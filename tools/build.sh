@@ -88,8 +88,19 @@ engine_diag_blocks() {
 # ⚠ **좁게 유지한다.** 스프라이트 팩 경로와 그 임포트 캐시의 자원 로딩 실패뿐이다.
 #   C# 예외 패턴을 여기 넣지 마라 — 엔진이 파일을 못 읽는 것은 환경이지만,
 #   그 결과로 생긴 null 을 우리 코드가 건드리는 것은 우리 버그다. 그 둘은 같이 묻히면 안 된다.
-_JUDGE_ASSET_ABSENT_ALLOW='res://addons/duelyst_animated_sprites/'
-_JUDGE_ASSET_ABSENT_ALLOW+='|res://\.godot/imported/'
+#
+# 세 가지를 동시에 못박는다. 전에는 경로 문자열 하나만 봤는데, 판정이 **블록** 단위라
+# (머리줄 + 들여쓴 줄을 ⏎ 로 이어 붙인다) 그 경로를 어딘가에서 **언급하기만 해도** 면제됐다:
+#   ① ^ERROR: — 엔진 자신의 진단만이다. SCRIPT ERROR: 는 관리 코드 예외가 나오는 자리라
+#     절대 면제될 수 없어야 한다. 앵커가 없으면 이어 붙인 블록 어디에 ERROR 가 있어도 걸렸다.
+#   ② 로더 문구 — 엔진이 "자원을 못 열었다" 고 말한 것만. 우리 버그로 난 진단이 같은 경로를
+#     스치기만 한 경우(예: 타입이 어긋난 .tres 를 GD.Load<SpriteFrames> 한 결과)는 안 걸린다.
+#   ③ [^⏎]* — 경로가 **머리줄 안에** 있어야 한다. 뒤에 이어 붙은 스택 프레임의 경로로는 못 빠진다.
+_JUDGE_ASSET_ABSENT_ALLOW='^ERROR: (Failed loading resource|Unable to open file|Cannot open file|No loader found for resource|Error loading resource)[^⏎]*res://(addons/duelyst_animated_sprites/|\.godot/imported/)'
+# 엔진은 같은 사실을 두 층에서 말한다. 로더가 "못 읽었다" 고 찍기 전에, 텍스트 자원 **파서**가
+# ".tres 6번째 줄의 ext_resource 가 없는 파일을 가리킨다" 고 먼저 찍는다 — 그 줄은 로더 문구로
+# 시작하지 않고 경로로 시작한다. 가리키는 쪽과 가리켜지는 쪽이 **둘 다** 스프라이트 팩 안일 때만 면제한다.
+_JUDGE_ASSET_ABSENT_ALLOW+='|^ERROR: res://addons/duelyst_animated_sprites/[^⏎]*Parse Error: \[ext_resource\] referenced non-existent resource at: res://addons/duelyst_animated_sprites/'
 
 #   judge_headless <무엇을 돌렸나> <로그파일> <완료 표지> <종료 코드> [의도된 에러 정규식]
 #
