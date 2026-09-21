@@ -33,4 +33,4 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 88)
 layout_mode = 2
-text = "타이틀"
+text = "전투"

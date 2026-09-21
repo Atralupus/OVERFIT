@@ -13,12 +13,12 @@ public partial class Play : Control
     public override void _Ready()
     {
         Log.Info("scene", "play ready");
-        GetNode<Button>("%BackButton").Pressed += OnBackPressed;
+        GetNode<Button>("%BackButton").Pressed += OnBattlePressed;
     }
 
-    private static void OnBackPressed()
+    private static void OnBattlePressed()
     {
-        Log.Info("scene", "play action=back");
-        Game.Instance.GoTo(Game.Scene.Title);
+        Log.Info("scene", "play action=battle");
+        Game.Instance.GoTo(Game.Scene.Battle);
     }
 }

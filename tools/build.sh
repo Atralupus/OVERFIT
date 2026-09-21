@@ -303,6 +303,8 @@ cmd_smoke() {
   expect_log "$log" info '^\[data\]\[I\] loaded ' "balance.json 을 읽은 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Play$' "Play 씬으로 간 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] play ready$' "Play 씬의 스크립트가 안 붙었습니다."
+  expect_log "$log" info '^\[scene\]\[I\] goto=Battle$' "Battle 씬으로 간 흔적이 없습니다."
+  expect_log "$log" info '^\[scene\]\[I\] battle ready$' "Battle 씬의 스크립트가 안 붙었습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Title$' "Title 로 돌아온 흔적이 없습니다."
   ok "스모크 통과 ($log)"
 }
