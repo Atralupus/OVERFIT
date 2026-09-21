@@ -69,7 +69,7 @@ public static class StageRoster
             Log.Warn("stage", $"short stage={picked} want={def.Want} have={def.Patterns.Count}");
         }
 
-        Log.Info("stage", $"roster stage={picked} patterns={string.Join(',', def.Patterns)}");
+        Log.Info("stage", () => $"roster stage={picked} patterns={string.Join(',', def.Patterns)}");
         return def.Patterns;
     }
 }

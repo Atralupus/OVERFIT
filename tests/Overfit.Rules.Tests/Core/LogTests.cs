@@ -68,6 +68,35 @@ public class LogTests
         calls.ShouldBe(1);
     }
 
+    [Fact]
+    public void 비싼_Info_도_레벨이_꺼져_있으면_안_만든다()
+    {
+        // BattleSim.Land 는 판정마다 한 줄을 Info 로 남긴다 — 수백만 판 × 10~150 판정이면
+        // LOG_LEVEL=off 여도 그 포맷 비용을 다 낸다. 지연 오버로드가 없으면 그걸 피할 방법이 없다.
+        using var capture = new LogCapture(LogLevel.Off);
+        int calls = 0;
+
+        Log.Info("boot", () => { calls++; return "비싸다"; });
+        Log.Warn("boot", () => { calls++; return "비싸다"; });
+        Log.Error("boot", () => { calls++; return "비싸다"; });
+
+        calls.ShouldBe(0);
+        capture.Lines.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void 지연_오버로드도_같은_형식으로_찍는다()
+    {
+        // 지연이라고 형식이 달라지면 judge_headless 의 ^\[tag\]\[E\] 앵커가 그 줄을 놓친다.
+        using var capture = new LogCapture(LogLevel.Trace);
+
+        Log.Info("boot", () => "k=v");
+        Log.Warn("boot", () => "k=v");
+        Log.Error("boot", () => "k=v");
+
+        capture.Lines.ShouldBe(new[] { "[boot][I] k=v", "[boot][W] k=v", "[boot][E] k=v" });
+    }
+
     [Theory]
     [InlineData("trace", LogLevel.Trace)]
     [InlineData("TRACE", LogLevel.Trace)]

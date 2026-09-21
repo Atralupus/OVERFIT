@@ -224,7 +224,7 @@ public sealed class BattleSim
 
         if (_runner.Finished)
         {
-            Log.Debug("boss", $"pattern_end id={Boss.CurrentPattern} tick={Ticks}");
+            Log.Debug("boss", () => $"pattern_end id={Boss.CurrentPattern} tick={Ticks}");
             _runner = null;
             _current = null;
             Boss.CurrentPattern = null;
@@ -251,7 +251,7 @@ public sealed class BattleSim
         _current = def;
         _runner = new PatternRunner(def);
         Boss.CurrentPattern = id;
-        Log.Debug("boss", $"pattern_begin id={id} pick={_picks} tick={Ticks}");
+        Log.Debug("boss", () => $"pattern_begin id={id} pick={_picks} tick={Ticks}");
     }
 
     /// <summary>
@@ -390,7 +390,9 @@ public sealed class BattleSim
             JumpAvailable: _current.Tags.Jumpable,
             ParryAvailable: _current.Tags.Parryable));
 
-        Log.Info("dodge", $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
+        // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
+        // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
+        Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
             + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}");
     }
 
@@ -411,7 +413,7 @@ public sealed class BattleSim
         if (gap <= Fighter.AttackReach)
         {
             Boss.TakeDamage(Fighter.AttackDamage);
-            Log.Debug("strike", $"hit boss_hp={Boss.Health} gap={gap:0} tick={Ticks}");
+            Log.Debug("strike", () => $"hit boss_hp={Boss.Health} gap={gap:0} tick={Ticks}");
         }
 
         _struckThisSwing = true;
