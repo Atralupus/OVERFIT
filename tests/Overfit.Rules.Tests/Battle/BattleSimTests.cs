@@ -447,6 +447,18 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 빈_명부는_첫_뽑기가_아니라_판을_세울_때_거절한다()
+    {
+        // 빈 목록을 그대로 받으면 Begin 의 Det.RollInt(n: 0) 이 터진다 — 첫 패턴이 설 때까지
+        // 아무 일도 없다가, 판이 도는 도중에 C# 예외로 나온다. 그 예외는 우리 로그 형식이
+        // 아니라 엔진 ERROR 블록으로만 보인다. 세우는 자리에서 막는다.
+        BattleSetup setup = Setup();
+        setup.PatternIds = System.Array.Empty<string>();
+
+        Should.Throw<ArgumentException>(() => new BattleSim(setup));
+    }
+
+    [Fact]
     public void 없는_패턴_id_는_매_틱_에러를_쏟지_않는다()
     {
         // Begin 이 간격을 안 되돌린 채 나가면 _gapLeft 가 0 이하로 남아 다음 틱에도 곧장

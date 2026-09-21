@@ -68,6 +68,15 @@ public sealed class BattleSim
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
+
+        // 빈 명부는 여기서 막는다. 그대로 받으면 첫 패턴을 고를 때 Det.RollInt(n: 0) 이
+        // ArgumentOutOfRangeException 으로 터진다 — 판이 한참 돈 뒤라, 무엇이 잘못됐는지가
+        // 그 스택에 안 적힌다. 세울 때 거절하면 부른 자리가 그대로 남는다.
+        if (setup.PatternIds.Count == 0)
+        {
+            throw new ArgumentException("패턴 명부가 비었다 — 한 판을 세울 수 없다", nameof(setup));
+        }
+
         _setup = setup;
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);

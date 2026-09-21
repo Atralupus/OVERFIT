@@ -60,7 +60,24 @@ public static class StageRoster
             Log.Warn("stage", $"out_of_range asked={stage} used={picked} defined={lowest}..{highest}");
         }
 
-        StageDef def = stages[picked.ToString(CultureInfo.InvariantCulture)];
+        // 색인이 아니라 조회다. 범위를 맞췄다고 그 키가 있는 것은 아니다 —
+        // stages.json 의 키가 연속이라는 것은 **어디에도 적히지 않은 가정**이고, 구멍이 하나만
+        // 생겨도 색인은 KeyNotFoundException 이었다. 예외는 우리 로그 형식으로 안 찍혀
+        // [E] 게이트를 그냥 지나가고 엔진 ERROR 블록으로만 나온다.
+        if (!stages.TryGetValue(picked.ToString(CultureInfo.InvariantCulture), out StageDef? def))
+        {
+            Log.Error("stage", $"stage_missing stage={picked} defined={lowest}..{highest}");
+            return Array.Empty<string>();
+        }
+
+        // 빈 명부는 경고가 아니라 거절이다. 전에는 short 경고만 내고 빈 목록을 그대로 돌려줬는데,
+        // 그것을 받은 BattleSim.Begin 이 Det.RollInt(n: 0) 으로 터졌다 — 데이터가 깨진 것을
+        // **쓰는 자리**에서 알게 되면 원인이 로그에 안 남는다.
+        if (def.Patterns.Count == 0)
+        {
+            Log.Error("stage", $"empty_roster stage={picked} want={def.Want}");
+            return Array.Empty<string>();
+        }
 
         // 모자람을 조용히 삼키지 않는다. 프로토타입은 패턴이 여섯뿐이라 4·5단계가 설계보다 짧은데,
         // 그걸 로그에 안 남기면 나중에 "단계가 올라도 왜 안 어려워지지" 를 데이터에서 찾을 수 없다.
