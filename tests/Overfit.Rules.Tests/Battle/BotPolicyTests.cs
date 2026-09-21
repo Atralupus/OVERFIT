@@ -11,21 +11,14 @@ public class BotPolicyTests
 {
     private static BattleSetup Setup(ulong seed = 51) => new()
     {
-        Arena = new Arena(1920),
+        Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
-        Boss = new BossConfig
-        {
-            MaxHealth = 200,
-            MoveSpeed = 160,
-            HalfWidth = 120,
-            PatternGap = 0.8,
-            Sprite = "boss_test",
-        },
+        Boss = TestConfigs.Boss(),
         PatternIds = new[] { "횡베기", "지면쓸기", "대공찌르기", "연속베기", "내려찍기", "돌진" },
         Patterns = JsonData<PatternDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
         Seed = seed,
-        MaxTicks = 60 * 180,
+        MaxTicks = TestConfigs.MaxTicks(),
     };
 
     private static (BattleOutcome Outcome, BattleSim Sim) Play(ulong seed)

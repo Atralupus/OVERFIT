@@ -106,7 +106,7 @@ public static class Log
     }
 
     /// <summary>
-    /// 지연 <see cref="Info"/>. <b>Info 도 뜨거운 자리가 있다</b> — <c>BattleSim.Land</c> 는 보스 판정
+    /// 지연 <see cref="Info(string, string)"/>. <b>Info 도 뜨거운 자리가 있다</b> — <c>BattleSim.Land</c> 는 보스 판정
     /// 하나마다 한 줄을 남기는데, 학습 데이터 공장은 한 판에 10~150 판정을 수백만 판 돌린다.
     /// 즉시 오버로드만 있으면 <c>LOG_LEVEL=off</c> 로 돌려도 그 포맷 비용을 전부 낸다.
     /// </summary>
@@ -118,7 +118,7 @@ public static class Log
         }
     }
 
-    /// <summary>지연 <see cref="Warn"/>. 대칭을 위해 둔다 — 없으면 뜨거운 자리에서 레벨만 올려도
+    /// <summary>지연 <see cref="Warn(string, string)"/>. 대칭을 위해 둔다 — 없으면 뜨거운 자리에서 레벨만 올려도
     /// 즉시 오버로드가 조용히 골라진다.</summary>
     public static void Warn(string tag, Func<string> message)
     {
@@ -128,7 +128,7 @@ public static class Log
         }
     }
 
-    /// <summary>지연 <see cref="Error"/>. 대칭을 위해 둔다.</summary>
+    /// <summary>지연 <see cref="Error(string, string)"/>. 대칭을 위해 둔다.</summary>
     public static void Error(string tag, Func<string> message)
     {
         if (IsEnabled(LogLevel.Error))

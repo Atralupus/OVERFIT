@@ -1,0 +1,11 @@
+{
+  "_comment": "보스 한 종의 수치. 전에는 BossConfig 를 C# 다섯 곳에서 손으로 만들었고 이미 갈려 있었다 — 게임은 boss_grym 을, 데모와 테스트는 boss_test 를 그렸다. 보스 체력을 한 곳에서 고치면 게임·데모·골든이 서로 다른 전투를 말하던 대가다.",
+  "_units": "거리 px@1080 · 속도 px/s · 시간 초",
+  "_note_id": "id 는 한글이다 (fighters.json · patterns.json 과 같다). sprite 는 addons/duelyst_animated_sprites 의 파일 이름이고 규칙은 이 값을 안 쓴다 — 뷰가 읽어 그릴 뿐이다.",
+
+  "그림": {
+    "sprite": "boss_grym",
+    "max_health": 200, "move_speed": 160,
+    "half_width": 120, "pattern_gap": 0.8
+  }
+}

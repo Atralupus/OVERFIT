@@ -93,23 +93,16 @@ public class ReplayGoldenTests
 
         var sim = new BattleSim(new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = new BossConfig
-            {
-                MaxHealth = 200,
-                MoveSpeed = 160,
-                HalfWidth = 120,
-                PatternGap = 0.8,
-                Sprite = "boss_test",
-            },
+            Boss = TestConfigs.Boss(),
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
             PatternIds = StageRoster.For(stages, 5),
             Patterns = JsonData<PatternDef>.ParseTable(
                 File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
             Seed = seed,
-            MaxTicks = 60 * 180,
+            MaxTicks = TestConfigs.MaxTicks(),
         });
 
         foreach (InputFrame input in Script())

@@ -9,7 +9,7 @@ public class HitResolverTests
     private const double _dt = 1.0 / 60.0;
     private const double _bossX = 960;
 
-    private static Fighter Spawn(double x) => new(TestConfigs.Fighter(), new Arena(1920), x);
+    private static Fighter Spawn(double x) => new(TestConfigs.Fighter(), TestConfigs.Arena(), x);
 
     private static PatternTags Tags(bool parryable) => new()
     {
