@@ -20,12 +20,15 @@ export GODOT_PATH=/path/to/Godot
 git clone git@github.com:Atralupus/Overfit.git
 cd Overfit
 tools/build.sh doctor      # 무엇이 없는지 알려준다
+python3 tools/fetch_duelyst.py   # 에셋 (CC0, 자동으로 받아진다)
 tools/build.sh import      # ⚠ 반드시 한 번. .godot/ 캐시와 .uid 를 만든다
 tools/build.sh run         # 게임 실행
 ```
 
 `import` 를 건너뛰면 `.uid` 가 없어 `check` 의 uid 단계가 빨개진다.
 **생긴 `.uid` 는 커밋한다** — 없으면 체크아웃마다 UID 가 갈리고 엔진은 WARNING 으로만 알린다.
+
+**에셋 원본은 저장소에 없다** — 받는 법과 출처는 [`overfit/assets/LICENSES.md`](overfit/assets/LICENSES.md).
 
 ## 3. 개발 루프
 

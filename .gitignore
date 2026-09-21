@@ -32,6 +32,12 @@ obj/
 .vs/
 *.sln.DotSettings.user
 
+# ---------- Python ----------
+# tools/*.py 를 직접 돌리면 생긴다. 받는 스크립트를 안내하는 저장소가 그 부산물을 안 무시하면
+# 다음 사람이 그대로 커밋한다.
+__pycache__/
+*.pyc
+
 # ---------- 테스트 산출물 ----------
 # tools/build.sh test 는 out/TestResults 로 떨어뜨리지만, IDE 테스트 탐색기는 프로젝트 옆에 만든다.
 TestResults/
@@ -95,3 +101,15 @@ $RECYCLE.BIN/
 .claude/worktrees/
 # 개인 설정. .claude/settings.json(공유되는 훅 설정)은 커밋한다.
 .claude/settings.local.json
+
+# ---------- 에셋 ----------
+# 원본(PNG)은 커밋하지 않는다. **라이선스 때문이 아니라 저장소 위생 때문이다** —
+# Duelyst 는 CC0 라 재배포해도 되지만, 한 번 들어간 바이너리는 히스토리에서 빠지지 않는다.
+# .import · .tres 와 라이선스 파일만 추적한다 — uid 와 임포트 설정이 .import 에 있고, 그게 없으면 체크아웃마다 uid 가 갈린다.
+# `overfit/addons/duelyst_animated_sprites/*` 로 쓰면 하위 폴더가 통째로 빠져 되살릴 수 없다. 그래서 네 줄이다.
+overfit/addons/duelyst_animated_sprites/**
+!overfit/addons/duelyst_animated_sprites/**/
+!overfit/addons/duelyst_animated_sprites/**/*.import
+!overfit/addons/duelyst_animated_sprites/**/*.tres
+!overfit/addons/duelyst_animated_sprites/duelyst-LICENSE
+!overfit/addons/duelyst_animated_sprites/duelyst-README.md
