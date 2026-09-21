@@ -16,6 +16,8 @@
 #   tools/build.sh editor              에디터 실행
 #   tools/build.sh import              에셋 임포트만 (헤드리스). 클론 직후 반드시 한 번
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
+#   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
+#   EXTRA="--fighter=단검 --stage=2" tools/build.sh demo   캐릭터 · 단계 지정
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
 #   tools/build.sh clean               빌드 산출물 삭제
 #
@@ -305,6 +307,23 @@ cmd_smoke() {
   ok "스모크 통과 ($log)"
 }
 
+# 전투 한 판을 창 없이. 규칙 층만 돌린다 — 씬이 뜨는지는 smoke 가 본다.
+cmd_demo() {
+  need_godot
+  cmd_build
+  say "전투 데모 (헤드리스)"
+  mkdir -p "$OUT"
+  local seed="${1:-51}" log="$OUT/demo.log" code=0
+  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" --quit-after 3600 \
+    -- --battle-demo "--seed=$seed" $LOG_ARG ${EXTRA:-} > "$log" 2>&1 || code=$?
+  grep -E "^\[(battle-demo|result|axes)\]" "$log" || true
+  judge_headless "전투 데모" "$log" "battle-demo=done" "$code"
+  # 판이 정말 돌았나. 표지만 보면 "아무것도 안 하고 끝난" 경우를 못 본다.
+  expect_log "$log" info '^\[result\]\[I\] (win|lose) ' "승패 판정이 안 났습니다."
+  expect_log "$log" info '^\[axes\]\[I\] samples=[1-9]' "회피 관측이 0건입니다 — 계측이 안 돌았습니다."
+  ok "전투 데모 통과 ($log)"
+}
+
 cmd_clean() {
   rm -rf "$OUT" "$PROJECT/.godot/mono/temp" "$PROJECT/obj" "$PROJECT/bin" "$TEST_DIR/obj" "$TEST_DIR/bin"
   ok "산출물을 지웠습니다."
@@ -328,6 +347,7 @@ case "${1:-}" in
   editor)    shift; cmd_editor "$@" ;;
   import)    shift; cmd_import "$@" ;;
   smoke)     shift; cmd_smoke "$@" ;;
+  demo)      shift; cmd_demo "$@" ;;
   clean)     shift; cmd_clean "$@" ;;
   ""|-h|--help|help) usage ;;
   *) echo "모르는 명령: $1" >&2; echo >&2; usage >&2; exit 1 ;;

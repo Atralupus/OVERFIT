@@ -18,6 +18,9 @@ public class PatternDataTests
     /// <summary>점프로 넘을 수 있다고 볼 높이. 캐릭터 키(120)보다 낮아야 한다.</summary>
     private const double _lowEnough = 100;
 
+    /// <summary>선 몸통의 키. 대공이 "지상은 안전" 이 되려면 판정 바닥이 이것보다 위여야 한다.</summary>
+    private const double _standingHeight = 120;
+
     private static Dictionary<string, PatternDef> Load() =>
         JsonData<PatternDef>.ParseTable(File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json");
 
@@ -84,7 +87,7 @@ public class PatternDataTests
         // 대공은 지상이 안전하다 — 판정의 아래끝이 땅에서 떠 있어야 한다.
         foreach ((string id, PatternDef def) in Load())
         {
-            bool offGround = def.Timeline.Where(s => s.Kind == "active").Any(s => s.Height![0] > 0);
+            bool offGround = def.Timeline.Where(s => s.Kind == "active").Any(s => s.Height![0] > _standingHeight);
             def.Tags.AntiAir.ShouldBe(offGround, $"{id}: anti_air={def.Tags.AntiAir} 인데 판정 바닥이 맞지 않는다");
         }
     }

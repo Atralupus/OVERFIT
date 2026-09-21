@@ -64,12 +64,15 @@
     <Compile Include="../../overfit/battle/rules/BattleSim.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/DodgeEvent.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BotPolicy.cs" LinkBase="linked/battle/rules" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
        덕분에 테스트가 저장소 경로를 몰라도 되고, 값을 고치면 다음 빌드가 복사한다. -->
   <ItemGroup>
     <None Include="../../overfit/data/*.json" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 리플레이 골든. 테스트가 출력 폴더에서 읽는다 — 저장소 경로를 몰라도 되고, 고치면 다음 빌드가 복사한다. -->
+    <None Include="../../tools/replay_golden.txt" Link="replay_golden.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- 병렬 실행을 끈다. Log.Sink · Log.Level 은 전역이라 LogCapture 를 쓰는 테스트가 동시에 돌면

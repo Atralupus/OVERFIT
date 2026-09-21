@@ -79,6 +79,42 @@ public sealed class BattleSim
     /// <summary>이 판에서 일어난 회피 관측 전부. <see cref="PlayerAxes.From"/> 에 그대로 넣는다.</summary>
     public IReadOnlyList<DodgeEvent> Events => _events;
 
+    /// <summary>
+    /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
+    ///
+    /// <para>
+    /// <see cref="Boss.CurrentPattern"/> 만으로는 "패턴이 돈다" 는 것만 알지 "지금이 언제인가" 는 모른다 —
+    /// 그것만 보고 반응하면 윈드업 내내 무작정 움직이게 된다. 봇이 판정 직전에 반응하려고 이것을 본다.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ <b>이것은 완전 정보다.</b> 사람은 선딜 모션을 보고 반응하지 다음 판정까지 남은 초를
+    /// 정확히 알지 못한다. 헤드리스 구동용 최소 봇에는 괜찮지만, <b>학습 데이터를 만드는 봇 함대는
+    /// 반응 지연과 잡음을 반드시 넣어야 한다</b> — 안 그러면 망이 "초인이 어떻게 실패하는가" 를
+    /// 배우고, 그건 사람에게 아무 의미가 없다.
+    /// </para>
+    /// </summary>
+    public double? NextActiveIn
+    {
+        get
+        {
+            if (_runner is null || _current is null)
+            {
+                return null;
+            }
+
+            foreach (PatternStep step in _current.Timeline)
+            {
+                if (step.Kind == "active" && step.T > _runner.Elapsed)
+                {
+                    return step.T - _runner.Elapsed;
+                }
+            }
+
+            return null;
+        }
+    }
+
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
     {
