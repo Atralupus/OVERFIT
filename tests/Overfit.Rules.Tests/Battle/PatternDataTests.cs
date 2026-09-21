@@ -132,13 +132,38 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 패리_불가면_패리_창이_0_이다()
+    public void 패리_가능_여부와_패리_창이_같은_말을_한다()
     {
+        // 이 둘은 이제 **같은 사실의 두 표현**이다. HitResolver 가 유효 창을 파이터와 패턴 중
+        // 좁은 쪽으로 잡으므로, parryable=true 인데 창이 0 이면 그 패턴은 사실 패리 불가인데
+        // DodgeEvent.ParryAvailable 은 "가능했다" 고 싣는다 — 의존도 축의 분모가 거짓이 된다.
         foreach ((string id, PatternDef def) in Load())
         {
-            if (!def.Tags.Parryable)
+            def.Tags.Parryable.ShouldBe(def.Tags.ParryWindow > 0,
+                $"{id}: parryable={def.Tags.Parryable} 인데 parry_window={def.Tags.ParryWindow} 다");
+        }
+    }
+
+    [Fact]
+    public void 열려_있다고_한_창은_적어도_한_틱은_열려_있다()
+    {
+        // 창이 0 이라는 것은 "그 수단으로는 못 피한다" 는 뜻이고, 0 이 아니라는 것은
+        // "피할 수 있다" 는 뜻이다. 한 틱(1/60초)보다 짧은 양수는 그 둘 중 어느 쪽도 아니다 —
+        // 값으로는 "가능" 이라 태그가 그렇게 실리는데 실제로는 한 번도 안에 들어갈 수 없다.
+        // 태그는 망의 입력이 되므로 그 간극이 그대로 거짓이 된다.
+        foreach ((string id, PatternDef def) in Load())
+        {
+            def.Tags.DashWindow.ShouldBeGreaterThanOrEqualTo(0, $"{id}: dash_window 가 음수다");
+            if (def.Tags.DashWindow > 0)
             {
-                def.Tags.ParryWindow.ShouldBe(0, $"{id}: 패리 불가인데 parry_window 가 있다");
+                def.Tags.DashWindow.ShouldBeGreaterThanOrEqualTo(BattleSim.Dt,
+                    $"{id}: dash_window={def.Tags.DashWindow} 가 한 틱보다 짧다 — 0 이 아닌데 실제로는 대시 불가다");
+            }
+
+            if (def.Tags.Parryable)
+            {
+                def.Tags.ParryWindow.ShouldBeGreaterThanOrEqualTo(BattleSim.Dt,
+                    $"{id}: parry_window={def.Tags.ParryWindow} 가 한 틱보다 짧다 — 패리 가능이라 실렸는데 못 받는다");
             }
         }
     }

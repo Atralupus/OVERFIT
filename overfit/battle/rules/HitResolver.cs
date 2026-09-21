@@ -54,16 +54,37 @@ public static class HitResolver
             return HitVerdict.MissedByHeight;
         }
 
-        if (fighter.Invulnerable)
+        // 유효 창은 **패턴과 캐릭터 중 좁은 쪽**이다.
+        //
+        // 전에는 캐릭터 쪽만 봤다. 대공찌르기가 parry_window 0.10 을(중검의 0.12 보다 좁게)
+        // 선언해도 아무 일도 안 일어났는데 — 그 숫자는 망의 입력이 된다. 거짓말하는 숫자는
+        // 없는 숫자보다 나쁘다. "빠른 공격은 패리하기 더 어렵다" 는 진짜 설계 레버라
+        // 태그를 지우는 대신 물게 했다.
+        if (fighter.Action == FighterAction.Dash && Within(fighter.ActionElapsed, fighter.DashIFrames, tags.DashWindow))
         {
             return HitVerdict.Dodged;
         }
 
-        if (fighter.Parrying && tags.Parryable)
+        if (tags.Parryable
+            && fighter.Action == FighterAction.Parry
+            && Within(fighter.ActionElapsed, fighter.ParryWindow, tags.ParryWindow))
         {
             return HitVerdict.Parried;
         }
 
         return HitVerdict.Hit;
     }
+
+    /// <summary>
+    /// 행동을 시작한 지 <paramref name="elapsed"/> 가 흘렀을 때, 두 창 모두 안에 있는가.
+    ///
+    /// <para>
+    /// 창이 0 이면 <b>한 번도 안이 아니다</b> — <c>dash_window: 0</c> 의 "대시로 못 피한다" 가
+    /// 그렇게 값과 뜻이 같은 자리에 떨어진다. 길이 0 인 창으로 읽어도 결과가 같지만,
+    /// 뜻은 다르다: <c>DodgeEvent.DashAvailable</c> 이 <c>dash_window &gt; 0</c> 으로
+    /// "대시가 가능했나" 를 싣고 의존도 축의 분모가 그것이다.
+    /// </para>
+    /// </summary>
+    private static bool Within(double elapsed, double fighterWindow, double patternWindow) =>
+        elapsed < Math.Min(fighterWindow, patternWindow);
 }

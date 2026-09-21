@@ -58,11 +58,24 @@ public sealed class Fighter
     /// <summary>현재 행동이 시작된 뒤 흐른 시간. Idle 이면 0.</summary>
     public double ActionElapsed { get; private set; }
 
-    /// <summary>대시 무적 창 안인가. 이 동안은 어떤 판정도 안 맞는다.</summary>
-    public bool Invulnerable => Action == FighterAction.Dash && ActionElapsed < _config.DashIFrames;
+    /// <summary>
+    /// 대시 무적 창 안인가. <b>이것은 캐릭터 쪽의 창일 뿐이다</b> — 실제로 판정을 피하는지는
+    /// 패턴의 <c>dash_window</c> 와 견준 뒤에 정해진다 (<see cref="HitResolver"/>).
+    /// 뷰가 "지금 무적 모션" 을 그리는 데 쓰라고 남긴다.
+    /// </summary>
+    public bool Invulnerable => Action == FighterAction.Dash && ActionElapsed < DashIFrames;
 
-    /// <summary>패리가 막아주는 창 안인가. 패리 불가 패턴은 이것이 참이어도 못 막는다.</summary>
-    public bool Parrying => Action == FighterAction.Parry && ActionElapsed < _config.ParryWindow;
+    /// <summary>
+    /// 패리가 막아주는 창 안인가. 위와 같이 <b>캐릭터 쪽의 창</b>이다 — 패리 불가 패턴이나
+    /// 더 좁은 <c>parry_window</c> 를 가진 패턴 앞에서는 이것이 참이어도 못 막는다.
+    /// </summary>
+    public bool Parrying => Action == FighterAction.Parry && ActionElapsed < ParryWindow;
+
+    /// <summary>이 캐릭터의 대시 무적 폭(초). <see cref="HitResolver"/> 가 패턴의 창과 견준다.</summary>
+    public double DashIFrames => _config.DashIFrames;
+
+    /// <summary>이 캐릭터의 패리 창 폭(초). <see cref="HitResolver"/> 가 패턴의 창과 견준다.</summary>
+    public double ParryWindow => _config.ParryWindow;
 
     /// <summary>공격 판정이 서 있는가. 선딜을 지나고 후딜 전.</summary>
     public bool AttackActive => Action == FighterAction.Attack
