@@ -6,7 +6,8 @@ CC0 1.0 으로 공개했다 — 저작자 표시 의무도 없다. 여기서 받
 Godot 4 SpriteFrames 로 재포장한 저장소다.
 
 **원본 PNG 는 커밋하지 않는다.** 라이선스 때문이 아니라 저장소 위생 때문이다 —
-한 번 들어간 바이너리는 히스토리에서 빠지지 않는다. `.import` 만 추적한다.
+한 번 들어간 바이너리는 히스토리에서 빠지지 않는다. `.import` · `.tres` 와
+라이선스 파일만 추적한다.
 """
 
 import argparse
@@ -69,6 +70,11 @@ def main() -> int:
                 if not args.dry_run:
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
+
+        if total == 0:
+            print("아무것도 못 받았습니다 — 업스트림 구조가 바뀌었을 수 있습니다.", file=sys.stderr)
+            print(f"기대한 경로: {', '.join(WANT)}", file=sys.stderr)
+            return 1
 
         verb = "복사(예정)" if args.dry_run else "복사"
         print(f"\n{total}개 {verb}. 다음: tools/build.sh import")
