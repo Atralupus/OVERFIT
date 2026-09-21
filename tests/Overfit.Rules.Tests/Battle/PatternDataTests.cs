@@ -105,23 +105,31 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void Dash_direction_이_in_이면_안쪽에_안전지대가_있다()
+    public void Dash_direction_이_안을_허용하면_안쪽에_안전지대가_있다()
     {
-        // "in" 은 "보스 쪽으로 파고들면 판정을 빠져나간다" 는 뜻이다. 그게 참이려면 판정의
-        // **안쪽 끝**이 보스 중심에서 떨어져 있어야 한다 (distance[0] > 0).
+        // "in" 은 "보스 쪽으로 파고들면 판정을 빠져나간다" 는 뜻이고, "either" 는 그 안쪽 길이
+        // 밖으로 빠지는 길과 **함께** 있다는 뜻이다. 둘 다 참이려면 판정의 **안쪽 끝**이
+        // 보스 중심에서 떨어져 있어야 한다 (distance[0] > 0).
         // 문자열 화이트리스트만 보던 때 돌진이 distance[0]=0 인 채로 "in" 을 달고 있었다 —
         // 자기 타임라인에 대해 거짓인 태그였고, 망은 그걸 사실로 배웠을 것이다.
+        int checkedPatterns = 0;
         foreach ((string id, PatternDef def) in Load())
         {
-            if (def.Tags.DashDirection != "in")
+            if (def.Tags.DashDirection is not ("in" or "either"))
             {
                 continue;
             }
 
+            checkedPatterns++;
             def.Timeline.Where(s => s.Kind == "active")
                 .ShouldContain(s => s.Distance![0] > 0,
-                    $"{id}: dash_direction=in 인데 안쪽에 안전한 틈이 없다 (모든 active 의 distance[0]=0)");
+                    $"{id}: dash_direction={def.Tags.DashDirection} 인데 안쪽에 안전한 틈이 없다 (모든 active 의 distance[0]=0)");
         }
+
+        // 여섯 패턴 전부 "out" 이던 때 이 가드는 매번 continue 로 빠져나가 **한 번도 실행되지 않았다.**
+        // 통과하는 가드와 도는 가드를 구별하지 않으면, 나중에 안쪽 안전지대가 사라져도 여전히 초록이다.
+        checkedPatterns.ShouldBeGreaterThan(0,
+            "안으로 파고들 수 있는 패턴이 하나도 없다 — dash_direction_bias 축이 구조적으로 못 가른다");
     }
 
     [Fact]
