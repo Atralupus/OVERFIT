@@ -12,11 +12,6 @@ namespace Overfit.Battle;
 /// </summary>
 public partial class Battle : Node2D
 {
-    private const double _dt = BattleSim.Dt;
-
-    /// <summary>한 <c>_Process</c> 안에서 따라잡을 최대 틱 수(약 83ms). 아래 <see cref="_Process"/> 참고.</summary>
-    private const int _maxCatchupTicks = 5;
-
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
@@ -27,7 +22,6 @@ public partial class Battle : Node2D
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
 
-    private double _accumulated;
     private bool _over;
 
     public override void _Ready()
@@ -38,7 +32,11 @@ public partial class Battle : Node2D
 
         Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
-        var ids = new List<string>(patterns.Keys);
+        Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
+
+        // 단계 명부는 data/stages.json 이 정한다 — patterns.json 의 키 순서를 쓰면 패턴을
+        // 파일 맨 위에 끼워 넣는 것만으로 1단계가 다른 전투가 된다.
+        IReadOnlyList<string> ids = StageRoster.For(stages, 1);
 
         _fighterConfig = fighters["중검"];
         _bossConfig = new BossConfig
@@ -55,7 +53,7 @@ public partial class Battle : Node2D
             Arena = new Arena(1920),
             Fighter = _fighterConfig,
             Boss = _bossConfig,
-            PatternIds = ids.GetRange(0, System.Math.Min(2, ids.Count)),
+            PatternIds = ids,
             Patterns = patterns,
             Seed = 51,
             MaxTicks = 60 * 180,
@@ -66,32 +64,40 @@ public partial class Battle : Node2D
         Log.Info("scene", "battle ready");
     }
 
-    public override void _Process(double delta)
+    /// <summary>
+    /// 전투를 민다. <b><c>_Process</c> 가 아니라 여기다.</b>
+    ///
+    /// <para>
+    /// 전에는 렌더 프레임에서 누산기로 고정 틱을 만들었는데, 입력이 <c>IsActionJustPressed</c>
+    /// (렌더 프레임 하나에만 참)라 둘의 주기가 어긋났다. 144Hz 에서는 대부분의 프레임이
+    /// 0틱을 돌려 엣지가 그냥 버려지고(실측 약 58% 유실), 60Hz 아래에서는 한 프레임이
+    /// 두 틱을 돌며 같은 <c>Read()</c> 를 두 번 읽어 한 번 누른 것이 두 <c>InputFrame</c> 이 됐다.
+    /// </para>
+    ///
+    /// <para>
+    /// 물리 틱은 <c>project.godot</c> 이 60으로 못박고, <c>Input</c> 은 물리 콜백 안에서
+    /// <b>물리 틱 기준</b>으로 엣지를 돌려준다 — 틱과 입력이 같은 시계를 타므로 누산기도
+    /// 따라잡기 상한도 필요 없고, 사람이 만드는 입력 시퀀스가 봇의 것과 같은 모양이 된다.
+    /// 그 동등성이 학습 데이터 계획 전체가 서 있는 자리다.
+    /// </para>
+    /// </summary>
+    public override void _PhysicsProcess(double delta)
     {
         if (_over)
         {
             return;
         }
 
-        // 고정 틱으로만 민다. 프레임 시간을 그대로 넣으면 기계마다 다른 판이 된다.
-        // 따라잡기 상한. 창을 끌거나 OS 가 멈췄다 깨어나면 delta 가 커지는데, 그걸 그대로 풀면
-        // 수백 틱이 한 프레임 안에서 동기로 돌아 멈춘 것처럼 보인다. 밀린 시간은 버린다 —
-        // 전투가 조금 건너뛰는 편이 화면이 얼어붙는 것보다 낫다.
-        _accumulated = System.Math.Min(_accumulated + delta, _dt * _maxCatchupTicks);
-        while (_accumulated >= _dt)
+        BattleOutcome? outcome = _sim.Tick(Read());
+        if (outcome is { } done)
         {
-            _accumulated -= _dt;
-            BattleOutcome? outcome = _sim.Tick(Read());
-            if (outcome is { } done)
-            {
-                _over = true;
-                Log.Info("scene", $"battle over outcome={done} ticks={_sim.Ticks}");
-                break;
-            }
+            _over = true;
+            Log.Info("scene", $"battle over outcome={done} ticks={_sim.Ticks}");
         }
-
-        RenderFrame();
     }
+
+    /// <summary>그리기만 한다. 규칙은 <see cref="_PhysicsProcess"/> 가 민다.</summary>
+    public override void _Process(double delta) => RenderFrame();
 
     /// <summary>키보드를 규칙의 입력으로. <b>봇과 같은 구조체를 만든다.</b></summary>
     private static InputFrame Read()
@@ -106,8 +112,9 @@ public partial class Battle : Node2D
             move = -1;
         }
 
-        // 넷은 엣지다 — 이번 프레임에 "눌렸나"(IsActionJustPressed) 를 본다. IsKeyPressed(레벨)로
-        // 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
+        // 넷은 엣지다 — "이번 물리 틱에 눌렸나"(IsActionJustPressed) 를 본다. 물리 콜백 안에서
+        // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
+        // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
         return new InputFrame(
             move,
             Input.IsActionJustPressed("jump"),

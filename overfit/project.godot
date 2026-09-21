@@ -32,6 +32,13 @@ window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[physics]
+
+; 전투 시뮬레이션이 여기에 얹혀 돈다 (Battle._PhysicsProcess). 규칙의 고정 틱(BattleSim.Dt = 1/60)과
+; **같은 수여야 한다** — 어긋나면 한 물리 틱이 1/60초가 아닌 시간을 진행시킨 셈이 되고,
+; 입력 엣지도 틱과 다른 주기로 들어온다. 엔진 기본값과 같지만 명시한다: 이 값은 계약이다.
+common/physics_ticks_per_second=60
+
 [gui]
 
 ; 전역 Theme 하나. 색·폰트·여백은 여기서만 정의한다.
