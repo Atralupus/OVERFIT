@@ -50,6 +50,16 @@
     <Compile Include="../../prerelu/core/CmdArgs.cs" LinkBase="linked/core" />
     <Compile Include="../../prerelu/core/JsonData.cs" LinkBase="linked/core" />
     <Compile Include="../../prerelu/core/BalanceData.cs" LinkBase="linked/core" />
+
+    <!-- 전투 규칙. 이 목록이 곧 "무엇이 규칙인가"의 선언이다 — 커밋 훅의 TDD 게이트가 여기를 읽는다. -->
+    <Compile Include="../../prerelu/battle/rules/InputFrame.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/Arena.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/FighterConfig.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/Fighter.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/HitBox.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/PatternDef.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/PatternRunner.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/HitResolver.cs" LinkBase="linked/battle/rules" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.

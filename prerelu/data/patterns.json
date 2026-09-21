@@ -1,0 +1,36 @@
+{
+  "_comment": "보스 패턴. tags 는 망의 입력이 되므로 PatternDataTests 가 타임라인과 대조한다.",
+  "_units": "t 초 · distance px (보스 중심에서) · height px (바닥에서) · damage 정수",
+
+  "횡베기": {
+    "tags": {
+      "dash_window": 0.18, "dash_direction": "out",
+      "jumpable": false, "anti_air": false,
+      "parryable": true, "parry_window": 0.12,
+      "punish_greed": true, "reach": "mid",
+      "feint": false, "multi_hit": 1, "tracking": false
+    },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.45, "kind": "active", "distance": [0, 260], "height": [0, 200], "damage": 18 },
+      { "t": 0.60, "kind": "recover" },
+      { "t": 0.90, "kind": "end" }
+    ]
+  },
+
+  "지면쓸기": {
+    "tags": {
+      "dash_window": 0.10, "dash_direction": "out",
+      "jumpable": true, "anti_air": false,
+      "parryable": false, "parry_window": 0,
+      "punish_greed": false, "reach": "far",
+      "feint": false, "multi_hit": 1, "tracking": false
+    },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.55, "kind": "active", "distance": [0, 520], "height": [0, 70], "damage": 14 },
+      { "t": 0.70, "kind": "recover" },
+      { "t": 1.00, "kind": "end" }
+    ]
+  }
+}
