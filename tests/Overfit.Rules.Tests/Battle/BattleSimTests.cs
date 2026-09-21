@@ -237,6 +237,49 @@ public class BattleSimTests
     }
 
     /// <summary>
+    /// 판정 직전에 대시하는 봇 한 판. <paramref name="inward"/> 면 보스 쪽을, 아니면 반대쪽을 보고 뛴다.
+    /// 대시는 <b>바라보는 쪽으로만</b> 가므로 어디를 보고 있었나가 곧 방향이다.
+    /// </summary>
+    private static PlayerAxes DashingBot(bool inward)
+    {
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = BossConfig(999_999),
+            PatternIds = new[] { "횡베기", "지면쓸기", "충격파" },
+            Patterns = Patterns(),
+            Seed = 51,
+            MaxTicks = 60 * 20,
+        });
+
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
+            bool soon = sim.NextActiveIn is double remaining && remaining <= 0.10;
+            outcome = sim.Tick(new InputFrame(inward ? toward : (sbyte)-toward, false, Dash: soon, false, false));
+        }
+
+        return PlayerAxes.From(sim.Events);
+    }
+
+    [Fact]
+    public void 파고드는_봇과_도망가는_봇을_대시_방향_축이_가른다()
+    {
+        // 여섯 패턴이 전부 distance[0]=0 이던 때는 안으로 가는 것이 정답인 상황이 아예 없었고,
+        // 그나마 나오던 -1 은 파이터가 보스 몸 안에 서서 부호가 뒤집힌 것이었다 — 성향이 아니라
+        // 겹침의 부산물이다. 이제 축이 양끝을 다 쓴다.
+        PlayerAxes inward = DashingBot(inward: true);
+        PlayerAxes outward = DashingBot(inward: false);
+
+        inward.DashSamples.ShouldBeGreaterThan(0);
+        outward.DashSamples.ShouldBeGreaterThan(0);
+        inward.DashDirectionBias.ShouldBeGreaterThan(0.5, "안으로만 뛰었는데 축이 안 따라온다");
+        outward.DashDirectionBias.ShouldBeLessThan(-0.5, "밖으로만 뛰었는데 축이 안 따라온다");
+    }
+
+    /// <summary>
     /// 충격파 한 방을 <paramref name="walkTicks"/> 만큼 보스 쪽으로 걸어간 자리에서 맞아 본다.
     /// 패턴은 2.0초 뒤에 서므로 그 전에 자리를 잡는다.
     /// </summary>
