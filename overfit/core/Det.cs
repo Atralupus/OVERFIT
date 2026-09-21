@@ -65,10 +65,13 @@ public static class Det
     /// </summary>
     public static class Domain
     {
+        /// <summary>보스가 다음에 어떤 패턴을 돌릴지. 프로토타입에서는 무작위이고, 나중에 망이 이 자리를 갈아끼운다.</summary>
+        public const uint PatternPick = 1;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
-            // 도메인이 생기면 여기 한 줄씩 — 예) Weight => "weight",
+            PatternPick => "pattern_pick",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

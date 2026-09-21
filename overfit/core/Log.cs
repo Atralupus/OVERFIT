@@ -14,7 +14,7 @@ public enum LogLevel
 
 /// <summary>
 /// 구조화 로그. 형식은 <c>[tag][L] key=value ...</c> — grep 과 MCP get_debug_output 으로 읽기 위해서다.
-/// 태그는 늘어난다. 지금 쓰는 것: <c>boot data scene tour test</c>.
+/// 태그는 늘어난다. 지금 쓰는 것: <c>boot data scene tour result boss strike dodge</c>.
 ///
 /// <para>
 /// <b>이 클래스는 Godot 을 모른다.</b> 출력은 <see cref="Sink"/>, 레벨 결정은 <see cref="LevelResolver"/> 로 주입한다 —
