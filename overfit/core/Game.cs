@@ -55,6 +55,11 @@ public partial class Game : Node
         {
             _ = TourAsync();
         }
+        else if (OS.IsDebugBuild() && CmdArgs.Has(args, "--battle-demo"))
+        {
+            // Autoload 의 자식이라 씬이 바뀌어도 살아남는다. 뷰를 안 만들고 규칙만 돌린다.
+            AddChild(new Battle.Debug.BattleDemo());
+        }
     }
 
     public void GoTo(Scene scene)

@@ -32,5 +32,71 @@
       { "t": 0.70, "kind": "recover" },
       { "t": 1.00, "kind": "end" }
     ]
+  },
+
+  "대공찌르기": {
+    "tags": {
+      "dash_window": 0.14, "dash_direction": "out",
+      "jumpable": false, "anti_air": true,
+      "parryable": true, "parry_window": 0.10,
+      "punish_greed": true, "reach": "mid",
+      "feint": false, "multi_hit": 1, "tracking": false
+    },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.50, "kind": "active", "distance": [0, 300], "height": [140, 420], "damage": 20 },
+      { "t": 0.66, "kind": "recover" },
+      { "t": 0.95, "kind": "end" }
+    ]
+  },
+
+  "연속베기": {
+    "tags": {
+      "dash_window": 0.12, "dash_direction": "out",
+      "jumpable": false, "anti_air": false,
+      "parryable": true, "parry_window": 0.10,
+      "punish_greed": true, "reach": "close",
+      "feint": false, "multi_hit": 3, "tracking": false
+    },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.40, "kind": "active", "distance": [0, 220], "height": [0, 180], "damage": 9 },
+      { "t": 0.62, "kind": "active", "distance": [0, 220], "height": [0, 180], "damage": 9 },
+      { "t": 0.84, "kind": "active", "distance": [0, 240], "height": [0, 180], "damage": 12 },
+      { "t": 1.00, "kind": "recover" },
+      { "t": 1.30, "kind": "end" }
+    ]
+  },
+
+  "내려찍기": {
+    "tags": {
+      "dash_window": 0.22, "dash_direction": "out",
+      "jumpable": false, "anti_air": false,
+      "parryable": false, "parry_window": 0,
+      "punish_greed": true, "reach": "close",
+      "feint": false, "multi_hit": 1, "tracking": false
+    },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.80, "kind": "active", "distance": [0, 200], "height": [0, 300], "damage": 26 },
+      { "t": 0.98, "kind": "recover" },
+      { "t": 1.35, "kind": "end" }
+    ]
+  },
+
+  "돌진": {
+    "tags": {
+      "dash_window": 0.16, "dash_direction": "in",
+      "jumpable": true, "anti_air": false,
+      "parryable": false, "parry_window": 0,
+      "punish_greed": false, "reach": "far",
+      "feint": false, "multi_hit": 1, "tracking": true
+    },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.60, "kind": "active", "distance": [0, 700], "height": [0, 90], "damage": 16 },
+      { "t": 0.78, "kind": "recover" },
+      { "t": 1.10, "kind": "end" }
+    ]
   }
 }
