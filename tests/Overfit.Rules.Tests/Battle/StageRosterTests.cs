@@ -71,6 +71,33 @@ public class StageRosterTests
     }
 
     [Fact]
+    public void 명부가_설계한_패턴_수를_넘지_않는다()
+    {
+        // want 는 설계가 정한 단계별 패턴 수(2·3·5·7·10)다. 모자란 것은 로그로 드러나지만
+        // 넘치는 것은 아무 데도 안 남는다 — 새 패턴을 명부에 끼워 넣을 때 아직 자리가 없는
+        // 낮은 단계에 얹으면 그 단계의 난이도 곡선이 조용히 달라진다.
+        foreach ((string stage, StageDef def) in Stages())
+        {
+            def.Patterns.Count.ShouldBeLessThanOrEqualTo(def.Want, $"{stage}단계 명부가 want={def.Want} 보다 길다");
+        }
+    }
+
+    [Fact]
+    public void 안으로_파고들어야_안전한_패턴이_마지막_단계_명부에_있다()
+    {
+        // dash_direction_bias 축은 "안으로 파고들었나 밖으로 도망갔나" 를 잰다. 안쪽이 안전한
+        // 패턴이 **명부에 없으면** 안으로 가는 것이 정답인 상황이 아예 없어 축이 상수가 된다 —
+        // 죽은 입력은 망의 용량만 먹고 아무것도 가르치지 않는다.
+        // patterns.json 에 있는 것만으로는 부족하다. 실제로 뽑히는 명부에 있어야 한다.
+        Dictionary<string, PatternDef> patterns = Patterns();
+        IReadOnlyList<string> roster = StageRoster.For(Stages(), 5);
+
+        roster.ShouldContain(
+            id => patterns[id].Timeline.Any(s => s.Kind == "active" && s.Distance![0] > 0),
+            "마지막 단계 명부에 안쪽 안전지대를 가진 패턴이 없다 — dash_direction_bias 가 상수가 된다");
+    }
+
+    [Fact]
     public void 설계보다_짧은_단계는_조용히_넘어가지_않는다()
     {
         // 프로토타입은 패턴이 여섯뿐이라 4·5단계가 설계(7·10)에 못 미친다. 줄여서 감추면

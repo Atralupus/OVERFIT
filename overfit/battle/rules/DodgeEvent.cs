@@ -35,6 +35,9 @@ public enum DodgeVerb
 /// <param name="Airborne">그 순간 공중에 있었나.</param>
 /// <param name="Distance">보스와의 거리.</param>
 /// <param name="GreedWindow">판정이 서는 그 순간 공격 중이었나 — 보스의 선딜을 욕심내 파고든 흔적이다.</param>
+/// <param name="DashAvailable">이 판정을 대시로 피할 수 있었나 (<c>dash_window &gt; 0</c>).</param>
+/// <param name="JumpAvailable">점프로 넘을 수 있었나 (<c>jumpable</c>).</param>
+/// <param name="ParryAvailable">패리로 받을 수 있었나 (<c>parryable</c>).</param>
 public readonly record struct DodgeEvent(
     string PatternId,
     DodgeVerb Verb,
@@ -43,4 +46,12 @@ public readonly record struct DodgeEvent(
     int Direction,
     bool Airborne,
     double Distance,
-    bool GreedWindow);
+    bool GreedWindow,
+
+    // 무엇을 골랐나뿐 아니라 **무엇을 고를 수 있었나**를 같이 싣는다.
+    // PlayerAxes.From 은 이벤트 목록만 받으므로 구조상 패턴 태그에 손이 안 닿는다 —
+    // 여기 없으면 의존도 축은 사용 비율로밖에 못 만들어지고, 그건 "점프에 의존한다" 와
+    // "점프로만 피할 수 있는 패턴만 만났다" 를 구별하지 못한다.
+    bool DashAvailable,
+    bool JumpAvailable,
+    bool ParryAvailable);

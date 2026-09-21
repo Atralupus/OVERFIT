@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -89,6 +90,252 @@ public class BattleSimTests
         }
 
         sim.Boss.X.ShouldBeLessThan(start);
+    }
+
+    /// <summary>몸 충돌이 허용하는 최소 간격. 보스 반폭 + 파이터 반폭이다 — 손으로 적지 않는다.</summary>
+    private static double MinGap() => BossConfig().HalfWidth + TestConfigs.Fighter().HalfWidth;
+
+    /// <summary>패턴이 안 도는 판. 보스가 다가오는 것만 본다 (간격이 커서 첫 패턴 전에 끝난다).</summary>
+    private static BattleSim Chaser() => new(new BattleSetup
+    {
+        Arena = new Arena(1920),
+        Fighter = TestConfigs.Fighter(),
+        Boss = new BossConfig
+        {
+            MaxHealth = 999_999,
+            MoveSpeed = 400,
+            HalfWidth = 120,
+            PatternGap = 1000,
+            Sprite = "boss_test",
+        },
+        PatternIds = new[] { "횡베기" },
+        Patterns = Patterns(),
+        Seed = 1,
+        MaxTicks = 60 * 60,
+    });
+
+    [Fact]
+    public void 보스는_파이터_중심이_아니라_간격을_두고_선다()
+    {
+        // 전에는 파이터의 정확한 중심을 목표로 걸어와서, 보스 반폭(120) 안쪽에 파이터가 섰다 —
+        // 데모 실측 평균 교전거리가 85px 였다. 붙는 사람과 떨어지는 사람이 둘 다 ≈0 으로 수렴하니
+        // distance_bias 축이 상수였다.
+        var sim = Chaser();
+
+        for (int i = 0; i < 300; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Boss.X.ShouldBe(sim.Fighter.X + MinGap(), 0.001, "보스가 간격을 두고 서지 않는다");
+    }
+
+    [Fact]
+    public void 파이터가_보스_몸_안으로_못_들어간다()
+    {
+        // 밀어내는 쪽은 **파이터**다. 보스는 4배 크고, 플레이어에게 밀리는 보스는 그림이 틀렸다.
+        var sim = Chaser();
+        double minGap = MinGap();
+
+        for (int i = 0; i < 600; i++)
+        {
+            // 계속 오른쪽으로 밀어붙이고 주기적으로 대시로 파고든다.
+            sim.Tick(new InputFrame(1, false, Dash: i % 13 == 0, false, false));
+            Math.Abs(sim.Fighter.X - sim.Boss.X)
+                .ShouldBeGreaterThanOrEqualTo(minGap - 1e-9, $"{i}틱에 파이터가 보스 몸 안에 있다");
+        }
+
+        // 벽에 붙어 버려 "못 들어간 게 아니라 못 다가간" 것이면 위 단언이 공허하다.
+        sim.Fighter.X.ShouldBe(sim.Boss.X - minGap, 0.001, "파이터가 보스에 붙지도 못했다");
+    }
+
+    [Fact]
+    public void 몸에_막혀도_대시_무적은_그대로_돈다()
+    {
+        // 대시가 보스를 뚫고 지나가던 때는 "안으로 파고들기" 가 순간이동이었다. 이제 벽에 선다 —
+        // 그런데 무적까지 같이 죽으면 "파고들어야 사는" 패턴(충격파)을 아무도 못 피한다.
+        // 무적은 위치가 아니라 행동 시계로 돌므로 막혀도 그대로여야 한다.
+        var setup = new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = new BossConfig
+            {
+                MaxHealth = 999_999,
+                MoveSpeed = 0,
+                HalfWidth = 120,
+                PatternGap = 2.0,
+                Sprite = "boss_test",
+            },
+            PatternIds = new[] { "단타" },
+            Patterns = new Dictionary<string, PatternDef>
+            {
+                ["단타"] = OneHit(
+                    distance: new double[] { 0, 2000 },
+                    height: new double[] { 0, 300 },
+                    parryable: false,
+                    at: 6 * BattleSim.Dt),
+            },
+            Seed = 1,
+            MaxTicks = 60 * 5,
+        };
+        var sim = new BattleSim(setup);
+
+        // 120틱 동안 오른쪽으로 걸어 보스 몸에 붙는다(패턴은 2.0초 뒤에 선다).
+        for (int i = 0; i < 120; i++)
+        {
+            sim.Tick(new InputFrame(1, false, false, false, false));
+        }
+
+        sim.Fighter.X.ShouldBe(sim.Boss.X - MinGap(), 0.001, "붙지 못했다 — 이 테스트가 막힌 대시를 안 본다");
+
+        // 막힌 채로 보스 쪽으로 대시. 판정은 여섯 틱 뒤에 선다.
+        for (int i = 0; i < 12; i++)
+        {
+            sim.Tick(new InputFrame(0, false, Dash: i == 0, false, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        sim.Events[0].Verdict.ShouldBe(HitVerdict.Dodged, "몸에 막힌 대시가 무적을 잃었다");
+        sim.Events[0].Verb.ShouldBe(DodgeVerb.Dash);
+        sim.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth);
+    }
+
+    /// <summary>
+    /// 한 판을 끝까지 돌리고 평균 교전 거리를 낸다.
+    /// <paramref name="standoff"/> 가 0 이면 붙는 봇(계속 보스 쪽으로), 아니면 그 거리를 지키는 봇이다.
+    /// </summary>
+    private static PlayerAxes Engage(double standoff)
+    {
+        var sim = new BattleSim(Setup(bossHealth: 999_999, maxTicks: 60 * 20));
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
+            var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
+            sbyte move = standoff <= 0 ? toward : gap < standoff ? (sbyte)-toward : (sbyte)0;
+            outcome = sim.Tick(new InputFrame(move, false, false, false, false));
+        }
+
+        return PlayerAxes.From(sim.Events);
+    }
+
+    [Fact]
+    public void 붙는_봇과_떨어지는_봇을_거리_축이_가른다()
+    {
+        // 이 축이 존재하는 이유 자체다. 몸 충돌이 없던 때는 붙는 쪽도 떨어지는 쪽도 보스 몸
+        // 안(≈0)으로 수렴해 distance_bias 가 상수였다 — 죽은 입력은 망의 용량만 먹고
+        // 아무것도 가르치지 않는다. "값이 0 이 아니다" 로는 부족하고 **둘이 갈려야** 한다.
+        PlayerAxes hugger = Engage(0);
+        PlayerAxes spacer = Engage(500);
+
+        hugger.Samples.ShouldBeGreaterThan(0);
+        spacer.Samples.ShouldBeGreaterThan(0);
+        hugger.DistanceBias.ShouldBeGreaterThanOrEqualTo(MinGap(), "붙는 봇이 아직 보스 몸 안에 있다");
+        spacer.DistanceBias.ShouldBeGreaterThan(hugger.DistanceBias + 200,
+            "붙는 봇과 떨어지는 봇이 같은 거리로 수렴한다 — 축이 못 가른다");
+    }
+
+    /// <summary>
+    /// 판정 직전에 대시하는 봇 한 판. <paramref name="inward"/> 면 보스 쪽을, 아니면 반대쪽을 보고 뛴다.
+    /// 대시는 <b>바라보는 쪽으로만</b> 가므로 어디를 보고 있었나가 곧 방향이다.
+    /// </summary>
+    private static PlayerAxes DashingBot(bool inward)
+    {
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = BossConfig(999_999),
+            PatternIds = new[] { "횡베기", "지면쓸기", "충격파" },
+            Patterns = Patterns(),
+            Seed = 51,
+            MaxTicks = 60 * 20,
+        });
+
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
+            bool soon = sim.NextActiveIn is double remaining && remaining <= 0.10;
+            outcome = sim.Tick(new InputFrame(inward ? toward : (sbyte)-toward, false, Dash: soon, false, false));
+        }
+
+        return PlayerAxes.From(sim.Events);
+    }
+
+    [Fact]
+    public void 파고드는_봇과_도망가는_봇을_대시_방향_축이_가른다()
+    {
+        // 여섯 패턴이 전부 distance[0]=0 이던 때는 안으로 가는 것이 정답인 상황이 아예 없었고,
+        // 그나마 나오던 -1 은 파이터가 보스 몸 안에 서서 부호가 뒤집힌 것이었다 — 성향이 아니라
+        // 겹침의 부산물이다. 이제 축이 양끝을 다 쓴다.
+        PlayerAxes inward = DashingBot(inward: true);
+        PlayerAxes outward = DashingBot(inward: false);
+
+        inward.DashSamples.ShouldBeGreaterThan(0);
+        outward.DashSamples.ShouldBeGreaterThan(0);
+        inward.DashDirectionBias.ShouldBeGreaterThan(0.5, "안으로만 뛰었는데 축이 안 따라온다");
+        outward.DashDirectionBias.ShouldBeLessThan(-0.5, "밖으로만 뛰었는데 축이 안 따라온다");
+    }
+
+    /// <summary>
+    /// 충격파 한 방을 <paramref name="walkTicks"/> 만큼 보스 쪽으로 걸어간 자리에서 맞아 본다.
+    /// 패턴은 2.0초 뒤에 서므로 그 전에 자리를 잡는다.
+    /// </summary>
+    private static DodgeEvent Shockwave(int walkTicks)
+    {
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = new BossConfig
+            {
+                MaxHealth = 999_999,
+                MoveSpeed = 0,
+                HalfWidth = 120,
+                PatternGap = 2.0,
+                Sprite = "boss_test",
+            },
+            PatternIds = new[] { "충격파" },
+            Patterns = Patterns(),
+            Seed = 1,
+            MaxTicks = 60 * 10,
+        });
+
+        for (int i = 0; i < 300 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame((sbyte)(i < walkTicks ? 1 : 0), false, false, false, false));
+        }
+
+        return sim.Events.Single();
+    }
+
+    [Fact]
+    public void 충격파는_붙은_쪽만_살려준다()
+    {
+        // 안쪽 220px 이 비어 있는 유일한 패턴이다. 몸 충돌이 허용하는 최소 간격(150)과 220 사이의
+        // 70px 주머니로 **파고들어야** 산다 — 그 결정이 dash_direction_bias 가 재려는 바로 그것이다.
+        // 두 수치는 다른 파일에 있다(patterns.json 의 220 · fighters.json 과 보스 반폭의 150).
+        // 어느 한쪽이 움직여 주머니가 닫히면 축은 조용히 다시 죽는다 — 여기서 빨개지게 한다.
+        DodgeEvent hugging = Shockwave(300);
+        DodgeEvent spacing = Shockwave(80);
+
+        hugging.Verdict.ShouldBe(HitVerdict.MissedByRange, "붙었는데 충격파에 맞았다 — 안쪽 주머니가 닫혔다");
+        hugging.Distance.ShouldBe(MinGap(), 0.001);
+
+        spacing.Verdict.ShouldBe(HitVerdict.Hit, "떨어져 있는데 안 맞았다 — 이 테스트가 주머니를 안 본다");
+        spacing.Distance.ShouldBeGreaterThan(220);
+    }
+
+    [Fact]
+    public void 정확히_겹친_자리는_고정된_쪽으로_민다()
+    {
+        // 정상 플레이에서는 나올 수 없는 자리다(매 틱 밀어내므로). 그래도 부동소수 0 의 부호나
+        // 난수로 가르지 않는다 — 한 번이라도 갈리면 리플레이 골든이 재현되지 않는다.
+        BattleSim.SeparatedX(480, 500, 150).ShouldBe(350, 1e-9);   // 왼쪽에 있었으면 왼쪽으로
+        BattleSim.SeparatedX(520, 500, 150).ShouldBe(650, 1e-9);   // 오른쪽에 있었으면 오른쪽으로
+        BattleSim.SeparatedX(500, 500, 150).ShouldBe(350, 1e-9);   // 정확히 겹치면 왼쪽으로 고정
     }
 
     [Fact]
@@ -348,6 +595,30 @@ public class BattleSimTests
         sim.Events.Count.ShouldBe(1);
         sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit);
         sim.Events[0].Verb.ShouldBe(DodgeVerb.Parry);
+    }
+
+    [Fact]
+    public void 관측이_그_판정에_무엇이_가능했는지를_같이_싣는다()
+    {
+        // PlayerAxes.From 은 이벤트 목록만 받는다 — 구조상 패턴 태그에 손이 안 닿는다.
+        // 그래서 "이 판정을 무엇으로 피할 수 있었나" 를 방출 시점에 실어 보낸다.
+        // 없으면 의존도 축은 사용 비율로밖에 못 만들어지고, 그건 스펙 8절의 정의가 아니다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 6 * BattleSim.Dt));
+
+        for (int i = 1; i <= 14; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.DashAvailable.ShouldBeTrue("dash_window=0.14 인데 대시가 없었다고 실렸다");
+        e.ParryAvailable.ShouldBeTrue("parryable=true 인데 패리가 없었다고 실렸다");
+        e.JumpAvailable.ShouldBeFalse("jumpable=false 인데 점프가 가능했다고 실렸다");
     }
 
     [Fact]

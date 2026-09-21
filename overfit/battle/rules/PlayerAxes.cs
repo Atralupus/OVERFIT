@@ -31,6 +31,11 @@ public sealed class PlayerAxes
 
     public double JumpTimingBias { get; private init; }
 
+    /// <summary>
+    /// <b>대시나 패리로도 피할 수 있었던 상황에서</b> 점프를 고른 비율 (스펙 8절).
+    /// 그냥 사용 비율이 아니다 — 그러면 "점프에 의존한다" 와 "점프로만 피할 수 있는 패턴만
+    /// 만났다" 가 같은 값이 되는데, 그 둘은 봉인할 것이 정반대다.
+    /// </summary>
     public double JumpReliance { get; private init; }
 
     /// <summary>
@@ -44,6 +49,7 @@ public sealed class PlayerAxes
 
     public double ParryRate { get; private init; }
 
+    /// <summary><b>다른 수단이 있는데</b> 패리를 고른 비율 (스펙 8절). <c>JumpReliance</c> 와 같은 셈법이다.</summary>
     public double ParryReliance { get; private init; }
 
     public double Greed { get; private init; }
@@ -63,6 +69,15 @@ public sealed class PlayerAxes
     /// <summary>패리로 설명된 관측 수. <c>ParryRate</c> 의 분모다.</summary>
     public int ParrySamples { get; private init; }
 
+    /// <summary>
+    /// 점프가 가능했고 <b>다른 수단도 가능했던</b> 관측 수 — <c>JumpReliance</c> 의 분모다.
+    /// 의존도는 부분집합의 부분집합이라 <c>Samples</c> 도 <c>JumpSamples</c> 도 이 얇기를 안 말해준다.
+    /// </summary>
+    public int JumpChoiceSamples { get; private init; }
+
+    /// <summary>패리가 가능했고 다른 수단도 가능했던 관측 수 — <c>ParryReliance</c> 의 분모다.</summary>
+    public int ParryChoiceSamples { get; private init; }
+
     public static PlayerAxes From(IReadOnlyList<DodgeEvent> events)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -74,6 +89,7 @@ public sealed class PlayerAxes
         var dashErrors = new List<double>();
         var jumpErrors = new List<double>();
         int dashes = 0, jumps = 0, parries = 0, parried = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
+        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0;
         double distance = 0;
 
         foreach (DodgeEvent e in events)
@@ -87,6 +103,27 @@ public sealed class PlayerAxes
             if (e.GreedWindow)
             {
                 greedy++;
+            }
+
+            // 의존도의 분모는 **진짜 선택이 있었던** 판정뿐이다 — 그 수단이 가능했고,
+            // 다른 수단도 하나 이상 가능했던 자리. 고를 수 없었던 것을 "안 골랐다" 로 세면
+            // 축이 플레이어의 성향이 아니라 보스의 패턴 구성을 재게 된다.
+            if (e.JumpAvailable && (e.DashAvailable || e.ParryAvailable))
+            {
+                jumpChoices++;
+                if (e.Verb == DodgeVerb.Jump)
+                {
+                    jumpChosen++;
+                }
+            }
+
+            if (e.ParryAvailable && (e.DashAvailable || e.JumpAvailable))
+            {
+                parryChoices++;
+                if (e.Verb == DodgeVerb.Parry)
+                {
+                    parryChosen++;
+                }
             }
 
             switch (e.Verb)
@@ -127,16 +164,18 @@ public sealed class PlayerAxes
             DashTimingVar = Variance(dashErrors),
             DashDirectionBias = Ratio(inward - outward, inward + outward),
             JumpTimingBias = Mean(jumpErrors),
-            JumpReliance = Ratio(jumps, events.Count),
+            JumpReliance = Ratio(jumpChosen, jumpChoices),
             AirborneAtImpactRatio = Ratio(airborne, events.Count),
             ParryRate = Ratio(parried, parries),
-            ParryReliance = Ratio(parries, events.Count),
+            ParryReliance = Ratio(parryChosen, parryChoices),
             Greed = Ratio(greedy, events.Count),
             DistanceBias = distance / events.Count,
             Samples = events.Count,
             DashSamples = dashes,
             JumpSamples = jumps,
             ParrySamples = parries,
+            JumpChoiceSamples = jumpChoices,
+            ParryChoiceSamples = parryChoices,
         };
     }
 
