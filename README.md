@@ -3,8 +3,18 @@
 **보스 하나를 다섯 번 잡는 2D 가로 소울라이크.** 단계를 넘을 때마다 보스가 쓰는 패턴이 늘고,
 그 패턴은 **이 플레이어가 지금까지 어떻게 피했는지에 따라 정해진다.**
 
-> ⚠️ **개발 중이고 아직 플레이 가능한 빌드가 없다.** 전투 규칙은 돌아가지만 화면이 아직 없다.
-> 빌드가 나오면 [Releases](https://github.com/Atralupus/OVERFIT/releases) 에 올리고 여기 링크한다 ([#10](https://github.com/Atralupus/OVERFIT/issues/10)).
+> **플레이 가능한 빌드가 있다** — [Releases](https://github.com/Atralupus/OVERFIT/releases/latest) 에서 macOS 판을 받는다.
+> 개발 중인 프로토타입이다. 서명하지 않은 빌드라 처음 열 때 우클릭 → 열기 가 필요하다.
+
+| | |
+|---|---|
+| <img src="docs/shots/title.png" width="420"> | <img src="docs/shots/battle-3.png" width="420"> |
+| **타이틀** — 조작 안내는 `InputMap` 에서 뽑는다 | **전투** — 보스가 패턴을 도는 동안 붉게 물든다 |
+| <img src="docs/shots/battle-1.png" width="420"> | <img src="docs/shots/battle-5.png" width="420"> |
+| 보스가 다가온다 | 몸이 겹치지 않는다 — 그래서 거리가 축이 된다 |
+
+> 그림체가 섞여 있고 연출이 없는 것은 프로토타입이기 때문이다. 스프라이트는 CC0 인 것을 모아 쓰고 있고,
+> 대시·패리 전용 애니메이션이 없어 색과 투명도로 대신한다.
 
 ---
 
@@ -104,9 +114,9 @@
 
 | | | 상태 |
 |---|---|---|
-| 1 | 전투 코어 — 대시·점프·패리, 보스 패턴 실행, 히트 판정 | 🔨 |
-| 2 | 패턴 시스템 — 정의 형식, 태그, 등록표 | 🔨 |
-| 3 | 계측 — 회피 이벤트 → 플레이어 10축 | 🔨 |
+| 1 | 전투 코어 — 대시·점프·패리, 보스 패턴 실행, 히트 판정 | ✅ |
+| 2 | 패턴 시스템 — 정의 형식, 태그, 등록표 | ✅ |
+| 3 | 계측 — 회피 이벤트 → 플레이어 10축 | ✅ |
 | 4 | 성장 루프 — 캐릭터 3택 · 강화 3택 · 단계 진행 | ⬜ |
 | 5 | 시뮬레이션 봇 + 데이터 공장 | ⬜ |
 | 6 | 망 학습 + C# 배포 | ⬜ |
@@ -114,7 +124,7 @@
 
 1·2·3 은 서로를 너무 많이 알아서 한 덩이로 만든다 — 지금 진행 중인
 [**전투 코어**](https://github.com/Atralupus/OVERFIT/issues/6)가 그 셋이고, 태스크 아홉으로 쪼개 놨다.
-**4/9 완료:**
+**아홉 태스크 전부 완료:**
 
 | 태스크 | |
 |---|---|
@@ -122,17 +132,17 @@
 | 2 파이터 행동 — 대시 · 패리 · 공격 · 스태미나 | ✅ |
 | 3 패턴 — 정의 · 로더 · 타임라인 실행기 | ✅ |
 | 4 히트 판정 — 닿는가, 무적과 패리가 막는가 | ✅ |
-| 5 보스와 전투 한 판 — `BattleSim` | ⬜ |
-| 6 계측 — 회피 이벤트와 10축 | ⬜ |
-| 7 패턴 여섯 · 최소 봇 · 헤드리스 데모 · 리플레이 골든 | ⬜ |
-| 8 에셋 파이프라인 — Duelyst (CC0) | ⬜ |
-| 9 전투 씬 — 보이게 한다 | ⬜ |
+| 5 보스와 전투 한 판 — `BattleSim` | ✅ |
+| 6 계측 — 회피 이벤트와 10축 | ✅ |
+| 7 패턴 여섯 · 최소 봇 · 헤드리스 데모 · 리플레이 골든 | ✅ |
+| 8 에셋 파이프라인 — Duelyst (CC0) | ✅ |
+| 9 전투 씬 — 보이게 한다 | ✅ |
 
 | | |
 |---|---|
 | 엔진 | Godot 4.7.2 (Mono / C#) · `forward_plus` · net8.0 · **데스크톱 전용** |
 | 화면 | 가로 1920×1080 |
-| 규칙 테스트 | Godot 없이 `tools/build.sh test` — **83건**, 0.2초 |
+| 규칙 테스트 | Godot 없이 `tools/build.sh test` — **156건**, 0.3초 |
 | 에셋 | [Duelyst](https://github.com/Jordyfel/duelyst-animated-sprites-godot) (**CC0 1.0**) — 유닛 696종 · 보스 50종 |
 
 ---
@@ -175,8 +185,10 @@ git clone git@github.com:Atralupus/OVERFIT.git
 cd OVERFIT
 tools/build.sh doctor      # 무엇이 없는지 알려준다
 tools/build.sh import      # 클론 직후 반드시 한 번
-tools/build.sh test        # 규칙 테스트 — Godot 없이 0.2초
-tools/build.sh run         # 실행 (아직 타이틀 · 자리 씬뿐이다)
+tools/build.sh test        # 규칙 테스트 — Godot 없이 0.3초
+tools/build.sh run         # 실행
+tools/build.sh export      # 플레이 가능한 빌드 → out/OVERFIT.app
+tools/build.sh shots       # 스크린샷 → out/shots · docs/shots
 ```
 
 인자 없이 `tools/build.sh` 를 부르면 서브커맨드 전체 목록이 나온다 — **README 보다 그쪽이 최신이다.**

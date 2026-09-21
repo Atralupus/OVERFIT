@@ -17,6 +17,8 @@
 #   tools/build.sh import              에셋 임포트만 (헤드리스). 클론 직후 반드시 한 번
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
 #   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
+#   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
+#                                      엔진 안에서 뷰포트를 직접 찍는다 — 화면 기록 권한이 필요 없고 다른 창이 안 겹친다
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
 #   EXTRA="--fighter=단검 --stage=2" tools/build.sh demo   캐릭터 · 단계 지정
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
@@ -376,6 +378,32 @@ export_template_dir() {
 #
 # 템플릿이 없으면 **먼저 멈춘다.** Godot 은 템플릿 없이도 끝까지 가다가 실행되지 않는
 # 껍데기를 남기는데, 그건 실패보다 나쁘다 — 산출물이 생겼으니 성공한 것처럼 보인다.
+# 창을 띄워 스크린샷. 헤드리스로는 못 한다 — 뷰포트에 그려진 것이 없다.
+cmd_shots() {
+  need_godot
+  cmd_build
+  say "스크린샷"
+  local out="$OUT/shots" log="$OUT/shots.log" code=0
+  rm -rf "$out"
+  mkdir -p "$out"
+  "$GODOT" --path "$PROJECT" -- --shots "--shot-dir=$out" $LOG_ARG > "$log" 2>&1 || code=$?
+  grep -E "^\[(shots|shot)\]" "$log" || true
+  judge_headless "스크린샷" "$log" "shots=done" "$code"
+
+  local n
+  n="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"
+  [[ "$n" -gt 0 ]] || die "스크린샷이 0장입니다 — 창이 안 떴거나 뷰포트가 비었습니다. 전체 로그: $log"
+
+  # 문서용 축소본. 원본은 1920x1080 이라 README 에 그대로 넣으면 무겁다.
+  mkdir -p "$ROOT/docs/shots"
+  local f
+  for f in "$out"/*.png; do
+    sips -Z 960 "$f" --out "$ROOT/docs/shots/$(basename "$f")" >/dev/null 2>&1 || warn "축소 실패: $(basename "$f")"
+  done
+
+  ok "스크린샷 ${n}장 — $out (축소본 docs/shots/)"
+}
+
 cmd_export() {
   need_godot
   local preset="${1:-macOS}"
@@ -448,6 +476,7 @@ case "${1:-}" in
   import)    shift; cmd_import "$@" ;;
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
+  shots)     shift; cmd_shots "$@" ;;
   export)    shift; cmd_export "$@" ;;
   clean)     shift; cmd_clean "$@" ;;
   ""|-h|--help|help) usage ;;
