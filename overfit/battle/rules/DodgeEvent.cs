@@ -23,7 +23,7 @@ public enum DodgeVerb
 /// <param name="Direction">대시 방향. +1 보스 쪽(안) · -1 반대(밖) · 0 대시가 아님.</param>
 /// <param name="Airborne">그 순간 공중에 있었나.</param>
 /// <param name="Distance">보스와의 거리.</param>
-/// <param name="GreedWindow">보스 선딜 중에 공격을 하고 있었나.</param>
+/// <param name="GreedWindow">판정이 서는 그 순간 공격 중이었나 — 보스의 선딜을 욕심내 파고든 흔적이다.</param>
 public readonly record struct DodgeEvent(
     string PatternId,
     DodgeVerb Verb,

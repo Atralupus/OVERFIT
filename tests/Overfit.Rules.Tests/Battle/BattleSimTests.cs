@@ -196,4 +196,65 @@ public class BattleSimTests
         PlayerAxes axes = PlayerAxes.From(sim.Events);
         axes.Samples.ShouldBe(sim.Events.Count);
     }
+
+    [Fact]
+    public void 한_번의_대시가_연속타_두_대를_모두_설명한다()
+    {
+        // 대시 무적(0.14초) 한 번이 멀티히트 판정 두 개를 다 덮도록 타임라인을 짠다.
+        // Land 가 첫 판정에서 회피 행동을 지워 버리면 두 번째 판정은 "아무것도 안 했다"로
+        // 잘못 기록된다 — 근거가 없는 게 아니라 잘못 붙는 사고다. 그래서 행동은 Land 가 아니라
+        // RememberDodgeStart 가 그 행동이 끝났을 때만 지운다.
+        var pattern = new PatternDef
+        {
+            Tags = new PatternTags
+            {
+                DashWindow = 0.14,
+                DashDirection = "either",
+                Jumpable = false,
+                AntiAir = false,
+                Parryable = false,
+                ParryWindow = 0,
+                PunishGreed = false,
+                Reach = "close",
+                Feint = false,
+                MultiHit = 2,
+                Tracking = false,
+            },
+            Timeline = new List<PatternStep>
+            {
+                new() { T = 3 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
+                new() { T = 6 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
+                new() { T = 10 * BattleSim.Dt, Kind = "end" },
+            },
+        };
+
+        var setup = new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = new BossConfig
+            {
+                MaxHealth = 999_999,
+                MoveSpeed = 0,
+                HalfWidth = 120,
+                PatternGap = 3 * BattleSim.Dt,
+                Sprite = "boss_test",
+            },
+            PatternIds = new[] { "멀티히트" },
+            Patterns = new Dictionary<string, PatternDef> { ["멀티히트"] = pattern },
+            Seed = 1,
+            MaxTicks = 60 * 5,
+        };
+
+        var sim = new BattleSim(setup);
+        // 패턴 시작(3틱째)과 같은 틱에 대시 — 대시 무적이 3·6틱째 판정을 둘 다 덮는다.
+        for (int i = 1; i <= 12; i++)
+        {
+            sim.Tick(new InputFrame(0, false, Dash: i == 3, false, false));
+        }
+
+        sim.Events.Count.ShouldBe(2);
+        sim.Events[0].Verb.ShouldBe(DodgeVerb.Dash);
+        sim.Events[1].Verb.ShouldBe(DodgeVerb.Dash);
+    }
 }

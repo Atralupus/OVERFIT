@@ -83,8 +83,11 @@ public sealed class BattleSim
     public BattleOutcome? Tick(InputFrame input)
     {
         Ticks++;
+        // 틱 시작의 접지 상태. "이번 틱에 땅에서 떨어졌는가" 는 이것과 비교해야만 알 수 있다 —
+        // 공중에서 점프를 또 눌러도 Fall 이 물리적으로는 무시하지만, 그 입력만 보면 구별이 안 된다.
+        bool wasGrounded = Fighter.Grounded;
         Fighter.Tick(input, Dt);
-        RememberDodgeStart(input);
+        RememberDodgeStart(input, wasGrounded);
         AdvanceBoss();
         Strike();
 
@@ -158,10 +161,14 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 이번 틱에 회피 행동이 시작됐으면 그 시각과 방향을 적어 둔다.
-    /// <b>판정이 설 때 이것과의 차이가 타이밍 오차가 된다.</b>
+    /// 이번 틱에 회피 행동이 시작됐으면 그 시각과 방향을 적어 두고, 이미 적어 둔 행동이
+    /// 끝났으면 잊는다. <b>판정이 설 때 이것과의 차이가 타이밍 오차가 된다.</b>
     /// </summary>
-    private void RememberDodgeStart(InputFrame input)
+    /// <param name="input">이번 틱의 입력. 점프가 눌렸는지를 본다.</param>
+    /// <param name="wasGrounded">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 접지 상태.
+    /// 점프 엣지 검출에 쓴다 — <see cref="Fighter.Grounded"/> 만 보면 "떨어진 순간"과
+    /// "이미 공중인데 또 눌렀다"를 구별할 수 없다.</param>
+    private void RememberDodgeStart(InputFrame input, bool wasGrounded)
     {
         double now = Ticks * Dt;
         if (Fighter.Action == FighterAction.Dash && Fighter.ActionElapsed <= Dt)
@@ -177,10 +184,25 @@ public sealed class BattleSim
             _actionStartedAt = now;
             _actionDirection = 0;
         }
-        else if (input.Jump && !Fighter.Grounded && Fighter.VelocityY > 0)
+        else if (input.Jump && wasGrounded && !Fighter.Grounded)
         {
             _actionVerb = DodgeVerb.Jump;
             _actionStartedAt = now;
+            _actionDirection = 0;
+        }
+        // 시작한 행동이 끝났을 때 잊는다. **Land 에서 지우지 않는다** — 대시 한 번의 무적이
+        // 연속타 여러 대를 막을 수 있는데, 첫 대가 소비해 버리면 나머지가 "회피 수단 없음" 으로
+        // 기록되어 근거가 없는 게 아니라 **잘못 붙는다.**
+        else if (_actionVerb switch
+        {
+            DodgeVerb.Dash => Fighter.Action != FighterAction.Dash,
+            DodgeVerb.Parry => Fighter.Action != FighterAction.Parry,
+            DodgeVerb.Jump => Fighter.Grounded,
+            _ => false,
+        })
+        {
+            _actionStartedAt = double.NaN;
+            _actionVerb = DodgeVerb.None;
             _actionDirection = 0;
         }
     }
@@ -210,11 +232,6 @@ public sealed class BattleSim
 
         Log.Info("dodge", $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
             + $" err={error:0.000} dir={_actionDirection} air={!Fighter.Grounded} hp={Fighter.Health}");
-
-        // 이 판정에 대한 회피는 여기서 소비된다 — 다음 판정은 새 행동을 봐야 한다.
-        _actionStartedAt = double.NaN;
-        _actionVerb = DodgeVerb.None;
-        _actionDirection = 0;
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
