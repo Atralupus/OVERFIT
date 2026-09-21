@@ -1,0 +1,33 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <!-- Godot 4.7.2 의 GodotSharp.dll 이 .NETCoreApp v8.0 을 타깃한다. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+
+    <Nullable>enable</Nullable>
+    <!-- net8.0 이 짝짓는 언어 버전. latest 는 SDK 를 올리는 순간 조용히 바뀐다. -->
+    <LangVersion>12.0</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- .editorconfig 의 스타일 규칙을 빌드에서도 검사한다. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- 이게 있어야 빌드에서 IDE0005(안 쓰는 using)가 잡힌다. Roslyn 제약이다.
+         켜면 XML 문서 주석 누락(CS1591)까지 잔소리하므로 그것만 끈다. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- 성능·신뢰성 카테고리만 전부 켠다. AnalysisMode=All(전체)은 켜지 않는다 —
+         큰 덩어리(CA2213 · CA1062 · CA1003)가 Godot 구조에서 틀린 규칙이다.
+         개별 억제는 .editorconfig 한 곳에 사유와 함께 둔다. -->
+    <AnalysisModePerformance>All</AnalysisModePerformance>
+    <AnalysisModeReliability>All</AnalysisModeReliability>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 에셋은 장수가 많아 컴파일 대상 스캔에서 제외한다. 아직 폴더가 없어도 무해하다. -->
+    <Compile Remove="assets/**" />
+    <None Remove="assets/**" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,95 @@
+# 이 저장소의 유일한 포맷 기준. dotnet format 이 이 파일을 읽는다.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{md,markdown}]
+# 마크다운은 줄 끝 공백 두 개가 줄바꿈이라 건드리지 않는다.
+trim_trailing_whitespace = false
+
+[*.{json,yml,yaml,tscn,tres,godot,cfg,svg,csproj,sln}]
+indent_size = 2
+
+[*.{py,sh}]
+indent_size = 4
+
+[*.cs]
+indent_size = 4
+max_line_length = 120
+
+# ---------- using ----------
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:warning
+
+# ---------- 네이밍 ----------
+dotnet_naming_rule.types_pascal.symbols = type_symbols
+dotnet_naming_rule.types_pascal.style = pascal_case
+dotnet_naming_rule.types_pascal.severity = warning
+dotnet_naming_symbols.type_symbols.applicable_kinds = class,struct,interface,enum,delegate,method,property,event
+dotnet_naming_symbols.type_symbols.applicable_accessibilities = *
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_style.underscore_camel.required_prefix = _
+
+# ---------- 스타일 ----------
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_readonly_field = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_prefer_switch_expression = true:suggestion
+
+# ---------- 새 줄 ----------
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# ---------- 들여쓰기 · 공백 ----------
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+
+# ---------- 잡아야 하는 것 ----------
+# 안 쓰는 using / 변수는 경고로 잡는다. 프로토타입이라 그 이상은 조인다고 이득이 없다.
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.CS0168.severity = warning
+dotnet_diagnostic.CS0219.severity = warning
+
+# ---------- 분석기 개별 억제 ----------
+# 성능(AnalysisModePerformance) · 신뢰성(AnalysisModeReliability) 카테고리를 두 csproj 에서 전부 켰다.
+# 그중 이 프로젝트 구조에서 **틀린** 규칙만 여기서 끈다. 끌 때는 반드시 사유를 한 줄 남긴다.
+#
+# CA2007 (await 에 ConfigureAwait 를 붙여라): Godot 은 씬 트리 조작을 메인 스레드에서만 허용한다.
+#   ConfigureAwait(false) 는 이어지는 코드를 스레드 풀로 보내므로 여기선 편의가 아니라 **버그**다.
+dotnet_diagnostic.CA2007.severity = none
+# CA2000 (범위를 벗어나기 전에 IDisposable 을 Dispose 하라): Godot Node 는 IDisposable 이지만
+#   수명을 씬 트리가 소유한다(AddChild 한 노드를 Dispose 하면 트리가 깨진다). 분석기가 그 소유권을 모른다.
+dotnet_diagnostic.CA2000.severity = none
+
+# 테스트 코드에만 끄는 것. 링크된 규칙 소스는 위 전역 설정 그대로 본다.
+[tests/**.cs]
+# CA1861 (반복 호출에 상수 배열 인수 대신 static readonly 필드): 단언의 기대값 `ShouldBe(new[] { "damaged", "died" })`
+#   는 그 줄에서 읽혀야 한다. 필드로 올리면 읽기가 나빠지고, 테스트 코드는 성능 대상이 아니다.
+dotnet_diagnostic.CA1861.severity = none
+# CA1806 (만든 개체를 쓰지 않는다): `Throws(() => new WaveRunner(...))` 는 **생성자가 던지는 것** 자체가 단언이다.
+dotnet_diagnostic.CA1806.severity = none

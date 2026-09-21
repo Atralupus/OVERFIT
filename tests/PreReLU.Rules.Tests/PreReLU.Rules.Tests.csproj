@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    규칙(순수 C#) 전용 테스트 프로젝트.
+
+    왜 prerelu/ **바깥**인가: Godot.NET.Sdk 의 기본 Compile glob 은 프로젝트 폴더 전체를 훑는다.
+    tests/ 를 prerelu/ 안에 두면 테스트 소스가 게임 어셈블리에 그대로 들어간다.
+    밖에 두면 게임 빌드·익스포트 경로가 한 글자도 바뀌지 않는다.
+
+    왜 소스를 **링크**하는가: 규칙 파일은 게임의 것이다. 옮기지 않는다.
+    아래 Compile Include 가 원본을 그 자리에 둔 채 이 어셈블리에도 컴파일한다.
+    Godot 을 끌고 오는 파일이 하나라도 섞이면 즉시 CS0246 으로 막힌다 — 그게 가드레일이다.
+    ("규칙은 Node 를 모른다"를 컴파일러가 강제한다.)
+
+    ⚠ **이 링크 목록이 곧 "규칙 층"의 정의다.** 커밋 훅(tools/precommit_check.sh)의 TDD 게이트가
+    이 csproj 를 읽어 범위를 정하므로, 새 순수 파일을 여기 넣는 순간 그 파일은 테스트 없이 못 고친다.
+  -->
+
+  <PropertyGroup>
+    <!-- 게임과 같은 타깃. Godot 4.7.2 의 GodotSharp.dll 이 .NETCoreApp v8.0 을 탄다. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <!-- 게임과 같은 언어 버전. net8.0 이 짝짓는 12.0 으로 고정한다. -->
+    <LangVersion>12.0</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ImplicitUsings>false</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>PreReLU.Rules.Tests</RootNamespace>
+
+    <!-- .editorconfig 스타일 규칙을 테스트 코드에도 건다 (게임 csproj 와 같은 설정). -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591 은 문서 주석 누락. CS1574/CS1580 은 링크된 소스가 Godot 쪽 타입을 가리키는 주석 —
+         이 어셈블리엔 그 타입이 없으니 못 찾는 게 정상이다. -->
+    <NoWarn>$(NoWarn);CS1591;CS1574;CS1580</NoWarn>
+
+    <!-- 게임 csproj 와 같은 분석기 설정. 링크된 규칙 소스를 여기서도 같은 잣대로 본다. -->
+    <AnalysisModePerformance>All</AnalysisModePerformance>
+    <AnalysisModeReliability>All</AnalysisModeReliability>
+  </PropertyGroup>
+
+  <!-- ── 링크: 게임의 순수 C# 소스. 경로는 이 csproj 기준 ────────────────────────────── -->
+  <ItemGroup>
+    <!-- 순수 core. Godot 을 아는 것(Balance · Game · LogSink)은 뺀다 — 넣으면 CS0246 으로 즉시 막힌다.
+         와일드카드가 아니라 이 목록이 전부다. 새 순수 파일은 여기 손으로 넣는다. -->
+    <Compile Include="../../prerelu/core/Log.cs" LinkBase="linked/core" />
+    <Compile Include="../../prerelu/core/Det.cs" LinkBase="linked/core" />
+    <Compile Include="../../prerelu/core/CmdArgs.cs" LinkBase="linked/core" />
+    <Compile Include="../../prerelu/core/JsonData.cs" LinkBase="linked/core" />
+    <Compile Include="../../prerelu/core/BalanceData.cs" LinkBase="linked/core" />
+  </ItemGroup>
+
+  <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
+       덕분에 테스트가 저장소 경로를 몰라도 되고, 값을 고치면 다음 빌드가 복사한다. -->
+  <ItemGroup>
+    <None Include="../../prerelu/data/*.json" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- 병렬 실행을 끈다. Log.Sink · Log.Level 은 전역이라 LogCapture 를 쓰는 테스트가 동시에 돌면
+       한쪽의 Dispose 가 다른 쪽의 싱크를 걷어가 실패 메시지가 텅 빈 채로 나온다.
+       코드 쪽 [assembly: CollectionBehavior(DisableTestParallelization = true)] 는 xunit.v3 4.0 에서
+       Obsolete(error) 라 컴파일이 안 된다 — 그래서 설정 파일로 끈다.
+       규칙 테스트는 Godot 을 안 띄워 전부 합쳐도 초 단위라 병렬로 얻을 것이 거의 없다. -->
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ⚠ xunit.runner.visualstudio 를 빼면 `dotnet test` 가 테스트 0개를 찾고 **조용히 통과**한다.
+         tools/build.sh test 가 발견 개수를 세어 인용하고 0 이면 실패시키는 것도 그래서다. -->
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="Shouldly" Version="4.3.0" />
+    <PackageReference Include="coverlet.collector" Version="10.0.1" />
+  </ItemGroup>
+
+  <!-- ⚠ TestingPlatformDotnetTestSupport 는 켜지 않는다 — coverlet.collector 와 양립하지 않는다. -->
+
+</Project>
