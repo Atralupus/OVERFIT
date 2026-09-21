@@ -182,4 +182,18 @@ public class BattleSimTests
             }
         }
     }
+
+    [Fact]
+    public void 전투가_회피_관측을_남긴다()
+    {
+        var sim = new BattleSim(Setup());
+        for (int i = 0; i < 900; i++)
+        {
+            sim.Tick(new InputFrame(0, false, Dash: i % 41 == 0, false, false));
+        }
+
+        sim.Events.ShouldNotBeEmpty();
+        PlayerAxes axes = PlayerAxes.From(sim.Events);
+        axes.Samples.ShouldBe(sim.Events.Count);
+    }
 }

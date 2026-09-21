@@ -51,6 +51,15 @@ public sealed class BattleSim
     private double _gapLeft;
     private int _picks;
 
+    private readonly List<DodgeEvent> _events = new();
+
+    /// <summary>회피 행동이 시작된 시각(초). 타이밍 오차를 재려고 들고 있는다.</summary>
+    private double _actionStartedAt = double.NaN;
+
+    private DodgeVerb _actionVerb = DodgeVerb.None;
+
+    private int _actionDirection;
+
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
@@ -67,11 +76,15 @@ public sealed class BattleSim
     /// <summary>지금까지 진행한 틱 수.</summary>
     public int Ticks { get; private set; }
 
+    /// <summary>이 판에서 일어난 회피 관측 전부. <see cref="PlayerAxes.From"/> 에 그대로 넣는다.</summary>
+    public IReadOnlyList<DodgeEvent> Events => _events;
+
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
     {
         Ticks++;
         Fighter.Tick(input, Dt);
+        RememberDodgeStart(input);
         AdvanceBoss();
         Strike();
 
@@ -144,6 +157,34 @@ public sealed class BattleSim
         Log.Debug("boss", $"pattern_begin id={id} pick={_picks} tick={Ticks}");
     }
 
+    /// <summary>
+    /// 이번 틱에 회피 행동이 시작됐으면 그 시각과 방향을 적어 둔다.
+    /// <b>판정이 설 때 이것과의 차이가 타이밍 오차가 된다.</b>
+    /// </summary>
+    private void RememberDodgeStart(InputFrame input)
+    {
+        double now = Ticks * Dt;
+        if (Fighter.Action == FighterAction.Dash && Fighter.ActionElapsed <= Dt)
+        {
+            _actionVerb = DodgeVerb.Dash;
+            _actionStartedAt = now;
+            // 보스 쪽으로 갔으면 안(+1), 반대면 밖(-1)
+            _actionDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
+        }
+        else if (Fighter.Action == FighterAction.Parry && Fighter.ActionElapsed <= Dt)
+        {
+            _actionVerb = DodgeVerb.Parry;
+            _actionStartedAt = now;
+            _actionDirection = 0;
+        }
+        else if (input.Jump && !Fighter.Grounded && Fighter.VelocityY > 0)
+        {
+            _actionVerb = DodgeVerb.Jump;
+            _actionStartedAt = now;
+            _actionDirection = 0;
+        }
+    }
+
     /// <summary>보스의 판정 하나를 파이터에게 대고, 맞았으면 깎는다.</summary>
     private void Land(HitBox box)
     {
@@ -153,7 +194,27 @@ public sealed class BattleSim
             Fighter.TakeDamage(box.Damage);
         }
 
-        Log.Debug("dodge", $"pattern={Boss.CurrentPattern} verdict={verdict} hp={Fighter.Health} tick={Ticks}");
+        double now = Ticks * Dt;
+        DodgeVerb verb = double.IsNaN(_actionStartedAt) ? DodgeVerb.None : _actionVerb;
+        double error = verb == DodgeVerb.None ? 0 : _actionStartedAt - now;
+
+        _events.Add(new DodgeEvent(
+            PatternId: Boss.CurrentPattern ?? "?",
+            Verb: verb,
+            Verdict: verdict,
+            TimingError: error,
+            Direction: verb == DodgeVerb.Dash ? _actionDirection : 0,
+            Airborne: !Fighter.Grounded,
+            Distance: Math.Abs(Fighter.X - Boss.X),
+            GreedWindow: Fighter.Action == FighterAction.Attack));
+
+        Log.Info("dodge", $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
+            + $" err={error:0.000} dir={_actionDirection} air={!Fighter.Grounded} hp={Fighter.Health}");
+
+        // 이 판정에 대한 회피는 여기서 소비된다 — 다음 판정은 새 행동을 봐야 한다.
+        _actionStartedAt = double.NaN;
+        _actionVerb = DodgeVerb.None;
+        _actionDirection = 0;
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
