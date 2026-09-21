@@ -13,7 +13,7 @@ Claude 와 사람이 **같이** 읽는 규칙이다. 여기 적힌 것은 취향
 - **main 에 직접 커밋하지 않는다.** 모든 변경은 브랜치 → PR 을 거친다.
   커밋 훅(`tools/precommit_check.sh`)이 막는다. 우회는 커밋 메시지에 `on-main: <사유>`.
 - **규칙 코드는 TDD 로 고친다.** 실패하는 테스트 먼저(red) → 통과할 만큼만(green) → 정리(refactor).
-  범위는 손으로 적지 않는다 — `tests/PreReLU.Rules.Tests` 의 csproj 가 **링크하는 파일**이 곧 범위다.
+  범위는 손으로 적지 않는다 — `tests/Overfit.Rules.Tests` 의 csproj 가 **링크하는 파일**이 곧 범위다.
   우회는 `no-test: <사유>`.
 - 커밋 전 게이트는 `tools/build.sh check` 하나다. **검증하는 곳이 늘어나도 그 명령을 부른다** —
   단계를 딴 데 복사해 두면 게이트가 자랄 때마다 조용히 어긋난다(복사본만 짧아진다).
@@ -23,11 +23,11 @@ Claude 와 사람이 **같이** 읽는 규칙이다. 여기 적힌 것은 취향
 게임 규칙은 **Godot 을 모르는 순수 C#** 이다. 씬은 그 결과를 그릴 뿐이다.
 
 ```
-prerelu/core/Log.cs        순수 — Godot 을 모른다
-prerelu/core/LogSink.cs    Godot 절반 — GD.Print 와 OS.* 가 여기 있다
+overfit/core/Log.cs        순수 — Godot 을 모른다
+overfit/core/LogSink.cs    Godot 절반 — GD.Print 와 OS.* 가 여기 있다
 ```
 
-이 경계를 **컴파일러가 강제한다.** `tests/PreReLU.Rules.Tests` 의 csproj 가 순수 파일을 링크하는데,
+이 경계를 **컴파일러가 강제한다.** `tests/Overfit.Rules.Tests` 의 csproj 가 순수 파일을 링크하는데,
 그 어셈블리에는 GodotSharp 참조가 없다. Godot 을 끌고 오는 파일이 하나라도 섞이면 즉시 `CS0246` 이다.
 
 새 순수 파일을 만들면 **그 csproj 의 링크 목록에 손으로 한 줄 넣는다.** 와일드카드를 쓰지 않는 이유는
@@ -43,7 +43,7 @@ Godot 쪽 클래스(`Node` 를 상속하는 것)는 **파일 이름과 클래스
 
 ## 3. 수치는 코드가 아니라 데이터에
 
-`prerelu/data/*.json` 이 진실이다. C# 에 매직 넘버를 두지 않는다.
+`overfit/data/*.json` 이 진실이다. C# 에 매직 넘버를 두지 않는다.
 DTO 는 `core/BalanceData.cs` 이고, `required` 가 붙은 키가 빠지면 부팅이 **빠진 키를 전부 나열하고** 멈춘다.
 
 제약(예: "이 값의 합은 저 값보다 작아야 한다")이 생기면 `tools/verify_balance.py` 를 만들어

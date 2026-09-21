@@ -252,7 +252,7 @@ fi
 # 링크된 파일은 Godot 없이 tests/ 에서 통째로 돌릴 수 있다는 뜻이고, 그러니 테스트를 못 쓸 핑계가 없다.
 # csproj 가 진실이라 새 파일이 링크에 들어오면 게이트도 자동으로 따라온다 (목록 이중관리 없음).
 # 반대(tests/ 만 고침)는 막지 않는다 — 실패하는 테스트를 먼저 커밋하는 red 단계가 TDD 의 첫걸음이다.
-gated_re="$(python3 - "$REPO/tests/PreReLU.Rules.Tests/PreReLU.Rules.Tests.csproj" 2>/dev/null <<'PY'
+gated_re="$(python3 - "$REPO/tests/Overfit.Rules.Tests/Overfit.Rules.Tests.csproj" 2>/dev/null <<'PY'
 import sys
 import xml.etree.ElementTree as ET
 
@@ -260,7 +260,7 @@ import xml.etree.ElementTree as ET
 EXCLUDE = {
     # balance.json 의 모양 그 자체인 노브 DTO. 수치 하나 늘리는 커밋은 데이터 검증이 보고,
     # 그 수치를 실제로 쓰는 규칙 파일은 어차피 이 게이트에 걸린다.
-    "prerelu/core/BalanceData.cs",
+    "overfit/core/BalanceData.cs",
 }
 
 SPECIAL = set(".[]{}()*+?^$|\\")
@@ -291,7 +291,7 @@ for node in root.iter("Compile"):
     inc = (node.get("Include") or "").replace("\\", "/")
     while inc.startswith("../"):
         inc = inc[3:]
-    if not inc.startswith("prerelu/") or inc in EXCLUDE:
+    if not inc.startswith("overfit/") or inc in EXCLUDE:
         continue
     pats.append(to_regex(inc))
 
@@ -343,12 +343,12 @@ $rules_list
 스테이징된 파일:
 $rules_list
 
-이 파일들은 tests/PreReLU.Rules.Tests 의 csproj 가 링크하는 것들입니다 —
+이 파일들은 tests/Overfit.Rules.Tests 의 csproj 가 링크하는 것들입니다 —
 Godot 없이 초 단위로 전부 돌릴 수 있다는 뜻이고, 그래서 게이트가 여기까지 봅니다.
 실패하는 테스트를 먼저 쓰고(red) → 통과할 만큼만 고치고(green) → 정리(refactor)하세요.
 
 셋 중 하나를 하세요:
-  1. tests/PreReLU.Rules.Tests 에 테스트를 더하고 함께 스테이징한다
+  1. tests/Overfit.Rules.Tests 에 테스트를 더하고 함께 스테이징한다
      (테스트만 먼저 커밋하는 red 상태는 막지 않습니다)
   2. 그 변경을 이 커밋에서 뺀다
   3. 정말 테스트가 필요 없으면 커밋 메시지 본문에 사유를 적는다:
@@ -365,9 +365,9 @@ fi
 command -v dotnet >/dev/null || pass   # 툴체인이 없으면 검사할 방법이 없다
 
 # 스테이징된 것 중 검사 대상이 없으면 돌릴 이유가 없다.
-# C# 뿐 아니라 prerelu/data/*.json 도 대상이다 — 수치는 코드가 아니라 그 파일에만 있다.
+# C# 뿐 아니라 overfit/data/*.json 도 대상이다 — 수치는 코드가 아니라 그 파일에만 있다.
 if [[ -n "$staged" ]] \
-  && ! grep -qE '\.(cs|csproj|sln)$|(^|/)\.(editorconfig|runsettings)$|^prerelu/data/.*\.json$|^prerelu/.*\.(tscn|tres|godot)$' <<< "$staged"; then
+  && ! grep -qE '\.(cs|csproj|sln)$|(^|/)\.(editorconfig|runsettings)$|^overfit/data/.*\.json$|^overfit/.*\.(tscn|tres|godot)$' <<< "$staged"; then
   pass
 fi
 

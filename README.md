@@ -1,4 +1,4 @@
-# PreReLU
+# Overfit
 
 **딥러닝을 실제로 쓰는 게임을 만든다.** 아직 설계 중이고, 지금 저장소에 있는 것은 **베이스뿐**이다.
 
@@ -19,7 +19,7 @@
 - **규칙과 그림을 나눈다.** 게임 규칙은 Godot 을 모르는 순수 C# 이고 씬은 그 결과를 그릴 뿐이다.
   테스트 프로젝트가 그 파일들을 링크하므로 **"규칙은 Godot 을 모른다"를 컴파일러가 강제한다** —
   순수 파일에 `using Godot;` 가 들어오면 즉시 `CS0246` 이다.
-- **수치는 코드가 아니라 데이터에.** `prerelu/data/*.json` 이 진실이고, 필수 키가 빠지면
+- **수치는 코드가 아니라 데이터에.** `overfit/data/*.json` 이 진실이고, 필수 키가 빠지면
   부팅이 **빠진 키를 전부 나열하고** 멈춘다.
 - **같은 시드면 같은 결과.** 난수는 "뽑는" 것이 아니라 시드·도메인·키로 **좌표를 조회**하는 것이라
   호출 순서가 값에 섞이지 않는다. 규칙 층에는 `Random` 도 벽시계도 없다.
@@ -33,8 +33,8 @@
 환경 세팅부터 작업 방식까지 **[CONTRIBUTING.md](CONTRIBUTING.md)** 하나에 있다.
 
 ```bash
-git clone git@github.com:Atralupus/PreReLU.git
-cd PreReLU
+git clone git@github.com:Atralupus/Overfit.git
+cd Overfit
 tools/build.sh doctor      # 무엇이 없는지 알려준다
 tools/build.sh import      # 클론 직후 반드시 한 번
 tools/build.sh run         # 게임 실행

@@ -1,0 +1,50 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="OVERFIT"
+config/version="0.1.0"
+run/main_scene="res://title/Title.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+config/icon="res://icon.svg"
+
+[autoload]
+
+; 등록 순서가 곧 초기화 순서다. Balance → Game.
+; Game 이 마지막이라 _Ready 에서 앞의 것들을 쓸 수 있다. 새 Autoload 는 Game 앞에 넣는다.
+Balance="*res://core/Balance.cs"
+Game="*res://core/Game.cs"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[gui]
+
+; 전역 Theme 하나. 색·폰트·여백은 여기서만 정의한다.
+theme/custom="res://ui/theme/main.tres"
+
+[dotnet]
+
+project/assembly_name="Overfit"
+
+[rendering]
+
+; 데스크톱 전용이다 — 모바일은 목표가 아니다. 그래서 데스크톱 기본값인 forward_plus 를 쓴다.
+; 2D 뿐이라 렌더러 선택이 성능에 거의 영향이 없고, mobile 을 남겨두면 "모바일도 하나?" 라는 오해만 남는다.
+renderer/rendering_method="forward_plus"
+; 화면 바탕색. Control 은 스스로 배경을 칠하지 않으므로 여기가 유일한 바탕이다.
+environment/defaults/default_clear_color=Color(0.070588, 0.078431, 0.109804, 1)

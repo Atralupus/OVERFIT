@@ -17,8 +17,8 @@ export GODOT_PATH=/path/to/Godot
 ## 2. 클론 직후
 
 ```bash
-git clone git@github.com:Atralupus/PreReLU.git
-cd PreReLU
+git clone git@github.com:Atralupus/Overfit.git
+cd Overfit
 tools/build.sh doctor      # 무엇이 없는지 알려준다
 tools/build.sh import      # ⚠ 반드시 한 번. .godot/ 캐시와 .uid 를 만든다
 tools/build.sh run         # 게임 실행
@@ -55,7 +55,7 @@ tools/build.sh run         # 게임 실행
 요약하면 넷이다.
 
 1. **main 에 직접 커밋하지 않는다.** 브랜치 → PR.
-2. **규칙 코드는 TDD 로 고친다.** `tests/PreReLU.Rules.Tests` 의 csproj 가 링크하는 파일이 그 범위다.
+2. **규칙 코드는 TDD 로 고친다.** `tests/Overfit.Rules.Tests` 의 csproj 가 링크하는 파일이 그 범위다.
 3. **규칙은 Godot 을 모른다.** 순수 C# 파일에 `using Godot;` 를 넣으면 테스트 어셈블리가 `CS0246` 으로 막는다.
 4. **디버깅은 전부 로그로.** `[tag][레벨] key=value`, 에러는 `[E]`.
 
@@ -71,12 +71,12 @@ Godot 위치가 다르면 그 파일도 같이 고친다.
 ## 6. 저장소 구조
 
 ```
-prerelu/           Godot 프로젝트
+overfit/           Godot 프로젝트
   core/            Autoload 와 공용 뼈대. 순수 C# 과 Godot 경계층이 여기서 갈린다
   data/            모든 수치. 코드에 매직 넘버를 두지 않는다
   title/ play/     씬. 규칙을 담지 않고 그리기만 한다
   ui/theme/        전역 Theme 하나. 색·폰트·여백은 여기서만 정의한다
-tests/PreReLU.Rules.Tests/   규칙 테스트. prerelu/ **바깥**이다 (csproj 주석 참조)
+tests/Overfit.Rules.Tests/   규칙 테스트. overfit/ **바깥**이다 (csproj 주석 참조)
 tools/             개발 루프(build.sh)와 커밋 훅
 docs/              기획
 out/               산출물. gitignore
