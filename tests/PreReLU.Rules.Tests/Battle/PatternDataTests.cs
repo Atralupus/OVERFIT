@@ -47,8 +47,8 @@ public class PatternDataTests
             {
                 step.Distance.ShouldNotBeNull($"{id}: active 에 distance 가 없다");
                 step.Height.ShouldNotBeNull($"{id}: active 에 height 가 없다");
-                step.Distance!.Length.ShouldBe(2, $"{id}: distance 는 [최소, 최대] 둘이다");
-                step.Height!.Length.ShouldBe(2, $"{id}: height 는 [아래, 위] 둘이다");
+                step.Distance!.Count.ShouldBe(2, $"{id}: distance 는 [최소, 최대] 둘이다");
+                step.Height!.Count.ShouldBe(2, $"{id}: height 는 [아래, 위] 둘이다");
                 step.Damage.ShouldBeGreaterThan(0, $"{id}: active 인데 피해가 0 이다");
             }
         }
@@ -68,9 +68,12 @@ public class PatternDataTests
     public void Jumpable_태그가_판정_높이와_맞는다()
     {
         // 점프로 넘으려면 판정의 위끝이 낮아야 한다.
+        // active 가 하나도 없으면 All() 이 공허하게 true 를 주므로, 그 전에 최소 하나는 있어야 한다 —
+        // 그래야 이 가드가 "태그가 거짓말을 해도 조용히 통과"하는 구멍 없이 실제로 기하를 본다.
         foreach ((string id, PatternDef def) in Load())
         {
-            bool allLow = def.Timeline.Where(s => s.Kind == "active").All(s => s.Height![1] <= _lowEnough);
+            List<PatternStep> actives = def.Timeline.Where(s => s.Kind == "active").ToList();
+            bool allLow = actives.Count > 0 && actives.All(s => s.Height![1] <= _lowEnough);
             def.Tags.Jumpable.ShouldBe(allLow, $"{id}: jumpable={def.Tags.Jumpable} 인데 판정 높이가 맞지 않는다");
         }
     }

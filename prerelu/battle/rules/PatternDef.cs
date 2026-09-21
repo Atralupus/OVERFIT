@@ -45,10 +45,10 @@ public sealed class PatternStep
     public required string Kind { get; init; }
 
     /// <summary>active 일 때 [최소, 최대] 거리. 다른 kind 면 null.</summary>
-    public double[]? Distance { get; init; }
+    public IReadOnlyList<double>? Distance { get; init; }
 
     /// <summary>active 일 때 [아래, 위] 높이. 다른 kind 면 null.</summary>
-    public double[]? Height { get; init; }
+    public IReadOnlyList<double>? Height { get; init; }
 
     public int Damage { get; init; }
 }

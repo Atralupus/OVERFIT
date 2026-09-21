@@ -85,11 +85,6 @@ dotnet_diagnostic.CA2007.severity = none
 # CA2000 (범위를 벗어나기 전에 IDisposable 을 Dispose 하라): Godot Node 는 IDisposable 이지만
 #   수명을 씬 트리가 소유한다(AddChild 한 노드를 Dispose 하면 트리가 깨진다). 분석기가 그 소유권을 모른다.
 dotnet_diagnostic.CA2000.severity = none
-# CA1819 (프로퍼티가 배열을 반환하면 안 된다): PatternStep.Distance/Height 는 patterns.json 의
-#   `[최소, 최대]`/`[아래, 위]` 고정 2칸 쌍을 그대로 옮기는 역직렬화 DTO 필드다. JsonData 가 한 번 채우고
-#   그 뒤로는 읽기만 하므로 분석기가 걱정하는 "호출마다 새 배열이 안 만들어져 공유 상태가 새는" 시나리오가
-#   없다. List<double> 로 바꾸면 인덱스 [0]/[1] 대신 의미 없는 컬렉션이 되어 오히려 읽기가 나빠진다.
-dotnet_diagnostic.CA1819.severity = none
 
 # 테스트 코드에만 끄는 것. 링크된 규칙 소스는 위 전역 설정 그대로 본다.
 [tests/**.cs]
