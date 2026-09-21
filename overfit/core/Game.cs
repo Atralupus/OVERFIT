@@ -57,6 +57,11 @@ public partial class Game : Node
         {
             _ = TourAsync();
         }
+        else if (OS.IsDebugBuild() && CmdArgs.Has(args, "--shots"))
+        {
+            // 창이 있어야 뷰포트에 그려진 것이 있다 — 헤드리스로 돌리면 빈 이미지가 나온다.
+            AddChild(new Battle.Debug.ShotRunner());
+        }
         else if (OS.IsDebugBuild() && CmdArgs.Has(args, "--battle-demo"))
         {
             // Autoload 의 자식이라 씬이 바뀌어도 살아남는다. 뷰를 안 만들고 규칙만 돌린다.

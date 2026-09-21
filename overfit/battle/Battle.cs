@@ -116,12 +116,15 @@ public partial class Battle : Node2D
     /// <summary>키보드를 규칙의 입력으로. <b>봇과 같은 구조체를 만든다.</b></summary>
     private static InputFrame Read()
     {
+        // 이동만 레벨이다 — 누르고 있으면 계속 가야 한다.
+        // 원시 키코드가 아니라 액션으로 읽는 이유는 타이틀의 조작 안내가 InputMap 에서 글자를 뽑기 때문이다.
+        // 여기서 키를 직접 보면 안내와 실제 조작이 따로 놀 수 있다.
         sbyte move = 0;
-        if (Input.IsKeyPressed(Key.Right) || Input.IsKeyPressed(Key.D))
+        if (Input.IsActionPressed("move_right"))
         {
             move = 1;
         }
-        else if (Input.IsKeyPressed(Key.Left) || Input.IsKeyPressed(Key.A))
+        else if (Input.IsActionPressed("move_left"))
         {
             move = -1;
         }
