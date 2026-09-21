@@ -59,6 +59,7 @@
     <Compile Include="../../prerelu/battle/rules/HitBox.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../prerelu/battle/rules/PatternDef.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../prerelu/battle/rules/PatternRunner.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../prerelu/battle/rules/HitResolver.cs" LinkBase="linked/battle/rules" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
