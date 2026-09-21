@@ -14,6 +14,9 @@ public partial class Battle : Node2D
 {
     private const double _dt = BattleSim.Dt;
 
+    /// <summary>한 <c>_Process</c> 안에서 따라잡을 최대 틱 수(약 83ms). 아래 <see cref="_Process"/> 참고.</summary>
+    private const int _maxCatchupTicks = 5;
+
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
@@ -44,7 +47,7 @@ public partial class Battle : Node2D
             MoveSpeed = 160,
             HalfWidth = 120,
             PatternGap = 0.8,
-            Sprite = "boss_test",
+            Sprite = "boss_grym",
         };
 
         _sim = new BattleSim(new BattleSetup
@@ -59,7 +62,7 @@ public partial class Battle : Node2D
         });
 
         _fighterView.Load(_fighterConfig.Sprite);
-        _bossView.Load("boss_grym");
+        _bossView.Load(_bossConfig.Sprite);
         Log.Info("scene", "battle ready");
     }
 
@@ -71,7 +74,10 @@ public partial class Battle : Node2D
         }
 
         // 고정 틱으로만 민다. 프레임 시간을 그대로 넣으면 기계마다 다른 판이 된다.
-        _accumulated += delta;
+        // 따라잡기 상한. 창을 끌거나 OS 가 멈췄다 깨어나면 delta 가 커지는데, 그걸 그대로 풀면
+        // 수백 틱이 한 프레임 안에서 동기로 돌아 멈춘 것처럼 보인다. 밀린 시간은 버린다 —
+        // 전투가 조금 건너뛰는 편이 화면이 얼어붙는 것보다 낫다.
+        _accumulated = System.Math.Min(_accumulated + delta, _dt * _maxCatchupTicks);
         while (_accumulated >= _dt)
         {
             _accumulated -= _dt;

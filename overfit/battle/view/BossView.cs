@@ -30,6 +30,7 @@ public partial class BossView : Node2D
 
         _sprite.SpriteFrames = frames;
         PlaySafe("idle");
+        AlignToGround("idle");
     }
 
     public void Show(double x, string? pattern)
@@ -53,5 +54,23 @@ public partial class BossView : Node2D
         }
 
         _sprite.Play(name);
+    }
+
+    /// <summary>
+    /// 타일 바닥을 노드 원점에 맞춘다. AnimatedSprite2D 는 centered 라 그냥 두면 타일 <b>중심</b>이
+    /// 바닥선에 놓여 몸의 절반이 지면 아래로 내려간다 — 보스는 4배라 230px 가 묻힌다.
+    /// 높이는 프레임에서 읽는다. <c>Offset</c> 은 로컬 좌표라 스프라이트의 <c>Scale</c> 이 곱해지므로
+    /// 4배 보스도 1배 파이터와 같은 구현으로 맞는다. 유닛마다 타일 크기가 다를 수 있어
+    /// 숫자를 박으면 갈아끼울 때 깨진다.
+    /// </summary>
+    private void AlignToGround(string anim)
+    {
+        Texture2D? frame = _sprite.SpriteFrames?.GetFrameTexture(anim, 0);
+        if (frame is null)
+        {
+            return;
+        }
+
+        _sprite.Offset = new Vector2(0, -frame.GetHeight() / 2.0f);
     }
 }
