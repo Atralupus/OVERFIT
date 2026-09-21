@@ -98,14 +98,16 @@ public class PlayerAxesTests
     }
 
     [Fact]
-    public void 공중_체류_비율은_공중에서_맞은_판정의_비율이다()
+    public void 피격_순간_고도는_판정이_선_순간을_센다()
     {
+        // 이름이 air_time_ratio 였을 때는 "공중에 떠 있던 시간" 으로 읽혔는데 재는 것은 이것이다.
+        // 전투의 90%를 땅에서 보내도 액티브 프레임마다 공중이면 1.00 이 나온다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(airborne: true), Event(airborne: true), Event(airborne: false), Event(airborne: false),
         });
 
-        axes.AirTimeRatio.ShouldBe(0.5, 0.001);
+        axes.AirborneAtImpactRatio.ShouldBe(0.5, 0.001);
     }
 
     [Fact]
@@ -138,5 +140,44 @@ public class PlayerAxesTests
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent> { Event(), Event(), Event() });
 
         axes.Samples.ShouldBe(3);
+    }
+
+    [Fact]
+    public void 수단별_표본_수를_따로_들고_다닌다()
+    {
+        // Samples 하나만 붙이면 "관측 10건" 이 "대시 3건으로 낸 분산" 까지 보증하는 것처럼 보인다 —
+        // 가장 얇은 근거를 가장 크게 믿게 만드는 배치다. 축이 아니라 개수라 10축 계약은 그대로다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash),
+            Event(verb: DodgeVerb.Jump),
+            Event(verb: DodgeVerb.Parry), Event(verb: DodgeVerb.Parry),
+            Event(verb: DodgeVerb.Spacing),
+            Event(verb: DodgeVerb.None),
+        });
+
+        axes.Samples.ShouldBe(8);
+        axes.DashSamples.ShouldBe(3);
+        axes.JumpSamples.ShouldBe(1);
+        axes.ParrySamples.ShouldBe(2);
+    }
+
+    [Fact]
+    public void 간격으로_피한_것은_어떤_수단에도_안_들어간다()
+    {
+        // Spacing 은 행동이 아니라 서 있던 자리다. 이것을 수단으로 세면 의존도 축이 오염된다 —
+        // 거리 성향은 DistanceBias 가 이미 재고 있으므로 11번째 축을 만들지 않는다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Spacing, timingError: 0, direction: 0),
+            Event(verb: DodgeVerb.Spacing, timingError: 0, direction: 0),
+            Event(verb: DodgeVerb.Jump),
+            Event(verb: DodgeVerb.Parry),
+        });
+
+        axes.DashSamples.ShouldBe(0);
+        axes.DashDirectionBias.ShouldBe(0);
+        axes.JumpReliance.ShouldBe(0.25, 0.001);
+        axes.ParryReliance.ShouldBe(0.25, 0.001);
     }
 }
