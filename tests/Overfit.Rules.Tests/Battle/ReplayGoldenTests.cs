@@ -61,7 +61,11 @@ public class ReplayGoldenTests
         {
             text.Append(CultureInfo.InvariantCulture, $"{e.PatternId}|{e.Verb}|{e.Verdict}|");
             text.Append(CultureInfo.InvariantCulture, $"{e.TimingError:0.0000}|{e.Direction}|");
-            text.Append(CultureInfo.InvariantCulture, $"{e.Airborne}|{e.Distance:0.000}|{e.GreedWindow}\n");
+            text.Append(CultureInfo.InvariantCulture, $"{e.Airborne}|{e.Distance:0.000}|{e.GreedWindow}|");
+            // 가능했던 수단도 넣는다. 패턴 id 에서 따라 나오는 값처럼 보이지만, patterns.json 의
+            // 태그를 고치면 id 는 그대로인 채 의존도 축의 분모가 통째로 달라진다 —
+            // 다이제스트에서 빼면 그 변화가 골든 밖이 된다.
+            text.Append(CultureInfo.InvariantCulture, $"{e.DashAvailable}|{e.JumpAvailable}|{e.ParryAvailable}\n");
         }
 
         ulong hash = 14695981039346656037UL;

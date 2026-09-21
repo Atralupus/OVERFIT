@@ -506,6 +506,30 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 관측이_그_판정에_무엇이_가능했는지를_같이_싣는다()
+    {
+        // PlayerAxes.From 은 이벤트 목록만 받는다 — 구조상 패턴 태그에 손이 안 닿는다.
+        // 그래서 "이 판정을 무엇으로 피할 수 있었나" 를 방출 시점에 실어 보낸다.
+        // 없으면 의존도 축은 사용 비율로밖에 못 만들어지고, 그건 스펙 8절의 정의가 아니다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 6 * BattleSim.Dt));
+
+        for (int i = 1; i <= 14; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.DashAvailable.ShouldBeTrue("dash_window=0.14 인데 대시가 없었다고 실렸다");
+        e.ParryAvailable.ShouldBeTrue("parryable=true 인데 패리가 없었다고 실렸다");
+        e.JumpAvailable.ShouldBeFalse("jumpable=false 인데 점프가 가능했다고 실렸다");
+    }
+
+    [Fact]
     public void 한_번의_대시가_연속타_두_대를_모두_설명한다()
     {
         // 대시 무적(0.14초) 한 번이 멀티히트 판정 두 개를 다 덮도록 타임라인을 짠다.

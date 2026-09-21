@@ -382,7 +382,13 @@ public sealed class BattleSim
             Direction: direction,
             Airborne: !Fighter.Grounded,
             Distance: Math.Abs(Fighter.X - Boss.X),
-            GreedWindow: Fighter.Action == FighterAction.Attack));
+            GreedWindow: Fighter.Action == FighterAction.Attack,
+
+            // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
+            // 이 셋이 없으면 만들어지지 않는다.
+            DashAvailable: _current.Tags.DashWindow > 0,
+            JumpAvailable: _current.Tags.Jumpable,
+            ParryAvailable: _current.Tags.Parryable));
 
         Log.Info("dodge", $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
             + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}");
