@@ -5,8 +5,11 @@ namespace Overfit.Battle.Rules;
 /// <summary>판정 하나가 파이터에게 어떻게 끝났나.</summary>
 public enum HitVerdict
 {
-    /// <summary>기하가 안 닿았다 — 거리 밖이거나 높이가 어긋났다. <b>위치나 점프로 피한 것이다.</b></summary>
-    Miss,
+    /// <summary>거리가 안 닿았다 — 간격으로 피한 것이다.</summary>
+    MissedByRange,
+
+    /// <summary>높이가 어긋났다 — 점프로 넘었거나 대공 아래 서 있었다.</summary>
+    MissedByHeight,
 
     /// <summary>맞았다.</summary>
     Hit,
@@ -23,9 +26,10 @@ public enum HitVerdict
 /// <c>BattleSim</c> 이다. 그래야 같은 판정을 여러 번 물어봐도 답이 같고 테스트가 쉽다.
 ///
 /// <para>
-/// <see cref="HitVerdict.Miss"/> 와 <see cref="HitVerdict.Dodged"/> 를 나누는 것이 중요하다.
-/// 둘 다 안 맞은 것이지만 전자는 위치·점프로 피한 것이고 후자는 대시로 피한 것이라,
-/// 계측이 이 둘을 구별해야 회피 수단별 의존도가 축이 된다.
+/// 판정 결과가 <b>무엇으로 피했는지까지</b> 말해야 한다. 안 맞은 이유가 거리인지 높이인지를
+/// 여기서 버리면 <c>BattleSim</c> 은 "그 순간 무슨 행동 중이었나" 로 추측할 수밖에 없고,
+/// 그 추측은 실제로 틀렸다 — 점프로 넘긴 지면쓸기가 같이 눌러둔 패리의 공으로 기록됐다.
+/// 이유는 여기서 이미 계산돼 있으니 버리지 않고 실어 보낸다.
 /// </para>
 /// </summary>
 public static class HitResolver
@@ -38,7 +42,7 @@ public static class HitResolver
         double distance = Math.Abs(fighter.X - bossX);
         if (distance < box.MinDistance || distance > box.MaxDistance)
         {
-            return HitVerdict.Miss;
+            return HitVerdict.MissedByRange;
         }
 
         // 몸통은 발밑(Y)에서 키만큼 위까지다. 판정 구간과 겹쳐야 닿는다 —
@@ -47,7 +51,7 @@ public static class HitResolver
         double bodyHigh = fighter.Y + fighter.BodyHeight;
         if (bodyHigh < box.LowHeight || bodyLow > box.HighHeight)
         {
-            return HitVerdict.Miss;
+            return HitVerdict.MissedByHeight;
         }
 
         if (fighter.Invulnerable)

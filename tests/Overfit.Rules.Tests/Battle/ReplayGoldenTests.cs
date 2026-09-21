@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using Overfit.Battle.Rules;
 using Overfit.Core;
 using Shouldly;
@@ -15,6 +17,13 @@ namespace Overfit.Rules.Tests.Battle;
 ///
 /// <para>
 /// 이게 깨지면 나중에 만든 학습 데이터를 재현할 수 없다. 물리 상수 하나, 연산 순서 하나면 갈린다.
+/// </para>
+///
+/// <para>
+/// 틱수·체력·관측수만 박아두던 때는 <b>계측이 통째로 골든 밖</b>이었다. 부호를 뒤집든, 기준 시각을
+/// 한 틱 옮기든, 분기 순서를 바꾸든 이 네 숫자는 그대로인데 망이 먹을 특징은 전부 달라졌다.
+/// 그래서 회피 관측 스트림 전체의 다이제스트를 같이 박는다 — 10축은 이 스트림의 집계이므로
+/// 스트림을 덮으면 축도 덮인다.
 /// </para>
 /// </summary>
 public class ReplayGoldenTests
@@ -36,6 +45,35 @@ public class ReplayGoldenTests
         return inputs;
     }
 
+    /// <summary>
+    /// 회피 관측 스트림의 다이제스트. <b>모든 필드를 다 넣는다</b> — 하나라도 빼면 그 필드는
+    /// 다시 골든 밖이 된다.
+    ///
+    /// <para>
+    /// FNV-1a 를 손으로 짠다. <c>string.GetHashCode()</c> 는 .NET 에서 <b>프로세스마다 다르다</b> —
+    /// 그걸로 박아두면 골든이 실행할 때마다 깨진다. 실수를 못 하게 여기 이유를 적어 둔다.
+    /// </para>
+    /// </summary>
+    private static string Digest(IReadOnlyList<DodgeEvent> events)
+    {
+        var text = new StringBuilder();
+        foreach (DodgeEvent e in events)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"{e.PatternId}|{e.Verb}|{e.Verdict}|");
+            text.Append(CultureInfo.InvariantCulture, $"{e.TimingError:0.0000}|{e.Direction}|");
+            text.Append(CultureInfo.InvariantCulture, $"{e.Airborne}|{e.Distance:0.000}|{e.GreedWindow}\n");
+        }
+
+        ulong hash = 14695981039346656037UL;
+        foreach (byte b in Encoding.UTF8.GetBytes(text.ToString()))
+        {
+            hash ^= b;
+            hash *= 1099511628211UL;
+        }
+
+        return hash.ToString("x16", CultureInfo.InvariantCulture);
+    }
+
     [Fact]
     public void 골든과_같은_판이_나온다()
     {
@@ -43,9 +81,12 @@ public class ReplayGoldenTests
         string line = Array.Find(golden, l => l.Length > 0 && !l.StartsWith('#'))
             ?? throw new InvalidOperationException("골든 파일에 값 줄이 없다");
         string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        parts.Length.ShouldBe(5, "골든 형식은 <시드> <틱수> <파이터HP> <보스HP> <관측수> 다");
+        parts.Length.ShouldBe(6, "골든 형식은 <시드> <틱수> <파이터HP> <보스HP> <관측수> <관측다이제스트> 다");
 
         ulong seed = ulong.Parse(parts[0], CultureInfo.InvariantCulture);
+        Dictionary<string, StageDef> stages = JsonData<StageDef>.ParseTable(
+            File.ReadAllText(Path.Combine("data", "stages.json")), "stages.json");
+
         var sim = new BattleSim(new BattleSetup
         {
             Arena = new Arena(1920),
@@ -58,7 +99,9 @@ public class ReplayGoldenTests
                 PatternGap = 0.8,
                 Sprite = "boss_test",
             },
-            PatternIds = new[] { "횡베기", "지면쓸기", "대공찌르기", "연속베기", "내려찍기", "돌진" },
+            // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
+            // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
+            PatternIds = StageRoster.For(stages, 5),
             Patterns = JsonData<PatternDef>.ParseTable(
                 File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
             Seed = seed,
@@ -73,15 +116,17 @@ public class ReplayGoldenTests
             }
         }
 
-        var actual = new[] { sim.Ticks, sim.Fighter.Health, sim.Boss.Health, sim.Events.Count };
-        var expected = new int[4];
-        for (int i = 0; i < 4; i++)
-        {
-            expected[i] = int.Parse(parts[i + 1], CultureInfo.InvariantCulture);
-        }
+        string measured = string.Join(' ',
+            seed.ToString(CultureInfo.InvariantCulture),
+            sim.Ticks.ToString(CultureInfo.InvariantCulture),
+            sim.Fighter.Health.ToString(CultureInfo.InvariantCulture),
+            sim.Boss.Health.ToString(CultureInfo.InvariantCulture),
+            sim.Events.Count.ToString(CultureInfo.InvariantCulture),
+            Digest(sim.Events));
 
-        actual.ShouldBe(expected,
-            $"결정론이 깨졌습니다. 실측: {seed} {actual[0]} {actual[1]} {actual[2]} {actual[3]}\n"
+        measured.ShouldBe(string.Join(' ', parts),
+            $"결정론이 깨졌습니다. 실측: {measured}\n"
+            + "다이제스트만 다르면 판의 겉모습은 같고 **계측 값이 달라진 것**입니다 — 회피 verb·판정·타이밍·거리 중 하나입니다.\n"
             + "일부러 바꾼 것이면 tools/replay_golden.txt 를 이 값으로 고치고 PR 에 무엇을 왜 바꿨는지 적으십시오.");
     }
 }

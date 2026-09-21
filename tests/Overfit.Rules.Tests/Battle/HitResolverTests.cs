@@ -50,7 +50,7 @@ public class HitResolverTests
     [Fact]
     public void 거리_밖이면_안_맞는다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.Miss);
+        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.MissedByRange);
     }
 
     [Fact]
@@ -101,14 +101,31 @@ public class HitResolverTests
         Fighter f = Airborne(_bossX + 100);
 
         f.Y.ShouldBeGreaterThan(70);
-        HitResolver.Resolve(f, _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.Miss);
+        HitResolver.Resolve(f, _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
     }
 
     [Fact]
     public void 대공은_지상이_안전하고_공중이_위험하다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, High(), Tags(false)).ShouldBe(HitVerdict.Miss);
+        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, High(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
         HitResolver.Resolve(Airborne(_bossX + 100), _bossX, High(), Tags(false)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 안_맞은_이유를_거리와_높이로_나눠_말한다()
+    {
+        // 여기서 이유를 버리면 BattleSim 은 "그 순간 무슨 행동 중이었나" 로 추측할 수밖에 없다.
+        // 그 추측이 실제로 틀렸다 — 점프로 넘긴 판정이 같이 눌러둔 패리의 공으로 기록됐다.
+        HitResolver.Resolve(Spawn(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByRange);
+        HitResolver.Resolve(Airborne(_bossX + 100), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
+    }
+
+    [Fact]
+    public void 거리가_먼저_걸리면_높이는_안_본다()
+    {
+        // 둘 다 어긋났을 때 무엇이라 말하는가. 거리를 먼저 보므로 거리로 답한다 —
+        // 순서를 박아두지 않으면 같은 상황이 판마다 다른 라벨을 내 학습 데이터가 흔들린다.
+        HitResolver.Resolve(Airborne(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByRange);
     }
 
     [Fact]

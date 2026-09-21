@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Overfit.Battle.Rules;
 using Overfit.Core;
+using Overfit.Rules.Tests.Support;
 using Shouldly;
 using Xunit;
 
@@ -195,6 +197,157 @@ public class BattleSimTests
         sim.Events.ShouldNotBeEmpty();
         PlayerAxes axes = PlayerAxes.From(sim.Events);
         axes.Samples.ShouldBe(sim.Events.Count);
+    }
+
+    [Fact]
+    public void 없는_패턴_id_는_매_틱_에러를_쏟지_않는다()
+    {
+        // Begin 이 간격을 안 되돌린 채 나가면 _gapLeft 가 0 이하로 남아 다음 틱에도 곧장
+        // 같은 갈래로 떨어진다 — 유효한 id 가 뽑힐 때까지 매 틱 [E] 다. 판은 끝나지만
+        // judge_headless 가 읽는 로그가 그것으로 뒤덮인다.
+        using var log = new LogCapture();
+        var setup = new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = new BossConfig
+            {
+                MaxHealth = 999_999,
+                MoveSpeed = 0,
+                HalfWidth = 120,
+                PatternGap = 10 * BattleSim.Dt,
+                Sprite = "boss_test",
+            },
+            PatternIds = new[] { "없는패턴" },
+            Patterns = new Dictionary<string, PatternDef>(),
+            Seed = 1,
+            MaxTicks = 60 * 5,
+        };
+
+        var sim = new BattleSim(setup);
+        for (int i = 0; i < 60; i++)
+        {
+            sim.Tick(default);
+        }
+
+        int errors = log.Lines.Count(l => l.Contains("pattern_missing", System.StringComparison.Ordinal));
+        errors.ShouldBeLessThanOrEqualTo(7, "간격을 안 되돌려 매 틱 에러를 쏟고 있다");
+    }
+
+    /// <summary>판정 하나짜리 패턴. 기하와 태그를 부르는 쪽이 정한다.</summary>
+    private static PatternDef OneHit(double[] distance, double[] height, bool parryable, double at) => new()
+    {
+        Tags = new PatternTags
+        {
+            DashWindow = 0.14,
+            DashDirection = "out",
+            Jumpable = false,
+            AntiAir = false,
+            Parryable = parryable,
+            ParryWindow = parryable ? 0.12 : 0,
+            PunishGreed = false,
+            Reach = "far",
+            Feint = false,
+            MultiHit = 1,
+            Tracking = false,
+        },
+        Timeline = new List<PatternStep>
+        {
+            new() { T = at, Kind = "active", Distance = distance, Height = height, Damage = 5 },
+            new() { T = at + (6 * BattleSim.Dt), Kind = "end" },
+        },
+    };
+
+    /// <summary>보스를 제자리에 세우고 <paramref name="pattern"/> 하나만 돌리는 판.</summary>
+    private static BattleSim OnePattern(PatternDef pattern) => new(new BattleSetup
+    {
+        Arena = new Arena(1920),
+        Fighter = TestConfigs.Fighter(),
+        Boss = new BossConfig
+        {
+            MaxHealth = 999_999,
+            MoveSpeed = 0,
+            HalfWidth = 120,
+            PatternGap = 3 * BattleSim.Dt,
+            Sprite = "boss_test",
+        },
+        PatternIds = new[] { "단타" },
+        Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern },
+        Seed = 1,
+        MaxTicks = 60 * 5,
+    });
+
+    [Fact]
+    public void 점프로_넘긴_판정은_같이_눌러둔_패리가_아니라_점프로_기록된다()
+    {
+        // 이 브랜치의 최우선 버그다. 회피 행동 칸이 하나였을 때는 **가장 최근에 시작한 행동**이
+        // 판정을 가져갔다. 그래서 점프로 넘긴 낮은 판정이 그 뒤에 누른 패리의 공으로 기록됐고
+        // (out/demo.log 10건 중 4건), 그 패리는 "실패한 패리" 로도 세어져 parry_rate 까지 깎았다.
+        // 안 맞은 이유는 HitResolver 가 이미 알고 있다 — 높이가 어긋났으면 점프다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 70 },
+            parryable: true,
+            at: 6 * BattleSim.Dt));
+
+        for (int i = 1; i <= 14; i++)
+        {
+            // 1틱: 점프(공중으로) → 7틱: 패리(점프보다 **나중에** 시작한다). 판정은 9틱 언저리다.
+            sim.Tick(new InputFrame(0, Jump: i == 1, false, Parry: i == 7, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedByHeight);
+        e.Verb.ShouldBe(DodgeVerb.Jump, "점프가 넘긴 판정인데 나중에 시작한 패리가 공을 가져갔다");
+        e.Airborne.ShouldBeTrue();
+        e.TimingError.ShouldBeLessThan(0);
+    }
+
+    [Fact]
+    public void 거리로_빗나간_판정은_어떤_행동에도_안_붙는다()
+    {
+        // 간격 덕에 그냥 안 닿은 것이다. 그 순간 돌던 대시·패리의 공으로 적으면
+        // dash_timing_bias 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 100 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 6 * BattleSim.Dt));
+
+        for (int i = 1; i <= 14; i++)
+        {
+            // 파이터는 480, 보스는 1440 에 서 있다 — 대시를 해도 100 안쪽으로는 못 들어간다.
+            sim.Tick(new InputFrame(0, false, Dash: i == 2, Parry: i == 8, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedByRange);
+        e.Verb.ShouldBe(DodgeVerb.Spacing);
+        e.TimingError.ShouldBe(0);
+        e.Direction.ShouldBe(0);
+    }
+
+    [Fact]
+    public void 맞은_판정은_그때_돌고_있던_행동을_남긴다()
+    {
+        // 피하지 못한 것도 데이터다 — "무엇을 시도했다 실패했나" 가 없으면
+        // 망은 "무엇을 못 피하나" 를 배울 수 없다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: false,
+            at: 6 * BattleSim.Dt));
+
+        for (int i = 1; i <= 14; i++)
+        {
+            sim.Tick(new InputFrame(0, false, false, Parry: i == 8, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit);
+        sim.Events[0].Verb.ShouldBe(DodgeVerb.Parry);
     }
 
     [Fact]
