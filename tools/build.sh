@@ -17,6 +17,7 @@
 #   tools/build.sh import              에셋 임포트만 (헤드리스). 클론 직후 반드시 한 번
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
 #   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
+#   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
 #   EXTRA="--fighter=단검 --stage=2" tools/build.sh demo   캐릭터 · 단계 지정
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
 #   tools/build.sh clean               빌드 산출물 삭제
@@ -360,6 +361,69 @@ cmd_demo() {
   ok "전투 데모 통과 ($log)"
 }
 
+# 익스포트 템플릿이 있는 폴더. 버전 문자열은 Godot 에게 물어본다 —
+# 박아두면 엔진을 올릴 때 조용히 어긋나고, 그 어긋남은 "템플릿이 없다" 가 아니라
+# "옛 템플릿으로 빌드됐다" 로 나타난다.
+export_template_dir() {
+  local version
+  version="$(godot_version | sed 's/\.official\..*$//')"
+  echo "$HOME/Library/Application Support/Godot/export_templates/$version"
+}
+
+# 플레이 가능한 빌드를 만든다.
+#
+#   tools/build.sh export [프리셋]     기본 macOS
+#
+# 템플릿이 없으면 **먼저 멈춘다.** Godot 은 템플릿 없이도 끝까지 가다가 실행되지 않는
+# 껍데기를 남기는데, 그건 실패보다 나쁘다 — 산출물이 생겼으니 성공한 것처럼 보인다.
+cmd_export() {
+  need_godot
+  local preset="${1:-macOS}"
+
+  [[ -f "$PROJECT/export_presets.cfg" ]] \
+    || die "익스포트 프리셋이 없습니다 — $PROJECT/export_presets.cfg (이 파일은 커밋되어 있어야 합니다)"
+  grep -q "name=\"$preset\"" "$PROJECT/export_presets.cfg" \
+    || die "프리셋 \"$preset\" 가 export_presets.cfg 에 없습니다."
+
+  local templates; templates="$(export_template_dir)"
+  [[ -d "$templates" ]] || die "익스포트 템플릿이 없습니다 — $templates
+에디터의 [에디터] → [익스포트 템플릿 관리] 에서 받거나, 같은 버전의 템플릿 tpz 를 그 경로에 푸세요."
+  [[ -f "$templates/macos.zip" ]] || die "macOS 템플릿이 없습니다 — $templates/macos.zip"
+
+  # C# 을 먼저 빌드한다. 익스포트가 옛 어셈블리를 싣는 것은 실패보다 나쁘다 —
+  # 돌긴 도는데 어제의 규칙으로 돈다.
+  cmd_build
+
+  say "익스포트 ($preset)"
+  mkdir -p "$OUT"
+  local app="$OUT/OVERFIT.app" log="$OUT/export.log" code=0
+  rm -rf "$app"
+  "$GODOT" --headless --path "$PROJECT" --export-release "$preset" "$app" > "$log" 2>&1 || code=$?
+
+  # 엔진 진단은 로그로만 나온다. 종료 코드가 0 이어도 ERROR 가 있으면 반쯤 만들어진 번들이다.
+  local errs
+  errs="$(engine_diag_blocks "$log" | grep -E "^(ERROR|SCRIPT ERROR|USER ERROR):" || true)"
+  if [[ -n "$errs" ]]; then
+    bad "익스포트: 엔진 ERROR $(grep -c . <<< "$errs")건. 전체 로그: $log"
+    head -5 <<< "$errs" | cut -c1-400 | sed 's/^/      /'
+    exit 1
+  fi
+
+  [[ $code -eq 0 ]] || die "익스포트 실패 (종료 코드 $code). 전체 로그: $log"
+  [[ -d "$app" ]] || die "번들이 안 만들어졌습니다 — $app. 전체 로그: $log"
+  [[ -x "$app/Contents/MacOS/OVERFIT" ]] || die "번들 안에 실행 파일이 없습니다 — $app/Contents/MacOS/OVERFIT"
+
+  # 번들은 **폴더**다. 올리거나 보내려면 파일 하나여야 하고, 그냥 zip 하면 심볼릭 링크와
+  # 서명 블록이 깨진다 — ditto 가 애플이 그 용도로 주는 도구다.
+  local zip="$OUT/OVERFIT-macos.zip"
+  rm -f "$zip"
+  ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
+
+  ok "$app ($(du -sh "$app" | cut -f1))"
+  ok "$zip ($(du -sh "$zip" | cut -f1))"
+  ok "로그: $log"
+}
+
 cmd_clean() {
   rm -rf "$OUT" "$PROJECT/.godot/mono/temp" "$PROJECT/obj" "$PROJECT/bin" "$TEST_DIR/obj" "$TEST_DIR/bin"
   ok "산출물을 지웠습니다."
@@ -384,6 +448,7 @@ case "${1:-}" in
   import)    shift; cmd_import "$@" ;;
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
+  export)    shift; cmd_export "$@" ;;
   clean)     shift; cmd_clean "$@" ;;
   ""|-h|--help|help) usage ;;
   *) echo "모르는 명령: $1" >&2; echo >&2; usage >&2; exit 1 ;;
