@@ -41,6 +41,26 @@ theme/custom="res://ui/theme/main.tres"
 
 project/assembly_name="Overfit"
 
+[input]
+
+; 넷은 엣지로 읽는다 (IsActionJustPressed). 레벨로 읽으면 누르고 있는 동안 매 틱 발동한다.
+jump={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":32,"pressed":true)]
+}
+dash={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":4194325,"pressed":true)]
+}
+parry={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":70,"pressed":true)]
+}
+attack={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":74,"pressed":true)]
+}
+
 [rendering]
 
 ; 데스크톱 전용이다 — 모바일은 목표가 아니다. 그래서 데스크톱 기본값인 forward_plus 를 쓴다.

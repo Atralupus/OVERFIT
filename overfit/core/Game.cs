@@ -19,12 +19,14 @@ public partial class Game : Node
     {
         Title,
         Play,
+        Battle,
     }
 
     private static readonly Dictionary<Scene, string> _scenePaths = new()
     {
         [Scene.Title] = "res://title/Title.tscn",
         [Scene.Play] = "res://play/Play.tscn",
+        [Scene.Battle] = "res://battle/Battle.tscn",
     };
 
     /// <summary>순회 한 걸음마다 주는 시간. 씬이 <c>_Ready</c> 를 끝내고 첫 프레임을 그릴 만큼이면 된다.</summary>
@@ -92,6 +94,7 @@ public partial class Game : Node
     private static Scene Next(Scene scene) => scene switch
     {
         Scene.Title => Scene.Play,
+        Scene.Play => Scene.Battle,
         _ => Scene.Title,
     };
 
@@ -105,7 +108,7 @@ public partial class Game : Node
     {
         await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
 
-        foreach (Scene scene in new[] { Scene.Play, Scene.Title })
+        foreach (Scene scene in new[] { Scene.Play, Scene.Battle, Scene.Title })
         {
             Log.Trace("scene", $"tour step={scene} frame={Engine.GetProcessFrames()}");
             GoTo(scene);
