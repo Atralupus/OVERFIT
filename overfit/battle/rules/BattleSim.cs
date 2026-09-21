@@ -128,6 +128,7 @@ public sealed class BattleSim
         // 공중에서 점프를 또 눌러도 Fall 이 물리적으로는 무시하지만, 그 입력만 보면 구별이 안 된다.
         bool wasGrounded = Fighter.Grounded;
         Fighter.Tick(input, Dt);
+        Separate();
         RememberDodgeStart(input, wasGrounded);
         AdvanceBoss();
         Strike();
@@ -153,13 +154,61 @@ public sealed class BattleSim
         return null;
     }
 
+    /// <summary>
+    /// 몸이 겹쳤을 때 파이터가 서야 할 x. <b>순수 함수라 테스트가 경계를 직접 못 박는다.</b>
+    ///
+    /// <para>
+    /// 있던 쪽을 그대로 유지한다 — 반대로 넘기면 보스를 관통하는 순간이동이 된다.
+    /// 정확히 겹친 자리(<c>fighterX == bossX</c>)는 매 틱 밀어내는 동안엔 나올 수 없지만,
+    /// 나오더라도 <b>왼쪽으로 고정</b>한다. 부동소수 0 의 부호나 난수로 가르면 같은 시드가
+    /// 다른 판을 내고 리플레이 골든이 재현되지 않는다.
+    /// </para>
+    /// </summary>
+    public static double SeparatedX(double fighterX, double bossX, double minGap) =>
+        bossX + ((fighterX > bossX ? 1 : -1) * minGap);
+
+    /// <summary>
+    /// 보스 반폭 + 파이터 반폭. 두 몸이 겹치지 않는 최소 중심 거리다.
+    /// <b>수치를 손으로 안 적는다</b> — 캐릭터마다 반폭이 다르고(26~36) data/fighters.json 이 진실이다.
+    /// </summary>
+    private double MinGap => Boss.HalfWidth + Fighter.HalfWidth;
+
+    /// <summary>
+    /// 두 몸을 떼어 놓는다. 밀리는 쪽은 <b>파이터</b>다 — 보스는 4배 크고, 플레이어에게 밀리는
+    /// 보스는 그림이 틀렸다.
+    ///
+    /// <para>
+    /// 이게 없던 때 파이터는 보스 몸(반폭 120) 안에 섰고 데모 평균 교전거리가 85px 였다.
+    /// 붙는 사람과 떨어지는 사람이 둘 다 ≈0 으로 수렴해 <c>distance_bias</c> 축이 상수였다 —
+    /// 죽은 입력은 망의 용량만 먹고 아무것도 가르치지 않는다.
+    /// </para>
+    ///
+    /// <para>
+    /// 대시가 보스를 뚫고 나가던 것도 여기서 막힌다. 그건 <b>의도한 결과다</b> —
+    /// "안으로 파고들기" 가 순간이동이 아니라 실제 자리 싸움이 되어야 그 판단이 축에 잡힌다.
+    /// 무적은 위치가 아니라 행동 시계로 도므로 막혀도 그대로다.
+    /// </para>
+    /// </summary>
+    private void Separate()
+    {
+        double minGap = MinGap;
+        if (Math.Abs(Fighter.X - Boss.X) >= minGap)
+        {
+            return;
+        }
+
+        Fighter.PushOutTo(SeparatedX(Fighter.X, Boss.X, minGap));
+    }
+
     /// <summary>보스: 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
     private void AdvanceBoss()
     {
         if (_runner is null)
         {
             _gapLeft -= Dt;
-            Boss.Approach(Fighter.X, Dt);
+            // 파이터의 중심이 아니라 **자기 쪽으로 minGap 떨어진 자리**를 목표로 한다.
+            // 중심을 노리면 보스가 파이터를 그대로 걸어 지나가 몸이 겹친다.
+            Boss.Approach(Fighter.X + ((Boss.X >= Fighter.X ? 1 : -1) * MinGap), Dt);
             if (_gapLeft <= 0)
             {
                 Begin();

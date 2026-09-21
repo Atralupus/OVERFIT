@@ -50,6 +50,9 @@ public sealed class Fighter
     /// <summary>몸통 높이. 판정이 점프로 넘기는지 · 대공에 걸리는지를 이것으로 잰다.</summary>
     public double BodyHeight => _config.Height;
 
+    /// <summary>몸 절반 폭. 보스와의 최소 간격을 <c>BattleSim</c> 이 이것으로 잰다 — 손으로 안 적는다.</summary>
+    public double HalfWidth => _config.HalfWidth;
+
     public FighterAction Action { get; private set; } = FighterAction.Idle;
 
     /// <summary>현재 행동이 시작된 뒤 흐른 시간. Idle 이면 0.</summary>
@@ -76,6 +79,19 @@ public sealed class Fighter
     public void Spend(double amount) => Stamina = Math.Max(0, Stamina - amount);
 
     public void TakeDamage(int amount) => Health = Math.Max(0, Health - amount);
+
+    /// <summary>
+    /// 몸이 겹쳐 밀려난 자리에 세운다. <b>보스를 아는 <c>BattleSim</c> 만 부른다</b> —
+    /// 파이터는 보스를 모르므로 어디로 밀릴지는 여기서 정하지 않는다.
+    ///
+    /// <para>
+    /// 벽 밖으로는 안 나간다. 벽과 보스 사이에 끼면 <b>벽이 이긴다</b> — 그 틱은 겹친 채로 남지만,
+    /// 보스는 자기 대기 간격을 목표로 물러나므로 다음 틱에 풀린다. 반대쪽으로 넘겨 버리면
+    /// 보스를 관통하는 순간이동이 되는데, 몸 충돌을 넣은 이유가 바로 그걸 없애는 것이었다.
+    /// </para>
+    /// </summary>
+    public void PushOutTo(double x) =>
+        X = Math.Clamp(x, _config.HalfWidth, _arena.Width - _config.HalfWidth);
 
     public void Tick(InputFrame input, double dt)
     {
