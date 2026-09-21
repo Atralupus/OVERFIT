@@ -23,12 +23,23 @@ public partial class BattleDemo : Node
         int stage = (int)(CmdArgs.Double(args, "--stage=") ?? 1);
 
         Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
+        Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
         Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
 
         if (!fighters.TryGetValue(fighterId, out FighterConfig? fighter))
         {
             Log.Error("battle-demo", $"fighter_missing id={fighterId}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        // 보스도 데이터다. 전에는 여기서 BossConfig 를 손으로 만들었고, 그 사본이 게임 쪽과
+        // 갈려 있었다 — 데모는 boss_test 를, 게임은 boss_grym 을 그렸다.
+        BattleBalance battle = Balance.Data.Battle;
+        if (!bosses.TryGetValue(battle.Boss, out BossConfig? boss))
+        {
+            Log.Error("battle-demo", $"boss_missing id={battle.Boss}");
             GetTree().Quit(1);
             return;
         }
@@ -41,20 +52,13 @@ public partial class BattleDemo : Node
 
         var sim = new BattleSim(new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = new Arena(battle.ArenaWidth),
             Fighter = fighter,
-            Boss = new BossConfig
-            {
-                MaxHealth = 200,
-                MoveSpeed = 160,
-                HalfWidth = 120,
-                PatternGap = 0.8,
-                Sprite = "boss_test",
-            },
+            Boss = boss,
             PatternIds = ids,
             Patterns = patterns,
             Seed = seed,
-            MaxTicks = 60 * 180,
+            MaxTicks = battle.MaxTicks,
         });
 
         var bot = new BotPolicy(seed);

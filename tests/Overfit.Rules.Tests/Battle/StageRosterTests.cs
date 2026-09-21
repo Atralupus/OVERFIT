@@ -110,6 +110,41 @@ public class StageRosterTests
     }
 
     [Fact]
+    public void 명부에_구멍이_있으면_예외가_아니라_에러_로그를_남긴다()
+    {
+        // Math.Clamp 로 범위만 맞춘 뒤 바로 색인하던 때는, stages.json 의 키가 연속이라는
+        // **적어둔 적 없는 가정**이 깨지는 순간 KeyNotFoundException 이었다. 예외는 우리 로그
+        // 형식으로 안 찍혀 [E] 게이트에 안 걸리고, 엔진 ERROR 블록으로만 나온다.
+        using var log = new LogCapture();
+        var holed = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 2, Patterns = new[] { "횡베기", "지면쓸기" } },
+            ["3"] = new() { Want = 5, Patterns = new[] { "횡베기" } },
+        };
+
+        StageRoster.For(holed, 2).ShouldBeEmpty();
+
+        log.Lines.ShouldContain(l => l.StartsWith("[stage][E] stage_missing", System.StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void 패턴이_하나도_없는_명부는_경고가_아니라_거절이다()
+    {
+        // 전에는 short 경고만 내고 빈 목록을 그대로 돌려줬다. 그 목록은 BattleSim.Begin 에서
+        // Det.RollInt(n: 0) 이 되어 ArgumentOutOfRangeException 으로 터졌다 —
+        // 데이터가 깨진 것을 **쓰는 자리**에서 알게 되면 원인이 로그에 안 남는다.
+        using var log = new LogCapture();
+        var empty = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 2, Patterns = System.Array.Empty<string>() },
+        };
+
+        StageRoster.For(empty, 1).ShouldBeEmpty();
+
+        log.Lines.ShouldContain(l => l.StartsWith("[stage][E] empty_roster", System.StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void 정의된_범위_밖의_단계는_잘라_쓰고_경고한다()
     {
         // 여기서 [E] 를 내면 헤드리스 판정이 실패로 본다. 없는 단계를 달라고 한 것은

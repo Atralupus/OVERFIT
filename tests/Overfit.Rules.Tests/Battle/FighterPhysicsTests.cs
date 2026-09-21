@@ -9,7 +9,7 @@ public class FighterPhysicsTests
 {
     private const double _dt = 1.0 / 60.0;
 
-    private static Fighter Spawn(double x = 960) => new(TestConfigs.Fighter(), new Arena(1920), x);
+    private static Fighter Spawn(double x = 960) => new(TestConfigs.Fighter(), TestConfigs.Arena(), x);
 
     private static void Run(Fighter f, InputFrame input, int ticks)
     {

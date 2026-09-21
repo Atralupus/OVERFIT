@@ -2,7 +2,10 @@ using System;
 
 namespace Overfit.Battle.Rules;
 
-/// <summary>보스 한 종의 수치. <c>data/bosses.json</c> 이 생기기 전까지는 코드가 만들어 넘긴다.</summary>
+/// <summary>
+/// 보스 한 종의 수치. <c>data/bosses.json</c> 의 모양이고 키는 snake_case 로 변환된다.
+/// <b>여기 없는 수치를 C# 에 상수로 두지 않는다.</b>
+/// </summary>
 public sealed class BossConfig
 {
     public required int MaxHealth { get; init; }

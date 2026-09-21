@@ -18,11 +18,14 @@ public partial class Battle : Node2D
     private BattleHud _hud = null!;
 
     // 최대 체력을 리터럴로 들지 않는다 — 시뮬레이션을 세운 바로 그 설정에서 읽는다.
-    // 수치는 데이터(fighters.json · 여기 BossConfig)에 있고, 뷰는 그것을 베끼지 않는다.
+    // 수치는 데이터(fighters.json · bosses.json)에 있고, 뷰는 그것을 베끼지 않는다.
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
 
     private bool _over;
+
+    /// <summary>데이터가 어긋나 판을 못 세웠다. 시뮬레이션이 없는 채로 틱을 돌리거나 그리지 않게 막는다.</summary>
+    private bool _broken;
 
     public override void _Ready()
     {
@@ -31,6 +34,7 @@ public partial class Battle : Node2D
         _hud = GetNode<BattleHud>("%Hud");
 
         Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
+        Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
         Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
 
@@ -38,25 +42,29 @@ public partial class Battle : Node2D
         // 파일 맨 위에 끼워 넣는 것만으로 1단계가 다른 전투가 된다.
         IReadOnlyList<string> ids = StageRoster.For(stages, 1);
 
+        // 아레나 폭 · 한 판의 상한 · 기본 보스는 balance.json 이 정한다. 전에는 이 셋이
+        // 게임 · 데모 · 테스트 다섯 곳에 리터럴로 흩어져 있었고 이미 갈려 있었다.
+        BattleBalance battle = Balance.Data.Battle;
+
         _fighterConfig = fighters["중검"];
-        _bossConfig = new BossConfig
+        if (!bosses.TryGetValue(battle.Boss, out BossConfig? boss))
         {
-            MaxHealth = 200,
-            MoveSpeed = 160,
-            HalfWidth = 120,
-            PatternGap = 0.8,
-            Sprite = "boss_grym",
-        };
+            Log.Error("battle", $"boss_missing id={battle.Boss}");
+            _broken = true;
+            return;
+        }
+
+        _bossConfig = boss;
 
         _sim = new BattleSim(new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = new Arena(battle.ArenaWidth),
             Fighter = _fighterConfig,
             Boss = _bossConfig,
             PatternIds = ids,
             Patterns = patterns,
             Seed = 51,
-            MaxTicks = 60 * 180,
+            MaxTicks = battle.MaxTicks,
         });
 
         _fighterView.Load(_fighterConfig.Sprite);
@@ -83,7 +91,7 @@ public partial class Battle : Node2D
     /// </summary>
     public override void _PhysicsProcess(double delta)
     {
-        if (_over)
+        if (_over || _broken)
         {
             return;
         }
@@ -97,7 +105,13 @@ public partial class Battle : Node2D
     }
 
     /// <summary>그리기만 한다. 규칙은 <see cref="_PhysicsProcess"/> 가 민다.</summary>
-    public override void _Process(double delta) => RenderFrame();
+    public override void _Process(double delta)
+    {
+        if (!_broken)
+        {
+            RenderFrame();
+        }
+    }
 
     /// <summary>키보드를 규칙의 입력으로. <b>봇과 같은 구조체를 만든다.</b></summary>
     private static InputFrame Read()

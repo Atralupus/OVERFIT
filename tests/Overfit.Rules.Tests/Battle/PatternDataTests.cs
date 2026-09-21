@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,9 +16,6 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class PatternDataTests
 {
-    /// <summary>점프로 넘을 수 있다고 볼 높이. 캐릭터 키(120)보다 낮아야 한다.</summary>
-    private const double _lowEnough = 100;
-
     /// <summary>선 몸통의 키. 대공이 "지상은 안전" 이 되려면 판정 바닥이 이것보다 위여야 한다.</summary>
     private const double _standingHeight = 120;
 
@@ -67,17 +65,58 @@ public class PatternDataTests
         }
     }
 
-    [Fact]
-    public void Jumpable_태그가_판정_높이와_맞는다()
+    /// <summary>
+    /// 이 캐릭터가 실제로 올라가는 높이(px). <b><see cref="Fighter"/> 를 정말 뛰게 해서</b> 잰다.
+    ///
+    /// <para>
+    /// 공식(v²/2g)을 여기 베껴 적지 않는 이유는 그것이 <b>연속</b> 적분이기 때문이다.
+    /// <c>Fighter.Fall</c> 은 매 틱 <c>v -= g·dt; y += v·dt</c> 로 이산 적분하고, 단검 기준으로
+    /// 연속은 184.08 · 이산은 176.33 이 나온다 — 7.75px 차이다. 연속값으로 가드를 세우면
+    /// 그 차이만큼 가드가 거짓말을 한다. 실제 규칙을 돌리면 어긋날 자리가 없다.
+    /// </para>
+    /// </summary>
+    private static double JumpApex(FighterConfig config)
     {
-        // 점프로 넘으려면 판정의 위끝이 낮아야 한다.
-        // active 가 하나도 없으면 All() 이 공허하게 true 를 주므로, 그 전에 최소 하나는 있어야 한다 —
-        // 그래야 이 가드가 "태그가 거짓말을 해도 조용히 통과"하는 구멍 없이 실제로 기하를 본다.
+        var fighter = new Fighter(config, TestConfigs.Arena(), 960);
+        fighter.Tick(new InputFrame(0, Jump: true, false, false, false), BattleSim.Dt);
+
+        double apex = fighter.Y;
+        while (!fighter.Grounded)
+        {
+            fighter.Tick(default, BattleSim.Dt);
+            apex = Math.Max(apex, fighter.Y);
+        }
+
+        return apex;
+    }
+
+    [Fact]
+    public void Jumpable_태그가_각_캐릭터의_실제_점프_정점과_맞는다()
+    {
+        // 전에는 하드코딩한 100px 과 견줬다 — fighters.json 과 아무 관계가 없었다.
+        // 단검의 정점은 176.33 이고 연속베기 판정 상단은 180 이라 마진이 3.67px 이었는데,
+        // jump_velocity 를 2% 올리면 그 패턴이 실제로 넘을 수 있게 되면서도 태그는 false 인 채고
+        // **아무 테스트도 안 빨개졌다.** 그래서 캐릭터마다 실제 정점을 재서 대조한다.
+        //
+        // HitResolver 가 높이로 빗나가게 하는 조건은 발밑(Y)이 판정 상단보다 위인 것이다 —
+        // 그래서 기준은 "정점 > 모든 active 의 상단" 이다.
+        Dictionary<string, double> apexes = TestConfigs.Fighters()
+            .ToDictionary(f => f.Key, f => JumpApex(f.Value));
+
         foreach ((string id, PatternDef def) in Load())
         {
             List<PatternStep> actives = def.Timeline.Where(s => s.Kind == "active").ToList();
-            bool allLow = actives.Count > 0 && actives.All(s => s.Height![1] <= _lowEnough);
-            def.Tags.Jumpable.ShouldBe(allLow, $"{id}: jumpable={def.Tags.Jumpable} 인데 판정 높이가 맞지 않는다");
+            // active 가 하나도 없으면 Max 가 던지고 All 은 공허하게 참이다. 먼저 못박는다 —
+            // 그래야 이 가드가 "태그가 거짓말을 해도 조용히 통과"하는 구멍 없이 기하를 본다.
+            actives.ShouldNotBeEmpty($"{id}: active 단계가 없다");
+            double top = actives.Max(s => s.Height![1]);
+
+            foreach ((string who, double apex) in apexes)
+            {
+                (apex > top).ShouldBe(def.Tags.Jumpable,
+                    $"{id}: jumpable={def.Tags.Jumpable} 인데 {who}의 점프 정점 {apex:0.00}px 과"
+                    + $" 판정 상단 {top}px 이 그 말과 다르다");
+            }
         }
     }
 
@@ -93,13 +132,38 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 패리_불가면_패리_창이_0_이다()
+    public void 패리_가능_여부와_패리_창이_같은_말을_한다()
     {
+        // 이 둘은 이제 **같은 사실의 두 표현**이다. HitResolver 가 유효 창을 파이터와 패턴 중
+        // 좁은 쪽으로 잡으므로, parryable=true 인데 창이 0 이면 그 패턴은 사실 패리 불가인데
+        // DodgeEvent.ParryAvailable 은 "가능했다" 고 싣는다 — 의존도 축의 분모가 거짓이 된다.
         foreach ((string id, PatternDef def) in Load())
         {
-            if (!def.Tags.Parryable)
+            def.Tags.Parryable.ShouldBe(def.Tags.ParryWindow > 0,
+                $"{id}: parryable={def.Tags.Parryable} 인데 parry_window={def.Tags.ParryWindow} 다");
+        }
+    }
+
+    [Fact]
+    public void 열려_있다고_한_창은_적어도_한_틱은_열려_있다()
+    {
+        // 창이 0 이라는 것은 "그 수단으로는 못 피한다" 는 뜻이고, 0 이 아니라는 것은
+        // "피할 수 있다" 는 뜻이다. 한 틱(1/60초)보다 짧은 양수는 그 둘 중 어느 쪽도 아니다 —
+        // 값으로는 "가능" 이라 태그가 그렇게 실리는데 실제로는 한 번도 안에 들어갈 수 없다.
+        // 태그는 망의 입력이 되므로 그 간극이 그대로 거짓이 된다.
+        foreach ((string id, PatternDef def) in Load())
+        {
+            def.Tags.DashWindow.ShouldBeGreaterThanOrEqualTo(0, $"{id}: dash_window 가 음수다");
+            if (def.Tags.DashWindow > 0)
             {
-                def.Tags.ParryWindow.ShouldBe(0, $"{id}: 패리 불가인데 parry_window 가 있다");
+                def.Tags.DashWindow.ShouldBeGreaterThanOrEqualTo(BattleSim.Dt,
+                    $"{id}: dash_window={def.Tags.DashWindow} 가 한 틱보다 짧다 — 0 이 아닌데 실제로는 대시 불가다");
+            }
+
+            if (def.Tags.Parryable)
+            {
+                def.Tags.ParryWindow.ShouldBeGreaterThanOrEqualTo(BattleSim.Dt,
+                    $"{id}: parry_window={def.Tags.ParryWindow} 가 한 틱보다 짧다 — 패리 가능이라 실렸는데 못 받는다");
             }
         }
     }

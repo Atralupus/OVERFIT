@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Overfit.Battle.Rules;
-using Overfit.Core;
 using Overfit.Rules.Tests.Support;
 using Shouldly;
 using Xunit;
@@ -12,23 +10,18 @@ namespace Overfit.Rules.Tests.Battle;
 
 public class BattleSimTests
 {
-    private static Dictionary<string, PatternDef> Patterns() =>
-        JsonData<PatternDef>.ParseTable(File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json");
+    private static Dictionary<string, PatternDef> Patterns() => TestConfigs.Patterns();
 
-    private static BossConfig BossConfig(int health = 200) => new()
+    /// <summary>
+    /// 기본 판. <paramref name="bossHealth"/> 와 <paramref name="maxTicks"/> 만 준다 —
+    /// 체력은 "이기지 못하게" 해서 시간 초과를 강제할 때, 상한은 테스트가 초 단위로 끝나야 할 때다.
+    /// 나머지는 전부 실제 데이터다.
+    /// </summary>
+    private static BattleSetup Setup(int? bossHealth = null, int maxTicks = 60 * 120) => new()
     {
-        MaxHealth = health,
-        MoveSpeed = 160,
-        HalfWidth = 120,
-        PatternGap = 0.8,
-        Sprite = "boss_test",
-    };
-
-    private static BattleSetup Setup(int bossHealth = 200, int maxTicks = 60 * 120) => new()
-    {
-        Arena = new Arena(1920),
+        Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
-        Boss = BossConfig(bossHealth),
+        Boss = TestConfigs.Boss(maxHealth: bossHealth),
         PatternIds = new[] { "횡베기", "지면쓸기" },
         Patterns = Patterns(),
         Seed = 51,
@@ -93,21 +86,14 @@ public class BattleSimTests
     }
 
     /// <summary>몸 충돌이 허용하는 최소 간격. 보스 반폭 + 파이터 반폭이다 — 손으로 적지 않는다.</summary>
-    private static double MinGap() => BossConfig().HalfWidth + TestConfigs.Fighter().HalfWidth;
+    private static double MinGap() => TestConfigs.Boss().HalfWidth + TestConfigs.Fighter().HalfWidth;
 
     /// <summary>패턴이 안 도는 판. 보스가 다가오는 것만 본다 (간격이 커서 첫 패턴 전에 끝난다).</summary>
     private static BattleSim Chaser() => new(new BattleSetup
     {
-        Arena = new Arena(1920),
+        Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
-        Boss = new BossConfig
-        {
-            MaxHealth = 999_999,
-            MoveSpeed = 400,
-            HalfWidth = 120,
-            PatternGap = 1000,
-            Sprite = "boss_test",
-        },
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, patternGap: 1000),
         PatternIds = new[] { "횡베기" },
         Patterns = Patterns(),
         Seed = 1,
@@ -157,16 +143,9 @@ public class BattleSimTests
         // 무적은 위치가 아니라 행동 시계로 돌므로 막혀도 그대로여야 한다.
         var setup = new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = new BossConfig
-            {
-                MaxHealth = 999_999,
-                MoveSpeed = 0,
-                HalfWidth = 120,
-                PatternGap = 2.0,
-                Sprite = "boss_test",
-            },
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
             PatternIds = new[] { "단타" },
             Patterns = new Dictionary<string, PatternDef>
             {
@@ -244,9 +223,9 @@ public class BattleSimTests
     {
         var sim = new BattleSim(new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = BossConfig(999_999),
+            Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "횡베기", "지면쓸기", "충격파" },
             Patterns = Patterns(),
             Seed = 51,
@@ -287,16 +266,9 @@ public class BattleSimTests
     {
         var sim = new BattleSim(new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = new BossConfig
-            {
-                MaxHealth = 999_999,
-                MoveSpeed = 0,
-                HalfWidth = 120,
-                PatternGap = 2.0,
-                Sprite = "boss_test",
-            },
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
             PatternIds = new[] { "충격파" },
             Patterns = Patterns(),
             Seed = 1,
@@ -447,6 +419,18 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 빈_명부는_첫_뽑기가_아니라_판을_세울_때_거절한다()
+    {
+        // 빈 목록을 그대로 받으면 Begin 의 Det.RollInt(n: 0) 이 터진다 — 첫 패턴이 설 때까지
+        // 아무 일도 없다가, 판이 도는 도중에 C# 예외로 나온다. 그 예외는 우리 로그 형식이
+        // 아니라 엔진 ERROR 블록으로만 보인다. 세우는 자리에서 막는다.
+        BattleSetup setup = Setup();
+        setup.PatternIds = System.Array.Empty<string>();
+
+        Should.Throw<ArgumentException>(() => new BattleSim(setup));
+    }
+
+    [Fact]
     public void 없는_패턴_id_는_매_틱_에러를_쏟지_않는다()
     {
         // Begin 이 간격을 안 되돌린 채 나가면 _gapLeft 가 0 이하로 남아 다음 틱에도 곧장
@@ -455,16 +439,9 @@ public class BattleSimTests
         using var log = new LogCapture();
         var setup = new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = new BossConfig
-            {
-                MaxHealth = 999_999,
-                MoveSpeed = 0,
-                HalfWidth = 120,
-                PatternGap = 10 * BattleSim.Dt,
-                Sprite = "boss_test",
-            },
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 10 * BattleSim.Dt),
             PatternIds = new[] { "없는패턴" },
             Patterns = new Dictionary<string, PatternDef>(),
             Seed = 1,
@@ -508,16 +485,9 @@ public class BattleSimTests
     /// <summary>보스를 제자리에 세우고 <paramref name="pattern"/> 하나만 돌리는 판.</summary>
     private static BattleSim OnePattern(PatternDef pattern) => new(new BattleSetup
     {
-        Arena = new Arena(1920),
+        Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
-        Boss = new BossConfig
-        {
-            MaxHealth = 999_999,
-            MoveSpeed = 0,
-            HalfWidth = 120,
-            PatternGap = 3 * BattleSim.Dt,
-            Sprite = "boss_test",
-        },
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
         PatternIds = new[] { "단타" },
         Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern },
         Seed = 1,
@@ -654,16 +624,9 @@ public class BattleSimTests
 
         var setup = new BattleSetup
         {
-            Arena = new Arena(1920),
+            Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = new BossConfig
-            {
-                MaxHealth = 999_999,
-                MoveSpeed = 0,
-                HalfWidth = 120,
-                PatternGap = 3 * BattleSim.Dt,
-                Sprite = "boss_test",
-            },
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
             PatternIds = new[] { "멀티히트" },
             Patterns = new Dictionary<string, PatternDef> { ["멀티히트"] = pattern },
             Seed = 1,

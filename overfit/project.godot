@@ -73,5 +73,9 @@ attack={
 ; 데스크톱 전용이다 — 모바일은 목표가 아니다. 그래서 데스크톱 기본값인 forward_plus 를 쓴다.
 ; 2D 뿐이라 렌더러 선택이 성능에 거의 영향이 없고, mobile 을 남겨두면 "모바일도 하나?" 라는 오해만 남는다.
 renderer/rendering_method="forward_plus"
+; macOS 를 universal(= arm64 포함)로 익스포트하려면 켜져 있어야 한다 — 꺼져 있으면 익스포트가
+; "Cannot export for universal or arm64 if ETC2 ASTC texture format is disabled" 로 멈춘다.
+; 데스크톱 전용이라 이 포맷을 쓸 일이 없는데도 켜는 이유는 그것뿐이다. 대가는 임포트 캐시가 커지는 것.
+textures/vram_compression/import_etc2_astc=true
 ; 화면 바탕색. Control 은 스스로 배경을 칠하지 않으므로 여기가 유일한 바탕이다.
 environment/defaults/default_clear_color=Color(0.070588, 0.078431, 0.109804, 1)

@@ -9,22 +9,39 @@ public class HitResolverTests
     private const double _dt = 1.0 / 60.0;
     private const double _bossX = 960;
 
-    private static Fighter Spawn(double x) => new(TestConfigs.Fighter(), new Arena(1920), x);
+    private static Fighter Spawn(double x) => new(TestConfigs.Fighter(), TestConfigs.Arena(), x);
 
-    private static PatternTags Tags(bool parryable) => new()
+    /// <summary>
+    /// 기본 태그. 두 창은 파이터의 것보다 <b>넓게</b> 둔다 (대시 0.18 &gt; 0.14 · 패리 0.12 = 0.12) —
+    /// 그래야 창을 따로 주지 않은 테스트는 전부 파이터 쪽이 결정한다.
+    /// </summary>
+    private static PatternTags Tags(bool parryable, double? dashWindow = null, double? parryWindow = null) => new()
     {
-        DashWindow = 0.18,
+        DashWindow = dashWindow ?? 0.18,
         DashDirection = "out",
         Jumpable = false,
         AntiAir = false,
         Parryable = parryable,
-        ParryWindow = parryable ? 0.12 : 0,
+        ParryWindow = parryWindow ?? (parryable ? 0.12 : 0),
         PunishGreed = false,
         Reach = "mid",
         Feint = false,
         MultiHit = 1,
         Tracking = false,
     };
+
+    /// <summary><paramref name="ticks"/> 틱째의 파이터. 1틱째면 행동 경과가 정확히 한 틱이다.</summary>
+    private static Fighter Acting(InputFrame start, int ticks)
+    {
+        Fighter f = Spawn(_bossX + 100);
+        f.Tick(start, _dt);
+        for (int i = 1; i < ticks; i++)
+        {
+            f.Tick(default, _dt);
+        }
+
+        return f;
+    }
 
     /// <summary>바닥에서 200 까지, 보스로부터 260 안쪽.</summary>
     private static HitBox Mid() => new(0, 260, 0, 200, 18);
@@ -137,6 +154,63 @@ public class HitResolverTests
         f.Tick(new InputFrame(0, false, true, false, false), _dt);
 
         HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Dodged);
+    }
+
+    // ── 패턴의 창이 실제로 문다 (이슈 #16) ─────────────────────────────────────
+    //
+    // 전에는 HitResolver 가 파이터의 창만 봤다. 대공찌르기가 parry_window 0.10 을 선언해도
+    // 중검의 0.12 가 그대로 이겨서 **그 숫자는 아무것도 안 했다** — 그런데 망은 그 숫자를 배운다.
+    // 거짓말하는 숫자는 없는 숫자보다 나쁘다. 이제 유효 창은 **둘 중 좁은 쪽**이다.
+
+    [Fact]
+    public void 패리는_패턴과_파이터_중_좁은_창을_따른다()
+    {
+        InputFrame parry = new(0, false, false, true, false);
+
+        // 패턴 0.05 < 파이터 0.12. 3틱(0.05)이면 패턴 창은 이미 닫혔고 파이터 창은 열려 있다.
+        HitResolver.Resolve(Acting(parry, 1), _bossX, Mid(), Tags(true, parryWindow: 0.05))
+            .ShouldBe(HitVerdict.Parried);
+
+        Fighter late = Acting(parry, 4);
+        late.Parrying.ShouldBeTrue("파이터 창은 아직 열려 있어야 이 테스트가 좁은 쪽을 본다");
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 패턴_창이_더_넓으면_파이터_창이_이긴다()
+    {
+        // 좁은 쪽이 이긴다는 것은 양방향이다. 패턴이 넉넉해도 파이터의 창이 닫혔으면 맞는다 —
+        // 안 그러면 패턴 태그가 캐릭터 차이를 지워 버린다.
+        InputFrame parry = new(0, false, false, true, false);
+        Fighter late = Acting(parry, 9);   // 0.15 > 중검의 0.12
+
+        late.Parrying.ShouldBeFalse();
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 대시_무적도_패턴과_파이터_중_좁은_창을_따른다()
+    {
+        InputFrame dash = new(0, false, true, false, false);
+
+        HitResolver.Resolve(Acting(dash, 1), _bossX, Mid(), Tags(false, dashWindow: 0.05))
+            .ShouldBe(HitVerdict.Dodged);
+
+        Fighter late = Acting(dash, 4);
+        late.Invulnerable.ShouldBeTrue("파이터 무적은 아직 돌아야 이 테스트가 좁은 쪽을 본다");
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(false, dashWindow: 0.05)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void Dash_window_0_은_길이가_0_인_창이_아니라_대시_불가다()
+    {
+        // 두 해석이 값으로는 같은 곳에 떨어지지만 뜻이 다르다. DodgeEvent.DashAvailable 이
+        // dash_window > 0 으로 "대시가 가능했나" 를 싣고, 의존도 축의 분모가 그것이다 —
+        // 0 을 "아주 짧은 창" 으로 읽으면 그 분모가 거짓이 된다.
+        Fighter f = Acting(new InputFrame(0, false, true, false, false), 1);
+
+        f.Invulnerable.ShouldBeTrue();
+        HitResolver.Resolve(f, _bossX, Mid(), Tags(false, dashWindow: 0)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]

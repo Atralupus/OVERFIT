@@ -12,7 +12,7 @@ public class FighterActionTests
     private static readonly InputFrame _parry = new(0, false, false, true, false);
     private static readonly InputFrame _attack = new(0, false, false, false, true);
 
-    private static Fighter Spawn(double x = 960) => new(TestConfigs.Fighter(), new Arena(1920), x);
+    private static Fighter Spawn(double x = 960) => new(TestConfigs.Fighter(), TestConfigs.Arena(), x);
 
     [Fact]
     public void 대시는_스태미나를_쓰고_무적을_준다()
