@@ -102,13 +102,15 @@
     ]
   },
 
+  "_note_돌진": "tracking 을 true → false 로 내렸다. 보스는 패턴을 도는 동안 Boss.Approach 를 한 번도 안 부르므로 실제로는 얼어붙어 있다 — 태그만 '따라온다' 고 말했고, 그 거짓은 망의 입력이 된다. 추적을 **구현하는** 쪽은 전투 감각을 바꾸는 설계 결정이라 사람의 몫이고(이슈 #16), 거짓말하는 태그는 지금 고칠 수 있는 결함이다. 그래서 값을 내렸다. 기믹 자체는 열려 있다.",
+
   "돌진": {
     "tags": {
       "dash_window": 0.16, "dash_direction": "out",
       "jumpable": true, "anti_air": false,
       "parryable": false, "parry_window": 0,
       "punish_greed": false, "reach": "far",
-      "feint": false, "multi_hit": 1, "tracking": true
+      "feint": false, "multi_hit": 1, "tracking": false
     },
     "timeline": [
       { "t": 0.00, "kind": "windup" },
