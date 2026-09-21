@@ -133,7 +133,7 @@
 | 엔진 | Godot 4.7.2 (Mono / C#) · `forward_plus` · net8.0 · **데스크톱 전용** |
 | 화면 | 가로 1920×1080 |
 | 규칙 테스트 | Godot 없이 `tools/build.sh test` — **83건**, 0.2초 |
-| 에셋 | [Duelyst](https://github.com/Jordyfel/duelyst-animated-sprites-godot) (**CC0 1.0**) — 유닛 696종 · 보스 49종 |
+| 에셋 | [Duelyst](https://github.com/Jordyfel/duelyst-animated-sprites-godot) (**CC0 1.0**) — 유닛 696종 · 보스 50종 |
 
 ---
 

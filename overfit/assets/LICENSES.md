@@ -10,7 +10,7 @@
 2023-01-10 에 소스와 **에셋 전부**를 CC0 1.0 으로 공개했다 — "no strings attached".
 **저작자 표시 의무도 없다.** 애드온 저장소의 `duelyst-LICENSE` 가 CC0 1.0 전문이다.
 
-유닛 696종(보스 전용 49종), 애니메이션은 `idle · breathing · walk · attack · hit · dead`.
+유닛 696종(보스 전용 50종), 애니메이션은 `idle · breathing · walk · attack · hit · dead`.
 
 ## 쓰는 유닛
 
