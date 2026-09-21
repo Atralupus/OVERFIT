@@ -86,7 +86,7 @@
 
   "돌진": {
     "tags": {
-      "dash_window": 0.16, "dash_direction": "in",
+      "dash_window": 0.16, "dash_direction": "out",
       "jumpable": true, "anti_air": false,
       "parryable": false, "parry_window": 0,
       "punish_greed": false, "reach": "far",

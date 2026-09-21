@@ -18,7 +18,11 @@ public partial class FighterView : Node2D
         var frames = GD.Load<SpriteFrames>($"res://addons/duelyst_animated_sprites/spriteframes/units/{spriteId}.tres");
         if (frames is null)
         {
-            // 에셋이 없는 환경(CI · 새 체크아웃)은 정상 상태다. 경고로 남기고 계속 간다.
+            // PNG 는 저장소에 없다(tools/fetch_duelyst.py 가 받아 온다). 받기 전에는 .tres 파싱은
+            // 되고 그 안의 텍스처 ext_resource 만 못 풀려, **엔진이 ERROR 블록을 여러 건 찍는다** —
+            // 여기서 null 을 받아 조용히 넘어가는 것이 아니다. 그 소음은 우리 코드의 버그가 아니라
+            // 환경이라 tools/build.sh 의 judge_headless 가 그 경로만 면제하고 건수를 경고로 남긴다.
+            // 우리 쪽은 스프라이트 없이 계속 간다.
             Core.Log.Warn("view", $"sprite_missing id={spriteId}");
             return;
         }

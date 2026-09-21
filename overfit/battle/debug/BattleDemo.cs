@@ -24,6 +24,7 @@ public partial class BattleDemo : Node
 
         Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
+        Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
 
         if (!fighters.TryGetValue(fighterId, out FighterConfig? fighter))
         {
@@ -32,17 +33,9 @@ public partial class BattleDemo : Node
             return;
         }
 
-        // 단계가 쓰는 패턴 수: 2 · 3 · 5 · 7 · 10. 프로토타입은 패턴이 여섯이라 3단계까지 돈다.
-        int[] counts = { 2, 3, 5, 7, 10 };
-        int want = counts[System.Math.Clamp(stage - 1, 0, counts.Length - 1)];
-        var ids = new List<string>();
-        foreach (string id in patterns.Keys)
-        {
-            if (ids.Count < want)
-            {
-                ids.Add(id);
-            }
-        }
+        // 단계 명부는 data/stages.json 이 정한다. patterns.json 의 키 순서에서 앞 N 개를 자르던
+        // 옛 방식은 패턴을 파일 맨 위에 끼워 넣는 것만으로 같은 단계를 다른 전투로 바꿨다.
+        IReadOnlyList<string> ids = StageRoster.For(stages, stage);
 
         Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={stage} patterns={ids.Count}");
 
@@ -72,10 +65,13 @@ public partial class BattleDemo : Node
         }
 
         PlayerAxes axes = PlayerAxes.From(sim.Events);
-        Log.Info("axes", $"samples={axes.Samples} dash_bias={axes.DashTimingBias:0.000}"
+        // 수단별 건수를 축 옆에 같이 찍는다. samples 만 보면 "관측 10건" 이 "대시 3건으로 낸 분산"
+        // 까지 보증하는 것처럼 읽힌다.
+        Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
+            + $" parry_n={axes.ParrySamples} dash_bias={axes.DashTimingBias:0.000}"
             + $" dash_var={axes.DashTimingVar:0.000} dash_dir={axes.DashDirectionBias:0.00}"
             + $" jump_bias={axes.JumpTimingBias:0.000} jump_rel={axes.JumpReliance:0.00}"
-            + $" air={axes.AirTimeRatio:0.00} parry_rate={axes.ParryRate:0.00}"
+            + $" air_impact={axes.AirborneAtImpactRatio:0.00} parry_rate={axes.ParryRate:0.00}"
             + $" parry_rel={axes.ParryReliance:0.00} greed={axes.Greed:0.00} dist={axes.DistanceBias:0}");
 
         Log.Marker("battle-demo", $"battle-demo=done outcome={outcome} ticks={sim.Ticks} events={sim.Events.Count}");

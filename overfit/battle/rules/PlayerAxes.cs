@@ -12,6 +12,13 @@ namespace Overfit.Battle.Rules;
 /// 그래서 <see cref="Samples"/> 를 같이 들고 다닌다: "3건으로 낸 0.5" 와 "300건으로 낸 0.5" 는 다르고,
 /// 망이 그 차이를 알아야 한다.
 /// </para>
+///
+/// <para>
+/// 다섯 축은 전체가 아니라 <b>부분집합</b>으로 계산된다 (대시·점프·패리 건만).
+/// <see cref="Samples"/> 만 옆에 붙이면 "관측 10건" 이 "대시 3건으로 낸 분산" 까지
+/// 보증하는 것처럼 보인다 — 가장 얇은 근거를 가장 크게 믿게 만드는 배치다.
+/// 그래서 수단별 건수를 따로 싣는다. <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
+/// </para>
 /// </summary>
 public sealed class PlayerAxes
 {
@@ -26,7 +33,14 @@ public sealed class PlayerAxes
 
     public double JumpReliance { get; private init; }
 
-    public double AirTimeRatio { get; private init; }
+    /// <summary>
+    /// 판정이 선 순간 공중에 있었던 비율. <b>공중에 떠 있던 시간의 비율이 아니다</b> —
+    /// 그 이름이었던 적이 있는데, 재는 것은 "액티브 프레임마다 공중이었나" 라서
+    /// 전투의 90%를 땅에서 보낸 플레이어도 1.00 이 나왔다.
+    /// 값을 바꾸지 않고 이름을 바꾼 이유는 <c>anti_air</c> 패턴이 아픈지를 예측하는 데는
+    /// 체류 시간보다 <b>피격 순간의 고도</b>가 바로 그 답이기 때문이다.
+    /// </summary>
+    public double AirborneAtImpactRatio { get; private init; }
 
     public double ParryRate { get; private init; }
 
@@ -38,6 +52,16 @@ public sealed class PlayerAxes
 
     /// <summary>이 축들을 낸 관측 수. 축의 신뢰도가 여기 들어 있다.</summary>
     public int Samples { get; private init; }
+
+    /// <summary>대시로 설명된 관측 수. <c>DashTimingBias</c> · <c>DashTimingVar</c> ·
+    /// <c>DashDirectionBias</c> 는 이만큼의 근거로 나왔다.</summary>
+    public int DashSamples { get; private init; }
+
+    /// <summary>점프로 설명된 관측 수. <c>JumpTimingBias</c> 의 근거다.</summary>
+    public int JumpSamples { get; private init; }
+
+    /// <summary>패리로 설명된 관측 수. <c>ParryRate</c> 의 분모다.</summary>
+    public int ParrySamples { get; private init; }
 
     public static PlayerAxes From(IReadOnlyList<DodgeEvent> events)
     {
@@ -104,12 +128,15 @@ public sealed class PlayerAxes
             DashDirectionBias = Ratio(inward - outward, inward + outward),
             JumpTimingBias = Mean(jumpErrors),
             JumpReliance = Ratio(jumps, events.Count),
-            AirTimeRatio = Ratio(airborne, events.Count),
+            AirborneAtImpactRatio = Ratio(airborne, events.Count),
             ParryRate = Ratio(parried, parries),
             ParryReliance = Ratio(parries, events.Count),
             Greed = Ratio(greedy, events.Count),
             DistanceBias = distance / events.Count,
             Samples = events.Count,
+            DashSamples = dashes,
+            JumpSamples = jumps,
+            ParrySamples = parries,
         };
     }
 

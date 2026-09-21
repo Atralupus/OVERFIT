@@ -24,6 +24,7 @@
 # 헤드리스 판정 — 창 없이 도는 서브커맨드(지금은 smoke 하나)는 판정 함수 하나(judge_headless)를 공유한다.
 #   ① 로그에 ^[tag][E] 가 있으면 실패 (CLAUDE.md: Error = 규칙 위반)
 #   ①′ 엔진이 찍은 ERROR: 블록이 있으면 실패 — C# 예외는 여기로만 나온다. WARNING: 은 세기만 한다
+#      스프라이트 팩 자원 로딩 실패만 면제하고(그림은 저장소에 없다) 면제 건수를 경고로 찍는다
 #   ② 완료 표지([tag][M])가 없으면 실패 — 게임이 끝까지 못 갔다
 #   ③ 표지 있고 종료 코드 0 → 통과      ④ 표지 있고 코드 != 0 → 실패
 # 완료 표지는 core/Log.Marker 가 내므로 LOG_LEVEL 과 무관하다. 내용 검사(expect_log)만 그 줄이 안 찍히는 레벨에서 건너뛴다.
@@ -78,6 +79,18 @@ engine_diag_blocks() {
   ' "$1"
 }
 
+# 에셋이 없는 체크아웃 면제 목록.
+#
+# 그림 파일(PNG)은 저장소에 없다 — tools/fetch_duelyst.py 가 받아 온다. 받기 전 체크아웃에서는
+# .tres 는 읽히는데 그것이 가리키는 텍스처가 없어 엔진이 자원 로딩 ERROR 를 쏟는다.
+# 그건 우리 코드의 버그가 아니라 **환경**이라, 방금 클론한 사람이 smoke 부터 막히지 않게 면제한다.
+#
+# ⚠ **좁게 유지한다.** 스프라이트 팩 경로와 그 임포트 캐시의 자원 로딩 실패뿐이다.
+#   C# 예외 패턴을 여기 넣지 마라 — 엔진이 파일을 못 읽는 것은 환경이지만,
+#   그 결과로 생긴 null 을 우리 코드가 건드리는 것은 우리 버그다. 그 둘은 같이 묻히면 안 된다.
+_JUDGE_ASSET_ABSENT_ALLOW='res://addons/duelyst_animated_sprites/'
+_JUDGE_ASSET_ABSENT_ALLOW+='|res://\.godot/imported/'
+
 #   judge_headless <무엇을 돌렸나> <로그파일> <완료 표지> <종료 코드> [의도된 에러 정규식]
 #
 # ⚠ **여기에 C# 예외를 면제로 넣지 마라.** 예외는 어디서 나든 우리 코드의 버그다.
@@ -103,6 +116,16 @@ judge_headless() {
   engine="$(grep -E '^(ERROR|SCRIPT ERROR|USER ERROR|USER SCRIPT ERROR):' <<< "$blocks" || true)"
   warns="$(grep -cE '^(WARNING|USER WARNING):' <<< "$blocks" || true)"
   [[ -n "$allow" ]] && engine="$(grep -vE "$allow" <<< "$engine" || true)"
+
+  # 에셋 없는 체크아웃 면제. **몇 건을 봐줬는지 반드시 찍는다** — 안 찍으면 그림이 없는 실행과
+  # 멀쩡한 실행이 똑같이 초록으로 보이고, "왜 아무것도 안 보이지" 를 로그에서 찾을 수 없다.
+  local exempted=0
+  if [[ -n "$engine" ]]; then
+    exempted="$(grep -cE "$_JUDGE_ASSET_ABSENT_ALLOW" <<< "$engine" || true)"
+    engine="$(grep -vE "$_JUDGE_ASSET_ABSENT_ALLOW" <<< "$engine" || true)"
+  fi
+  [[ "$exempted" -gt 0 ]] && warn "$what: 에셋 없는 체크아웃으로 보아 엔진 ERROR ${exempted}건 면제 (tools/fetch_duelyst.py 를 안 돌린 상태다)"
+
   if [[ -n "$engine" ]]; then
     bad "$what: 엔진 ERROR $(grep -c . <<< "$engine")건 — C# 예외거나 엔진이 규칙 위반을 본 것이다. 전체 로그: $log"
     head -5 <<< "$engine" | cut -c1-400 | sed 's/^/      /'

@@ -53,12 +53,17 @@ public sealed class BattleSim
 
     private readonly List<DodgeEvent> _events = new();
 
-    /// <summary>회피 행동이 시작된 시각(초). 타이밍 오차를 재려고 들고 있는다.</summary>
-    private double _actionStartedAt = double.NaN;
+    // 회피 수단마다 **따로** 시작 시각을 들고 있는다(초, NaN = 지금 그 수단이 없다).
+    // 슬롯이 하나였을 때는 "가장 최근에 시작한 행동" 이 판정을 다 가져갔다 —
+    // 점프로 넘긴 지면쓸기가 같이 눌러둔 패리의 공이 되어, 데모 10건 중 4건이
+    // 엉뚱한 verb 로 기록됐고 parry_rate 까지 그 실패로 오염됐다.
+    private double _dashStartedAt = double.NaN;
 
-    private DodgeVerb _actionVerb = DodgeVerb.None;
+    private double _parryStartedAt = double.NaN;
 
-    private int _actionDirection;
+    private double _jumpStartedAt = double.NaN;
+
+    private int _dashDirection;
 
     public BattleSim(BattleSetup setup)
     {
@@ -186,6 +191,10 @@ public sealed class BattleSim
         string id = _setup.PatternIds[index];
         if (!_setup.Patterns.TryGetValue(id, out PatternDef? def))
         {
+            // 간격을 되돌려 놓고 나간다. 안 그러면 _gapLeft 가 0 이하로 남아 다음 틱에도
+            // 곧장 이 갈래로 떨어져, 유효한 id 가 뽑힐 때까지 매 틱 [E] 를 쏟는다 —
+            // 헤드리스 판정이 읽는 로그가 그것으로 뒤덮인다.
+            _gapLeft = Boss.PatternGap;
             Log.Error("boss", $"pattern_missing id={id}");
             return;
         }
@@ -197,8 +206,13 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 이번 틱에 회피 행동이 시작됐으면 그 시각과 방향을 적어 두고, 이미 적어 둔 행동이
-    /// 끝났으면 잊는다. <b>판정이 설 때 이것과의 차이가 타이밍 오차가 된다.</b>
+    /// 이번 틱에 시작된 회피 행동의 시각을 그 수단의 칸에 적고, 끝난 수단의 칸은 지운다.
+    /// <b>판정이 설 때 이것과의 차이가 타이밍 오차가 된다.</b>
+    ///
+    /// <para>
+    /// 수단마다 칸이 따로다. 하나로 합치면 나중에 시작한 행동이 앞선 행동을 덮어써서,
+    /// 정작 판정을 피하게 한 수단의 시각이 사라진다.
+    /// </para>
     /// </summary>
     /// <param name="input">이번 틱의 입력. 점프가 눌렸는지를 본다.</param>
     /// <param name="wasGrounded">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 접지 상태.
@@ -207,40 +221,94 @@ public sealed class BattleSim
     private void RememberDodgeStart(InputFrame input, bool wasGrounded)
     {
         double now = Ticks * Dt;
+
+        // 시작한 행동은 **그 행동이 끝났을 때만** 지운다. Land 에서 지우면 대시 한 번의 무적이
+        // 막은 연속타 중 첫 대가 기록을 소비해 버려 나머지가 "회피 수단 없음" 으로 기록된다 —
+        // 근거가 없는 게 아니라 **잘못 붙는다.**
         if (Fighter.Action == FighterAction.Dash && Fighter.ActionElapsed <= Dt)
         {
-            _actionVerb = DodgeVerb.Dash;
-            _actionStartedAt = now;
+            _dashStartedAt = now;
             // 보스 쪽으로 갔으면 안(+1), 반대면 밖(-1)
-            _actionDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
+            _dashDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
         }
-        else if (Fighter.Action == FighterAction.Parry && Fighter.ActionElapsed <= Dt)
+        else if (Fighter.Action != FighterAction.Dash)
         {
-            _actionVerb = DodgeVerb.Parry;
-            _actionStartedAt = now;
-            _actionDirection = 0;
+            _dashStartedAt = double.NaN;
+            _dashDirection = 0;
         }
-        else if (input.Jump && wasGrounded && !Fighter.Grounded)
+
+        if (Fighter.Action == FighterAction.Parry && Fighter.ActionElapsed <= Dt)
         {
-            _actionVerb = DodgeVerb.Jump;
-            _actionStartedAt = now;
-            _actionDirection = 0;
+            _parryStartedAt = now;
         }
-        // 시작한 행동이 끝났을 때 잊는다. **Land 에서 지우지 않는다** — 대시 한 번의 무적이
-        // 연속타 여러 대를 막을 수 있는데, 첫 대가 소비해 버리면 나머지가 "회피 수단 없음" 으로
-        // 기록되어 근거가 없는 게 아니라 **잘못 붙는다.**
-        else if (_actionVerb switch
+        else if (Fighter.Action != FighterAction.Parry)
         {
-            DodgeVerb.Dash => Fighter.Action != FighterAction.Dash,
-            DodgeVerb.Parry => Fighter.Action != FighterAction.Parry,
-            DodgeVerb.Jump => Fighter.Grounded,
-            _ => false,
-        })
-        {
-            _actionStartedAt = double.NaN;
-            _actionVerb = DodgeVerb.None;
-            _actionDirection = 0;
+            _parryStartedAt = double.NaN;
         }
+
+        if (input.Jump && wasGrounded && !Fighter.Grounded)
+        {
+            _jumpStartedAt = now;
+        }
+        else if (Fighter.Grounded)
+        {
+            _jumpStartedAt = double.NaN;
+        }
+    }
+
+    /// <summary>
+    /// 이 판정을 <b>무엇이</b> 그렇게 만들었나. 결과가 이미 답을 들고 있다 —
+    /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다.
+    /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
+    /// </summary>
+    private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict) => verdict switch
+    {
+        HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
+        HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
+
+        // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에
+        // 그냥 서 있었던 것이다 — 후자를 점프로 세면 jump_reliance 가 **정반대 행동**으로 부푼다.
+        HitVerdict.MissedByHeight => double.IsNaN(_jumpStartedAt)
+            ? (DodgeVerb.None, double.NaN)
+            : (DodgeVerb.Jump, _jumpStartedAt),
+
+        // 거리로 빗나갔다. 행동이 아니라 서 있던 자리가 피하게 했으므로 타이밍이 없다.
+        HitVerdict.MissedByRange => (DodgeVerb.Spacing, double.NaN),
+
+        // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
+        _ => MostRecentAction(),
+    };
+
+    /// <summary>
+    /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 판정에만 쓴다 —
+    /// 겹쳐 있으면 그 판정을 겨냥한 쪽이 더 나중이다.
+    /// 동시 시작은 대시 → 패리 → 점프 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
+    /// 다른 라벨을 내 학습 데이터가 재현되지 않는다.
+    /// </summary>
+    private (DodgeVerb Verb, double StartedAt) MostRecentAction()
+    {
+        DodgeVerb verb = DodgeVerb.None;
+        double at = double.NaN;
+
+        if (!double.IsNaN(_dashStartedAt))
+        {
+            verb = DodgeVerb.Dash;
+            at = _dashStartedAt;
+        }
+
+        if (!double.IsNaN(_parryStartedAt) && (double.IsNaN(at) || _parryStartedAt > at))
+        {
+            verb = DodgeVerb.Parry;
+            at = _parryStartedAt;
+        }
+
+        if (!double.IsNaN(_jumpStartedAt) && (double.IsNaN(at) || _jumpStartedAt > at))
+        {
+            verb = DodgeVerb.Jump;
+            at = _jumpStartedAt;
+        }
+
+        return (verb, at);
     }
 
     /// <summary>보스의 판정 하나를 파이터에게 대고, 맞았으면 깎는다.</summary>
@@ -253,21 +321,22 @@ public sealed class BattleSim
         }
 
         double now = Ticks * Dt;
-        DodgeVerb verb = double.IsNaN(_actionStartedAt) ? DodgeVerb.None : _actionVerb;
-        double error = verb == DodgeVerb.None ? 0 : _actionStartedAt - now;
+        (DodgeVerb verb, double startedAt) = Credit(verdict);
+        double error = double.IsNaN(startedAt) ? 0 : startedAt - now;
+        int direction = verb == DodgeVerb.Dash ? _dashDirection : 0;
 
         _events.Add(new DodgeEvent(
             PatternId: Boss.CurrentPattern ?? "?",
             Verb: verb,
             Verdict: verdict,
             TimingError: error,
-            Direction: verb == DodgeVerb.Dash ? _actionDirection : 0,
+            Direction: direction,
             Airborne: !Fighter.Grounded,
             Distance: Math.Abs(Fighter.X - Boss.X),
             GreedWindow: Fighter.Action == FighterAction.Attack));
 
         Log.Info("dodge", $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
-            + $" err={error:0.000} dir={_actionDirection} air={!Fighter.Grounded} hp={Fighter.Health}");
+            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}");
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
