@@ -236,6 +236,55 @@ public class BattleSimTests
             "붙는 봇과 떨어지는 봇이 같은 거리로 수렴한다 — 축이 못 가른다");
     }
 
+    /// <summary>
+    /// 충격파 한 방을 <paramref name="walkTicks"/> 만큼 보스 쪽으로 걸어간 자리에서 맞아 본다.
+    /// 패턴은 2.0초 뒤에 서므로 그 전에 자리를 잡는다.
+    /// </summary>
+    private static DodgeEvent Shockwave(int walkTicks)
+    {
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = new Arena(1920),
+            Fighter = TestConfigs.Fighter(),
+            Boss = new BossConfig
+            {
+                MaxHealth = 999_999,
+                MoveSpeed = 0,
+                HalfWidth = 120,
+                PatternGap = 2.0,
+                Sprite = "boss_test",
+            },
+            PatternIds = new[] { "충격파" },
+            Patterns = Patterns(),
+            Seed = 1,
+            MaxTicks = 60 * 10,
+        });
+
+        for (int i = 0; i < 300 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame((sbyte)(i < walkTicks ? 1 : 0), false, false, false, false));
+        }
+
+        return sim.Events.Single();
+    }
+
+    [Fact]
+    public void 충격파는_붙은_쪽만_살려준다()
+    {
+        // 안쪽 220px 이 비어 있는 유일한 패턴이다. 몸 충돌이 허용하는 최소 간격(150)과 220 사이의
+        // 70px 주머니로 **파고들어야** 산다 — 그 결정이 dash_direction_bias 가 재려는 바로 그것이다.
+        // 두 수치는 다른 파일에 있다(patterns.json 의 220 · fighters.json 과 보스 반폭의 150).
+        // 어느 한쪽이 움직여 주머니가 닫히면 축은 조용히 다시 죽는다 — 여기서 빨개지게 한다.
+        DodgeEvent hugging = Shockwave(300);
+        DodgeEvent spacing = Shockwave(80);
+
+        hugging.Verdict.ShouldBe(HitVerdict.MissedByRange, "붙었는데 충격파에 맞았다 — 안쪽 주머니가 닫혔다");
+        hugging.Distance.ShouldBe(MinGap(), 0.001);
+
+        spacing.Verdict.ShouldBe(HitVerdict.Hit, "떨어져 있는데 안 맞았다 — 이 테스트가 주머니를 안 본다");
+        spacing.Distance.ShouldBeGreaterThan(220);
+    }
+
     [Fact]
     public void 정확히_겹친_자리는_고정된_쪽으로_민다()
     {
