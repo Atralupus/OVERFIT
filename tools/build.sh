@@ -6,7 +6,7 @@
 #   tools/build.sh check               포맷 검사 + 빌드 + 규칙 테스트 + .uid 짝. 커밋 전 게이트
 #   tools/build.sh fix                 포맷 자동 수정
 #   tools/build.sh build               C# 빌드만
-#   tools/build.sh test [cover] [인자…] 규칙 테스트 (xUnit, tests/PreReLU.Rules.Tests). Godot 을 안 띄운다 — 초 단위
+#   tools/build.sh test [cover] [인자…] 규칙 테스트 (xUnit, tests/Overfit.Rules.Tests). Godot 을 안 띄운다 — 초 단위
 #                                      발견 개수를 TRX 에서 읽어 인용한다. **0개면 실패다** — 러너가 빠지면
 #                                      dotnet test 가 테스트 0개를 찾고 조용히 통과하기 때문이다
 #                                      cover → 커버리지(cobertura) 까지. 나머지 인자는 dotnet test 로 그대로
@@ -31,14 +31,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT="$ROOT/prerelu"
-SLN="$PROJECT/PreReLU.sln"
+PROJECT="$ROOT/overfit"
+SLN="$PROJECT/Overfit.sln"
 OUT="$ROOT/out"
 
-# 규칙 테스트. prerelu/ **바깥**이다 — 안에 두면 Godot.NET.Sdk 의 기본 glob 이
+# 규칙 테스트. overfit/ **바깥**이다 — 안에 두면 Godot.NET.Sdk 의 기본 glob 이
 # 테스트 소스를 게임 어셈블리에 컴파일해 넣는다. 규칙 파일은 옮기지 않고 csproj 가 링크만 한다.
-TEST_DIR="$ROOT/tests/PreReLU.Rules.Tests"
-TEST_PROJ="$TEST_DIR/PreReLU.Rules.Tests.csproj"
+TEST_DIR="$ROOT/tests/Overfit.Rules.Tests"
+TEST_PROJ="$TEST_DIR/Overfit.Rules.Tests.csproj"
 
 GODOT="${GODOT_PATH:-${GODOT:-/Applications/Godot_mono.app/Contents/MacOS/Godot}}"
 
