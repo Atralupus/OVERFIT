@@ -197,9 +197,23 @@ public sealed class BattleSim
     /// "안으로 파고들기" 가 순간이동이 아니라 실제 자리 싸움이 되어야 그 판단이 축에 잡힌다.
     /// 무적은 위치가 아니라 행동 시계로 도므로 막혀도 그대로다.
     /// </para>
+    ///
+    /// <para>
+    /// <b>지상에서만 민다.</b> 공중에서도 밀던 때는 보스가 붙으면 플레이어가 벽 쪽으로 밀리고
+    /// 빠져나갈 길이 아예 없었다 — 할 수 있는 것이 없는 상태는 패턴을 읽는 게임이 아니다.
+    /// 보스 키는 480px 이고 점프 정점은 176px 라, "넘어간다" 는 높이로 넘는 것이 아니라
+    /// <b>공중에서 가로로 지나가는 것</b>이다. 2D 액션의 관례고, 지상 간격은 그대로라
+    /// <c>distance_bias</c> 축이 재는 교전 거리는 한 px 도 안 바뀐다 —
+    /// 공중 판정은 <c>DodgeEvent.Airborne</c> 이 따로 싣는다.
+    /// </para>
     /// </summary>
     private void Separate()
     {
+        if (!Fighter.Grounded)
+        {
+            return;
+        }
+
         double minGap = MinGap;
         if (Math.Abs(Fighter.X - Boss.X) >= minGap)
         {

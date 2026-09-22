@@ -135,6 +135,73 @@ public class BattleSimTests
         sim.Fighter.X.ShouldBe(sim.Boss.X - minGap, 0.001, "파이터가 보스에 붙지도 못했다");
     }
 
+    /// <summary>보스가 제자리에 서 있고 패턴도 안 도는 판. <b>몸 충돌만</b> 본다.</summary>
+    private static BattleSim StillBoss() => new(new BattleSetup
+    {
+        Arena = TestConfigs.Arena(),
+        Fighter = TestConfigs.Fighter(),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
+        PatternIds = new[] { "횡베기" },
+        Patterns = Patterns(),
+        Seed = 1,
+        MaxTicks = 60 * 60,
+    });
+
+    /// <summary>보스 몸에 닿을 때까지 오른쪽으로 걷는다. 붙었는지까지 확인하고 돌려준다.</summary>
+    private static void WalkIntoBoss(BattleSim sim)
+    {
+        for (int i = 0; i < 150; i++)
+        {
+            sim.Tick(new InputFrame(1, false, false, false, false));
+        }
+
+        sim.Fighter.X.ShouldBe(sim.Boss.X - MinGap(), 0.001, "보스 몸에 붙지 못했다 — 이 테스트가 몸 충돌을 안 본다");
+    }
+
+    [Fact]
+    public void 공중이면_보스_몸을_가로질러_지나간다()
+    {
+        // 보스가 붙으면 플레이어는 벽 쪽으로 밀려 **할 수 있는 게 없었다.** 보스 키는 480px 이고
+        // 점프 정점은 176px 라, "넘어간다" 는 높이로 넘는 것이 아니라 공중에서 가로로 지나가는 것이다 —
+        // 2D 액션의 관례다. 지상 간격은 그대로라 distance_bias 축은 살아 있다.
+        var sim = StillBoss();
+        double minGap = MinGap();
+        WalkIntoBoss(sim);
+
+        bool passedThrough = false;
+        for (int i = 0; i < 60; i++)
+        {
+            sim.Tick(new InputFrame(1, Jump: i == 0, false, false, false));
+            if (!sim.Fighter.Grounded && Math.Abs(sim.Fighter.X - sim.Boss.X) < minGap - 1e-9)
+            {
+                passedThrough = true;
+            }
+        }
+
+        passedThrough.ShouldBeTrue("공중인데 몸 충돌에 막혔다 — 보스가 붙으면 빠져나갈 길이 없다");
+        sim.Fighter.X.ShouldBeGreaterThan(sim.Boss.X, "점프로 보스를 가로질러 반대편으로 못 갔다");
+    }
+
+    [Fact]
+    public void 착지하면_다시_밀려난다()
+    {
+        // 공중 통과가 "몸 충돌을 껐다" 가 되면 안 된다. 지상 교전 거리가 그대로여야
+        // distance_bias 축이 산다 — 그 축을 살리려고 몸 충돌을 넣었다.
+        var sim = StillBoss();
+        double minGap = MinGap();
+        WalkIntoBoss(sim);
+
+        // 점프해서 보스 몸 **안까지만** 가로로 들어간 뒤 멈춘다 — 거기서 착지한다.
+        for (int i = 0; i < 60; i++)
+        {
+            sim.Tick(new InputFrame((sbyte)(i < 15 ? 1 : 0), Jump: i == 0, false, false, false));
+        }
+
+        sim.Fighter.Grounded.ShouldBeTrue("아직 공중이다 — 이 테스트가 착지를 안 본다");
+        Math.Abs(sim.Fighter.X - sim.Boss.X)
+            .ShouldBeGreaterThanOrEqualTo(minGap - 1e-9, "착지했는데 보스 몸 안에 서 있다");
+    }
+
     [Fact]
     public void 몸에_막혀도_대시_무적은_그대로_돈다()
     {
