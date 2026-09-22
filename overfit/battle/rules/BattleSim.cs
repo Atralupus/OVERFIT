@@ -137,7 +137,6 @@ public sealed class BattleSim
         // 공중에서 점프를 또 눌러도 Fall 이 물리적으로는 무시하지만, 그 입력만 보면 구별이 안 된다.
         bool wasGrounded = Fighter.Grounded;
         Fighter.Tick(input, Dt);
-        Separate();
         RememberDodgeStart(input, wasGrounded);
         AdvanceBoss();
         Strike();
@@ -164,74 +163,30 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 몸이 겹쳤을 때 파이터가 서야 할 x. <b>순수 함수라 테스트가 경계를 직접 못 박는다.</b>
-    ///
-    /// <para>
-    /// 있던 쪽을 그대로 유지한다 — 반대로 넘기면 보스를 관통하는 순간이동이 된다.
-    /// 정확히 겹친 자리(<c>fighterX == bossX</c>)는 매 틱 밀어내는 동안엔 나올 수 없지만,
-    /// 나오더라도 <b>왼쪽으로 고정</b>한다. 부동소수 0 의 부호나 난수로 가르면 같은 시드가
-    /// 다른 판을 내고 리플레이 골든이 재현되지 않는다.
-    /// </para>
-    /// </summary>
-    public static double SeparatedX(double fighterX, double bossX, double minGap) =>
-        bossX + ((fighterX > bossX ? 1 : -1) * minGap);
-
-    /// <summary>
-    /// 보스 반폭 + 파이터 반폭. 두 몸이 겹치지 않는 최소 중심 거리다.
+    /// 보스가 파이터에게서 두고 서는 간격. 보스 반폭 + 파이터 반폭이다.
+    /// <b>벽이 아니다</b> — 파이터는 이 안으로 걸어 들어가고, 지나쳐 나간다(이슈 #27).
+    /// 보스가 이 거리를 목표로 서는 이유는 <b>파이터 중심을 목표로 걸으면 둘이 완전히 겹쳐</b>
+    /// 교전 거리가 늘 0 으로 수렴하기 때문이다 — 그림도 틀리고 <c>distance_bias</c> 도 상수가 된다.
     /// <b>수치를 손으로 안 적는다</b> — 캐릭터마다 반폭이 다르고(26~36) data/fighters.json 이 진실이다.
     /// </summary>
-    private double MinGap => Boss.HalfWidth + Fighter.HalfWidth;
+    private double Standoff => Boss.HalfWidth + Fighter.HalfWidth;
 
-    /// <summary>
-    /// 두 몸을 떼어 놓는다. 밀리는 쪽은 <b>파이터</b>다 — 보스는 4배 크고, 플레이어에게 밀리는
-    /// 보스는 그림이 틀렸다.
-    ///
-    /// <para>
-    /// 이게 없던 때 파이터는 보스 몸(반폭 120) 안에 섰고 데모 평균 교전거리가 85px 였다.
-    /// 붙는 사람과 떨어지는 사람이 둘 다 ≈0 으로 수렴해 <c>distance_bias</c> 축이 상수였다 —
-    /// 죽은 입력은 망의 용량만 먹고 아무것도 가르치지 않는다.
-    /// </para>
-    ///
-    /// <para>
-    /// 대시가 보스를 뚫고 나가던 것도 여기서 막힌다. 그건 <b>의도한 결과다</b> —
-    /// "안으로 파고들기" 가 순간이동이 아니라 실제 자리 싸움이 되어야 그 판단이 축에 잡힌다.
-    /// 무적은 위치가 아니라 행동 시계로 도므로 막혀도 그대로다.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>지상에서만 민다.</b> 공중에서도 밀던 때는 보스가 붙으면 플레이어가 벽 쪽으로 밀리고
-    /// 빠져나갈 길이 아예 없었다 — 할 수 있는 것이 없는 상태는 패턴을 읽는 게임이 아니다.
-    /// 보스 키는 480px 이고 점프 정점은 176px 라, "넘어간다" 는 높이로 넘는 것이 아니라
-    /// <b>공중에서 가로로 지나가는 것</b>이다. 2D 액션의 관례고, 지상 간격은 그대로라
-    /// <c>distance_bias</c> 축이 재는 교전 거리는 한 px 도 안 바뀐다 —
-    /// 공중 판정은 <c>DodgeEvent.Airborne</c> 이 따로 싣는다.
-    /// </para>
-    /// </summary>
-    private void Separate()
-    {
-        if (!Fighter.Grounded)
-        {
-            return;
-        }
-
-        double minGap = MinGap;
-        if (Math.Abs(Fighter.X - Boss.X) >= minGap)
-        {
-            return;
-        }
-
-        Fighter.PushOutTo(SeparatedX(Fighter.X, Boss.X, minGap));
-    }
-
-    /// <summary>보스: 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
+    /// <summary>보스: 굳었으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
     private void AdvanceBoss()
     {
+        // 경직 시계만은 굳어 있어도 돈다 — 아니면 안 풀린다.
+        Boss.Tick(Dt);
+        if (Boss.Staggered)
+        {
+            return;
+        }
+
         if (_runner is null)
         {
             _gapLeft -= Dt;
-            // 파이터의 중심이 아니라 **자기 쪽으로 minGap 떨어진 자리**를 목표로 한다.
-            // 중심을 노리면 보스가 파이터를 그대로 걸어 지나가 몸이 겹친다.
-            Boss.Approach(Fighter.X + ((Boss.X >= Fighter.X ? 1 : -1) * MinGap), Dt);
+            // 파이터의 중심이 아니라 **자기 쪽으로 Standoff 떨어진 자리**를 목표로 한다.
+            // 중심을 노리면 보스가 파이터 위에 정확히 겹쳐 서서 교전 거리가 늘 0 이 된다.
+            Boss.Approach(Fighter.X + ((Boss.X >= Fighter.X ? 1 : -1) * Standoff), Dt);
             if (_gapLeft <= 0)
             {
                 Begin();
@@ -309,11 +264,15 @@ public sealed class BattleSim
             _dashDirection = 0;
         }
 
-        if (Fighter.Action == FighterAction.Parry && Fighter.ActionElapsed <= Dt)
+        // 패리 칸은 **행동이 아니라 누름**을 따라 산다. 부정확 창(0.5초)이 패리 행동(0.30초)보다
+        // 길어서, 행동이 끝날 때 지우면 늦게 누른 패리가 판정을 받아낸 바로 그 순간에
+        // 시작 시각이 사라진다 — TimingError 가 0 이 되어 "아무것도 안 했다" 와 같은 점이 된다.
+        // 그 붕괴를 없애려고 만든 것이 부정확 단계인데, 그러면 아무것도 안 고친 셈이 된다.
+        if (Fighter.SinceParryPress <= Dt)
         {
             _parryStartedAt = now;
         }
-        else if (Fighter.Action != FighterAction.Parry)
+        else if (Fighter.SinceParryPress > Fighter.ImpreciseParryWindow)
         {
             _parryStartedAt = double.NaN;
         }
@@ -336,7 +295,11 @@ public sealed class BattleSim
     private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict) => verdict switch
     {
         HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
-        HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
+
+        // 정확이든 부정확이든 **받아낸 것은 패리다.** 둘의 차이는 verb 가 아니라 판정(Verdict)이
+        // 나른다 — verb 를 갈라 놓으면 parry_reliance("다른 수단이 있는데 패리를 골랐나")가
+        // 늦게 누른 패리를 "패리를 안 골랐다" 로 세게 된다. 고른 것은 같고 결과가 다르다.
+        HitVerdict.Parried or HitVerdict.ParriedLate => (DodgeVerb.Parry, _parryStartedAt),
 
         // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에
         // 그냥 서 있었던 것이다 — 후자를 점프로 세면 jump_reliance 가 **정반대 행동**으로 부푼다.
@@ -387,9 +350,24 @@ public sealed class BattleSim
     private void Land(HitBox box)
     {
         HitVerdict verdict = HitResolver.Resolve(Fighter, Boss.X, box, _current!.Tags);
-        if (verdict == HitVerdict.Hit)
+        switch (verdict)
         {
-            Fighter.TakeDamage(box.Damage);
+            case HitVerdict.Hit:
+                Fighter.TakeDamage(box.Damage);
+                break;
+
+            case HitVerdict.Parried:
+                // 보스를 굳히는 것은 여기다 — 파이터는 보스를 모른다.
+                Fighter.ParryPrecise();
+                Boss.Stagger();
+                break;
+
+            case HitVerdict.ParriedLate:
+                Fighter.ParryImprecise(box.Damage);
+                break;
+
+            default:
+                break;
         }
 
         double now = Ticks * Dt;
@@ -415,8 +393,13 @@ public sealed class BattleSim
 
         // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
+        // qi 를 같이 찍는다. 정확·부정확이 둘 다 기를 주므로 이 줄만 보고 "받아냈나" 를 셀 수 있고,
+        // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
+        // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
+        // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
         Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
-            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}");
+            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded}"
+            + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}");
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>

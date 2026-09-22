@@ -74,11 +74,13 @@ public partial class BattleDemo : Node
         }
 
         PlayerAxes axes = PlayerAxes.From(sim.Events);
-        // 수단별 건수를 축 옆에 같이 찍는다. samples 만 보면 "관측 10건" 이 "대시 3건으로 낸 분산"
+        // 수단별 건수를 축 옆에 같이 찍는다. parry_late_n(부정확 패리)은 축이 아니라 개수다 —
+        // 정확 · 부정확 · 무반응 셋이 한 줄에서 갈려 보여야 계측이 갈랐다는 말을 할 수 있다. samples 만 보면 "관측 10건" 이 "대시 3건으로 낸 분산"
         // 까지 보증하는 것처럼 읽힌다. 의존도 축은 한 겹 더 얇다 — 그 수단이 가능했고 **다른
         // 수단도 가능했던** 판정만 분모라, jump_rel_n · parry_rel_n 을 따로 찍는다.
         Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
-            + $" parry_n={axes.ParrySamples} jump_rel_n={axes.JumpChoiceSamples}"
+            + $" parry_n={axes.ParrySamples} parry_late_n={axes.ParryLateSamples}"
+            + $" jump_rel_n={axes.JumpChoiceSamples}"
             + $" parry_rel_n={axes.ParryChoiceSamples} dash_bias={axes.DashTimingBias:0.000}"
             + $" dash_var={axes.DashTimingVar:0.000} dash_dir={axes.DashDirectionBias:0.00}"
             + $" jump_bias={axes.JumpTimingBias:0.000} jump_rel={axes.JumpReliance:0.00}"

@@ -2,11 +2,13 @@
   "_comment": "보스 한 종의 수치. 전에는 BossConfig 를 C# 다섯 곳에서 손으로 만들었고 이미 갈려 있었다 — 게임은 boss_grym 을, 데모와 테스트는 boss_test 를 그렸다. 보스 체력을 한 곳에서 고치면 게임·데모·골든이 서로 다른 전투를 말하던 대가다.",
   "_units": "거리 px@1080 · 속도 px/s · 시간 초",
   "_note_id": "id 는 한글이다 (fighters.json · patterns.json 과 같다). sprite 는 assets/spriteframes/<이름>.tres 의 파일 이름이고 규칙은 이 값을 안 쓴다 — 뷰가 읽어 그릴 뿐이다.",
+  "_note_stagger": "정확 패리에 보스가 굳는 시간(초). 이 동안 보스는 걷지도, 돌던 패턴의 타임라인을 밀지도 않는다 — 패턴을 **취소**하지 않고 세우는 이유는 취소가 연속타 패턴을 첫 대만 받아내면 통째로 지우는 큰 밸런스 변화이기 때문이다(이슈 #27 은 조작을 맞추는 이슈다). 경직은 '패리를 성공하면 내 차례가 온다' 는 보상 구조의 절반이고, 나머지 절반은 공중 대시가 즉시 돌아오는 것이다.",
   "_note_half_width": "히트박스 반폭은 **그려지는 몸**에서 나온다. Medieval King 의 idle 몸통은 프레임 안에서 31px 이고 뷰가 5.5배(balance.json feel.boss_sprite_scale)로 그리므로 31*5.5/2 ≈ 85 다. Duelyst 시절의 120 은 그때의 4배 스프라이트에서 나온 값이라, 팩을 갈면서 같이 옮기지 않으면 보스의 사거리가 몸과 다른 말을 한다.",
 
   "그림": {
     "sprite": "medieval_king",
     "max_health": 200, "move_speed": 160,
-    "half_width": 85, "pattern_gap": 0.8
+    "half_width": 85, "pattern_gap": 0.8,
+    "stagger_seconds": 0.5
   }
 }

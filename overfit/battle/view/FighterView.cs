@@ -41,6 +41,17 @@ public partial class FighterView : Node2D
     private static readonly Color _parryRingColor = new(0.60f, 0.95f, 1.00f, 0.90f);
     private static readonly Color _parryBurstColor = new(1.00f, 0.97f, 0.65f, 1.00f);
     private static readonly Color _parryFlash = new(2.60f, 2.60f, 2.10f);
+
+    /// <summary>
+    /// <b>부정확</b> 패리의 색. 정확 패리(희고 노란 폭발 + 스파크 + 히트스톱)와 달리
+    /// 탁하고 좁게 터진다 — 두 결과가 같아 보이면 화면은 "막았다" 만 말하고
+    /// "절반 흘렸다" 는 안 말한다. 결과가 둘이면 피드백도 둘이어야 한다(이슈 #27).
+    /// </summary>
+    private static readonly Color _parryChipColor = new(0.85f, 0.52f, 0.40f, 0.85f);
+
+    /// <summary>부정확 패리에 굳은 동안의 몸 색. 어둡고 채도가 죽는다 — 안 보이면
+    /// 0.6초 동안 키가 안 먹는 것이 버그로 읽힌다.</summary>
+    private static readonly Color _lockedTint = new(0.50f, 0.46f, 0.58f);
     private static readonly Color _attackFlash = new(2.10f, 2.10f, 1.70f);
     private static readonly Color _slashColor = new(1.00f, 0.92f, 0.72f, 0.95f);
     private static readonly Color _hitFlash = new(2.40f, 0.45f, 0.45f);
@@ -160,6 +171,21 @@ public partial class FighterView : Node2D
             (float)_feel.SparkLength);
     }
 
+    /// <summary>
+    /// 부정확 패리가 받아냈다. <b>일부러 약하다</b> — 섬광도 스파크도 히트스톱도 없이
+    /// 탁한 고리 하나다. 정확 패리와 같은 연출을 주면 "정확히 눌렀나" 가 화면에서 사라진다.
+    /// </summary>
+    public void ParryImprecise()
+    {
+        _ring.Burst(
+            (float)_feel.ParryRingFrom,
+            (float)((_feel.ParryRingFrom + _feel.ParryRingTo) / 2),
+            _feel.BurstSeconds * 0.6,
+            _parryChipColor,
+            sparks: 0,
+            sparkLength: 0);
+    }
+
     /// <summary>죽었다. 마지막 프레임에서 멈춘다 — 결과 화면은 <c>Battle</c> 이 그 뒤에 띄운다.</summary>
     public void Die()
     {
@@ -230,7 +256,9 @@ public partial class FighterView : Node2D
 
     private Color Tint(FighterFrame frame)
     {
-        Color baseTint = frame.Invulnerable ? _invulnerableTint
+        // 고정을 맨 앞에 본다. 굳은 동안에는 다른 무엇도 못 하므로 다른 색이 이길 수 없다.
+        Color baseTint = frame.Locked ? _lockedTint
+            : frame.Invulnerable ? _invulnerableTint
             : frame.Pose == FighterPose.Dash ? _dashTailTint
             : frame.Parrying ? _parryTint
             : Colors.White;

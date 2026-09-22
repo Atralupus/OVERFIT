@@ -103,6 +103,10 @@ public class PatternDataTests
         Dictionary<string, double> apexes = TestConfigs.Fighters()
             .ToDictionary(f => f.Key, f => JumpApex(f.Value));
 
+        // 캐릭터가 없으면 아래 foreach 가 공허하게 참이다 — 이 가드가 한 번 그렇게 죽은 적이 있다
+        // (안쪽 안전지대 가드가 continue 로만 빠져나가던 것과 같은 종류의 구멍이다).
+        apexes.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
+
         foreach ((string id, PatternDef def) in Load())
         {
             List<PatternStep> actives = def.Timeline.Where(s => s.Kind == "active").ToList();
@@ -117,6 +121,35 @@ public class PatternDataTests
                     $"{id}: jumpable={def.Tags.Jumpable} 인데 {who}의 점프 정점 {apex:0.00}px 과"
                     + $" 판정 상단 {top}px 이 그 말과 다르다");
             }
+        }
+    }
+
+    [Fact]
+    public void 점프_정점이_넘을_판정과_못_넘을_판정_사이에_있다()
+    {
+        // jumpable 가드는 참거짓만 본다 — 정점이 판정 상단보다 1px 높아도 초록이다.
+        // 이슈 #27 의 요구는 **여유**다: 낮은 공격(지면쓸기 70 · 돌진 90)을 확실히 넘되
+        // 높은 판정(연속베기 180 · 내려찍기 300)은 못 넘어야 "점프로 피할 수 있는가" 가 축이 된다.
+        //
+        // ⚠ 위쪽 경계는 고를 수 있는 것이 아니라 **패턴 기하가 정한다** — 넘지 말아야 할 패턴 중
+        // 가장 낮은 상단(연속베기 180)이 천장이다. 더 높이 뛰게 하려면 그 패턴의 태그나 기하를
+        // 같이 옮겨야 하고, 그건 밸런스라 사람의 몫이다(패턴 작성은 이슈 #28).
+        const double margin = 1.8;
+        Dictionary<string, PatternDef> patterns = Load();
+
+        double clearable = patterns.Values.Where(d => d.Tags.Jumpable)
+            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
+            .Max(s => s.Height![1]);
+        double ceiling = patterns.Values.Where(d => !d.Tags.Jumpable)
+            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
+            .Min(s => s.Height![1]);
+
+        foreach ((string who, double apex) in TestConfigs.Fighters().ToDictionary(f => f.Key, f => JumpApex(f.Value)))
+        {
+            apex.ShouldBeGreaterThan(clearable * margin,
+                $"{who}: 정점 {apex:0.00}px 이 넘어야 할 판정({clearable}px)을 겨우 넘는다");
+            apex.ShouldBeLessThanOrEqualTo(ceiling,
+                $"{who}: 정점 {apex:0.00}px 이 못 넘어야 할 판정({ceiling}px)까지 넘는다");
         }
     }
 

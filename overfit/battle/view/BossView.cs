@@ -23,10 +23,23 @@ namespace Overfit.Battle.View;
 public partial class BossView : Node2D
 {
     /// <summary>선딜이 무르익었을 때의 몸 색. 판정이 가까울수록 이쪽으로 간다.</summary>
-    private static readonly Color _windupTint = new(2.00f, 0.55f, 0.45f);
+    private static readonly Color _windupTint = new(2.00f, 0.72f, 0.30f);
+
+    /// <summary>
+    /// <b>패리 불가</b> 패턴의 선딜 색 — 크림슨. 나인 솔즈의 관례고, 이 게임에는 이미
+    /// <c>parryable: false</c> 태그가 있었는데 화면이 그 말을 안 했다(이슈 #27).
+    ///
+    /// <para>
+    /// 평소 예고를 <b>호박색으로 옮겼다.</b> 전에는 선딜이 (1.00, 0.42, 0.34) 로 이미 붉은 쪽이라
+    /// 크림슨을 얹어도 "조금 더 붉은 붉은색" 이었다 — 못 받아치는 공격을 받아치려다 맞는 것은
+    /// 정보가 없어서지 반사 신경이 모자라서가 아니다. 두 색은 색상환에서 갈라야 한다.
+    /// </para>
+    /// </summary>
+    private static readonly Color _unparryableTint = new(2.40f, 0.10f, 0.22f);
 
     private static readonly Color _recoverTint = new(0.70f, 0.70f, 0.78f);
-    private static readonly Color _tellRingColor = new(1.00f, 0.42f, 0.34f, 0.85f);
+    private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
+    private static readonly Color _unparryableRingColor = new(1.00f, 0.06f, 0.20f, 0.95f);
     private static readonly Color _shockRingColor = new(1.00f, 0.80f, 0.35f, 1.00f);
     private static readonly Color _activeFlash = new(2.60f, 2.30f, 1.60f);
     private static readonly Color _hitFlash = new(2.40f, 2.40f, 2.40f);
@@ -72,8 +85,13 @@ public partial class BossView : Node2D
         Animate("idle");
     }
 
-    /// <summary>한 프레임. <paramref name="nextActiveIn"/> 은 다음 판정까지 남은 시간(초)이고 없으면 null.</summary>
-    public void Show(double x, BossPhase phase, double? nextActiveIn)
+    /// <summary>한 프레임.</summary>
+    /// <param name="x">보스의 규칙 좌표 x.</param>
+    /// <param name="phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
+    /// <param name="nextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
+    /// <param name="parryable">지금 도는 패턴을 받아칠 수 있나. 못 받아치면 예고가 크림슨이다.
+    /// <b>규칙이 아니라 태그를 그대로 그린다</b> — 뷰가 판정을 다시 계산하면 두 곳이 갈린다.</param>
+    public void Show(double x, BossPhase phase, double? nextActiveIn, bool parryable)
     {
         double dt = GetProcessDeltaTime();
         Position = new Vector2((float)x, 0);
@@ -88,11 +106,11 @@ public partial class BossView : Node2D
             // 판정이 가까울수록 링이 **조여 든다.** 퍼지는 충격파와 방향이 반대라 둘을 헷갈릴 수 없다.
             _ring.Charge(
                 Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness),
-                _tellRingColor);
+                parryable ? _tellRingColor : _unparryableRingColor);
         }
 
         Animate(AnimationFor(phase));
-        _sprite.Modulate = Tint(phase, ripeness);
+        _sprite.Modulate = Tint(phase, ripeness, parryable);
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -160,11 +178,11 @@ public partial class BossView : Node2D
         _flashLeft = seconds;
     }
 
-    private Color Tint(BossPhase phase, float ripeness)
+    private Color Tint(BossPhase phase, float ripeness, bool parryable)
     {
         Color baseTint = phase switch
         {
-            BossPhase.Windup => Colors.White.Lerp(_windupTint, ripeness),
+            BossPhase.Windup => Colors.White.Lerp(parryable ? _windupTint : _unparryableTint, ripeness),
             BossPhase.Recover => _recoverTint,
             _ => Colors.White,
         };

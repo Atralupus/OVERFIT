@@ -33,6 +33,9 @@ public partial class Battle : Node2D
     // 수치는 데이터(fighters.json · bosses.json)에 있고, 뷰는 그것을 베끼지 않는다.
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
+
+    /// <summary>패턴 표. 뷰가 <b>태그</b>(지금은 parryable)를 그리는 데만 쓴다 — 규칙은 시뮬레이션이 본다.</summary>
+    private Dictionary<string, PatternDef> _patterns = null!;
     private FeelBalance _feel = null!;
 
     private int _stage;
@@ -79,6 +82,12 @@ public partial class Battle : Node2D
     /// <summary>파이터의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 피격 순간이다.</summary>
     public int FighterHealth => _broken ? 0 : _sim.Fighter.Health;
 
+    /// <summary>
+    /// 지금 도는 패턴이 <b>패리 불가</b>인가. 위와 같이 디버그 전용 읽기다 —
+    /// 크림슨 예고가 화면에서 구별되는지를 스크린샷으로 증명하려면 그 순간을 기다려야 한다.
+    /// </summary>
+    public bool BossUnparryable => !_broken && !_over && !CurrentParryable();
+
     public override void _Ready()
     {
         _fighterView = GetNode<FighterView>("%FighterView");
@@ -116,6 +125,7 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
+        _patterns = patterns;
 
         // 단계는 Autoload 가 들고 있다 — 씬은 다시 시작할 때마다 새로 만들어지므로 여기 두면 사라진다.
         _stage = Game.Instance.Stage;
@@ -259,9 +269,15 @@ public partial class Battle : Node2D
 
             for (int i = _lastEventCount; i < _sim.Events.Count; i++)
             {
+                // 정확과 부정확은 **다른 피드백**이어야 한다. 히트스톱은 정확에만 준다 —
+                // 시간을 세우는 것은 "완전히 받아냈다" 의 표현이고, 절반 흘린 것에 주면 거짓말이다.
                 if (_sim.Events[i].Verdict == HitVerdict.Parried)
                 {
                     ParryLanded();
+                }
+                else if (_sim.Events[i].Verdict == HitVerdict.ParriedLate)
+                {
+                    _fighterView.ParryImprecise();
                 }
             }
 
@@ -420,9 +436,12 @@ public partial class Battle : Node2D
             Pose(),
             _sim.Fighter.Invulnerable,
             _sim.Fighter.Parrying,
-            _sim.Fighter.ParryWindow <= 0 ? 0 : _sim.Fighter.ActionElapsed / _sim.Fighter.ParryWindow));
+            _sim.Fighter.PreciseParryWindow <= 0
+                ? 0
+                : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
+            _sim.Fighter.Locked));
 
-        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn);
+        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, CurrentParryable());
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
@@ -444,6 +463,16 @@ public partial class Battle : Node2D
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
     }
+
+    /// <summary>
+    /// 지금 도는 패턴을 받아칠 수 있나 (이슈 #27 · 패리 불가는 크림슨으로 예고한다).
+    /// 패턴이 안 도는 중이면 <b>받아칠 수 있는 쪽</b>으로 둔다 — 쉬는 보스를 붉게 칠하면
+    /// "지금 뭔가 온다" 는 거짓말이 된다.
+    /// </summary>
+    private bool CurrentParryable() =>
+        _sim.Boss.CurrentPattern is not string id
+        || !_patterns.TryGetValue(id, out PatternDef? def)
+        || def.Tags.Parryable;
 
     /// <summary>
     /// 보스가 패턴의 어디쯤인가. 더 올 판정이 있으면 선딜, 없으면 후딜이다 —

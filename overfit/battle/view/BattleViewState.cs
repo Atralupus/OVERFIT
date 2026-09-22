@@ -47,6 +47,8 @@ public enum BossPhase
 /// <param name="ParryProgress">패리 창을 얼마나 지났나(0~1). 링의 반지름이 이것이다 —
 /// 뷰가 자기 시계로 재게 하면 창 길이(캐릭터마다 다르다)를 뷰가 알아야 하고,
 /// 그 사본은 fighters.json 이 움직이는 순간 조용히 어긋난다.</param>
+/// <param name="Locked">부정확 패리에 굳었나(이슈 #27). 0.6초 동안 아무것도 못 한다 —
+/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.</param>
 public readonly record struct FighterFrame(
     double X,
     double Y,
@@ -54,4 +56,5 @@ public readonly record struct FighterFrame(
     FighterPose Pose,
     bool Invulnerable,
     bool Parrying,
-    double ParryProgress);
+    double ParryProgress,
+    bool Locked);
