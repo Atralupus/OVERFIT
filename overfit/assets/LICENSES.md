@@ -64,9 +64,10 @@ tools/build.sh import                       # ⚠ 반드시 한 번
 이펙트로 대신한다 — 대시는 `run` + 잔상, 패리는 `hit` 프레임 정지 + 히트스톱.
 2D 액션에서 이 둘의 피드백은 애니메이션이 아니라 이펙트·히트스톱이 결정한다.
 
-**캐릭터가 하나뿐이다.** `fighters.json` 의 셋(단검 · 중검 · 대검)이 전부 같은 `martial_hero` 를 가리킨다.
-Martial Hero 팩에 캐릭터가 하나라서다. 지금 화면에 서는 것은 `balance.json` 이 가리키는 하나뿐이라
-당장 문제가 되지 않지만, 3택이 돌아오면 팩이 더 필요하다.
+**캐릭터가 하나뿐이다.** Martial Hero 팩에 캐릭터가 하나라서다.
+`fighters.json` 도 셋(단검 · 중검 · 대검)이 전부 같은 `martial_hero` 를 가리키다가
+이슈 [#38](https://github.com/Atralupus/OVERFIT/issues/38) 에서 하나(`검객`)로 줄었다 —
+데이터가 셋이어도 그림은 처음부터 하나였다. 3택이 돌아오면 팩이 더 필요하다.
 
 **없는 이름으로 `Play` 하면 엔진이 `ERROR:` 를 찍고 그건 헤드리스 판정을 실패시킨다.**
 뷰는 이름을 그대로 믿지 말고 `SpriteFrames.HasAnimation` 으로 확인하고 없으면 로그만 남기고 넘어가야 한다.

@@ -70,8 +70,8 @@ public class PatternDataTests
     ///
     /// <para>
     /// 공식(v²/2g)을 여기 베껴 적지 않는 이유는 그것이 <b>연속</b> 적분이기 때문이다.
-    /// <c>Fighter.Fall</c> 은 매 틱 <c>v -= g·dt; y += v·dt</c> 로 이산 적분하고, 단검 기준으로
-    /// 연속은 184.08 · 이산은 176.33 이 나온다 — 7.75px 차이다. 연속값으로 가드를 세우면
+    /// <c>Fighter.Fall</c> 은 매 틱 <c>v -= g·dt; y += v·dt</c> 로 이산 적분하고, 옛 단검 수치로
+    /// 재 보면 연속은 184.08 · 이산은 176.33 이 나온다 — 7.75px 차이다. 연속값으로 가드를 세우면
     /// 그 차이만큼 가드가 거짓말을 한다. 실제 규칙을 돌리면 어긋날 자리가 없다.
     /// </para>
     /// </summary>
@@ -136,6 +136,12 @@ public class PatternDataTests
         // 세 패턴의 height 를 거기 맞췄다. 한쪽만 고치면 여기서 빨개진다.
         const double margin = 1.8;
         Dictionary<string, PatternDef> patterns = Load();
+        Dictionary<string, double> apexes = TestConfigs.Fighters()
+            .ToDictionary(f => f.Key, f => JumpApex(f.Value));
+
+        // 위 가드와 같은 이유로 못박는다 — 캐릭터 표가 비면 아래 foreach 가 공허하게 참이다.
+        // 캐릭터를 셋에서 하나로 줄이면서(이슈 #38) 이 집합이 실제로 작아졌다.
+        apexes.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
 
         double clearable = patterns.Values.Where(d => d.Tags.Jumpable)
             .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
@@ -144,7 +150,7 @@ public class PatternDataTests
             .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
             .Min(s => s.Height![1]);
 
-        foreach ((string who, double apex) in TestConfigs.Fighters().ToDictionary(f => f.Key, f => JumpApex(f.Value)))
+        foreach ((string who, double apex) in apexes)
         {
             apex.ShouldBeGreaterThan(clearable * margin,
                 $"{who}: 정점 {apex:0.00}px 이 넘어야 할 판정({clearable}px)을 겨우 넘는다");

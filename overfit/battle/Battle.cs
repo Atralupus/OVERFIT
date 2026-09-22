@@ -83,6 +83,14 @@ public partial class Battle : Node2D
     public int FighterHealth => _broken ? 0 : _sim.Fighter.Health;
 
     /// <summary>
+    /// 공격 판정이 선 틱인가. 위와 같이 디버그 전용 읽기다 — 이 순간이 곧 <b>칼이 지나가는
+    /// 프레임</b>이라(fighters.json 의 attack_anim_blade_frame), 스크린샷이 "칼이 보이는가" 를
+    /// 증명하려면 프레임 수를 세는 대신 이것을 보고 셔터를 눌러야 한다. 세어 두면 공격 타이밍을
+    /// 고치는 순간 조용히 어긋나 선딜 자세만 찍힌다 — 이슈 #38 전의 스크린샷이 그랬다.
+    /// </summary>
+    public bool FighterAttackActive => !_broken && !_over && _sim.Fighter.AttackActive;
+
+    /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
     /// 순간이고(이슈 #28), 그건 0.2초뿐이라 벽시계로 노리면 대부분 놓친다.
     /// </summary>

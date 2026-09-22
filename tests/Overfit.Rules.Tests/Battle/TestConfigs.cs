@@ -10,8 +10,10 @@ namespace Overfit.Rules.Tests.Battle;
 /// csproj 가 그 파일들을 출력 폴더의 <c>data/</c> 로 복사한다.
 ///
 /// <para>
-/// 파이터만 리터럴이다. 이것은 특정 캐릭터가 아니라 <b>기준값</b>이라 fighters.json 의 세 캐릭터 중
-/// 어느 하나를 골라 쓰면 그 캐릭터의 밸런스를 고칠 때마다 무관한 테스트가 같이 빨개진다.
+/// 파이터만 리터럴이다. 이것은 특정 캐릭터가 아니라 <b>기준값</b>이라, fighters.json 의 캐릭터를
+/// 그대로 쓰면 그 캐릭터의 밸런스를 고칠 때마다 무관한 테스트가 같이 빨개진다. 캐릭터가 하나가 된
+/// 뒤에도(이슈 #38) 마찬가지다 — 공격 타이밍 하나를 그림에 맞추려고 패리 틱 수를 세는 테스트가
+/// 같이 움직이면, 그 테스트들은 더 이상 자기가 말하는 것을 말하지 않는다.
 /// 보스·아레나·상한은 반대다 — 실제 전투가 쓰는 바로 그 값이어야 게임·데모·골든이 같은 판을 말한다.
 /// </para>
 /// </summary>
@@ -39,6 +41,12 @@ public static class TestConfigs
         AttackWindup = 0.08,
         AttackActive = 0.06,
         AttackRecover = 0.14,
+        // 기준 파이터에는 그림이 없지만 셋의 관계는 진짜여야 한다 — 50fps · 14프레임이면
+        // 재생 0.28초로 위 셋의 합과 같고, 4번 프레임(0.08초)이 선딜의 끝이다.
+        // 거짓 값을 넣으면 이 픽스처가 "애니메이션에서 거꾸로 정한다"는 규칙의 반례가 된다.
+        AttackAnimFps = 50,
+        AttackAnimFrames = 14,
+        AttackAnimBladeFrame = 4,
         AttackReach = 90,
         AttackDamage = 8,
         AttackCost = 12,

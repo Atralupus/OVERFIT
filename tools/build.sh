@@ -20,7 +20,7 @@
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
 #                                      엔진 안에서 뷰포트를 직접 찍는다 — 화면 기록 권한이 필요 없고 다른 창이 안 겹친다
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
-#   EXTRA="--fighter=단검 --stage=2" tools/build.sh demo   캐릭터 · 단계 지정
+#   EXTRA="--stage=2" tools/build.sh demo        단계 지정 (캐릭터는 하나라 --fighter= 는 그 하나만 가리킨다)
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
 #   tools/build.sh clean               빌드 산출물 삭제
 #
