@@ -20,12 +20,12 @@ public static class TestConfigs
     public static FighterConfig Fighter() => new()
     {
         MoveSpeed = 420,
-        JumpVelocity = 900,
+        JumpVelocity = 940,
         MaxHealth = 100,
         MaxStamina = 100,
         HalfWidth = 30,
         Height = 120,
-        DashSpeed = 1100,
+        DashSpeed = 2200,
         DashDuration = 0.18,
         DashIFrames = 0.14,
         DashCost = 25,

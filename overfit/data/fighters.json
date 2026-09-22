@@ -1,14 +1,16 @@
 {
   "_comment": "캐릭터 3종. 사거리가 짧을수록 공격 사이클이 빠르다 — FighterDataTests 가 그 관계를 지킨다.",
   "_units": "거리 px · 속도 px/s · 시간 초 · 스태미나 무차원",
+  "_note_dash": "사거리를 2배로 늘렸다 (이슈 #27 · 나인 솔즈). 늘린 것은 **속도뿐이고 지속과 무적 창은 그대로**다 — 지속을 늘려 거리를 벌면 무적 비율이 같이 움직여 '더 멀리 가는 같은 기술' 이 아니라 다른 기술이 된다. 패턴의 dash_window 도, 계측이 재는 타이밍 오차도, 봇의 반응 창도 전부 초 단위라 지속을 건드리면 그 셋이 한꺼번에 뜻을 바꾼다. 기준은 '보스 몸 하나를 한 번에 지나는가': 닿은 자리에서 반대편 닿은 자리까지가 보스 반폭 85 + 파이터 반폭의 두 배(222~242px)인데 옛 값은 실측 183px 라 못 지났다. FighterDataTests 가 실제로 대시를 돌려 대조한다.",
+  "_note_jump": "정점을 올렸다 (이슈 #27). 낮은 공격(지면쓸기 70 · 돌진 90)을 여유 있게 넘는 높이다. **위쪽은 고를 수 있는 값이 아니라 패턴 기하가 정한다** — 넘지 말아야 할 패턴 중 가장 낮은 상단(연속베기 180)이 천장이라 정점은 172~178 에 선다. 더 높이 뛰게 하려면 그 패턴의 태그나 기하를 같이 옮겨야 하고 그건 밸런스다(패턴 작성은 이슈 #28). 몸 충돌이 없어져 점프는 보스를 넘는 수단이 아니다 — 낮은 판정을 넘는 것이 전부다.",
   "_note_sprite": "셋이 같은 그림이다. 플레이어 팩(Martial Hero)에 캐릭터가 하나뿐이라 그렇다 — 셋을 그림으로 구분하려면 팩이 더 필요하고, 지금 화면에 서는 것은 balance.json 이 가리키는 하나뿐이다.",
 
   "단검": {
     "sprite": "martial_hero",
-    "move_speed": 480, "jump_velocity": 940,
+    "move_speed": 480, "jump_velocity": 945,
     "max_health": 90, "max_stamina": 110,
     "half_width": 26, "height": 120,
-    "dash_speed": 1200, "dash_duration": 0.16, "dash_i_frames": 0.13, "dash_cost": 22,
+    "dash_speed": 2500, "dash_duration": 0.16, "dash_i_frames": 0.13, "dash_cost": 22,
     "parry_window": 0.12, "parry_duration": 0.26, "parry_cost": 14,
     "attack_windup": 0.06, "attack_active": 0.05, "attack_recover": 0.10,
     "attack_reach": 70, "attack_damage": 6, "attack_cost": 10,
@@ -17,10 +19,10 @@
 
   "중검": {
     "sprite": "martial_hero",
-    "move_speed": 420, "jump_velocity": 900,
+    "move_speed": 420, "jump_velocity": 940,
     "max_health": 110, "max_stamina": 100,
     "half_width": 30, "height": 120,
-    "dash_speed": 1100, "dash_duration": 0.18, "dash_i_frames": 0.14, "dash_cost": 25,
+    "dash_speed": 2200, "dash_duration": 0.18, "dash_i_frames": 0.14, "dash_cost": 25,
     "parry_window": 0.12, "parry_duration": 0.30, "parry_cost": 15,
     "attack_windup": 0.09, "attack_active": 0.06, "attack_recover": 0.15,
     "attack_reach": 110, "attack_damage": 10, "attack_cost": 14,
@@ -29,10 +31,10 @@
 
   "대검": {
     "sprite": "martial_hero",
-    "move_speed": 360, "jump_velocity": 860,
+    "move_speed": 360, "jump_velocity": 930,
     "max_health": 130, "max_stamina": 95,
     "half_width": 36, "height": 120,
-    "dash_speed": 980, "dash_duration": 0.20, "dash_i_frames": 0.15, "dash_cost": 30,
+    "dash_speed": 2000, "dash_duration": 0.20, "dash_i_frames": 0.15, "dash_cost": 30,
     "parry_window": 0.11, "parry_duration": 0.34, "parry_cost": 18,
     "attack_windup": 0.14, "attack_active": 0.08, "attack_recover": 0.22,
     "attack_reach": 160, "attack_damage": 17, "attack_cost": 20,
