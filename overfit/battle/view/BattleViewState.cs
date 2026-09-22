@@ -78,3 +78,28 @@ public readonly record struct BossTell(
     double X,
     double Y,
     double Length);
+
+/// <summary>
+/// 한 렌더 프레임에 보스를 그리는 데 필요한 전부. <see cref="FighterFrame"/> 과 같은 규약이다 —
+/// <b>순간(판정이 섰다 · 맞았다 · 죽었다)은 여기 없다.</b> 그건 상태가 아니라 사건이라
+/// <c>BossView</c> 의 메서드 호출로 들어온다.
+/// </summary>
+/// <param name="X">보스의 규칙 좌표 x.</param>
+/// <param name="Facing">-1 왼쪽 · +1 오른쪽. <b>규칙이 정한 값을 그대로 싣는다</b> —
+/// 뷰가 보스와 파이터의 x 를 보고 스스로 정하면 "같은 시드면 같은 결과" 가 그림까지 덮지 못하고,
+/// 무엇보다 <b>패턴 중 잠금</b>(<c>Boss.Face</c>)이 뷰에서 풀려 예고가 스윙 도중에 뒤집힌다.</param>
+/// <param name="Phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
+/// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
+/// <param name="Parryable">지금 도는 패턴을 받아칠 수 있나. 못 받아치면 예고가 크림슨이다.
+/// <b>규칙이 아니라 태그를 그대로 그린다</b> — 뷰가 판정을 다시 계산하면 두 곳이 갈린다.</param>
+/// <param name="Anim">선딜에 재생할 모션 이름. 패턴마다 다르다(<c>patterns.json</c> 의 <c>tell.anim</c>).
+/// 패턴이 안 돌면 null.</param>
+/// <param name="Tell">이 패턴의 예고 표지. 패턴이 안 돌거나 후딜이면 null.</param>
+public readonly record struct BossFrame(
+    double X,
+    int Facing,
+    BossPhase Phase,
+    double? NextActiveIn,
+    bool Parryable,
+    string? Anim,
+    BossTell? Tell);

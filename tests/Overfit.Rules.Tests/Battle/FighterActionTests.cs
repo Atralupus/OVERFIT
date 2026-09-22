@@ -305,6 +305,41 @@ public class FighterActionTests
     }
 
     [Fact]
+    public void 대시_중에는_방향_입력을_받아도_안_돌아선다()
+    {
+        // 보스의 잠금(이슈 #36)과 같은 규칙이 파이터에도 선다. 여기서는 그림만의 문제가 아니다 —
+        // Facing 이 대시 이동에 곱해지므로, 도중에 뒤집히면 대시가 <b>가던 길을 되돌아온다.</b>
+        Fighter f = Spawn();
+        f.Tick(_dash, _dt);
+        double after = f.X;
+
+        for (int i = 0; i < 6; i++)
+        {
+            f.Tick(new InputFrame(-1, false, false, false, false), _dt);
+        }
+
+        f.Action.ShouldBe(FighterAction.Dash);
+        f.Facing.ShouldBe(1);
+        f.X.ShouldBeGreaterThan(after);
+    }
+
+    [Fact]
+    public void 공격_중에는_방향_입력을_받아도_안_돌아선다()
+    {
+        // 휘두르던 칼이 도중에 반대쪽을 향하면 그림이 거짓말이 된다.
+        Fighter f = Spawn();
+        f.Tick(_attack, _dt);
+
+        for (int i = 0; i < 6; i++)
+        {
+            f.Tick(new InputFrame(-1, false, false, false, false), _dt);
+        }
+
+        f.Action.ShouldBe(FighterAction.Attack);
+        f.Facing.ShouldBe(1);
+    }
+
+    [Fact]
     public void 피해를_받으면_체력이_줄고_0_아래로_안_간다()
     {
         Fighter f = Spawn();

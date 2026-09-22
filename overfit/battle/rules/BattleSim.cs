@@ -80,6 +80,10 @@ public sealed class BattleSim
         _setup = setup;
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
+
+        // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
+        // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
+        Boss.Face(Fighter.X);
         _gapLeft = setup.Boss.PatternGap;
     }
 
@@ -184,6 +188,18 @@ public sealed class BattleSim
         if (_runner is null)
         {
             _gapLeft -= Dt;
+
+            // 방향은 **쉬는 동안에만** 바꾼다. 여기 두는 것 자체가 잠금의 절반이고
+            // (나머지 절반은 Boss.Face 안의 가드다), 그래서 패턴이 서는 순간의 방향이
+            // 그 패턴이 끝날 때까지 그대로 간다 — 예고가 거짓말이 되지 않는다.
+            // **다가가는 자리와 무관하게 파이터 중심을 본다** — Standoff 는 서는 자리지 보는 곳이 아니다.
+            int was = Boss.Facing;
+            Boss.Face(Fighter.X);
+            if (Boss.Facing != was)
+            {
+                Log.Debug("boss", () => $"turn facing={Boss.Facing} tick={Ticks}");
+            }
+
             // 파이터의 중심이 아니라 **자기 쪽으로 Standoff 떨어진 자리**를 목표로 한다.
             // 중심을 노리면 보스가 파이터 위에 정확히 겹쳐 서서 교전 거리가 늘 0 이 된다.
             Boss.Approach(Fighter.X + ((Boss.X >= Fighter.X ? 1 : -1) * Standoff), Dt);

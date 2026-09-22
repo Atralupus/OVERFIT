@@ -90,25 +90,28 @@ public partial class BossView : Node2D
         Animate("idle");
     }
 
-    /// <summary>한 프레임.</summary>
-    /// <param name="x">보스의 규칙 좌표 x.</param>
-    /// <param name="phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
-    /// <param name="nextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
-    /// <param name="parryable">지금 도는 패턴을 받아칠 수 있나. 못 받아치면 예고가 크림슨이다.
-    /// <b>규칙이 아니라 태그를 그대로 그린다</b> — 뷰가 판정을 다시 계산하면 두 곳이 갈린다.</param>
-    /// <param name="anim">선딜에 재생할 모션 이름. 패턴마다 다르다(<c>patterns.json</c> 의 <c>tell.anim</c>) —
-    /// 팩의 attack · attack2 · attack3 이 백장의 세 패턴에 하나씩 붙는다. 패턴이 안 돌면 null.</param>
-    /// <param name="tell">이 패턴의 예고 표지. 패턴이 안 돌거나 후딜이면 null.</param>
-    public void Show(double x, BossPhase phase, double? nextActiveIn, bool parryable, string? anim, BossTell? tell)
+    /// <summary>
+    /// 한 프레임. <paramref name="frame"/> 의 모든 값은 <b>규칙이 정한 것</b>이고 여기서 다시 재지 않는다.
+    /// </summary>
+    public void Show(BossFrame frame)
     {
         double dt = GetProcessDeltaTime();
-        Position = new Vector2((float)x, 0);
+        Position = new Vector2((float)frame.X, 0);
+
+        // 스프라이트 원본은 오른쪽을 본다 — 팩의 규약이고 FighterView 도 같다.
+        // **뒤집어도 자리가 안 어긋난다**: Offset 의 x 는 0 이고(AlignToGround 는 y 만 건드린다)
+        // 링도 x=0 에 선다. 좌우가 비대칭인 것은 예고 표지 하나뿐이고, 그건 Battle 이
+        // 이 Facing 으로 이미 뒤집어 넘긴다.
+        _sprite.FlipH = frame.Facing < 0;
+
+        BossPhase phase = frame.Phase;
+        bool parryable = frame.Parryable;
 
         _flashLeft = System.Math.Max(0, _flashLeft - dt);
         _hitPoseLeft = System.Math.Max(0, _hitPoseLeft - dt);
         HoldLastFrameWhenDead();
 
-        float ripeness = Ripeness(phase, nextActiveIn);
+        float ripeness = Ripeness(phase, frame.NextActiveIn);
         if (ripeness > 0)
         {
             // 판정이 가까울수록 링이 **조여 든다.** 퍼지는 충격파와 방향이 반대라 둘을 헷갈릴 수 없다.
@@ -120,13 +123,13 @@ public partial class BossView : Node2D
         // 표지는 선딜 **내내** 보인다. 무르익음에만 묶으면 tell_lead_seconds 밖의 선딜이
         // 통째로 무표지가 되는데, 백장의 올려베기가 정확히 그 구간이 가장 긴 패턴이다 —
         // "크게 예고한다" 가 설계인 패턴이 예고를 제일 늦게 받는 것은 뒤집힌 것이다.
-        if (phase == BossPhase.Windup && tell is { } mark)
+        if (phase == BossPhase.Windup && frame.Tell is { } mark)
         {
             Color tint = parryable ? _tellRingColor : _unparryableRingColor;
             _tell.Show(mark, new Color(tint.R, tint.G, tint.B, 0.45f + (0.55f * ripeness)));
         }
 
-        Animate(AnimationFor(phase, anim));
+        Animate(AnimationFor(phase, frame.Anim));
         _sprite.Modulate = Tint(phase, ripeness, parryable);
     }
 
