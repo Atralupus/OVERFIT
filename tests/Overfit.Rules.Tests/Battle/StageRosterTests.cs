@@ -32,7 +32,7 @@ public class StageRosterTests
     public void 명부가_적힌_그대로_순서까지_나온다()
     {
         // 순서가 계약이다 — Det 의 뽑기 좌표가 이 리스트의 인덱스다.
-        StageRoster.For(Stages(), 1).ShouldBe(new[] { "횡베기", "지면쓸기" });
+        StageRoster.For(Stages(), 1).ShouldBe(new[] { "내려찍기 3연", "점프 강타" });
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class StageRosterTests
     [Fact]
     public void 설계보다_짧은_단계는_조용히_넘어가지_않는다()
     {
-        // 프로토타입은 패턴이 여섯뿐이라 4·5단계가 설계(7·10)에 못 미친다. 줄여서 감추면
+        // 백장의 패턴은 셋뿐이라(이슈 #28) 3~5단계가 설계(5·7·10)에 못 미친다. 줄여서 감추면
         // 나중에 "단계가 올라도 왜 안 어려워지지" 를 로그에서 찾을 수 없다.
         using var log = new LogCapture();
 
@@ -118,8 +118,8 @@ public class StageRosterTests
         using var log = new LogCapture();
         var holed = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 2, Patterns = new[] { "횡베기", "지면쓸기" } },
-            ["3"] = new() { Want = 5, Patterns = new[] { "횡베기" } },
+            ["1"] = new() { Want = 2, Patterns = new[] { "내려찍기 3연", "점프 강타" } },
+            ["3"] = new() { Want = 5, Patterns = new[] { "내려찍기 3연" } },
         };
 
         StageRoster.For(holed, 2).ShouldBeEmpty();

@@ -46,6 +46,19 @@ public static class TestConfigs
         Sprite = "test_unit",
     };
 
+    /// <summary>
+    /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
+    /// 그리는 것은 뷰다. 여기 있는 이유는 <c>PatternDef.Tell</c> 이 required 이기 때문뿐이다.
+    /// </summary>
+    public static PatternTell Tell() => new()
+    {
+        Id = "test_mark",
+        Anim = "attack",
+        X = 0,
+        Y = 0,
+        Length = 100,
+    };
+
     /// <summary>실제 <c>fighters.json</c>. 캐릭터별 수치를 봐야 하는 가드가 쓴다.</summary>
     public static Dictionary<string, FighterConfig> Fighters() => Table<FighterConfig>("fighters.json");
 

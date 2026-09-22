@@ -14,7 +14,7 @@ public class BotPolicyTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(),
-        PatternIds = new[] { "횡베기", "지면쓸기", "대공찌르기", "연속베기", "내려찍기", "돌진" },
+        PatternIds = new[] { "내려찍기 3연", "이단 올려베기", "점프 강타" },
         Patterns = JsonData<PatternDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
         Seed = seed,
