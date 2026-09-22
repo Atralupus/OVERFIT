@@ -1,122 +1,71 @@
 {
   "_comment": "보스 패턴. tags 는 망의 입력이 되므로 PatternDataTests 가 타임라인과 대조한다.",
-  "_units": "t 초 · distance px (보스 중심에서) · height px (바닥에서) · damage 정수",
+  "_units": "t 초 · distance px (보스 중심에서) · height px (바닥에서) · damage 정수 · tell 의 x·y·length 는 px",
 
-  "횡베기": {
-    "tags": {
-      "dash_window": 0.18, "dash_direction": "out",
-      "jumpable": false, "anti_air": false,
-      "parryable": true, "parry_window": 0.12,
-      "punish_greed": true, "reach": "mid",
-      "feint": false, "multi_hit": 1, "tracking": false
-    },
-    "timeline": [
-      { "t": 0.00, "kind": "windup" },
-      { "t": 0.45, "kind": "active", "distance": [0, 260], "height": [0, 200], "damage": 18 },
-      { "t": 0.60, "kind": "recover" },
-      { "t": 0.90, "kind": "end" }
-    ]
-  },
+  "_note_백장": "나인 솔즈의 첫 미니보스 **백장**의 패턴 셋이다 (이슈 #28). 일곱이던 것을 셋으로 갈아엎었다 — 백장은 **패리와 대시를 가르치려고 설계된** 튜토리얼 보스라 지금 이 프로토타입이 필요한 것과 정확히 같고, 셋뿐이라는 것 자체가 설계다. 셋의 역할이 겹치지 않는다: 내려찍기 3연은 **패리만**, 이단 올려베기는 **느려서 무엇이든**, 점프 강타는 **패리 말고 무엇이든**.",
 
-  "지면쓸기": {
-    "tags": {
-      "dash_window": 0.10, "dash_direction": "out",
-      "jumpable": true, "anti_air": false,
-      "parryable": false, "parry_window": 0,
-      "punish_greed": false, "reach": "far",
-      "feint": false, "multi_hit": 1, "tracking": false
-    },
-    "timeline": [
-      { "t": 0.00, "kind": "windup" },
-      { "t": 0.55, "kind": "active", "distance": [0, 520], "height": [0, 70], "damage": 14 },
-      { "t": 0.70, "kind": "recover" },
-      { "t": 1.00, "kind": "end" }
-    ]
-  },
+  "_note_tell": "선딜 링은 '뭔가 온다' 까지만 말한다. 백장의 설계는 **칼이 땅에 있나 떠 있나**로 두 패턴을 가르는 것이라, 그 차이가 화면에 없으면 두 패턴은 플레이어에게 같은 공격이다. 그래서 패턴마다 tell 을 단다: id 는 뷰의 등록표(모양 id → 구현)를 조회하는 열쇠고, x·y·length 가 그 모양이 설 자리다 — **y 하나가 '칼이 땅에 있나' 를 말한다**(내려찍기 6 · 올려베기 215). anim 은 선딜에 재생할 보스 모션이고 패턴마다 다르다: 같은 모션을 두 패턴이 쓰면 모션으로는 종류가 안 갈린다. `attack` 3프레임은 작가가 그린 흰 검기라 가장 무겁게 읽혀서 가장 강한 패턴(점프 강타)에 준다. PatternDataTests 가 id·anim 이 패턴마다 다른지 본다.",
 
-  "대공찌르기": {
-    "tags": {
-      "dash_window": 0.14, "dash_direction": "out",
-      "jumpable": false, "anti_air": true,
-      "parryable": true, "parry_window": 0.10,
-      "punish_greed": true, "reach": "mid",
-      "feint": false, "multi_hit": 1, "tracking": false
-    },
-    "timeline": [
-      { "t": 0.00, "kind": "windup" },
-      { "t": 0.50, "kind": "active", "distance": [0, 300], "height": [140, 420], "damage": 20 },
-      { "t": 0.66, "kind": "recover" },
-      { "t": 0.95, "kind": "end" }
-    ]
-  },
+  "_note_점프높이": "세 패턴의 height 는 **점프 정점이 먼저 정해진 뒤** 거기 맞춰 잡았다 (이슈 #28 · #27 에서 뒤집힌 순서를 바로잡은 것이다). 전에는 기존 패턴의 기하가 점프를 176px 에 가둬 두고 있었는데, 패턴을 통째로 갈아엎는 자리에서는 그 제약이 사라진다. 지금 정점은 297~302px 이고(fighters.json), 그 위아래를 이 세 패턴이 정의한다: 넘어야 할 것은 이단 올려베기의 150 하나뿐이고(정점의 1.8배 여유), 못 넘어야 할 것은 내려찍기 3연 340 · 점프 강타의 착지 충격 330 이다. 넘지 말아야 할 것 중 가장 낮은 상단이 곧 정점의 천장이라, 이 두 숫자를 내리면 점프도 같이 내려와야 한다.",
 
-  "연속베기": {
+  "_note_내려찍기": "**셋 다 패리 가능이고 그것이 유일한 답이다.** 판정 상단이 340 이라 점프로 못 넘고(정점 302), distance[0]=0 이라 파고들 안쪽도 없다. 대시 창은 0.12 로 셋 중 가장 좁다 — 세 번을 전부 대시로 넘기려면 스태미나(중검 대시 25 × 3 = 75 / 최대 100)가 거의 바닥나므로, 대시는 '한 대는 봐준다' 이지 답이 아니다. 나인 솔즈의 백장이 패리를 가르치는 방식이 정확히 이것이다.",
+
+  "내려찍기 3연": {
     "tags": {
       "dash_window": 0.12, "dash_direction": "out",
       "jumpable": false, "anti_air": false,
-      "parryable": true, "parry_window": 0.10,
+      "parryable": true, "parry_window": 0.13,
       "punish_greed": true, "reach": "close",
       "feint": false, "multi_hit": 3, "tracking": false
     },
+    "tell": { "id": "blade_drag", "anim": "attack2", "x": 150, "y": 6, "length": 250 },
     "timeline": [
       { "t": 0.00, "kind": "windup" },
-      { "t": 0.40, "kind": "active", "distance": [0, 220], "height": [0, 180], "damage": 9 },
-      { "t": 0.62, "kind": "active", "distance": [0, 220], "height": [0, 180], "damage": 9 },
-      { "t": 0.84, "kind": "active", "distance": [0, 240], "height": [0, 180], "damage": 12 },
-      { "t": 1.00, "kind": "recover" },
-      { "t": 1.30, "kind": "end" }
+      { "t": 0.50, "kind": "active", "distance": [0, 250], "height": [0, 340], "damage": 9 },
+      { "t": 0.85, "kind": "active", "distance": [0, 250], "height": [0, 340], "damage": 9 },
+      { "t": 1.20, "kind": "active", "distance": [0, 270], "height": [0, 340], "damage": 12 },
+      { "t": 1.42, "kind": "recover" },
+      { "t": 1.80, "kind": "end" }
     ]
   },
 
-  "내려찍기": {
+  "_note_올려베기": "**크게 예고하고 느린 것이 전부다.** 첫 판정까지 0.90초로 셋 중 가장 길고, parry_window 0.18 도 가장 넓다(유효 창은 캐릭터의 0.133 과 좁은 쪽이라 실제로는 캐릭터가 이긴다 — 그래도 이 패턴만은 캐릭터의 창을 한 번도 안 깎는다). 판정 상단이 150 뿐이라 **점프로도 넘는다**: 보스가 플레이어의 2.5배라 그의 '올려베기' 는 자기 무릎~허리 높이를 쓸고 지나가고, 그 띠가 곧 선 플레이어의 몸이다. 정점 302 로 뜬 몸은 그 위에 있다. 셋 중 답이 여럿인 유일한 패턴이고, 그래서 **점프 축이 여기 하나에 걸려 있다** — 이 상단을 올리면 jumpable 패턴이 하나도 없어져 PatternDataTests 의 점프 가드가 빈 집합 위에서 터진다.",
+
+  "이단 올려베기": {
     "tags": {
-      "dash_window": 0.22, "dash_direction": "out",
-      "jumpable": false, "anti_air": false,
-      "parryable": false, "parry_window": 0,
-      "punish_greed": true, "reach": "close",
-      "feint": false, "multi_hit": 1, "tracking": false
-    },
-    "timeline": [
-      { "t": 0.00, "kind": "windup" },
-      { "t": 0.80, "kind": "active", "distance": [0, 200], "height": [0, 300], "damage": 26 },
-      { "t": 0.98, "kind": "recover" },
-      { "t": 1.35, "kind": "end" }
-    ]
-  },
-
-  "_note_충격파": "바깥 고리만 쓸고 지나가 **보스에 붙어 있으면 안전한** 유일한 패턴이다. 여섯 패턴이 전부 distance[0]=0 이던 때는 안으로 파고드는 것이 정답인 상황이 하나도 없어 dash_direction_bias 축이 상수였다 — 죽은 입력은 망의 용량만 먹고 아무것도 가르치지 않는다. 몸 충돌을 걷은 지금(이슈 #27) 이 안쪽 220px 이 **distance_bias 축을 살려 두는 유일한 장치**다: 밀려나서 거리가 갈리던 것은 부산물이었고, 붙는 것이 정답인 패턴이 있어야 거리가 판단이 된다. 보스가 두고 서는 간격(반폭 85 + 파이터 반폭 26~36 ≈ 115)보다 105px 넓어, 그 주머니로 **파고들어야만** 피해지도록 jumpable·parryable 을 일부러 끈다 — 다른 답을 열어 두면 축이 다시 흐려진다.",
-
-  "충격파": {
-    "tags": {
-      "dash_window": 0.20, "dash_direction": "in",
-      "jumpable": false, "anti_air": false,
-      "parryable": false, "parry_window": 0,
-      "punish_greed": false, "reach": "far",
-      "feint": false, "multi_hit": 1, "tracking": false
-    },
-    "timeline": [
-      { "t": 0.00, "kind": "windup" },
-      { "t": 0.70, "kind": "active", "distance": [220, 780], "height": [0, 240], "damage": 22 },
-      { "t": 0.88, "kind": "recover" },
-      { "t": 1.25, "kind": "end" }
-    ]
-  },
-
-  "_note_돌진": "tracking 을 true → false 로 내렸다. 보스는 패턴을 도는 동안 Boss.Approach 를 한 번도 안 부르므로 실제로는 얼어붙어 있다 — 태그만 '따라온다' 고 말했고, 그 거짓은 망의 입력이 된다. 추적을 **구현하는** 쪽은 전투 감각을 바꾸는 설계 결정이라 사람의 몫이고(이슈 #16), 거짓말하는 태그는 지금 고칠 수 있는 결함이다. 그래서 값을 내렸다. 기믹 자체는 열려 있다.",
-
-  "돌진": {
-    "tags": {
-      "dash_window": 0.16, "dash_direction": "out",
+      "dash_window": 0.20, "dash_direction": "out",
       "jumpable": true, "anti_air": false,
-      "parryable": false, "parry_window": 0,
-      "punish_greed": false, "reach": "far",
-      "feint": false, "multi_hit": 1, "tracking": false
+      "parryable": true, "parry_window": 0.18,
+      "punish_greed": false, "reach": "mid",
+      "feint": false, "multi_hit": 2, "tracking": false
     },
+    "tell": { "id": "blade_raised", "anim": "attack3", "x": -170, "y": 215, "length": 230 },
     "timeline": [
       { "t": 0.00, "kind": "windup" },
-      { "t": 0.60, "kind": "active", "distance": [0, 700], "height": [0, 90], "damage": 16 },
-      { "t": 0.78, "kind": "recover" },
-      { "t": 1.10, "kind": "end" }
+      { "t": 0.90, "kind": "active", "distance": [0, 310], "height": [0, 150], "damage": 13 },
+      { "t": 1.22, "kind": "active", "distance": [0, 330], "height": [0, 150], "damage": 16 },
+      { "t": 1.45, "kind": "recover" },
+      { "t": 1.90, "kind": "end" }
+    ]
+  },
+
+  "_note_점프강타": "**크림슨이다 — 패리 불가(parryable:false 가 붉은 예고를 구동한다, 이슈 #27).** 판정이 둘인 이유는 이 패턴 하나가 축 둘을 먹여 살리기 때문이다.\n① `[0,250] × [150,520]` 은 **내리꽂는 몸**이다. 아래끝 150 이 선 몸통(120)보다 높아 **지상에서는 절대 안 맞고 공중에서만 맞는다** — anti_air 축이 이 한 줄에 걸려 있다. 점프로 크림슨을 피하려는 습관을 정확히 여기서 벌한다.\n② `[190,760] × [0,330]` 은 **착지 충격**이다. 안쪽 190px 이 비어 있어 **보스 발밑이 안전하다** — 뛰어올라 내리찍는 공격의 발밑이 안전한 것은 실제 나인 솔즈의 설계이기도 하다. 상단 330 은 정점(302)보다 높아 점프로는 못 넘는다: 넘을 수 있게 두면 '파고든다' 가 유일한 답이 아니게 되고 distance 축이 다시 흐려진다(#27 이 몸 충돌을 걷은 뒤 이 축을 살리는 것은 이 주머니뿐이다).\n⚠ **이 패턴이 distance 축을 혼자 진다.** 전에는 그 일을 `충격파` 가 했는데 4~5단계 명부에만 있어서 1~3단계에는 거리로 할 판단이 아예 없었다. 지금은 1단계 명부부터 이것이 들어 있다.",
+
+  "점프 강타": {
+    "tags": {
+      "dash_window": 0.24, "dash_direction": "in",
+      "jumpable": false, "anti_air": true,
+      "parryable": false, "parry_window": 0,
+      "punish_greed": true, "reach": "far",
+      "feint": false, "multi_hit": 2, "tracking": false
+    },
+    "tell": { "id": "leap_mark", "anim": "attack", "x": 0, "y": 330, "length": 190 },
+    "timeline": [
+      { "t": 0.00, "kind": "windup" },
+      { "t": 0.85, "kind": "active", "distance": [0, 250], "height": [150, 520], "damage": 10 },
+      { "t": 0.95, "kind": "active", "distance": [190, 760], "height": [0, 330], "damage": 14 },
+      { "t": 1.20, "kind": "recover" },
+      { "t": 1.65, "kind": "end" }
     ]
   }
 }

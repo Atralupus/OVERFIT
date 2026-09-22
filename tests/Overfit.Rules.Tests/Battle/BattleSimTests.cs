@@ -22,7 +22,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(maxHealth: bossHealth),
-        PatternIds = new[] { "횡베기", "지면쓸기" },
+        PatternIds = new[] { "내려찍기 3연", "이단 올려베기" },
         Patterns = Patterns(),
         Seed = 51,
         MaxTicks = maxTicks,
@@ -98,7 +98,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, patternGap: 1000),
-        PatternIds = new[] { "횡베기" },
+        PatternIds = new[] { "내려찍기 3연" },
         Patterns = Patterns(),
         Seed = 1,
         MaxTicks = 60 * 60,
@@ -126,7 +126,7 @@ public class BattleSimTests
         // 몸 충돌을 걷었다(이슈 #27). 나인 솔즈처럼 적을 **그냥 지나갈 수 있어야** 한다 —
         // 밀어내기가 남아 있으면 보스가 붙는 순간 파이터는 벽 쪽으로 밀리고 빠져나갈 길이 없다.
         // 그 대가로 distance_bias 축을 겹침으로 세우던 방법은 잃는다 — 대신 패턴의 안전 거리대
-        // (충격파의 distance[0]=220)가 "붙어야 안전" 을 만든다. 설계 문서 §6 에 적어 뒀다.
+        // (점프 강타의 distance[0]=190)가 "붙어야 안전" 을 만든다. 설계 문서 §6 에 적어 뒀다.
         var sim = Chaser();
         double standoff = Standoff();
         bool inside = false;
@@ -149,7 +149,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
-        PatternIds = new[] { "횡베기" },
+        PatternIds = new[] { "내려찍기 3연" },
         Patterns = Patterns(),
         Seed = 1,
         MaxTicks = 60 * 60,
@@ -208,7 +208,7 @@ public class BattleSimTests
     {
         // 무적은 **위치가 아니라 행동 시계**로 돈다. 몸 충돌이 있던 때는 "벽에 막혀도 무적은
         // 그대로" 를 못박았고, 지금은 반대쪽 — 몸을 통과해 반대편으로 나가도 그대로다.
-        // 어느 쪽이든 깨지면 "파고들어야 사는" 패턴(충격파)을 아무도 못 피한다.
+        // 어느 쪽이든 깨지면 "파고들어야 사는" 패턴(점프 강타)을 아무도 못 피한다.
         var setup = new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -277,7 +277,7 @@ public class BattleSimTests
         // 이 축이 존재하는 이유 자체다. "값이 0 이 아니다" 로는 부족하고 **둘이 갈려야** 한다.
         // 몸 충돌을 걷은 뒤에도(이슈 #27) 갈리는지가 여기서 증명된다 — 붙는 봇은 보스 몸 안으로
         // 들어가고 떨어지는 봇은 제 간격을 지킨다. 축을 살리는 것은 이제 겹침이 아니라
-        // **거리를 고를 이유**(충격파의 안쪽 안전지대)다.
+        // **거리를 고를 이유**(점프 강타의 안쪽 안전지대)다.
         PlayerAxes hugger = Engage(0);
         PlayerAxes spacer = Engage(500);
 
@@ -289,8 +289,18 @@ public class BattleSimTests
             "붙는 봇과 떨어지는 봇이 같은 거리로 수렴한다 — 축이 못 가른다");
     }
 
-    /// <summary>봇이 판정을 기다리며 잡는 자리(px). 대시 사거리보다 멀어야 "파고든다" 가 성립한다.</summary>
-    private const double _dashHold = 450;
+    /// <summary>
+    /// 봇이 판정을 기다리며 잡는 자리(px). 대시 사거리(396)보다 멀어야 "파고든다" 가 성립한다.
+    ///
+    /// <para>
+    /// 450 → 620 으로 올렸다 (이슈 #28). 백장의 패턴은 셋 다 <b>연속타</b>라 판정과 판정 사이가
+    /// 0.10~0.35초뿐인데, 그 사이에도 봇은 조준 구간(0.30초)에 있어 계속 보스 쪽으로 걷는다.
+    /// 450 에서 출발하면 조준 걸음 + 앞선 대시가 보스 중심을 <b>넘겨</b>, 걷는 방향은 그대로인데
+    /// "안" 과 "밖" 이 틱마다 뒤집혔다 — 실측 13건 중 5건이 반대 라벨이었다. 방향 라벨이 성향이
+    /// 아니라 부산물이 되는 자리이고, 이 파일의 주석이 원래 경고하던 바로 그 실패다.
+    /// </para>
+    /// </summary>
+    private const double _dashHold = 620;
 
     /// <summary>
     /// 판정 직전에 대시하는 봇 한 판. <paramref name="inward"/> 면 보스 쪽을, 아니면 반대쪽을 보고 뛴다.
@@ -303,7 +313,7 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
-            PatternIds = new[] { "횡베기", "지면쓸기", "충격파" },
+            PatternIds = new[] { "내려찍기 3연", "이단 올려베기", "점프 강타" },
             Patterns = Patterns(),
             Seed = 51,
             MaxTicks = 60 * 20,
@@ -347,47 +357,64 @@ public class BattleSimTests
     }
 
     /// <summary>
-    /// 충격파 한 방을 보스로부터 <paramref name="standoff"/> px 떨어진 자리에서 맞아 본다.
+    /// 점프 강타 한 판을 보스로부터 <paramref name="standoff"/> px 떨어진 자리에서 맞아 본다.
     /// 패턴은 2.0초 뒤에 서므로 그 전에 자리를 잡는다. <b>걸음 수가 아니라 거리로 준다</b> —
     /// 몸 충돌이 없어져 "끝까지 걸으면 붙는다" 가 더는 참이 아니다(지나쳐 버린다).
+    ///
+    /// <para>
+    /// 이 패턴은 판정이 <b>둘</b>이라(이슈 #28) 관측도 둘 난다 — 내리꽂는 몸(대공)과 착지 충격이다.
+    /// 둘을 그대로 돌려준다: 하나만 골라 오면 "지상이 안전" 과 "발밑이 안전" 중 한쪽을 안 보게 된다.
+    /// </para>
     /// </summary>
-    private static DodgeEvent Shockwave(double standoff)
+    private static IReadOnlyList<DodgeEvent> LeapSlam(double standoff)
     {
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
-            PatternIds = new[] { "충격파" },
+            PatternIds = new[] { "점프 강타" },
             Patterns = Patterns(),
             Seed = 1,
             MaxTicks = 60 * 10,
         });
 
-        for (int i = 0; i < 300 && sim.Events.Count == 0; i++)
+        for (int i = 0; i < 300 && sim.Events.Count < 2; i++)
         {
             double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
             sim.Tick(new InputFrame((sbyte)(gap > standoff ? 1 : 0), false, false, false, false));
         }
 
-        return sim.Events.Single();
+        return sim.Events;
     }
 
     [Fact]
-    public void 충격파는_붙은_쪽만_살려준다()
+    public void 점프_강타는_발밑만_살려주고_공중을_벌한다()
     {
-        // 안쪽 220px 이 비어 있는 유일한 패턴이고, **몸 충돌을 걷은 지금 distance_bias 축을
-        // 살려 두는 것이 이 하나다**(이슈 #27 · 설계 문서 §6). 충돌이 있던 때는 "밀려나서" 거리가
-        // 갈렸지만 이제는 "붙는 것이 정답인 패턴이 있어서" 갈린다 — 후자가 판단이고 전자는 부산물이다.
-        // 주머니가 닫히면(patterns.json 의 220 이 내려가면) 축은 조용히 다시 죽는다 — 여기서 빨개진다.
-        DodgeEvent hugging = Shockwave(60);
-        DodgeEvent spacing = Shockwave(400);
+        // 이 패턴 하나가 축 둘을 먹여 살린다 (이슈 #28 · 설계 문서 §6).
+        //
+        // ① 착지 충격의 안쪽 190px 이 비어 있다 — **몸 충돌을 걷은 지금(이슈 #27) distance_bias 를
+        //    살려 두는 것이 이 주머니 하나다.** 충돌이 있던 때는 "밀려나서" 거리가 갈렸지만 이제는
+        //    "붙는 것이 정답인 패턴이 있어서" 갈린다 — 후자가 판단이고 전자는 부산물이다.
+        //    주머니가 닫히면(patterns.json 의 190 이 내려가면) 축은 조용히 다시 죽는다 — 여기서 빨개진다.
+        // ② 내리꽂는 몸의 아래끝이 150 이라 **선 몸통(120)에는 절대 안 닿는다.** anti_air 축이
+        //    이 한 줄에 걸려 있다 — 여기가 지상까지 닿으면 "점프하면 더 맞는다" 가 거짓이 된다.
+        IReadOnlyList<DodgeEvent> hugging = LeapSlam(60);
+        IReadOnlyList<DodgeEvent> spacing = LeapSlam(400);
 
-        hugging.Verdict.ShouldBe(HitVerdict.MissedByRange, "붙었는데 충격파에 맞았다 — 안쪽 주머니가 닫혔다");
-        hugging.Distance.ShouldBeLessThan(220);
+        hugging.Count.ShouldBe(2, "점프 강타의 판정은 둘이다");
+        spacing.Count.ShouldBe(2);
 
-        spacing.Verdict.ShouldBe(HitVerdict.Hit, "떨어져 있는데 안 맞았다 — 이 테스트가 주머니를 안 본다");
-        spacing.Distance.ShouldBeGreaterThan(220);
+        // 대공 판정은 distance [0,250] 이라 붙은 쪽만 거리 안에 든다 — 그쪽이 높이로 빠지는 것이
+        // anti_air 의 증명이다. 떨어진 쪽은 거리에서 먼저 걸러지므로 "맞지 않았다" 까지만 말한다.
+        hugging[0].Verdict.ShouldBe(HitVerdict.MissedByHeight, "붙어서 선 몸통이 대공 판정에 맞았다");
+        spacing[0].Verdict.ShouldBe(HitVerdict.MissedByRange, "250px 밖인데 대공 판정이 닿았다");
+
+        hugging[1].Verdict.ShouldBe(HitVerdict.MissedByRange, "붙었는데 착지 충격에 맞았다 — 안쪽 주머니가 닫혔다");
+        hugging[1].Distance.ShouldBeLessThan(190);
+
+        spacing[1].Verdict.ShouldBe(HitVerdict.Hit, "떨어져 있는데 안 맞았다 — 이 테스트가 주머니를 안 본다");
+        spacing[1].Distance.ShouldBeGreaterThan(190);
     }
 
     [Fact]
@@ -471,7 +498,7 @@ public class BattleSimTests
     public void 단계가_쓰는_패턴만_나온다()
     {
         var setup = Setup();
-        setup.PatternIds = new[] { "지면쓸기" };
+        setup.PatternIds = new[] { "이단 올려베기" };
         var sim = new BattleSim(setup);
 
         for (int i = 0; i < 900; i++)
@@ -479,7 +506,7 @@ public class BattleSimTests
             sim.Tick(default);
             if (sim.Boss.CurrentPattern is { } id)
             {
-                id.ShouldBe("지면쓸기");
+                id.ShouldBe("이단 올려베기");
             }
         }
     }
@@ -541,6 +568,7 @@ public class BattleSimTests
     /// <summary>판정 하나짜리 패턴. 기하와 태그를 부르는 쪽이 정한다.</summary>
     private static PatternDef OneHit(double[] distance, double[] height, bool parryable, double at) => new()
     {
+        Tell = TestConfigs.Tell(),
         Tags = new PatternTags
         {
             DashWindow = 0.14,
@@ -798,6 +826,7 @@ public class BattleSimTests
         // RememberDodgeStart 가 그 행동이 끝났을 때만 지운다.
         var pattern = new PatternDef
         {
+            Tell = TestConfigs.Tell(),
             Tags = new PatternTags
             {
                 DashWindow = 0.14,

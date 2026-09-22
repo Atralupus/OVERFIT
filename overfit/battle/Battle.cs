@@ -68,7 +68,7 @@ public partial class Battle : Node2D
 
     /// <summary>
     /// 판이 끝났나. <b>디버그 전용 읽기</b> — <c>tools/build.sh shots</c> 의 <c>ShotRunner</c> 가
-    /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 0.9~1.35초 패턴)와
+    /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 1.65~1.90초 패턴)와
     /// 어긋나 매번 다른 순간이 찍힌다 — 그러면 스크린샷이 "무엇이 보이는가" 를 증명하지 못한다.
     /// </summary>
     public bool Over => _over;
@@ -83,10 +83,23 @@ public partial class Battle : Node2D
     public int FighterHealth => _broken ? 0 : _sim.Fighter.Health;
 
     /// <summary>
+    /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
+    /// 순간이고(이슈 #28), 그건 0.2초뿐이라 벽시계로 노리면 대부분 놓친다.
+    /// </summary>
+    public int BossHealth => _broken ? 0 : _sim.Boss.Health;
+
+    /// <summary>
     /// 지금 도는 패턴이 <b>패리 불가</b>인가. 위와 같이 디버그 전용 읽기다 —
     /// 크림슨 예고가 화면에서 구별되는지를 스크린샷으로 증명하려면 그 순간을 기다려야 한다.
     /// </summary>
     public bool BossUnparryable => !_broken && !_over && !CurrentParryable();
+
+    /// <summary>
+    /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 예고</b>를
+    /// 증명하려면 "지금 어느 패턴인가" 를 보고 셔터를 눌러야 한다. 같은 패턴을 세 번 찍으면
+    /// 세 장이 똑같고, 그건 증명이 아니라 우연이다.
+    /// </summary>
+    public string? BossPattern => _broken || _over ? null : _sim.Boss.CurrentPattern;
 
     public override void _Ready()
     {
@@ -441,7 +454,7 @@ public partial class Battle : Node2D
                 : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
             _sim.Fighter.Locked));
 
-        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, CurrentParryable());
+        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, CurrentParryable(), CurrentAnim(), CurrentTell());
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
@@ -473,6 +486,34 @@ public partial class Battle : Node2D
         _sim.Boss.CurrentPattern is not string id
         || !_patterns.TryGetValue(id, out PatternDef? def)
         || def.Tags.Parryable;
+
+    /// <summary>지금 도는 패턴의 선딜 모션 이름. 패턴이 안 돌면 null.</summary>
+    private string? CurrentAnim() => Current()?.Tell.Anim;
+
+    /// <summary>
+    /// 지금 도는 패턴의 예고 표지를 <b>화면 좌표로</b> 옮긴다.
+    ///
+    /// <para>
+    /// 데이터의 <c>x</c> 는 "보스의 앞(+) 인가 뒤(-) 인가" 다. 화면의 왼/오른쪽으로 옮기려면
+    /// 보스가 <b>어디를 보는지</b>를 알아야 하고, 그것을 아는 것은 규칙과 뷰를 둘 다 아는 여기뿐이다.
+    /// 보스는 늘 파이터를 본다 — 스프라이트를 안 뒤집는 지금도 표지는 뒤집어야 한다.
+    /// 안 그러면 파이터가 보스 왼쪽에 설 때 "앞에 끌리는 칼" 이 등 뒤에 그려진다.
+    /// </para>
+    /// </summary>
+    private BossTell? CurrentTell()
+    {
+        if (Current() is not PatternDef def)
+        {
+            return null;
+        }
+
+        double facing = _sim.Fighter.X < _sim.Boss.X ? -1.0 : 1.0;
+        return new BossTell(def.Tell.Id, def.Tell.X * facing, def.Tell.Y, def.Tell.Length);
+    }
+
+    /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>
+    private PatternDef? Current() =>
+        _sim.Boss.CurrentPattern is string id && _patterns.TryGetValue(id, out PatternDef? def) ? def : null;
 
     /// <summary>
     /// 보스가 패턴의 어디쯤인가. 더 올 판정이 있으면 선딜, 없으면 후딜이다 —

@@ -11,6 +11,7 @@ public class PatternRunnerTests
 
     private static PatternDef Slash() => new()
     {
+        Tell = TestConfigs.Tell(),
         Tags = new PatternTags
         {
             DashWindow = 0.18,

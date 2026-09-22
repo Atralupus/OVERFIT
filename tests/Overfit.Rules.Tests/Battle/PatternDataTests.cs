@@ -94,9 +94,9 @@ public class PatternDataTests
     public void Jumpable_태그가_각_캐릭터의_실제_점프_정점과_맞는다()
     {
         // 전에는 하드코딩한 100px 과 견줬다 — fighters.json 과 아무 관계가 없었다.
-        // 단검의 정점은 176.33 이고 연속베기 판정 상단은 180 이라 마진이 3.67px 이었는데,
-        // jump_velocity 를 2% 올리면 그 패턴이 실제로 넘을 수 있게 되면서도 태그는 false 인 채고
-        // **아무 테스트도 안 빨개졌다.** 그래서 캐릭터마다 실제 정점을 재서 대조한다.
+        // 정점이 판정 상단에 몇 px 차로 붙어 있으면 jump_velocity 를 조금 올리는 것만으로
+        // 그 패턴이 실제로 넘을 수 있게 되면서도 태그는 false 인 채고 **아무 테스트도 안 빨개졌다.**
+        // 그래서 캐릭터마다 실제 정점을 재서 대조한다.
         //
         // HitResolver 가 높이로 빗나가게 하는 조건은 발밑(Y)이 판정 상단보다 위인 것이다 —
         // 그래서 기준은 "정점 > 모든 active 의 상단" 이다.
@@ -128,12 +128,12 @@ public class PatternDataTests
     public void 점프_정점이_넘을_판정과_못_넘을_판정_사이에_있다()
     {
         // jumpable 가드는 참거짓만 본다 — 정점이 판정 상단보다 1px 높아도 초록이다.
-        // 이슈 #27 의 요구는 **여유**다: 낮은 공격(지면쓸기 70 · 돌진 90)을 확실히 넘되
-        // 높은 판정(연속베기 180 · 내려찍기 300)은 못 넘어야 "점프로 피할 수 있는가" 가 축이 된다.
+        // 요구는 **여유**다: 낮은 공격(이단 올려베기 150)을 확실히 넘되 높은 판정
+        // (내려찍기 3연 340 · 점프 강타의 착지 충격 330)은 못 넘어야 "점프로 피할 수 있는가" 가 축이 된다.
         //
-        // ⚠ 위쪽 경계는 고를 수 있는 것이 아니라 **패턴 기하가 정한다** — 넘지 말아야 할 패턴 중
-        // 가장 낮은 상단(연속베기 180)이 천장이다. 더 높이 뛰게 하려면 그 패턴의 태그나 기하를
-        // 같이 옮겨야 하고, 그건 밸런스라 사람의 몫이다(패턴 작성은 이슈 #28).
+        // ⚠ 이 둘은 **같이 움직인다.** 이슈 #27 에서는 패턴 기하가 먼저 서 있어서 정점이 176 에
+        // 갇혔고, 이슈 #28 이 패턴을 통째로 갈아엎으며 순서를 뒤집었다 — 점프를 먼저 정하고
+        // 세 패턴의 height 를 거기 맞췄다. 한쪽만 고치면 여기서 빨개진다.
         const double margin = 1.8;
         Dictionary<string, PatternDef> patterns = Load();
 
@@ -227,6 +227,34 @@ public class PatternDataTests
         // 통과하는 가드와 도는 가드를 구별하지 않으면, 나중에 안쪽 안전지대가 사라져도 여전히 초록이다.
         checkedPatterns.ShouldBeGreaterThan(0,
             "안으로 파고들 수 있는 패턴이 하나도 없다 — dash_direction_bias 축이 구조적으로 못 가른다");
+    }
+
+    [Fact]
+    public void 패턴마다_자기_예고가_있고_서로_다르다()
+    {
+        // 선딜 링은 "뭔가 온다" 까지만 말한다 — **무엇이** 오는지는 안 말한다(이슈 #28).
+        // 백장의 두 패턴은 "칼이 땅에 있나 떠 있나" 로만 갈리므로, 예고가 같으면 그 둘은
+        // 화면에서 같은 공격이다. 그래서 id(모양) · anim(보스 모션) 둘 다 패턴마다 달라야 한다.
+        var shapes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var anims = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach ((string id, PatternDef def) in Load())
+        {
+            def.Tell.Id.ShouldNotBeNullOrWhiteSpace($"{id}: tell.id 가 비었다");
+            def.Tell.Anim.ShouldNotBeNullOrWhiteSpace($"{id}: tell.anim 이 비었다");
+            def.Tell.Length.ShouldBeGreaterThan(0, $"{id}: tell.length 가 0 이면 아무것도 안 그려진다");
+            def.Tell.Y.ShouldBeGreaterThanOrEqualTo(0, $"{id}: tell.y 가 바닥 아래다");
+
+            shapes.ShouldNotContainKey(def.Tell.Id,
+                $"{id}: 예고 모양 {def.Tell.Id} 를 {shapes.GetValueOrDefault(def.Tell.Id)} 와 같이 쓴다 — 화면에서 두 패턴이 같아진다");
+            shapes[def.Tell.Id] = id;
+
+            anims.ShouldNotContainKey(def.Tell.Anim,
+                $"{id}: 보스 모션 {def.Tell.Anim} 를 {anims.GetValueOrDefault(def.Tell.Anim)} 와 같이 쓴다 — 선딜 모션으로 종류가 안 갈린다");
+            anims[def.Tell.Anim] = id;
+        }
+
+        // 위 두 루프는 패턴이 없으면 공허하게 참이다. 이 가드가 실제로 무언가를 봤는지 못박는다.
+        shapes.ShouldNotBeEmpty("패턴이 하나도 없다 — 이 가드가 아무것도 안 본다");
     }
 
     [Fact]
