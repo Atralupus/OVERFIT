@@ -164,8 +164,72 @@ public partial class ShotRunner : Node
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-8-result");
 
+        await Facing();
+
         Log.Marker("shots", "shots=done");
         GetTree().Quit();
+    }
+
+    /// <summary>
+    /// 보스의 방향 전환 세 장 (이슈 #36). <b>새 판에서 찍는다</b> — 앞 시퀀스는 파이터가 맞아 죽는 것으로
+    /// 끝나므로 이어 붙일 수 없고, 앞에 끼워 넣으면 남은 체력을 몇 초어치 더 써서 뒤의 장면들이
+    /// 통째로 결과 화면으로 찍힌다(이 파일의 다른 주석들이 이미 밟은 실패다).
+    ///
+    /// <para>
+    /// 증명해야 하는 것이 둘이다. ① <b>양쪽</b> — 파이터가 왼쪽에 있을 때와 오른쪽에 있을 때
+    /// 보스가 각각 그쪽을 보는가(#27 로 몸 충돌이 없어져 반대편으로 돌아갈 수 있게 됐고,
+    /// 그때부터 보스는 등 뒤를 향해 칼을 휘두르는 그림이었다). ② <b>잠금</b> — 스윙 도중에
+    /// 지나가도 <b>안</b> 돌아보는가. 둘째 장이 없으면 첫째 장은 "따라 도는 것" 만 말하고,
+    /// 그것만 맞추려다 예고를 거짓말로 만드는 것이 이 기능의 유일한 함정이다.
+    /// </para>
+    /// </summary>
+    private async Task Facing()
+    {
+        Game.Instance.GoTo(Game.Scene.Battle);
+        await Frames(4);
+        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+
+        // 파이터는 아레나의 25% · 보스는 75% 에 선다 — 보스는 처음부터 왼쪽을 본다.
+        await Wait(0.8);
+        await FacingShot("battle-9-face-left");
+
+        // 오른쪽으로 달려 보스를 지나간다.
+        Hold("move_right", true);
+        await Wait(2.6);
+        Hold("move_right", false);
+        await FacingShot("battle-9b-face-right");
+
+        // ── 잠금: 선딜 도중에 반대편으로 지나간다 ─────────────────────────
+        // 방금 자리(보스의 오른쪽)에서 기다렸다가 **선딜 도중에** 왼쪽으로 빠져나간다.
+        // 보스는 그 선딜이 끝날 때까지 오른쪽을 본 채여야 한다 — 예고(칼)도 오른쪽에 그대로 있다.
+        //
+        // **판정까지 0.6초 넘게 남은 선딜만 고른다.** 그냥 "선딜인가" 만 보면 끝자락에 걸리고,
+        // 그때 지나가면 잠긴 몸 대신 판정 충격파가 찍힌다 — 실제로 그렇게 찍혔다.
+        //
+        // **걸음이 아니라 대시로 넘는다.** 보스 몸이 반폭 85 라 걸음(420px/s)으로는 선딜 하나 안에
+        // 몸 밖으로 확실히 못 나간다 — 겹친 채 찍히면 어느 쪽에 섰는지가 그림에서 안 읽힌다.
+        // 대시는 0.18초에 396px 이라 한 번에 넘기고, 남은 프레임은 이어지는 걸음이 더 벌린다.
+        await Until(
+            () => _battle is { BossWindingUp: true } && _battle.BossNextActiveIn >= 0.6,
+            _tellTimeout);
+        Hold("move_left", true);
+        await Frames(2);   // 왼쪽을 보게 세운다 — 대시는 **바라보는 쪽으로만** 간다
+        Tap("dash");
+        await Frames(26);
+        Hold("move_left", false);
+        await Screenshot.CaptureAsync(this, "battle-9c-facing-locked");
+    }
+
+    /// <summary>
+    /// 방향이 <b>가라앉은 뒤</b> 한 장. 패턴이 도는 동안에는 방향이 잠겨 있으므로
+    /// (<c>Boss.Face</c>) 패턴 중에 찍으면 "아직 안 돌았다" 가 찍힌다 — 그건 잠금이 일하는
+    /// 그림이지 이 두 장이 증명할 것이 아니다(그건 <c>battle-9c</c> 가 맡는다).
+    /// </summary>
+    private async Task FacingShot(string name)
+    {
+        await Until(() => _battle is { BossPattern: null }, _pollTimeout);
+        await Frames(2);
+        await Screenshot.CaptureAsync(this, name);
     }
 
     /// <summary>

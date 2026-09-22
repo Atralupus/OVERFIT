@@ -101,6 +101,14 @@ public partial class Battle : Node2D
     /// </summary>
     public string? BossPattern => _broken || _over ? null : _sim.Boss.CurrentPattern;
 
+    /// <summary>
+    /// 다음 판정까지 남은 시간(초). 더 올 판정이 없으면 0. 위와 같이 디버그 전용 읽기다 —
+    /// 선딜의 <b>어디쯤인지</b>를 보고 셔터를 눌러야 하는 장면이 있다(이슈 #36 의 방향 잠금:
+    /// 선딜이 넉넉히 남았을 때 지나가야 "안 돌아본다" 가 증명되고, 끝자락에 지나가면
+    /// 잠금이 아니라 충격파가 찍힌다 — 실제로 그렇게 찍혔다).
+    /// </summary>
+    public double BossNextActiveIn => _broken || _over ? 0 : _sim.NextActiveIn ?? 0;
+
     public override void _Ready()
     {
         _fighterView = GetNode<FighterView>("%FighterView");
@@ -454,7 +462,14 @@ public partial class Battle : Node2D
                 : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
             _sim.Fighter.Locked));
 
-        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, CurrentParryable(), CurrentAnim(), CurrentTell());
+        _bossView.Show(new BossFrame(
+            _sim.Boss.X,
+            _sim.Boss.Facing,
+            Phase(),
+            _sim.NextActiveIn,
+            CurrentParryable(),
+            CurrentAnim(),
+            CurrentTell()));
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
@@ -495,9 +510,14 @@ public partial class Battle : Node2D
     ///
     /// <para>
     /// 데이터의 <c>x</c> 는 "보스의 앞(+) 인가 뒤(-) 인가" 다. 화면의 왼/오른쪽으로 옮기려면
-    /// 보스가 <b>어디를 보는지</b>를 알아야 하고, 그것을 아는 것은 규칙과 뷰를 둘 다 아는 여기뿐이다.
-    /// 보스는 늘 파이터를 본다 — 스프라이트를 안 뒤집는 지금도 표지는 뒤집어야 한다.
-    /// 안 그러면 파이터가 보스 왼쪽에 설 때 "앞에 끌리는 칼" 이 등 뒤에 그려진다.
+    /// 보스가 <b>어디를 보는지</b>를 알아야 하고, 그 답은 <see cref="Boss.Facing"/> 하나다.
+    /// 안 뒤집으면 파이터가 보스 왼쪽에 설 때 "앞에 끌리는 칼" 이 등 뒤에 그려진다.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ <b>두 x 를 견줘 여기서 다시 계산하면 안 된다</b>(이슈 #36 전에는 그랬다). 그러면 파이터가
+    /// 스윙 도중에 보스를 지나가는 순간 <b>표지가 한 프레임에 반대쪽으로 튄다</b> — 몸은 잠겨 그대로인데
+    /// 칼만 등 뒤로 간다. 방향을 아는 곳은 규칙 한 곳이어야 한다.
     /// </para>
     /// </summary>
     private BossTell? CurrentTell()
@@ -507,8 +527,7 @@ public partial class Battle : Node2D
             return null;
         }
 
-        double facing = _sim.Fighter.X < _sim.Boss.X ? -1.0 : 1.0;
-        return new BossTell(def.Tell.Id, def.Tell.X * facing, def.Tell.Y, def.Tell.Length);
+        return new BossTell(def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length);
     }
 
     /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>
