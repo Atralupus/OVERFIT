@@ -19,13 +19,19 @@ public partial class BattleDemo : Node
     {
         string[] args = OS.GetCmdlineUserArgs();
         ulong seed = (ulong)(CmdArgs.Double(args, "--seed=") ?? 51);
-        string fighterId = CmdArgs.Text(args, "--fighter=") ?? "중검";
         int stage = (int)(CmdArgs.Double(args, "--stage=") ?? 1);
 
         Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
         Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
         Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
+
+        BattleBalance battle = Balance.Data.Battle;
+
+        // 기본 캐릭터도 데이터다. 전에는 여기 "중검" 이 리터럴로 박혀 있었다 — 게임이 쓰는 캐릭터를
+        // 바꾸면 데모는 조용히 옛 캐릭터로 계속 돌았을 것이다. 보스가 정확히 그렇게 갈렸던 적이 있다.
+        // --fighter= 는 남긴다: 다른 캐릭터로 돌려보는 것은 데모의 일이다.
+        string fighterId = CmdArgs.Text(args, "--fighter=") ?? battle.Fighter;
 
         if (!fighters.TryGetValue(fighterId, out FighterConfig? fighter))
         {
@@ -36,7 +42,6 @@ public partial class BattleDemo : Node
 
         // 보스도 데이터다. 전에는 여기서 BossConfig 를 손으로 만들었고, 그 사본이 게임 쪽과
         // 갈려 있었다 — 데모는 boss_test 를, 게임은 boss_grym 을 그렸다.
-        BattleBalance battle = Balance.Data.Battle;
         if (!bosses.TryGetValue(battle.Boss, out BossConfig? boss))
         {
             Log.Error("battle-demo", $"boss_missing id={battle.Boss}");

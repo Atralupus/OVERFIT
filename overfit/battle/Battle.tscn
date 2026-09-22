@@ -1,9 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://battle/Battle.cs" id="1_battle"]
 [ext_resource type="Script" path="res://battle/view/FighterView.cs" id="2_fighter"]
 [ext_resource type="Script" path="res://battle/view/BossView.cs" id="3_boss"]
 [ext_resource type="Script" path="res://battle/view/BattleHud.cs" id="4_hud"]
+[ext_resource type="Script" path="res://battle/view/BattleResult.cs" id="5_result"]
 
 [node name="Battle" type="Node2D"]
 script = ExtResource("1_battle")
@@ -70,3 +71,73 @@ offset_top = 988.0
 offset_right = 464.0
 offset_bottom = 1012.0
 show_percentage = false
+
+; 결과 화면. HUD 보다 위 레이어라 체력바를 덮는다.
+; 이게 없던 때는 죽어도 게임이 끝나지 않았다 — 틱만 멈추고 렌더는 영원히 돌았다.
+[node name="ResultLayer" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="Result" type="Control" parent="ResultLayer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("5_result")
+
+[node name="Dim" type="ColorRect" parent="ResultLayer/Result"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.027451, 0.031373, 0.047059, 0.8)
+
+[node name="Box" type="VBoxContainer" parent="ResultLayer/Result"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -460.0
+offset_top = -190.0
+offset_right = 460.0
+offset_bottom = 190.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="Outcome" type="Label" parent="ResultLayer/Result/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "결과"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 96
+
+[node name="Detail" type="Label" parent="ResultLayer/Result/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.603922, 0.654902, 0.741176, 1)
+theme_override_font_sizes/font_size = 30
+
+[node name="Buttons" type="HBoxContainer" parent="ResultLayer/Result/Box"]
+layout_mode = 2
+theme_override_constants/separation = 36
+alignment = 1
+
+[node name="Again" type="Button" parent="ResultLayer/Result/Box/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "다시"
+
+[node name="Title" type="Button" parent="ResultLayer/Result/Box/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "타이틀"

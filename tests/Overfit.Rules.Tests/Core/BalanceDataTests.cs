@@ -23,6 +23,20 @@ public class BalanceDataTests
     }
 
     [Fact]
+    public void 연출_수치도_balance_json_에_있다()
+    {
+        // 뷰만 읽는 값이라 규칙 테스트가 하나도 안 건드린다 — 그래서 블록이 통째로 사라져도
+        // 조용하다. `required` 가 부팅을 멈추게 하지만, 그 실패는 Godot 을 띄워야만 보인다.
+        // 여기서 Godot 없이 초 단위로 본다.
+        BalanceData data = JsonData<BalanceData>.ParseOne(ReadData("balance.json"), "balance.json");
+
+        data.Feel.HitstopFrames.ShouldBeInRange(1, 20, "히트스톱이 프레임 단위를 벗어났다");
+        data.Feel.DashGhostInterval.ShouldBeGreaterThan(0, "잔상 간격이 0 이면 프레임마다 잔상이 쏟아진다");
+        data.Feel.SparkCount.ShouldBeGreaterThan(0);
+        data.Feel.DeathHoldSeconds.ShouldBeGreaterThan(0, "사망 애니메이션을 볼 시간이 없다");
+    }
+
+    [Fact]
     public void 밑줄로_시작하는_키는_주석이라_데이터로_세지_않는다()
     {
         List<string> keys = JsonData.TopLevelKeys(ReadData("balance.json"), "balance.json");

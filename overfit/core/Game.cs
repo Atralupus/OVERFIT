@@ -36,6 +36,22 @@ public partial class Game : Node
 
     public Scene Current { get; private set; } = Scene.Title;
 
+    /// <summary>
+    /// 지금 도는 단계. 이기면 오르고, 타이틀로 나가면 1로 돌아간다.
+    ///
+    /// <para>
+    /// <b>이것이 남은 유일한 진행 상태다.</b> 캐릭터 3택과 스탯 강화는 만들지 않는다(이슈 #22) —
+    /// 단계 진행은 성장 루프가 아니라 보스 설계의 축이라 남긴다: 단계가 오를수록 보스가 쓰는
+    /// 패턴이 늘고(2·3·5·7·10), 그 "패턴이 늘어난다" 가 게임 자체다.
+    /// </para>
+    ///
+    /// <para>
+    /// 씬이 아니라 여기(Autoload)에 둔다. 전투 씬은 다시 시작할 때마다 새로 만들어지므로
+    /// 씬 안에 두면 이긴 단계가 그 자리에서 사라진다.
+    /// </para>
+    /// </summary>
+    public int Stage { get; private set; } = 1;
+
     public override void _Ready()
     {
         // 로그 출력을 Godot 에 꽂는다. 모듈 초기화(LogSink.AutoInstall)가 이미 꽂았으므로 여기선 멱등이다 —
@@ -68,6 +84,20 @@ public partial class Game : Node
             AddChild(new Battle.Debug.BattleDemo());
         }
     }
+
+    /// <summary>
+    /// 단계를 옮긴다. <b>범위를 여기서 안 자른다</b> — 몇 단계가 있는지는
+    /// <c>data/stages.json</c> 이 알고, 그 파일을 읽는 것은 전투 씬이다.
+    /// 여기서 상한을 박으면 데이터와 코드에 같은 숫자가 둘이 된다.
+    /// </summary>
+    public void SetStage(int stage)
+    {
+        Stage = System.Math.Max(1, stage);
+        Log.Info("run", $"stage={Stage}");
+    }
+
+    /// <summary>판을 처음으로. 타이틀로 나갈 때 부른다 — 안 부르면 다음 판이 5단계에서 시작한다.</summary>
+    public void ResetRun() => SetStage(1);
 
     public void GoTo(Scene scene)
     {

@@ -341,7 +341,9 @@ cmd_smoke() {
   expect_log "$log" info '^\[scene\]\[I\] goto=Play$' "Play 씬으로 간 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] play ready$' "Play 씬의 스크립트가 안 붙었습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Battle$' "Battle 씬으로 간 흔적이 없습니다."
-  expect_log "$log" info '^\[scene\]\[I\] battle ready$' "Battle 씬의 스크립트가 안 붙었습니다."
+  # 단계까지 본다. "battle ready" 만 보면 단계 진행이 통째로 빠져도 초록이다 —
+  # 그 값은 Autoload 가 들고 있어서 씬만 떠서는 증명되지 않는다.
+  expect_log "$log" info '^\[scene\]\[I\] battle ready stage=[0-9]+ fighter=' "Battle 씬의 스크립트가 안 붙었거나 단계를 못 읽었습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Title$' "Title 로 돌아온 흔적이 없습니다."
   ok "스모크 통과 ($log)"
 }
