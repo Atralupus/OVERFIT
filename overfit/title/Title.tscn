@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://title/Title.cs" id="1_title"]
+[ext_resource type="PackedScene" path="res://ui/Backdrop.tscn" id="2_backdrop"]
 
 [node name="Title" type="Control"]
 layout_mode = 3
@@ -10,6 +11,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_title")
+
+; 타이틀도 전투와 같은 방을 보여준다. 첫 화면이 단색이면 "아직 아무것도 없다" 로 읽히는데,
+; 배경 한 벌을 씬으로 뽑아 뒀으므로(ui/Backdrop.tscn) 여기 한 줄이면 된다.
+[node name="Backdrop" parent="." instance=ExtResource("2_backdrop")]
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
