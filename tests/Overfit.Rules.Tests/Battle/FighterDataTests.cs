@@ -34,7 +34,24 @@ public class FighterDataTests
     {
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.ParryWindow.ShouldBeLessThan(c.ParryDuration, $"{id}: 패리 실패가 안 비싸면 의존도가 축이 안 된다");
+            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryDuration, $"{id}: 패리 실패가 안 비싸면 의존도가 축이 안 된다");
+        }
+    }
+
+    [Fact]
+    public void 패리_창_셋이_연타_정확_부정확_순으로_선다()
+    {
+        // 세 창의 **순서가 곧 규칙**이다 (이슈 #27).
+        // 연타 창이 정확 창보다 넓으면 난사가 벌이 아니라 상이 되고,
+        // 부정확 창이 정확 창보다 좁으면 "늦게 눌렀다" 가 다시 "아무것도 안 했다" 와 같은 점이 된다.
+        // 부정확 창은 패리 **행동**보다도 길어야 한다 — 행동이 끝난 뒤가 바로 그 늦은 자리다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.ParrySpamWindow.ShouldBeLessThan(c.ParryPreciseWindow, $"{id}: 연타 징벌이 창을 안 좁힌다");
+            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryImpreciseWindow, $"{id}: 정확 창이 부정확 창보다 넓다");
+            c.ParryDuration.ShouldBeLessThan(c.ParryImpreciseWindow, $"{id}: 부정확 창이 패리 행동 안에서 끝난다");
+            c.ParryInternalRatio.ShouldBeInRange(0, 1, $"{id}: 내상 비율이 0~1 이 아니다");
+            c.ParryLock.ShouldBeGreaterThan(0, $"{id}: 부정확 패리에 고정이 없다");
         }
     }
 

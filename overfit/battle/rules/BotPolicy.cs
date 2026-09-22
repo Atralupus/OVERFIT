@@ -19,8 +19,12 @@ namespace Overfit.Battle.Rules;
 /// </summary>
 public sealed class BotPolicy
 {
-    /// <summary>대시·패리를 걸 창(초). 무적창(0.14) · 패리창(0.10~0.12)보다 좁게 잡아
-    /// 판정이 서는 순간까지 창이 열려 있게 한다 — 일찍 걸면 판정 전에 창이 닫혀 그냥 맞는다.</summary>
+    /// <summary>
+    /// 대시·패리를 걸 창(초). 무적창(0.14) · <b>정확</b> 패리창(0.133)보다 좁게 잡아
+    /// 판정이 서는 순간까지 창이 열려 있게 한다 — 일찍 걸면 정확을 놓치고 부정확 패리가 된다
+    /// (그건 절반을 내상으로 받고 굳는다). 연타 징벌(이슈 #27)도 여기에 걸려 있다:
+    /// 이 창 안에서만 누르므로 누름은 거의 항상 무언가를 받아내고, 받아낸 누름은 사슬을 푼다.
+    /// </summary>
     private const double _lateReact = 0.10;
 
     private readonly ulong _seed;

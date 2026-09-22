@@ -17,8 +17,15 @@ public enum HitVerdict
     /// <summary>닿았지만 무적이 먹었다 — <b>대시로</b> 피한 것이다.</summary>
     Dodged,
 
-    /// <summary>닿았지만 패리가 받았다.</summary>
+    /// <summary>닿았지만 <b>정확</b> 패리가 받았다. 피해 0 · 보스 경직.</summary>
     Parried,
+
+    /// <summary>
+    /// 닿았고 <b>부정확</b> 패리가 받았다 — 늦게(또는 너무 일찍) 눌렀다. 피해의 절반을 내상으로
+    /// 받고 지상이면 굳는다. <b>이 값이 있어서 계측이 셋을 가른다</b>: 정확(Parried) ·
+    /// 늦음(ParriedLate) · 무반응(Hit + Verb=None). 전에는 뒤의 둘이 같은 점이었다.
+    /// </summary>
+    ParriedLate,
 }
 
 /// <summary>
@@ -65,11 +72,22 @@ public static class HitResolver
             return HitVerdict.Dodged;
         }
 
-        if (tags.Parryable
-            && fighter.Action == FighterAction.Parry
-            && Within(fighter.ActionElapsed, fighter.ParryWindow, tags.ParryWindow))
+        if (tags.Parryable)
         {
-            return HitVerdict.Parried;
+            // 창은 **행동이 아니라 누름**에 붙는다. 부정확 창(0.5초)이 패리 행동(0.26~0.34초)보다
+            // 길어서, 행동이 끝났으면 못 받는다고 하면 그 뒷부분이 통째로 사라진다 —
+            // 거기가 "늦게 눌렀다" 를 "아무것도 안 했다" 와 가르는 자리다.
+            if (Within(fighter.SinceParryPress, fighter.PreciseParryWindow, tags.ParryWindow))
+            {
+                return HitVerdict.Parried;
+            }
+
+            // 부정확 창은 패턴의 창과 안 견준다. 패턴의 parry_window 는 "얼마나 정확해야 하는가"
+            // 이고, 부정확 패리는 그 정확을 이미 놓친 자리이기 때문이다.
+            if (fighter.SinceParryPress < fighter.ImpreciseParryWindow)
+            {
+                return HitVerdict.ParriedLate;
+            }
         }
 
         return HitVerdict.Hit;

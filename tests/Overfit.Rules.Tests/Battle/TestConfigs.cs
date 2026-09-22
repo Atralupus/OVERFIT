@@ -29,7 +29,11 @@ public static class TestConfigs
         DashDuration = 0.18,
         DashIFrames = 0.14,
         DashCost = 25,
-        ParryWindow = 0.12,
+        ParryPreciseWindow = 0.133,
+        ParryImpreciseWindow = 0.5,
+        ParrySpamWindow = 0.1,
+        ParryLock = 0.6,
+        ParryInternalRatio = 0.5,
         ParryDuration = 0.30,
         ParryCost = 15,
         AttackWindup = 0.08,
@@ -76,6 +80,7 @@ public static class TestConfigs
             MoveSpeed = moveSpeed ?? data.MoveSpeed,
             HalfWidth = data.HalfWidth,
             PatternGap = patternGap ?? data.PatternGap,
+            StaggerSeconds = data.StaggerSeconds,
             Sprite = data.Sprite,
         };
     }

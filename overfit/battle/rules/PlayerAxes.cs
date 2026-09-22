@@ -47,6 +47,11 @@ public sealed class PlayerAxes
     /// </summary>
     public double AirborneAtImpactRatio { get; private init; }
 
+    /// <summary>
+    /// 패리 <b>성공</b>률. 분자는 <b>정확</b> 패리뿐이다 — 부정확 패리는 절반을 내상으로 받고
+    /// 굳으므로 "막았다" 로 세면 두 결과가 한 점이 된다. 부정확의 수는
+    /// <see cref="ParryLateSamples"/> 가 따로 나른다 (축이 아니라 개수다).
+    /// </summary>
     public double ParryRate { get; private init; }
 
     /// <summary><b>다른 수단이 있는데</b> 패리를 고른 비율 (스펙 8절). <c>JumpReliance</c> 와 같은 셈법이다.</summary>
@@ -70,6 +75,13 @@ public sealed class PlayerAxes
     public int ParrySamples { get; private init; }
 
     /// <summary>
+    /// 그중 <b>부정확</b> 패리로 받아낸 수. 정확(<c>ParryRate</c> 의 분자) · 부정확(여기) ·
+    /// 무반응(둘 다 아님)이 셋으로 갈리는 자리다 — 전에는 뒤의 둘이 같은 점이었다(이슈 #27).
+    /// <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
+    /// </summary>
+    public int ParryLateSamples { get; private init; }
+
+    /// <summary>
     /// 점프가 가능했고 <b>다른 수단도 가능했던</b> 관측 수 — <c>JumpReliance</c> 의 분모다.
     /// 의존도는 부분집합의 부분집합이라 <c>Samples</c> 도 <c>JumpSamples</c> 도 이 얇기를 안 말해준다.
     /// </summary>
@@ -89,7 +101,7 @@ public sealed class PlayerAxes
         var dashErrors = new List<double>();
         var jumpErrors = new List<double>();
         int dashes = 0, jumps = 0, parries = 0, parried = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
-        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0;
+        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0, parriedLate = 0;
         double distance = 0;
 
         foreach (DodgeEvent e in events)
@@ -151,6 +163,10 @@ public sealed class PlayerAxes
                     {
                         parried++;
                     }
+                    else if (e.Verdict == HitVerdict.ParriedLate)
+                    {
+                        parriedLate++;
+                    }
 
                     break;
                 default:
@@ -174,6 +190,7 @@ public sealed class PlayerAxes
             DashSamples = dashes,
             JumpSamples = jumps,
             ParrySamples = parries,
+            ParryLateSamples = parriedLate,
             JumpChoiceSamples = jumpChoices,
             ParryChoiceSamples = parryChoices,
         };

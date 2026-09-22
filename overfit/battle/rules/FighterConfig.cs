@@ -29,8 +29,31 @@ public sealed class FighterConfig
 
     public required double DashCost { get; init; }
 
-    /// <summary>막아주는 창. <see cref="ParryDuration"/> 보다 짧다 — 실패가 비싸야 패리 의존도가 축이 된다.</summary>
-    public required double ParryWindow { get; init; }
+    /// <summary>
+    /// <b>정확</b> 패리의 창. 적중 이 시간 안에 눌렀으면 피해 0 · 보스 경직 · 기 +1 이다.
+    /// <see cref="ParryDuration"/> 보다 짧다 — 실패가 비싸야 패리 의존도가 축이 된다.
+    /// </summary>
+    public required double ParryPreciseWindow { get; init; }
+
+    /// <summary>
+    /// <b>부정확</b> 패리의 창. 정확 창을 놓쳤어도 이 안이면 피해의 <see cref="ParryInternalRatio"/> 만
+    /// 내상으로 받는다. 이 창이 있는 이유는 게임 감각만이 아니다 — "늦게 눌렀다" 와 "아무것도 안 했다" 가
+    /// 지금까지 같은 점(<c>Verb=None · TimingError=0</c>)이었고, 이 중간 단계가 그 둘을 갈라 준다.
+    /// <b>패리 행동(<see cref="ParryDuration"/>)보다 길다</b> — 그래서 창은 행동이 아니라 누름에 붙는다.
+    /// </summary>
+    public required double ParryImpreciseWindow { get; init; }
+
+    /// <summary>
+    /// 연타 징벌로 좁아진 정확 창. 앞 누름의 부정확 창 안에서 또 누르면 두 번째 누름이 이 창을 쓰고,
+    /// 세 번째부터는 정확 창이 아예 없다(부정확만 가능).
+    /// </summary>
+    public required double ParrySpamWindow { get; init; }
+
+    /// <summary>부정확 패리로 받아냈을 때 지상에서 굳는 시간(초). 공중에서는 안 굳는다.</summary>
+    public required double ParryLock { get; init; }
+
+    /// <summary>부정확 패리가 내상으로 받는 피해 비율.</summary>
+    public required double ParryInternalRatio { get; init; }
 
     public required double ParryDuration { get; init; }
 

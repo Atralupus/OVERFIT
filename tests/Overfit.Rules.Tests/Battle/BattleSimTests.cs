@@ -671,6 +671,124 @@ public class BattleSimTests
         e.JumpAvailable.ShouldBeFalse("jumpable=false 인데 점프가 가능했다고 실렸다");
     }
 
+    // ── 2단계 패리와 계측 (이슈 #27) ─────────────────────────────────────────
+
+    /// <summary>
+    /// 패리 가능한 판정 하나를 <paramref name="pressAt"/> 틱에 패리해 보고, 그 관측과
+    /// <b>판정이 선 틱</b>을 같이 돌려준다. 그 틱을 손으로 안 적는 이유는 간격 소진이
+    /// 부동소수 누적에 걸려 한 틱씩 밀릴 수 있기 때문이다 — 박아 두면 타임라인을 건드릴 때마다
+    /// 무관한 실패가 난다.
+    /// </summary>
+    private static (DodgeEvent Event, int Tick) ParryAt(int? pressAt)
+    {
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 24 * BattleSim.Dt));
+
+        for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(0, false, false, Parry: i == pressAt, false));
+        }
+
+        return (sim.Events.Single(), sim.Ticks);
+    }
+
+    [Fact]
+    public void 정확_부정확_무반응이_서로_다른_관측이_된다()
+    {
+        // **이 브랜치가 답하는 숙제다.** 전에는 "늦게 눌렀다" 와 "아무것도 안 했다" 가 같은 점
+        // (Verb=None · TimingError=0)이었다 — 패리 행동이 끝나면 시작 시각이 사라졌기 때문이다.
+        // 부정확 단계가 그 중간을 만들고, 계측이 셋을 가른다. 셋이 다시 뭉치면 여기서 빨개진다.
+        const int early = 12;
+        (DodgeEvent precise, int hitTick) = ParryAt(26);   // 판정 코앞 — 정확 창(0.133) 안
+        (DodgeEvent late, _) = ParryAt(early);             // 0.2초쯤 전 — 정확은 놓쳤고 부정확 창 안
+        (DodgeEvent none, _) = ParryAt(null);              // 아무것도 안 했다
+
+        precise.Verdict.ShouldBe(HitVerdict.Parried);
+        precise.Verb.ShouldBe(DodgeVerb.Parry);
+        precise.TimingError.ShouldBe((26 - hitTick) * BattleSim.Dt, 1e-9);
+
+        late.Verdict.ShouldBe(HitVerdict.ParriedLate);
+        late.Verb.ShouldBe(DodgeVerb.Parry, "부정확도 고른 수단은 패리다 — 의존도 축의 분자가 그것이다");
+        late.TimingError.ShouldBe((early - hitTick) * BattleSim.Dt, 1e-9);
+        late.TimingError.ShouldBeLessThan(-TestConfigs.Fighter().ParryPreciseWindow,
+            "정확 창 안에서 누른 것이 부정확으로 기록됐다 — 이 테스트가 중간 단계를 안 본다");
+
+        none.Verdict.ShouldBe(HitVerdict.Hit);
+        none.Verb.ShouldBe(DodgeVerb.None);
+        none.TimingError.ShouldBe(0);
+
+        // 셋이 **서로 다른 점**인지 직접 못박는다. 하나씩 보면 다 맞는데 둘이 같은 값으로
+        // 뭉쳐 있는 실패가 실제로 있었다.
+        var points = new HashSet<(HitVerdict, DodgeVerb, double)>
+        {
+            (precise.Verdict, precise.Verb, precise.TimingError),
+            (late.Verdict, late.Verb, late.TimingError),
+            (none.Verdict, none.Verb, none.TimingError),
+        };
+        points.Count.ShouldBe(3, "정확 · 부정확 · 무반응이 같은 점으로 뭉쳤다");
+
+        // 축 집계까지 따라가는지도 본다 — 관측이 갈려도 집계가 뭉치면 망은 못 본다.
+        PlayerAxes axes = PlayerAxes.From(new[] { precise, late, none });
+        axes.ParrySamples.ShouldBe(2);
+        axes.ParryLateSamples.ShouldBe(1);
+        axes.ParryRate.ShouldBe(0.5, 1e-9, "부정확을 성공으로 세면 패리 성공률이 거짓이 된다");
+    }
+
+    [Fact]
+    public void 부정확_패리는_절반만_맞고_굳는다()
+    {
+        // 피해가 그대로면 "받아냈다" 가 관측에만 있고 판에는 없는 말이 된다.
+        (DodgeEvent late, _) = ParryAt(12);
+        late.Verdict.ShouldBe(HitVerdict.ParriedLate);
+
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 24 * BattleSim.Dt));
+        for (int i = 1; i <= 30; i++)
+        {
+            sim.Tick(new InputFrame(0, false, false, Parry: i == 12, false));
+        }
+
+        // OneHit 의 피해는 5 — 절반은 반올림해 3 이다.
+        sim.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth - 3);
+        sim.Fighter.InternalDamage.ShouldBe(3);
+        sim.Fighter.Locked.ShouldBeTrue();
+        sim.Fighter.Qi.ShouldBe(1);
+    }
+
+    [Fact]
+    public void 정확_패리는_보스를_굳히고_공중_대시를_돌려준다()
+    {
+        // 보상 구조의 두 반쪽이다 (나인 솔즈). 굳는 동안 보스는 걷지도 타임라인을 밀지도 않는다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 24 * BattleSim.Dt));
+
+        for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(0, false, false, Parry: i == 24, false));
+        }
+
+        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
+        sim.Boss.Staggered.ShouldBeTrue();
+        sim.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth, "정확 패리인데 깎였다");
+
+        double bossX = sim.Boss.X;
+        for (int i = 0; i < 20; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Boss.X.ShouldBe(bossX, 1e-9, "굳었는데 보스가 걸었다");
+    }
+
     [Fact]
     public void 한_번의_대시가_연속타_두_대를_모두_설명한다()
     {

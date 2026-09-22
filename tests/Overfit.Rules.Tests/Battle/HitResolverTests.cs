@@ -173,19 +173,27 @@ public class HitResolverTests
 
         Fighter late = Acting(parry, 4);
         late.Parrying.ShouldBeTrue("파이터 창은 아직 열려 있어야 이 테스트가 좁은 쪽을 본다");
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Hit);
+
+        // **정확**을 잃는다. 패턴이 요구하는 정밀도를 못 맞췄으니 정확 패리는 아니고,
+        // 누른 지 0.5초를 안 넘겼으니 부정확 패리로 받아낸다(이슈 #27) — 전에는 그냥 맞았다.
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.ParriedLate);
     }
 
     [Fact]
     public void 패턴_창이_더_넓으면_파이터_창이_이긴다()
     {
-        // 좁은 쪽이 이긴다는 것은 양방향이다. 패턴이 넉넉해도 파이터의 창이 닫혔으면 맞는다 —
-        // 안 그러면 패턴 태그가 캐릭터 차이를 지워 버린다.
+        // 좁은 쪽이 이긴다는 것은 양방향이다. 패턴이 넉넉해도 파이터의 정확 창이 닫혔으면
+        // 정확 패리가 아니다 — 안 그러면 패턴 태그가 캐릭터 차이를 지워 버린다.
         InputFrame parry = new(0, false, false, true, false);
-        Fighter late = Acting(parry, 9);   // 0.15 > 중검의 0.12
+        Fighter late = Acting(parry, 9);   // 0.15 > 기준 파이터의 정확 창 0.133
 
         late.Parrying.ShouldBeFalse();
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.ParriedLate);
+
+        // 부정확 창(0.5초)까지 넘기면 그때야 그냥 맞는다. 이 줄이 없으면 "늦으면 늘 받아낸다" 가
+        // 되어 패리에 실패가 없어진다.
+        Fighter tooLate = Acting(parry, 31);   // 0.5167 > 0.5
+        HitResolver.Resolve(tooLate, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]

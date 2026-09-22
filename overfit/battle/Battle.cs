@@ -420,7 +420,10 @@ public partial class Battle : Node2D
             Pose(),
             _sim.Fighter.Invulnerable,
             _sim.Fighter.Parrying,
-            _sim.Fighter.ParryWindow <= 0 ? 0 : _sim.Fighter.ActionElapsed / _sim.Fighter.ParryWindow));
+            _sim.Fighter.PreciseParryWindow <= 0
+                ? 0
+                : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
+            _sim.Fighter.Locked));
 
         _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn);
 

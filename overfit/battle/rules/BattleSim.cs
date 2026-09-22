@@ -171,9 +171,16 @@ public sealed class BattleSim
     /// </summary>
     private double Standoff => Boss.HalfWidth + Fighter.HalfWidth;
 
-    /// <summary>보스: 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
+    /// <summary>보스: 굳었으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
     private void AdvanceBoss()
     {
+        // 경직 시계만은 굳어 있어도 돈다 — 아니면 안 풀린다.
+        Boss.Tick(Dt);
+        if (Boss.Staggered)
+        {
+            return;
+        }
+
         if (_runner is null)
         {
             _gapLeft -= Dt;
@@ -257,11 +264,15 @@ public sealed class BattleSim
             _dashDirection = 0;
         }
 
-        if (Fighter.Action == FighterAction.Parry && Fighter.ActionElapsed <= Dt)
+        // 패리 칸은 **행동이 아니라 누름**을 따라 산다. 부정확 창(0.5초)이 패리 행동(0.30초)보다
+        // 길어서, 행동이 끝날 때 지우면 늦게 누른 패리가 판정을 받아낸 바로 그 순간에
+        // 시작 시각이 사라진다 — TimingError 가 0 이 되어 "아무것도 안 했다" 와 같은 점이 된다.
+        // 그 붕괴를 없애려고 만든 것이 부정확 단계인데, 그러면 아무것도 안 고친 셈이 된다.
+        if (Fighter.SinceParryPress <= Dt)
         {
             _parryStartedAt = now;
         }
-        else if (Fighter.Action != FighterAction.Parry)
+        else if (Fighter.SinceParryPress > Fighter.ImpreciseParryWindow)
         {
             _parryStartedAt = double.NaN;
         }
@@ -284,7 +295,11 @@ public sealed class BattleSim
     private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict) => verdict switch
     {
         HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
-        HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
+
+        // 정확이든 부정확이든 **받아낸 것은 패리다.** 둘의 차이는 verb 가 아니라 판정(Verdict)이
+        // 나른다 — verb 를 갈라 놓으면 parry_reliance("다른 수단이 있는데 패리를 골랐나")가
+        // 늦게 누른 패리를 "패리를 안 골랐다" 로 세게 된다. 고른 것은 같고 결과가 다르다.
+        HitVerdict.Parried or HitVerdict.ParriedLate => (DodgeVerb.Parry, _parryStartedAt),
 
         // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에
         // 그냥 서 있었던 것이다 — 후자를 점프로 세면 jump_reliance 가 **정반대 행동**으로 부푼다.
@@ -335,9 +350,24 @@ public sealed class BattleSim
     private void Land(HitBox box)
     {
         HitVerdict verdict = HitResolver.Resolve(Fighter, Boss.X, box, _current!.Tags);
-        if (verdict == HitVerdict.Hit)
+        switch (verdict)
         {
-            Fighter.TakeDamage(box.Damage);
+            case HitVerdict.Hit:
+                Fighter.TakeDamage(box.Damage);
+                break;
+
+            case HitVerdict.Parried:
+                // 보스를 굳히는 것은 여기다 — 파이터는 보스를 모른다.
+                Fighter.ParryPrecise();
+                Boss.Stagger();
+                break;
+
+            case HitVerdict.ParriedLate:
+                Fighter.ParryImprecise(box.Damage);
+                break;
+
+            default:
+                break;
         }
 
         double now = Ticks * Dt;
@@ -363,8 +393,11 @@ public sealed class BattleSim
 
         // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
+        // qi 를 같이 찍는다. 정확·부정확이 둘 다 기를 주므로 이 줄만 보고 "받아냈나" 를 셀 수 있고,
+        // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
         Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
-            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}");
+            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}"
+            + $" qi={Fighter.Qi}");
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
