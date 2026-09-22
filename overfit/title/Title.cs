@@ -27,6 +27,7 @@ public partial class Title : Control
     {
         Log.Info("scene", "title ready");
         GetNode<Button>("%StartButton").Pressed += OnStartPressed;
+        GetNode<Button>("%CreditsButton").Pressed += OnCreditsPressed;
         FillControls(GetNode<GridContainer>("%Controls"));
     }
 
@@ -34,6 +35,12 @@ public partial class Title : Control
     {
         Log.Info("scene", "title action=start");
         Game.Instance.GoTo(Game.Scene.Battle);
+    }
+
+    private static void OnCreditsPressed()
+    {
+        Log.Info("scene", "title action=credits");
+        Game.Instance.GoTo(Game.Scene.Credits);
     }
 
     /// <summary>InputMap 을 읽어 "이름 → 키" 두 칸짜리 줄들을 채운다.</summary>

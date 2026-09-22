@@ -48,8 +48,16 @@ public partial class Balance : Node
         }
     }
 
-    /// <summary><c>res://</c> 파일을 문자열로. 못 읽으면 <see cref="DataException"/>.</summary>
-    private static string ReadText(string path)
+    /// <summary>
+    /// <c>res://</c> 파일을 문자열로. 못 읽으면 <see cref="DataException"/>.
+    ///
+    /// <para>
+    /// <b>public 인 이유:</b> 여기가 "Godot 이 파일을 읽고, Godot 을 모르는 <see cref="JsonData{T}"/> 가 파싱한다" 는
+    /// 경계 그 자체다. 데이터 파일을 읽는 다른 화면(크레딧)이 같은 네 줄을 다시 쓰면
+    /// Android 의 <c>res://</c> 처럼 플랫폼 사정이 바뀔 때 고칠 곳이 둘이 된다.
+    /// </para>
+    /// </summary>
+    public static string ReadText(string path)
     {
         using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
         if (file is null)

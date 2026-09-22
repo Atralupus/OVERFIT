@@ -344,6 +344,10 @@ cmd_smoke() {
   # 단계까지 본다. "battle ready" 만 보면 단계 진행이 통째로 빠져도 초록이다 —
   # 그 값은 Autoload 가 들고 있어서 씬만 떠서는 증명되지 않는다.
   expect_log "$log" info '^\[scene\]\[I\] battle ready stage=[0-9]+ fighter=' "Battle 씬의 스크립트가 안 붙었거나 단계를 못 읽었습니다."
+  # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
+  # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
+  expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."
+  expect_log "$log" debug '^\[credits\]\[D\] entries=[1-9][0-9]* ' "크레딧 화면이 항목을 하나도 못 세웠습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Title$' "Title 로 돌아온 흔적이 없습니다."
   ok "스모크 통과 ($log)"
 }

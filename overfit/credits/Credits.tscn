@@ -1,0 +1,62 @@
+[gd_scene load_steps=3 format=3]
+
+; 크레딧 화면의 **틀**만 있다. 팩 목록은 Credits.cs 가 data/credits.json 을 읽어 채운다 —
+; 씬에 이름과 링크를 적어 두면 데이터와 화면이 두 곳이 되고, 팩이 바뀌는 날 한쪽만 고쳐진다.
+
+[ext_resource type="Script" path="res://credits/Credits.cs" id="1_credits"]
+[ext_resource type="PackedScene" path="res://ui/Backdrop.tscn" id="2_backdrop"]
+
+[node name="Credits" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_credits")
+
+[node name="Backdrop" parent="." instance=ExtResource("2_backdrop")]
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 120
+theme_override_constants/margin_top = 90
+theme_override_constants/margin_right = 120
+theme_override_constants/margin_bottom = 90
+
+[node name="Box" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="Heading" type="Label" parent="Margin/Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "크레딧"
+
+; CC0 는 표시 의무가 없다. 왜 그래도 적는지를 화면에서 한 줄로 말한다 —
+; 이 줄이 없으면 크레딧이 의무를 때우는 화면으로 읽힌다.
+[node name="Why" type="Label" parent="Margin/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.65, 0.74, 1)
+theme_override_font_sizes/font_size = 24
+text = "이 게임에 얼굴이 있는 것은 아래 사람들 덕이다. 전부 CC0 — 표시 의무는 없지만 적는다.
+링크를 누르면 받는 곳이 열린다."
+
+; 여기부터 Credits.cs 가 채운다. 항목 사이가 붙으면 네 팩이 한 덩어리로 읽힌다.
+[node name="Entries" type="VBoxContainer" parent="Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 30
+
+[node name="BackButton" type="Button" parent="Margin/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 72)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "돌아가기"

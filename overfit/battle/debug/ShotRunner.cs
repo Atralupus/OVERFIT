@@ -40,6 +40,13 @@ public partial class ShotRunner : Node
         await Wait(0.6);
         await Screenshot.CaptureAsync(this, "title");
 
+        // 크레딧도 찍는다. 이 화면은 data/credits.json 을 읽어 **자기가 짓는** 화면이라
+        // 항목이 늘면 줄이 늘고 링크가 길면 잘린다 — 그 종류의 실패는 로그에 안 남는다.
+        // 이 저장소는 화면의 실패를 여러 번 스크린샷에서 처음 봤다.
+        Game.Instance.GoTo(Game.Scene.Credits);
+        await Frames(6);
+        await Screenshot.CaptureAsync(this, "credits");
+
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
