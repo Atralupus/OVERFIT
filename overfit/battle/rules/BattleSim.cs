@@ -395,9 +395,11 @@ public sealed class BattleSim
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
         // qi 를 같이 찍는다. 정확·부정확이 둘 다 기를 주므로 이 줄만 보고 "받아냈나" 를 셀 수 있고,
         // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
+        // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
+        // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
         Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
-            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded} hp={Fighter.Health}"
-            + $" qi={Fighter.Qi}");
+            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded}"
+            + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}");
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>

@@ -33,6 +33,9 @@ public partial class Battle : Node2D
     // 수치는 데이터(fighters.json · bosses.json)에 있고, 뷰는 그것을 베끼지 않는다.
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
+
+    /// <summary>패턴 표. 뷰가 <b>태그</b>(지금은 parryable)를 그리는 데만 쓴다 — 규칙은 시뮬레이션이 본다.</summary>
+    private Dictionary<string, PatternDef> _patterns = null!;
     private FeelBalance _feel = null!;
 
     private int _stage;
@@ -116,6 +119,7 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
+        _patterns = patterns;
 
         // 단계는 Autoload 가 들고 있다 — 씬은 다시 시작할 때마다 새로 만들어지므로 여기 두면 사라진다.
         _stage = Game.Instance.Stage;
@@ -259,9 +263,15 @@ public partial class Battle : Node2D
 
             for (int i = _lastEventCount; i < _sim.Events.Count; i++)
             {
+                // 정확과 부정확은 **다른 피드백**이어야 한다. 히트스톱은 정확에만 준다 —
+                // 시간을 세우는 것은 "완전히 받아냈다" 의 표현이고, 절반 흘린 것에 주면 거짓말이다.
                 if (_sim.Events[i].Verdict == HitVerdict.Parried)
                 {
                     ParryLanded();
+                }
+                else if (_sim.Events[i].Verdict == HitVerdict.ParriedLate)
+                {
+                    _fighterView.ParryImprecise();
                 }
             }
 
@@ -425,7 +435,14 @@ public partial class Battle : Node2D
                 : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
             _sim.Fighter.Locked));
 
-        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn);
+        // 패리 불가 패턴은 크림슨으로 예고한다(이슈 #27 · 나인 솔즈의 관례).
+        // 태그가 없으면(패턴이 안 도는 중) 받아칠 수 있는 쪽으로 둔다 — 쉬는 보스를 붉게 칠하면
+        // "지금 뭔가 온다" 는 거짓말이 된다.
+        bool parryable = _sim.Boss.CurrentPattern is not string id
+            || !_patterns.TryGetValue(id, out PatternDef? def)
+            || def.Tags.Parryable;
+
+        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, parryable);
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
