@@ -19,11 +19,45 @@ public class PlayerAxesTests
         bool airborne = false,
         double distance = 200,
         bool greedWindow = false,
+        int chargeTier = 0,
         bool dashAvailable = true,
         bool jumpAvailable = true,
         bool parryAvailable = true) =>
-        new("내려찍기 3연", verb, verdict, timingError, direction, airborne, distance, greedWindow,
+        new("내려찍기 3연", verb, verdict, timingError, direction, airborne, distance, greedWindow, chargeTier,
             dashAvailable, jumpAvailable, parryAvailable);
+
+    [Fact]
+    public void 욕심_축은_모으고_선_것도_센다()
+    {
+        // 차지는 **더 오래 서 있는 공격**이라 정확히 이 축의 이야기다 (이슈 #40).
+        // GreedWindow 를 만드는 쪽(BattleSim)이 차지도 참으로 두므로 여기서는 비율만 본다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(greedWindow: true, chargeTier: 2),
+            Event(greedWindow: true),
+            Event(greedWindow: false),
+            Event(greedWindow: false),
+        });
+
+        axes.Greed.ShouldBe(0.5, 0.001);
+    }
+
+    [Fact]
+    public void 모으고_맞은_판정은_따로_센다()
+    {
+        // 축이 아니라 **개수**다 (parry_late_n 과 같은 자리). 비율만으로는 "휘두르다 맞았다" 와
+        // "2초를 모으고 서 있다 맞았다" 가 한 점이 되는데, 그 둘은 위험의 크기가 다르다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(greedWindow: true, chargeTier: 2),
+            Event(greedWindow: true, chargeTier: 1),
+            Event(greedWindow: true, chargeTier: 0),
+            Event(greedWindow: false, chargeTier: 0),
+        });
+
+        axes.Greed.ShouldBe(0.75, 0.001);
+        axes.ChargedGreedSamples.ShouldBe(2);
+    }
 
     [Fact]
     public void 이벤트가_없으면_축이_전부_0_이다()

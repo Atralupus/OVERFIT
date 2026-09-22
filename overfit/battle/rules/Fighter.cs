@@ -175,6 +175,17 @@ public sealed class Fighter
     /// <summary>차지 단계의 수. 봇이 단계를 고를 때 쓴다 — 수치를 봇 쪽에 베끼지 않는다.</summary>
     public int ChargeTierCount => _config.ChargeTiers.Count;
 
+    /// <summary>그 단계에 닿는 데 걸리는 시간(초). 범위를 벗어난 번호는 양 끝으로 접는다.</summary>
+    public double ChargeTierSeconds(int tier) =>
+        _config.ChargeTiers[Math.Clamp(tier, 0, _config.ChargeTiers.Count - 1)].Seconds;
+
+    /// <summary>
+    /// 지금 휘두르면 칼이 닿기까지 걸리는 시간(초) — 선딜 + 판정이다.
+    /// 봇이 "지금 놓아도 판정 전에 닿나" 를 이것으로 잰다. 수치를 봇 쪽에 베끼면
+    /// 공격 타이밍을 그림에 맞출 때마다(이슈 #38) 봇만 옛 값으로 남는다.
+    /// </summary>
+    public double AttackLead => _config.AttackWindup + _config.AttackActive;
+
     /// <summary>최대 차지 시간(초). <b>마지막 단계의 시간이 곧 그것</b>이라 데이터에 따로 없다.</summary>
     public double ChargeMaxSeconds => _config.ChargeTiers[^1].Seconds;
 

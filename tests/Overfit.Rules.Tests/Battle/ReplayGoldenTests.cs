@@ -62,6 +62,9 @@ public class ReplayGoldenTests
             text.Append(CultureInfo.InvariantCulture, $"{e.PatternId}|{e.Verb}|{e.Verdict}|");
             text.Append(CultureInfo.InvariantCulture, $"{e.TimingError:0.0000}|{e.Direction}|");
             text.Append(CultureInfo.InvariantCulture, $"{e.Airborne}|{e.Distance:0.000}|{e.GreedWindow}|");
+            // 차지 단계도 넣는다 (이슈 #40). 이 스크립트는 한 번도 안 모으므로 값은 전부 0 이지만,
+            // 빼 두면 "모으고 맞았다" 가 골든 밖이 되어 배수 규칙을 통째로 바꿔도 초록이다.
+            text.Append(CultureInfo.InvariantCulture, $"{e.ChargeTier}|");
             // 가능했던 수단도 넣는다. 패턴 id 에서 따라 나오는 값처럼 보이지만, patterns.json 의
             // 태그를 고치면 id 는 그대로인 채 의존도 축의 분모가 통째로 달라진다 —
             // 다이제스트에서 빼면 그 변화가 골든 밖이 된다.

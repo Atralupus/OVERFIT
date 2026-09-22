@@ -88,6 +88,35 @@ public class BotPolicyTests
     }
 
     [Fact]
+    public void 봇도_차지를_낸다()
+    {
+        // **입력 계약은 사람과 봇이 같이 쓰는 통로다.** 사람만 차지할 수 있으면 나중에 망이
+        // "차지가 없는 전투" 를 배우고, 그 데이터는 사람에게 아무 의미가 없다 (이슈 #40).
+        // 그래서 봇이 실제로 모아서 휘두르는지를 본다 — 계약에 칸이 있는지가 아니라.
+        var sim = new BattleSim(Setup(51));
+        var bot = new BotPolicy(51);
+        var swings = new HashSet<int>();
+        bool charged = false;
+
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(bot.Next(sim));
+            charged |= sim.Fighter.Charging;
+
+            // 칼이 나가는 틱의 단계가 곧 "얼마를 모아서 휘둘렀나" 다.
+            if (sim.Fighter.AttackActive)
+            {
+                swings.Add(sim.Fighter.ChargeTier);
+            }
+        }
+
+        charged.ShouldBeTrue("봇이 한 번도 안 모았다");
+        swings.ShouldContain(0, "봇이 그냥 누르는 공격을 아예 안 낸다");
+        swings.Count.ShouldBeGreaterThan(1, $"봇이 낸 차지 단계가 {string.Join(",", swings)} 뿐이다 — 한 종류면 차지가 데이터에 없는 것과 같다");
+    }
+
+    [Fact]
     public void 같은_시드는_같은_판을_만든다()
     {
         (BattleOutcome a, BattleSim simA) = Play(51);
