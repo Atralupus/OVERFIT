@@ -1,7 +1,10 @@
-[gd_resource type="Theme" load_steps=4 format=3]
+[gd_resource type="Theme" load_steps=7 format=3]
 
 ; 이 저장소의 유일한 시각 기준. 색·폰트 크기·여백은 여기서만 정의한다.
 ; 씬에서 theme_override_* 로 덮는 것은 "그 씬에서만 다를 이유"가 있을 때뿐이다.
+;
+; 바 색이 종류마다 다를 때는 **타입 변형**(<이름>/base_type)을 쓴다. 씬은 theme_type_variation 으로
+; 이름만 고르고 색은 여기 남는다 — theme_override_styles 로 씬마다 칠하면 색을 아는 곳이 흩어진다.
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_normal"]
 content_margin_left = 28.0
@@ -46,6 +49,36 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+; 바의 **빈 쪽**. 채움과 같은 계열이면 남은 양이 안 읽히므로 확실히 어둡게 둔다 —
+; 회색 기본값이 그대로 나왔을 때 화면이 디버깅 화면처럼 보인 원인이 이 대비의 부재였다.
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_track"]
+bg_color = Color(0.0862745, 0.0745098, 0.105882, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.243137, 0.278431, 0.360784, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+; 체력 = 빨강. ProgressBar 의 기본값이라 체력바는 아무것도 안 골라도 이 색이 된다.
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_health"]
+bg_color = Color(0.827451, 0.211765, 0.196078, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+; 스태미나 = 초록. 체력과 **색상환에서 멀어야** 곁눈으로도 구별된다.
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_stamina"]
+bg_color = Color(0.356863, 0.807843, 0.415686, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
 [resource]
 default_font_size = 28
 Button/colors/font_color = Color(0.878431, 0.901961, 0.941176, 1)
@@ -56,3 +89,13 @@ Button/styles/hover = SubResource("StyleBoxFlat_button_hover")
 Button/styles/normal = SubResource("StyleBoxFlat_button_normal")
 Button/styles/pressed = SubResource("StyleBoxFlat_button_pressed")
 Label/colors/font_color = Color(0.878431, 0.901961, 0.941176, 1)
+ProgressBar/styles/background = SubResource("StyleBoxFlat_bar_track")
+ProgressBar/styles/fill = SubResource("StyleBoxFlat_bar_health")
+StaminaBar/base_type = &"ProgressBar"
+StaminaBar/styles/background = SubResource("StyleBoxFlat_bar_track")
+StaminaBar/styles/fill = SubResource("StyleBoxFlat_bar_stamina")
+BarNumber/base_type = &"Label"
+BarNumber/colors/font_color = Color(1, 1, 1, 1)
+BarNumber/colors/font_outline_color = Color(0.027451, 0.031373, 0.047059, 1)
+BarNumber/constants/outline_size = 10
+BarNumber/font_sizes/font_size = 34

@@ -1,23 +1,101 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://battle/Battle.cs" id="1_battle"]
 [ext_resource type="Script" path="res://battle/view/FighterView.cs" id="2_fighter"]
 [ext_resource type="Script" path="res://battle/view/BossView.cs" id="3_boss"]
 [ext_resource type="Script" path="res://battle/view/BattleHud.cs" id="4_hud"]
 [ext_resource type="Script" path="res://battle/view/BattleResult.cs" id="5_result"]
+[ext_resource type="PackedScene" path="res://ui/Backdrop.tscn" id="6_backdrop"]
+
+; 바닥 덩어리. 위가 밝고 아래로 갈수록 어두워져 "선" 이 아니라 "땅" 이 된다.
+[sub_resource type="Gradient" id="Gradient_slab"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(0.094118, 0.105882, 0.164706, 1, 0.054902, 0.062745, 0.101961, 1, 0.023529, 0.027451, 0.043137, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_slab"]
+gradient = SubResource("Gradient_slab")
+width = 4
+height = 256
+fill_from = Vector2(0, 0)
+fill_to = Vector2(0, 1)
 
 [node name="Battle" type="Node2D"]
 script = ExtResource("1_battle")
+
+; 배경은 ui/Backdrop.tscn 한 벌을 타이틀과 같이 쓴다. CanvasLayer(layer = -1)라 World 보다 뒤에 그려지고,
+; World 밖이라 화면 흔들림을 안 탄다 — 먼 배경이 앞의 것과 똑같이 흔들리면 거리감이 사라진다.
+[node name="Backdrop" parent="." instance=ExtResource("6_backdrop")]
 
 [node name="World" type="Node2D" parent="."]
 ; 규칙의 y 는 위가 +이고 바닥이 0 이다. 화면은 아래가 +라 뷰가 -y 로 뒤집고,
 ; 이 노드를 내려 바닥을 화면 아래쪽에 둔다.
 position = Vector2(0, 900)
 
-[node name="Ground" type="ColorRect" parent="World"]
-offset_right = 1920.0
-offset_bottom = 8.0
-color = Color(0.243137, 0.278431, 0.360784, 1)
+; 바닥은 World 안이라 싸우는 둘과 **같이 흔들린다.** 배경(Backdrop)은 안 흔들린다 — 그 어긋남이 거리감이다.
+; 좌우로 화면 밖까지 나가 있는 것은 흔들릴 때 가장자리에 틈이 생기지 않게 하려는 것이다.
+[node name="Ground" type="Node2D" parent="World"]
+
+[node name="Slab" type="TextureRect" parent="World/Ground"]
+offset_left = -120.0
+offset_right = 2040.0
+offset_bottom = 300.0
+texture = SubResource("GradientTexture2D_slab")
+expand_mode = 1
+
+[node name="Crack1" type="ColorRect" parent="World/Ground"]
+offset_left = 276.0
+offset_top = 14.0
+offset_right = 286.0
+offset_bottom = 96.0
+color = Color(0.015686, 0.019608, 0.031373, 1)
+
+[node name="Crack2" type="ColorRect" parent="World/Ground"]
+offset_left = 712.0
+offset_top = 14.0
+offset_right = 720.0
+offset_bottom = 152.0
+color = Color(0.015686, 0.019608, 0.031373, 1)
+
+[node name="Crack3" type="ColorRect" parent="World/Ground"]
+offset_left = 1244.0
+offset_top = 14.0
+offset_right = 1256.0
+offset_bottom = 120.0
+color = Color(0.015686, 0.019608, 0.031373, 1)
+
+[node name="Crack4" type="ColorRect" parent="World/Ground"]
+offset_left = 1636.0
+offset_top = 14.0
+offset_right = 1644.0
+offset_bottom = 176.0
+color = Color(0.015686, 0.019608, 0.031373, 1)
+
+[node name="Seam1" type="ColorRect" parent="World/Ground"]
+offset_left = -120.0
+offset_top = 58.0
+offset_right = 2040.0
+offset_bottom = 61.0
+color = Color(0.105882, 0.121569, 0.192157, 1)
+
+[node name="Seam2" type="ColorRect" parent="World/Ground"]
+offset_left = -120.0
+offset_top = 146.0
+offset_right = 2040.0
+offset_bottom = 148.0
+color = Color(0.070588, 0.082353, 0.129412, 1)
+
+; 바닥의 **윗면**. 이 두 줄이 "빛을 받는 면" 이라 땅이 평면으로 읽힌다.
+[node name="Surface" type="ColorRect" parent="World/Ground"]
+offset_left = -120.0
+offset_right = 2040.0
+offset_bottom = 14.0
+color = Color(0.164706, 0.192157, 0.290196, 1)
+
+[node name="Edge" type="ColorRect" parent="World/Ground"]
+offset_left = -120.0
+offset_right = 2040.0
+offset_bottom = 4.0
+color = Color(0.298039, 0.352941, 0.501961, 1)
 
 [node name="BossView" type="Node2D" parent="World"]
 unique_name_in_owner = true
@@ -45,31 +123,61 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("4_hud")
 
+; 색은 씬이 아니라 ui/theme/main.tres 가 정한다. 여기 있는 것은 자리와 크기뿐이다.
+; 보스 바가 52px 로 두꺼운 이유는 하나다 — 안에 남은 체력 숫자가 들어가야 한다.
 [node name="BossHealth" type="ProgressBar" parent="HudLayer/Hud"]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 460.0
-offset_top = 48.0
+offset_top = 44.0
 offset_right = 1460.0
-offset_bottom = 84.0
+offset_bottom = 96.0
 show_percentage = false
+
+[node name="BossNumber" type="Label" parent="HudLayer/Hud/BossHealth"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_type_variation = &"BarNumber"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Health" type="ProgressBar" parent="HudLayer/Hud"]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 64.0
-offset_top = 940.0
+offset_top = 928.0
 offset_right = 564.0
-offset_bottom = 976.0
+offset_bottom = 972.0
 show_percentage = false
+
+[node name="HealthNumber" type="Label" parent="HudLayer/Hud/Health"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_type_variation = &"BarNumber"
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Stamina" type="ProgressBar" parent="HudLayer/Hud"]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 64.0
-offset_top = 988.0
+offset_top = 984.0
 offset_right = 464.0
 offset_bottom = 1012.0
+theme_type_variation = &"StaminaBar"
 show_percentage = false
 
 ; 결과 화면. HUD 보다 위 레이어라 체력바를 덮는다.
