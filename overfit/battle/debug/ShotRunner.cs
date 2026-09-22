@@ -96,6 +96,13 @@ public partial class ShotRunner : Node
         await Frames(12);
         await Screenshot.CaptureAsync(this, "battle-6-windup");
 
+        // ── 패리 불가 선딜: 크림슨 ────────────────────────────────────────
+        // 평소 예고(호박색)와 **같은 화면에서 견줄 수 있어야** 이 연출이 일한다.
+        // 두 장이 나란히 없으면 "붉은가" 만 알 수 있고 "다른가" 는 모른다.
+        await Until(() => _battle is { BossWindingUp: true, BossUnparryable: true }, _pollTimeout);
+        await Frames(12);
+        await Screenshot.CaptureAsync(this, "battle-6b-unparryable");
+
         // ── 피격: 체력이 줄어든 바로 다음 프레임 ──────────────────────────
         int before = _battle?.FighterHealth ?? 0;
         await Until(() => (_battle?.FighterHealth ?? 0) < before, _pollTimeout);

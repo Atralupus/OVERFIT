@@ -82,6 +82,12 @@ public partial class Battle : Node2D
     /// <summary>파이터의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 피격 순간이다.</summary>
     public int FighterHealth => _broken ? 0 : _sim.Fighter.Health;
 
+    /// <summary>
+    /// 지금 도는 패턴이 <b>패리 불가</b>인가. 위와 같이 디버그 전용 읽기다 —
+    /// 크림슨 예고가 화면에서 구별되는지를 스크린샷으로 증명하려면 그 순간을 기다려야 한다.
+    /// </summary>
+    public bool BossUnparryable => !_broken && !_over && !CurrentParryable();
+
     public override void _Ready()
     {
         _fighterView = GetNode<FighterView>("%FighterView");
@@ -435,14 +441,7 @@ public partial class Battle : Node2D
                 : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
             _sim.Fighter.Locked));
 
-        // 패리 불가 패턴은 크림슨으로 예고한다(이슈 #27 · 나인 솔즈의 관례).
-        // 태그가 없으면(패턴이 안 도는 중) 받아칠 수 있는 쪽으로 둔다 — 쉬는 보스를 붉게 칠하면
-        // "지금 뭔가 온다" 는 거짓말이 된다.
-        bool parryable = _sim.Boss.CurrentPattern is not string id
-            || !_patterns.TryGetValue(id, out PatternDef? def)
-            || def.Tags.Parryable;
-
-        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, parryable);
+        _bossView.Show(_sim.Boss.X, Phase(), _sim.NextActiveIn, CurrentParryable());
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
@@ -464,6 +463,16 @@ public partial class Battle : Node2D
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
     }
+
+    /// <summary>
+    /// 지금 도는 패턴을 받아칠 수 있나 (이슈 #27 · 패리 불가는 크림슨으로 예고한다).
+    /// 패턴이 안 도는 중이면 <b>받아칠 수 있는 쪽</b>으로 둔다 — 쉬는 보스를 붉게 칠하면
+    /// "지금 뭔가 온다" 는 거짓말이 된다.
+    /// </summary>
+    private bool CurrentParryable() =>
+        _sim.Boss.CurrentPattern is not string id
+        || !_patterns.TryGetValue(id, out PatternDef? def)
+        || def.Tags.Parryable;
 
     /// <summary>
     /// 보스가 패턴의 어디쯤인가. 더 올 판정이 있으면 선딜, 없으면 후딜이다 —
