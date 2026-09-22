@@ -50,6 +50,7 @@
     <Compile Include="../../overfit/core/CmdArgs.cs" LinkBase="linked/core" />
     <Compile Include="../../overfit/core/JsonData.cs" LinkBase="linked/core" />
     <Compile Include="../../overfit/core/BalanceData.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/CreditsData.cs" LinkBase="linked/core" />
 
     <!-- 전투 규칙. 이 목록이 곧 "무엇이 규칙인가"의 선언이다 — 커밋 훅의 TDD 게이트가 여기를 읽는다. -->
     <Compile Include="../../overfit/battle/rules/InputFrame.cs" LinkBase="linked/battle/rules" />

@@ -20,6 +20,7 @@ public partial class Game : Node
         Title,
         Play,
         Battle,
+        Credits,
     }
 
     private static readonly Dictionary<Scene, string> _scenePaths = new()
@@ -27,6 +28,7 @@ public partial class Game : Node
         [Scene.Title] = "res://title/Title.tscn",
         [Scene.Play] = "res://play/Play.tscn",
         [Scene.Battle] = "res://battle/Battle.tscn",
+        [Scene.Credits] = "res://credits/Credits.tscn",
     };
 
     /// <summary>순회 한 걸음마다 주는 시간. 씬이 <c>_Ready</c> 를 끝내고 첫 프레임을 그릴 만큼이면 된다.</summary>
@@ -130,6 +132,7 @@ public partial class Game : Node
     {
         Scene.Title => Scene.Play,
         Scene.Play => Scene.Battle,
+        Scene.Battle => Scene.Credits,
         _ => Scene.Title,
     };
 
@@ -143,7 +146,9 @@ public partial class Game : Node
     {
         await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
 
-        foreach (Scene scene in new[] { Scene.Play, Scene.Battle, Scene.Title })
+        // 크레딧도 순회에 넣는다. 데이터(data/credits.json)를 읽어 스스로를 짓는 화면이라
+        // 파일이 깨지면 [credits][E] 가 뜨고, 그 한 줄이 이 순회를 실패로 만든다 — 공짜 불변식이다.
+        foreach (Scene scene in new[] { Scene.Play, Scene.Battle, Scene.Credits, Scene.Title })
         {
             Log.Trace("scene", $"tour step={scene} frame={Engine.GetProcessFrames()}");
             GoTo(scene);
