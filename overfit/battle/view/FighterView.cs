@@ -8,7 +8,7 @@ namespace Overfit.Battle.View;
 /// 사건 메서드 몇 개를 받아 그리기만 한다.
 ///
 /// <para>
-/// 평생 <c>idle</c> 만 재생하던 것이 이 화면의 가장 큰 문제였다. 팩에 있는 것은
+/// 평생 <c>idle</c> 만 재생하던 것이 이 화면의 가장 큰 문제였다. 뷰가 부르는 것은
 /// <c>idle · run · attack · hit · death</c> 다섯이고 대시·패리 전용 그림은 없다 —
 /// 그 둘은 <b>이펙트로 만든다</b>(잔상 · 링 · 섬광). 2D 액션에서 대시와 패리의 피드백은
 /// 원래 애니메이션이 아니라 이펙트와 히트스톱이 결정하므로 대체품이 아니라 제 모양이다.
@@ -19,7 +19,7 @@ public partial class FighterView : Node2D
     /// <summary>
     /// 무적 창 안의 몸 색. <b>희게 탄다.</b> 잔상(푸른색)과 <b>다른 색</b>이어야 하는 이유는
     /// 실측이다 — 둘을 같은 청록으로 두니 몸과 꼬리가 한 덩어리 얼룩으로 뭉쳐서,
-    /// 120px 짜리 캐릭터에서는 잔상이 몇 장인지도 지금 어디 있는지도 안 읽혔다.
+    /// 130px 짜리 캐릭터에서는 잔상이 몇 장인지도 지금 어디 있는지도 안 읽혔다.
     /// </summary>
     private static readonly Color _invulnerableTint = new(1.80f, 2.20f, 2.40f);
 
@@ -69,6 +69,10 @@ public partial class FighterView : Node2D
     {
         _sprite = GetNode<AnimatedSprite2D>("Sprite");
         _feel = Balance.Data.Feel;
+        // 배율은 데이터다. 팩의 그림은 원본 전신이 52px 뿐이라 1배로 두면 화면에서 안 읽히고,
+        // 그 배율이 곧 fighters.json 의 height 와 맞물린다 (balance.json 의 _note_sprite_scale).
+        _sprite.Scale = new Vector2(
+            (float)_feel.FighterSpriteScale, (float)_feel.FighterSpriteScale);
         _ring = new RingBurst
         {
             Position = new Vector2(0, (float)-_feel.RingOffsetY),
@@ -83,10 +87,10 @@ public partial class FighterView : Node2D
     /// <summary>스프라이트를 갈아끼운다. id 는 data/fighters.json 의 sprite 값이다.</summary>
     public void Load(string spriteId)
     {
-        var frames = GD.Load<SpriteFrames>($"res://addons/duelyst_animated_sprites/spriteframes/units/{spriteId}.tres");
+        var frames = GD.Load<SpriteFrames>($"res://assets/spriteframes/{spriteId}.tres");
         if (frames is null)
         {
-            // PNG 는 저장소에 없다(tools/fetch_duelyst.py 가 받아 온다). 받기 전에는 .tres 파싱은
+            // PNG 는 저장소에 없다(tools/install_assets.py 가 받아둔 zip 을 푼다). 풀기 전에는 .tres 파싱은
             // 되고 그 안의 텍스처 ext_resource 만 못 풀려, **엔진이 ERROR 블록을 여러 건 찍는다** —
             // 여기서 null 을 받아 조용히 넘어가는 것이 아니다. 그 소음은 우리 코드의 버그가 아니라
             // 환경이라 tools/build.sh 의 judge_headless 가 그 경로만 면제하고 건수를 경고로 남긴다.
@@ -115,7 +119,7 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 공격 판정이 선 틱. 몸 섬광 <b>하나로는 안 읽혔다</b> — 캐릭터가 120px 뿐이라
+    /// 공격 판정이 선 틱. 몸 섬광 <b>하나로는 안 읽혔다</b> — 캐릭터가 130px 뿐이라
     /// 살짝 밝아지는 것은 이 크기에서 보이지 않는다. 칼이 닿는 앞쪽에 섬광을 하나 더 세운다.
     /// </summary>
     public void AttackActive()
@@ -280,7 +284,8 @@ public partial class FighterView : Node2D
         if (!_sprite.SpriteFrames.HasAnimation(name))
         {
             // 없는 이름으로 Play 하면 엔진이 ERROR: 를 찍고, 그건 헤드리스 판정(judge_headless)을
-            // 실패시킨다 — 696종이 전부 같은 세트를 갖지 않는다 (실측 idle 695 · run 668 …).
+            // 실패시킨다. 지금 팩에는 다섯이 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 확인한다)
+            // 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
             Log.Warn("view", $"anim_missing name={name}");
             return;
         }
@@ -294,6 +299,12 @@ public partial class FighterView : Node2D
     /// 바닥선에 놓여 몸의 절반이 지면 아래로 내려간다. 높이는 프레임에서 읽는다 — 유닛마다,
     /// 그리고 <b>애니메이션마다</b> 타일 크기가 다를 수 있어 바꿀 때마다 다시 잰다.
     /// 숫자를 박으면 갈아끼울 때 깨진다.
+    ///
+    /// <para>
+    /// 프레임 <b>아래끝이 곧 발바닥</b>이라는 것이 이 계산의 전제다. Martial Hero 는 200px 프레임
+    /// 안에서 발이 y=122 라 그냥 두면 78px 떠 있었다 — <c>tools/install_assets.py</c> 가
+    /// SpriteFrames 의 region 을 팩 전체의 불투명 범위로 잘라 그 전제를 만들어 둔다.
+    /// </para>
     /// </summary>
     private void AlignToGround(string anim)
     {

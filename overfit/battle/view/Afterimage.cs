@@ -6,7 +6,7 @@ namespace Overfit.Battle.View;
 /// 대시가 지나온 자리에 남는 잔상 한 장. 스스로 옅어지고 스스로 없어진다.
 ///
 /// <para>
-/// 전용 대시 애니메이션이 팩에 없다(Duelyst 에 roll/dodge 가 없다). 2D 액션에서 대시의 피드백은
+/// 전용 대시 애니메이션이 팩에 없다(Martial Hero 에 roll/dodge 가 없다). 2D 액션에서 대시의 피드백은
 /// 원래 애니메이션이 아니라 <b>잔상과 히트스톱</b>이 결정하므로, 이건 임시방편이 아니라 제 모양이다.
 /// </para>
 ///
@@ -48,6 +48,10 @@ public partial class Afterimage : Sprite2D
             FlipH = from.FlipH,
             Scale = from.Scale,
             Centered = from.Centered,
+
+            // 필터도 따라가야 한다. 본체는 씬에서 Nearest 로 두는데 코드로 만든 이 노드는
+            // 기본값(Inherit → Linear)이라, 안 베끼면 잔상만 흐려져 픽셀아트에서 눈에 띈다.
+            TextureFilter = from.TextureFilter,
             Modulate = tint,
             _life = life,
             _tint = tint,

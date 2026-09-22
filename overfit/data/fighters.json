@@ -1,9 +1,10 @@
 {
   "_comment": "캐릭터 3종. 사거리가 짧을수록 공격 사이클이 빠르다 — FighterDataTests 가 그 관계를 지킨다.",
   "_units": "거리 px · 속도 px/s · 시간 초 · 스태미나 무차원",
+  "_note_sprite": "셋이 같은 그림이다. 플레이어 팩(Martial Hero)에 캐릭터가 하나뿐이라 그렇다 — 셋을 그림으로 구분하려면 팩이 더 필요하고, 지금 화면에 서는 것은 balance.json 이 가리키는 하나뿐이다.",
 
   "단검": {
-    "sprite": "neutral_mercdaggerkiri",
+    "sprite": "martial_hero",
     "move_speed": 480, "jump_velocity": 940,
     "max_health": 90, "max_stamina": 110,
     "half_width": 26, "height": 120,
@@ -15,7 +16,7 @@
   },
 
   "중검": {
-    "sprite": "f1_warblade",
+    "sprite": "martial_hero",
     "move_speed": 420, "jump_velocity": 900,
     "max_health": 110, "max_stamina": 100,
     "half_width": 30, "height": 120,
@@ -27,7 +28,7 @@
   },
 
   "대검": {
-    "sprite": "f4_underworldbrute",
+    "sprite": "martial_hero",
     "move_speed": 360, "jump_velocity": 860,
     "max_health": 130, "max_stamina": 95,
     "half_width": 36, "height": 120,

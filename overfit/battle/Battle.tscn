@@ -101,7 +101,10 @@ color = Color(0.298039, 0.352941, 0.501961, 1)
 unique_name_in_owner = true
 script = ExtResource("3_boss")
 
+; texture_filter = 1 (Nearest). 픽셀아트를 2.5~5.5배로 늘리므로 기본값(Linear)이면 윤곽이 녹는다.
+; 프로젝트 전역으로 바꾸지 않는 이유는 UI 와 바닥 그라디언트가 Linear 를 전제하기 때문이다.
 [node name="Sprite" type="AnimatedSprite2D" parent="World/BossView"]
+texture_filter = 1
 centered = true
 
 [node name="FighterView" type="Node2D" parent="World"]
@@ -109,6 +112,7 @@ unique_name_in_owner = true
 script = ExtResource("2_fighter")
 
 [node name="Sprite" type="AnimatedSprite2D" parent="World/FighterView"]
+texture_filter = 1
 centered = true
 
 [node name="HudLayer" type="CanvasLayer" parent="."]

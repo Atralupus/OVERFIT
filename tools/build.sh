@@ -27,7 +27,7 @@
 # 헤드리스 판정 — 창 없이 도는 서브커맨드(지금은 smoke 하나)는 판정 함수 하나(judge_headless)를 공유한다.
 #   ① 로그에 ^[tag][E] 가 있으면 실패 (CLAUDE.md: Error = 규칙 위반)
 #   ①′ 엔진이 찍은 ERROR: 블록이 있으면 실패 — C# 예외는 여기로만 나온다. WARNING: 은 세기만 한다
-#      스프라이트 팩 자원 로딩 실패만 면제하고(그림은 저장소에 없다) 면제 건수를 경고로 찍는다
+#      에셋(res://assets/) 자원 로딩 실패만 면제하고(그림은 저장소에 없다) 면제 건수를 경고로 찍는다
 #   ② 완료 표지([tag][M])가 없으면 실패 — 게임이 끝까지 못 갔다
 #   ③ 표지 있고 종료 코드 0 → 통과      ④ 표지 있고 코드 != 0 → 실패
 # 완료 표지는 core/Log.Marker 가 내므로 LOG_LEVEL 과 무관하다. 내용 검사(expect_log)만 그 줄이 안 찍히는 레벨에서 건너뛴다.
@@ -84,11 +84,11 @@ engine_diag_blocks() {
 
 # 에셋이 없는 체크아웃 면제 목록.
 #
-# 그림 파일(PNG)은 저장소에 없다 — tools/fetch_duelyst.py 가 받아 온다. 받기 전 체크아웃에서는
+# 그림 파일(PNG)은 저장소에 없다 — tools/install_assets.py 가 받아둔 zip 을 푼다. 풀기 전 체크아웃에서는
 # .tres 는 읽히는데 그것이 가리키는 텍스처가 없어 엔진이 자원 로딩 ERROR 를 쏟는다.
 # 그건 우리 코드의 버그가 아니라 **환경**이라, 방금 클론한 사람이 smoke 부터 막히지 않게 면제한다.
 #
-# ⚠ **좁게 유지한다.** 스프라이트 팩 경로와 그 임포트 캐시의 자원 로딩 실패뿐이다.
+# ⚠ **좁게 유지한다.** 에셋 경로(res://assets/)와 그 임포트 캐시의 자원 로딩 실패뿐이다.
 #   C# 예외 패턴을 여기 넣지 마라 — 엔진이 파일을 못 읽는 것은 환경이지만,
 #   그 결과로 생긴 null 을 우리 코드가 건드리는 것은 우리 버그다. 그 둘은 같이 묻히면 안 된다.
 #
@@ -99,11 +99,13 @@ engine_diag_blocks() {
 #   ② 로더 문구 — 엔진이 "자원을 못 열었다" 고 말한 것만. 우리 버그로 난 진단이 같은 경로를
 #     스치기만 한 경우(예: 타입이 어긋난 .tres 를 GD.Load<SpriteFrames> 한 결과)는 안 걸린다.
 #   ③ [^⏎]* — 경로가 **머리줄 안에** 있어야 한다. 뒤에 이어 붙은 스택 프레임의 경로로는 못 빠진다.
-_JUDGE_ASSET_ABSENT_ALLOW='^ERROR: (Failed loading resource|Unable to open file|Cannot open file|No loader found for resource|Error loading resource)[^⏎]*res://(addons/duelyst_animated_sprites/|\.godot/imported/)'
+_JUDGE_ASSET_ABSENT_ALLOW='^ERROR: (Failed loading resource|Unable to open file|Cannot open file|No loader found for resource|Error loading resource)[^⏎]*res://(assets/|\.godot/imported/)'
 # 엔진은 같은 사실을 두 층에서 말한다. 로더가 "못 읽었다" 고 찍기 전에, 텍스트 자원 **파서**가
 # ".tres 6번째 줄의 ext_resource 가 없는 파일을 가리킨다" 고 먼저 찍는다 — 그 줄은 로더 문구로
-# 시작하지 않고 경로로 시작한다. 가리키는 쪽과 가리켜지는 쪽이 **둘 다** 스프라이트 팩 안일 때만 면제한다.
-_JUDGE_ASSET_ABSENT_ALLOW+='|^ERROR: res://addons/duelyst_animated_sprites/[^⏎]*Parse Error: \[ext_resource\] referenced non-existent resource at: res://addons/duelyst_animated_sprites/'
+# 시작하지 않고 경로로 시작한다. **가리켜지는 쪽은 반드시 res://assets/** 이고, 가리키는 쪽은
+# 그림을 직접 다는 두 자리(SpriteFrames .tres · 배경 씬 ui/Backdrop.tscn)로 못박는다 —
+# 아무나 가리켜도 되게 두면 우리 씬의 진짜 깨진 참조가 같이 초록이 된다.
+_JUDGE_ASSET_ABSENT_ALLOW+='|^ERROR: res://(assets/|ui/Backdrop\.tscn)[^⏎]*Parse Error: \[ext_resource\] referenced non-existent resource at: res://assets/'
 
 #   judge_headless <무엇을 돌렸나> <로그파일> <완료 표지> <종료 코드> [의도된 에러 정규식]
 #
@@ -138,7 +140,7 @@ judge_headless() {
     exempted="$(grep -cE "$_JUDGE_ASSET_ABSENT_ALLOW" <<< "$engine" || true)"
     engine="$(grep -vE "$_JUDGE_ASSET_ABSENT_ALLOW" <<< "$engine" || true)"
   fi
-  [[ "$exempted" -gt 0 ]] && warn "$what: 에셋 없는 체크아웃으로 보아 엔진 ERROR ${exempted}건 면제 (tools/fetch_duelyst.py 를 안 돌린 상태다)"
+  [[ "$exempted" -gt 0 ]] && warn "$what: 에셋 없는 체크아웃으로 보아 엔진 ERROR ${exempted}건 면제 (tools/install_assets.py 를 안 돌린 상태다)"
 
   if [[ -n "$engine" ]]; then
     bad "$what: 엔진 ERROR $(grep -c . <<< "$engine")건 — C# 예외거나 엔진이 규칙 위반을 본 것이다. 전체 로그: $log"

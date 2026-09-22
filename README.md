@@ -150,7 +150,7 @@
 | 5 보스와 전투 한 판 — `BattleSim` | ✅ |
 | 6 계측 — 회피 이벤트와 10축 | ✅ |
 | 7 패턴 여섯 · 최소 봇 · 헤드리스 데모 · 리플레이 골든 | ✅ |
-| 8 에셋 파이프라인 — Duelyst (CC0) | ✅ |
+| 8 에셋 파이프라인 — itch 팩 셋 (CC0) | ✅ |
 | 9 전투 씬 — 보이게 한다 | ✅ |
 
 | | |
@@ -158,7 +158,7 @@
 | 엔진 | Godot 4.7.2 (Mono / C#) · `forward_plus` · net8.0 · **데스크톱 전용** |
 | 화면 | 가로 1920×1080 |
 | 규칙 테스트 | Godot 없이 `tools/build.sh test` — **159건**, 0.3초 |
-| 에셋 | [Duelyst](https://github.com/Jordyfel/duelyst-animated-sprites-godot) (**CC0 1.0**) — 유닛 696종 · 보스 50종 |
+| 에셋 | Martial Hero · Medieval King Pack 2 (LuizMelo) · Warped City (ansimuz) — 셋 다 **CC0 1.0**. 출처는 `overfit/data/credits.json` 하나 |
 
 ---
 

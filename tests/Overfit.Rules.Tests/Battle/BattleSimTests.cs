@@ -212,7 +212,11 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
+            // 걷는 틱 수와 patternGap 은 **짝이다** — 걸어 붙는 동안 패턴이 서면 대시가 아니라
+            // 걷기가 판정을 받는다. 그래서 132틱(= 2.2초)으로 둘을 맞춰 둔다.
+            // 이슈 #26 에서 보스 반폭이 120 → 85 로 줄어 벽이 35px 멀어졌고, 그만큼 더 걸어야
+            // 몸에 닿는다. 검사(ShouldBe)는 한 글자도 안 바뀐다 — 벽 위치는 여전히 데이터에서 온다.
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.2),
             PatternIds = new[] { "단타" },
             Patterns = new Dictionary<string, PatternDef>
             {
@@ -227,8 +231,8 @@ public class BattleSimTests
         };
         var sim = new BattleSim(setup);
 
-        // 120틱 동안 오른쪽으로 걸어 보스 몸에 붙는다(패턴은 2.0초 뒤에 선다).
-        for (int i = 0; i < 120; i++)
+        // 132틱 동안 오른쪽으로 걸어 보스 몸에 붙는다(패턴은 2.2초 뒤에 선다).
+        for (int i = 0; i < 132; i++)
         {
             sim.Tick(new InputFrame(1, false, false, false, false));
         }

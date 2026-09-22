@@ -1,43 +1,32 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=5 format=3]
 
 ; 배경 한 벌. **씬마다 다시 그리지 않는다** — 타이틀과 전투가 같은 방을 보여줘야 하고,
 ; 색을 아는 곳이 둘이 되면 한쪽만 고쳐지는 날이 온다 (ui/theme/main.tres 가 UI 색에 대해 하는 일과 같다).
 ;
-; 에셋을 안 쓰고 **그린다.** 그림을 하나 더 들이면 assets/LICENSES.md 가 그만큼 길어지는데,
-; 그 기록이 이 저장소의 라이선스 주장 전체가 서 있는 자리다. 그라디언트 셋과 사각형 열이면 충분했다.
+; 전에는 에셋 없이 그라디언트와 사각형으로 **그렸다**. 이슈 #26 이 Warped City (CC0, ansimuz)를
+; 들이면서 그 자리를 패럴랙스 세 겹이 가져갔다 — 출처는 여전히 data/credits.json 한 곳뿐이다.
 ;
 ; ⚠ 배경은 **이기면 안 된다.** 보스와 플레이어가 화면에서 가장 잘 읽혀야 하고,
 ;   이펙트(패리 링 청록 · 보스 선딜 링 빨강 · 공격 호)도 그대로 튀어야 한다.
-;   그래서 전부 어둡고 채도가 낮다 — 밝은 것은 싸우는 둘과 바뀌는 숫자뿐이다.
+;
+;   Warped City 는 네온 간판이 박힌 밝은 그림이라 **그대로 쓰면 싸우는 둘을 삼킨다.**
+;   그래서 세 겹 다 modulate 로 눌렀다 (하늘 0.42 · 먼 건물 0.30 · 가까운 건물 0.24).
+;   손으로 그리던 배경이 0.02~0.06 밝기였던 것과 같은 이유다: 밝은 것은 싸우는 둘과 바뀌는 숫자뿐이어야 한다.
+;   뒤로 갈수록 밝은 것은 대기 원근이다 — 먼 것이 더 흐리고 밝아야 거리가 생긴다.
+;
+; 겹마다 크기가 다른 것이 곧 거리다. 먼 건물(buildings-bg)은 낮게 서고 가까운 건물은 화면을
+; 더 많이 먹는다. 크기가 같으면 두 겹이 한 겹으로 읽혀 패럴랙스가 사라진다.
 ;
 ; CanvasLayer(layer = -1)인 이유: 어디에 붙여도 뒤로 간다. 전투에서는 World 밖이라
 ; 화면 흔들림(Battle.Shake)을 안 타는데, 먼 배경이 앞의 것과 똑같이 흔들리면 거리감이 사라진다.
+;
+; texture_filter = 1 (Nearest) — 픽셀아트를 2.5~4.5배로 늘린다. 기본값(Linear)이면 창문 격자가 죽 번진다.
 
-[sub_resource type="Gradient" id="Gradient_sky"]
-offsets = PackedFloat32Array(0, 0.55, 0.85, 1)
-colors = PackedColorArray(0.023529, 0.027451, 0.047059, 1, 0.054902, 0.062745, 0.105882, 1, 0.117647, 0.109804, 0.2, 1, 0.172549, 0.145098, 0.258824, 1)
+[ext_resource type="Texture2D" path="res://assets/warped_city/skyline-a.png" id="1_sky"]
+[ext_resource type="Texture2D" path="res://assets/warped_city/buildings-bg.png" id="2_far"]
+[ext_resource type="Texture2D" path="res://assets/warped_city/near-buildings-bg.png" id="3_near"]
 
-[sub_resource type="GradientTexture2D" id="GradientTexture2D_sky"]
-gradient = SubResource("Gradient_sky")
-width = 4
-height = 256
-fill_from = Vector2(0, 0)
-fill_to = Vector2(0, 1)
-
-; 바닥 근처의 흐릿한 빛. 방이 어디서 끝나는지를 알려줘 화면에 깊이가 생긴다.
-[sub_resource type="Gradient" id="Gradient_glow"]
-offsets = PackedFloat32Array(0, 0.45, 1)
-colors = PackedColorArray(0.309804, 0.243137, 0.439216, 0.34, 0.223529, 0.180392, 0.337255, 0.16, 0.223529, 0.180392, 0.337255, 0)
-
-[sub_resource type="GradientTexture2D" id="GradientTexture2D_glow"]
-gradient = SubResource("Gradient_glow")
-width = 256
-height = 256
-fill = 1
-fill_from = Vector2(0.5, 0.5)
-fill_to = Vector2(1, 0.5)
-
-; 기둥 밑동을 지워 거리감을 만든다. 이게 없으면 기둥이 바닥에 **붙어** 보여 배경이 무대 소품이 된다.
+; 기둥 밑동을 지워 거리감을 만든다. 이게 없으면 건물이 바닥에 **붙어** 보여 배경이 무대 소품이 된다.
 [sub_resource type="Gradient" id="Gradient_fog"]
 offsets = PackedFloat32Array(0, 1)
 colors = PackedColorArray(0.137255, 0.129412, 0.223529, 0, 0.145098, 0.133333, 0.231373, 0.92)
@@ -52,101 +41,44 @@ fill_to = Vector2(0, 1)
 [node name="Backdrop" type="CanvasLayer"]
 layer = -1
 
+; 하늘. 128x240 타일 하나가 하늘 전체를 담고 있어 세로로 4.5배 = 1080 이 정확히 맞는다.
+; 가로는 타일(stretch_mode = 1)로 이어 붙인다.
 [node name="Sky" type="TextureRect" parent="."]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = SubResource("GradientTexture2D_sky")
+texture_filter = 1
+texture_repeat = 1
+offset_right = 427.0
+offset_bottom = 240.0
+scale = Vector2(4.5, 4.5)
+texture = ExtResource("1_sky")
 expand_mode = 1
+stretch_mode = 1
+modulate = Color(0.42, 0.42, 0.42, 1)
 
-[node name="Glow" type="TextureRect" parent="."]
-offset_left = 240.0
-offset_top = 200.0
-offset_right = 1680.0
-offset_bottom = 1000.0
-texture = SubResource("GradientTexture2D_glow")
+; 먼 건물. 바닥선(y = 900)에 밑동을 대고 310px 만 올라온다 — 낮게 서야 멀어 보인다.
+[node name="FarBuildings" type="TextureRect" parent="."]
+texture_filter = 1
+texture_repeat = 1
+offset_top = 590.0
+offset_right = 768.0
+offset_bottom = 714.0
+scale = Vector2(2.5, 2.5)
+texture = ExtResource("2_far")
 expand_mode = 1
+stretch_mode = 1
+modulate = Color(0.3, 0.3, 0.3, 1)
 
-; 기둥 다섯. 굵기와 높이가 다른 이유는 같으면 격자무늬로 읽혀 배경이 아니라 패턴이 되기 때문이다.
-[node name="Pillars" type="Control" parent="."]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="Shaft1" type="ColorRect" parent="Pillars"]
-offset_left = 92.0
-offset_top = 336.0
-offset_right = 232.0
-offset_bottom = 908.0
-color = Color(0.031373, 0.035294, 0.058824, 1)
-
-[node name="Cap1" type="ColorRect" parent="Pillars"]
-offset_left = 60.0
-offset_top = 300.0
-offset_right = 264.0
-offset_bottom = 344.0
-color = Color(0.031373, 0.035294, 0.058824, 1)
-
-[node name="Shaft2" type="ColorRect" parent="Pillars"]
-offset_left = 468.0
-offset_top = 432.0
-offset_right = 580.0
-offset_bottom = 908.0
-color = Color(0.027451, 0.031373, 0.052941, 1)
-
-[node name="Cap2" type="ColorRect" parent="Pillars"]
-offset_left = 442.0
-offset_top = 402.0
-offset_right = 606.0
-offset_bottom = 440.0
-color = Color(0.027451, 0.031373, 0.052941, 1)
-
-[node name="Shaft3" type="ColorRect" parent="Pillars"]
-offset_left = 1128.0
-offset_top = 388.0
-offset_right = 1252.0
-offset_bottom = 908.0
-color = Color(0.027451, 0.031373, 0.052941, 1)
-
-[node name="Cap3" type="ColorRect" parent="Pillars"]
-offset_left = 1100.0
-offset_top = 356.0
-offset_right = 1280.0
-offset_bottom = 396.0
-color = Color(0.027451, 0.031373, 0.052941, 1)
-
-[node name="Shaft4" type="ColorRect" parent="Pillars"]
-offset_left = 1496.0
-offset_top = 304.0
-offset_right = 1632.0
-offset_bottom = 908.0
-color = Color(0.031373, 0.035294, 0.058824, 1)
-
-[node name="Cap4" type="ColorRect" parent="Pillars"]
-offset_left = 1464.0
-offset_top = 268.0
-offset_right = 1664.0
-offset_bottom = 312.0
-color = Color(0.031373, 0.035294, 0.058824, 1)
-
-[node name="Shaft5" type="ColorRect" parent="Pillars"]
-offset_left = 1800.0
-offset_top = 470.0
-offset_right = 1898.0
-offset_bottom = 908.0
-color = Color(0.023529, 0.027451, 0.047059, 1)
-
-[node name="Cap5" type="ColorRect" parent="Pillars"]
-offset_left = 1776.0
-offset_top = 444.0
-offset_right = 1920.0
-offset_bottom = 478.0
-color = Color(0.023529, 0.027451, 0.047059, 1)
+; 가까운 건물. 같은 바닥선에서 627px 올라온다 — 더 크고 더 어둡다.
+[node name="NearBuildings" type="TextureRect" parent="."]
+texture_filter = 1
+texture_repeat = 1
+offset_top = 273.0
+offset_right = 640.0
+offset_bottom = 482.0
+scale = Vector2(3, 3)
+texture = ExtResource("3_near")
+expand_mode = 1
+stretch_mode = 1
+modulate = Color(0.24, 0.24, 0.24, 1)
 
 [node name="Fog" type="TextureRect" parent="."]
 offset_top = 560.0

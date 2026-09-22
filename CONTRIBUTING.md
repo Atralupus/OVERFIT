@@ -19,16 +19,23 @@ export GODOT_PATH=/path/to/Godot
 ```bash
 git clone git@github.com:Atralupus/Overfit.git
 cd Overfit
-tools/build.sh doctor      # 무엇이 없는지 알려준다
-python3 tools/fetch_duelyst.py   # 에셋 (CC0, 자동으로 받아진다)
-tools/build.sh import      # ⚠ 반드시 한 번. .godot/ 캐시와 .uid 를 만든다
-tools/build.sh run         # 게임 실행
+tools/build.sh doctor             # 무엇이 없는지 알려준다
+python3 tools/install_assets.py   # 받아둔 에셋 zip 을 제자리에 푼다 (셋 다 CC0)
+tools/build.sh import             # ⚠ 반드시 한 번. .godot/ 캐시와 .uid 를 만든다
+tools/build.sh run                # 게임 실행
 ```
+
+**에셋 zip 은 먼저 손으로 받아야 한다.** itch.io 는 내려받기에 브라우저 세션이 필요해서
+스크립트가 자동으로 못 가져온다 — 셋을 어디서 받는지는
+[`overfit/assets/LICENSES.md`](overfit/assets/LICENSES.md) 에 표로 있다.
+받아둔 곳이 `~/Downloads` 가 아니면 경로를 인자로 준다
+(`python3 tools/install_assets.py ~/어디든`).
 
 `import` 를 건너뛰면 `.uid` 가 없어 `check` 의 uid 단계가 빨개진다.
 **생긴 `.uid` 는 커밋한다** — 없으면 체크아웃마다 UID 가 갈리고 엔진은 WARNING 으로만 알린다.
 
-**에셋 원본은 저장소에 없다** — 받는 법과 출처는 [`overfit/assets/LICENSES.md`](overfit/assets/LICENSES.md).
+**에셋 원본(PNG)은 저장소에 없다** — 추적하는 것은 `.import` 와 `.tres` 뿐이다.
+에셋을 건드린 커밋에서는 `git ls-files overfit | grep -c '\.png$'` 가 **0** 인지 본다.
 
 ## 3. 개발 루프
 

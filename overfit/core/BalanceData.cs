@@ -68,6 +68,29 @@ public sealed class FeelBalance
     /// </summary>
     public required int HitstopFrames { get; init; }
 
+    /// <summary>
+    /// 플레이어 스프라이트의 배율. 팩의 그림은 픽셀아트라 원본 전신이 52px 뿐이라
+    /// 그대로 두면 1920x1080 화면에서 안 읽힌다.
+    ///
+    /// <para>
+    /// <b>히트박스와 짝이다.</b> 2.5배면 키 130px 로 <c>fighters.json</c> 의 <c>height</c> 120 과 맞는다 —
+    /// 한쪽만 고치면 그림과 규칙이 다른 말을 한다.
+    /// </para>
+    /// </summary>
+    public required double FighterSpriteScale { get; init; }
+
+    /// <summary>
+    /// 보스 스프라이트의 배율. 5.5배면 키 297px · 몸통 폭 171px 라
+    /// <c>bosses.json</c> 의 <c>half_width</c> 85 와 맞고, 플레이어의 2.28배로 선다.
+    ///
+    /// <para>
+    /// Duelyst 시절엔 4배가 <c>BossView</c> 의 <c>const</c> 였고 <c>half_width</c> 120 이 그 값을
+    /// 전제했다. 팩을 갈면서 둘을 같이 옮기지 않으면 보스의 <b>사거리가 몸과 어긋난다</b> —
+    /// 그래서 배율도 수치로 끌어내려 히트박스와 같은 층에 둔다.
+    /// </para>
+    /// </summary>
+    public required double BossSpriteScale { get; init; }
+
     /// <summary>잔상을 남기는 간격(초). 무적 창(0.14초)을 이 값으로 나눈 만큼 잔상이 생긴다.</summary>
     public required double DashGhostInterval { get; init; }
 
@@ -109,7 +132,7 @@ public sealed class FeelBalance
 
     /// <summary>
     /// 공격 섬광을 몸에서 앞으로 얼마나 밀어 낼지(px). <b>몸 위에 겹치면 안 된다</b> —
-    /// 캐릭터가 120px 뿐이라 몸에 겹친 섬광은 "칼이 어디까지 닿나" 를 못 말한다.
+    /// 캐릭터가 130px 뿐이라 몸에 겹친 섬광은 "칼이 어디까지 닿나" 를 못 말한다.
     /// </summary>
     public required double AttackRingX { get; init; }
 
@@ -131,10 +154,10 @@ public sealed class FeelBalance
     /// <summary>보스 선딜 예고 링이 판정 순간에 닿는 반지름(px).</summary>
     public required double TellRingTo { get; init; }
 
-    /// <summary>보스 링을 그리는 높이(px, 발밑 기준). 보스는 480px 라 파이터와 같은 높이면 발치에 깔린다.</summary>
+    /// <summary>보스 링을 그리는 높이(px, 발밑 기준). 보스는 297px 라 파이터와 같은 높이면 발치에 깔린다.</summary>
     public required double BossRingOffsetY { get; init; }
 
-    /// <summary>보스 판정이 서는 순간 퍼지는 충격파의 끝 반지름(px). 보스는 4배 크다.</summary>
+    /// <summary>보스 판정이 서는 순간 퍼지는 충격파의 끝 반지름(px). 보스 몸(반폭 85)보다 훨씬 커야 "퍼진다" 로 읽힌다.</summary>
     public required double BossRingTo { get; init; }
 
     /// <summary>사망 애니메이션을 보여주고 결과 화면을 띄우기까지의 시간(초).</summary>
