@@ -73,7 +73,7 @@ dash={
 }
 parry={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"keycode":70,"pressed":true)]
+"events": [Object(InputEventKey,"keycode":75,"pressed":true)]
 }
 attack={
 "deadzone": 0.5,
