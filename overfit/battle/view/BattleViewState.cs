@@ -58,3 +58,23 @@ public readonly record struct FighterFrame(
     bool Parrying,
     double ParryProgress,
     bool Locked);
+
+/// <summary>
+/// 한 프레임에 보스의 <b>예고 표지</b>를 그리는 데 필요한 전부.
+///
+/// <para>
+/// <c>PatternTell</c>(규칙 층의 DTO)을 그대로 안 넘긴다. 뷰가 규칙 타입에 묶이면 그 타입을 쪼개는
+/// 리팩터가 그림까지 끌고 다니고, 무엇보다 <c>X</c> 의 뜻이 여기서 <b>달라진다</b>:
+/// 데이터의 <c>x</c> 는 "보스 앞/뒤" 이고 화면의 X 는 "왼/오른쪽" 이다. 그 뒤집기는 보스가
+/// 어디를 보는지를 아는 <c>Battle</c> 만 할 수 있다 — 뷰에 맡기면 뷰가 다시 규칙을 읽게 된다.
+/// </para>
+/// </summary>
+/// <param name="ShapeId">예고 모양 id. <see cref="BossTellShapes"/> 가 이것으로 구현을 찾는다.</param>
+/// <param name="X">보스 발밑 기준 가로 오프셋(px). <b>이미 보스가 보는 쪽으로 뒤집혀 있다.</b></param>
+/// <param name="Y">바닥에서의 높이(px, 위가 +). <b>이 숫자 하나가 "칼이 땅에 있나" 를 말한다.</b></param>
+/// <param name="Length">모양의 주된 크기(px). 칼이면 날 길이, 고리면 반지름이다.</param>
+public readonly record struct BossTell(
+    string ShapeId,
+    double X,
+    double Y,
+    double Length);

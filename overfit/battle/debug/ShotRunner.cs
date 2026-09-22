@@ -10,7 +10,7 @@ namespace Overfit.Battle.Debug;
 ///
 /// <para>
 /// 전에는 벽시계로만 기다렸다 — 정해진 초에 셔터를 눌렀다. 그러면 <b>무엇이 찍힐지 아무도 모른다</b>:
-/// 패턴 주기(간격 0.8초 + 패턴 0.9~1.35초)와 어긋나 실행할 때마다 다른 순간이 나오고,
+/// 패턴 주기(간격 0.8초 + 패턴 1.65~1.90초)와 어긋나 실행할 때마다 다른 순간이 나오고,
 /// 플레이어는 아무것도 안 하므로 대시·패리·공격은 한 번도 안 찍힌다.
 /// </para>
 ///
@@ -28,6 +28,13 @@ public partial class ShotRunner : Node
 
     /// <summary>상태를 기다릴 때의 기본 상한(초).</summary>
     private const double _pollTimeout = 8.0;
+
+    /// <summary>
+    /// <b>아직 안 찍은</b> 패턴의 선딜을 기다리는 상한(초). 기본 상한보다 길다 — 패턴은 무작위로
+    /// 뽑히므로 특정 하나를 기다리는 것은 한 주기가 아니라 여러 주기다(주기 ≈ 간격 0.8 + 패턴 1.7~1.9초).
+    /// 넘기면 경고만 남기고 그냥 찍는다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다.
+    /// </summary>
+    private const double _tellTimeout = 16.0;
 
     private Overfit.Battle.Battle? _battle;
 
@@ -47,6 +54,9 @@ public partial class ShotRunner : Node
         await Frames(6);
         await Screenshot.CaptureAsync(this, "credits");
 
+        // **2단계로 간다.** 1단계 명부는 패턴이 둘뿐이라(stages.json) 셋째 예고가 영원히 안 오고,
+        // 그러면 "패턴마다 예고가 다른가" 를 찍어서 증명할 수가 없다.
+        Game.Instance.SetStage(2);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
@@ -91,6 +101,20 @@ public partial class ShotRunner : Node
         await Frames(6);
         await Screenshot.CaptureAsync(this, "battle-5-attack");
 
+        // ── 보스 피격: 작가가 그린 흰 실루엣 (이슈 #28) ───────────────────
+        // 0.2초(12프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다 —
+        // 때린 것이 닿았는지가 안 보이면 공격에 값이 안 붙는다는 것이 이 연출의 이유이고,
+        // 그 증명은 "흰가" 가 아니라 "맞은 그 프레임에 흰가" 다.
+        await Wait(0.4);
+        int bossBefore = _battle?.BossHealth ?? 0;
+        Tap("attack");
+        // **7프레임 뒤다(≈0.117초).** 팩의 take-hit-white 는 4프레임 10fps 이고 흰 프레임은
+        // 그중 두 번째라, 맞은 그 프레임을 찍으면 흰색이 아니라 평범한 피격 자세가 나온다 —
+        // 실제로 그렇게 찍혔고 "흰 플래시가 없다" 로 잘못 읽힐 뻔했다.
+        await Until(() => (_battle?.BossHealth ?? 0) < bossBefore, _pollTimeout);
+        await Frames(7);
+        await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
+
         // ── 보스 선딜: 예고 링이 조여 드는 중 ─────────────────────────────
         await Until(() => _battle?.BossWindingUp == true, _pollTimeout);
         await Frames(12);
@@ -99,8 +123,10 @@ public partial class ShotRunner : Node
         // ── 패리 불가 선딜: 크림슨 ────────────────────────────────────────
         // 평소 예고(호박색)와 **같은 화면에서 견줄 수 있어야** 이 연출이 일한다.
         // 두 장이 나란히 없으면 "붉은가" 만 알 수 있고 "다른가" 는 모른다.
+        // 12 → 4프레임. 조건은 선딜 **어디서든** 참이라 판정 직전에 걸릴 수 있고, 그때 12프레임을
+        // 더 기다리면 선딜이 끝나 있다 — 크림슨 예고 대신 판정 충격파가 찍혔다(실제로 그랬다).
         await Until(() => _battle is { BossWindingUp: true, BossUnparryable: true }, _pollTimeout);
-        await Frames(12);
+        await Frames(4);
         await Screenshot.CaptureAsync(this, "battle-6b-unparryable");
 
         // ── 피격: 체력이 줄어든 바로 다음 프레임 ──────────────────────────
@@ -108,6 +134,30 @@ public partial class ShotRunner : Node
         await Until(() => (_battle?.FighterHealth ?? 0) < before, _pollTimeout);
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-7-hit");
+
+        // ── 패턴마다 다른 예고 (이슈 #28) ─────────────────────────────────
+        // **맨 뒤다.** 서로 다른 패턴 셋을 기다리는 것은 여러 주기가 걸리는데, 백장의 패턴은
+        // 셋 다 연속타라 그 사이에 파이터가 죽는다 — 앞에 두면 크림슨 예고와 피격 순간이
+        // 통째로 결과 화면으로 찍힌다(실제로 그렇게 찍혔다).
+        // 백장의 설계는 **칼이 땅에 있나 떠 있나**로 두 패턴을 가르는 것이다. 링은 셋 다 같으므로
+        // 링만 찍으면 그 설계가 화면에 있는지 없는지 알 수가 없다. **서로 다른** 패턴의 선딜을
+        // 세 장 찍어 나란히 두는 것이 그 증명이고, 그래서 id 를 보고 셔터를 누른다 —
+        // 같은 패턴을 세 번 찍으면 세 장이 똑같고 그건 우연이지 증명이 아니다.
+        var shot = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+        for (int i = 1; i <= 3; i++)
+        {
+            await Until(
+                () => _battle is { BossWindingUp: true } && _battle.BossPattern is string id && !shot.Contains(id),
+                _tellTimeout);
+            if (_battle?.BossPattern is string now)
+            {
+                shot.Add(now);
+                Log.Info("shots", $"tell pattern={now} n={i}");
+            }
+
+            await Frames(8);
+            await Screenshot.CaptureAsync(this, $"battle-6a-tell-{i}");
+        }
 
         // ── 결과 화면: 아무것도 안 하고 맞아 죽는다 ───────────────────────
         await Until(() => _battle?.ResultVisible == true, _battleTimeout);
