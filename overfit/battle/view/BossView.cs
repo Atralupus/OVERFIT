@@ -4,8 +4,14 @@ using Overfit.Core;
 namespace Overfit.Battle.View;
 
 /// <summary>
-/// 보스 스프라이트. <b>캐릭터의 4배로 그린다</b> — 스펙이 정한 수치이고,
-/// 히트박스(<c>BossConfig.HalfWidth</c>)도 그 크기에 맞춰 잡혀 있다.
+/// 보스 스프라이트. 배율은 <c>balance.json</c> 의 <c>feel.boss_sprite_scale</c> 이고,
+/// 히트박스(<c>BossConfig.HalfWidth</c>)가 <b>그 배율로 그려진 몸</b>에 맞춰 잡혀 있다.
+///
+/// <para>
+/// 배율이 여기 <c>const</c> 로 있던 때는 그림만 바꿔도 규칙이 조용히 어긋났다 —
+/// 4배 스프라이트에 맞춰 잡은 반폭 120 이 팩을 갈아도 그대로 남았다. 둘을 같은 층(데이터)에
+/// 두면 한쪽만 고치는 일이 눈에 띈다.
+/// </para>
 ///
 /// <para>
 /// 패턴 중 붉은 틴트 하나로는 <b>무엇이 오는지</b>가 안 보인다는 것이 플레이 피드백이었다.
@@ -16,9 +22,6 @@ namespace Overfit.Battle.View;
 /// </summary>
 public partial class BossView : Node2D
 {
-    /// <summary>캐릭터 대비 배율. 그림만이 아니라 규칙(HalfWidth · 아레나 폭)이 이 값을 전제한다.</summary>
-    public const float SizeMultiplier = 4.0f;
-
     /// <summary>선딜이 무르익었을 때의 몸 색. 판정이 가까울수록 이쪽으로 간다.</summary>
     private static readonly Color _windupTint = new(2.00f, 0.55f, 0.45f);
 
@@ -41,8 +44,8 @@ public partial class BossView : Node2D
     public override void _Ready()
     {
         _sprite = GetNode<AnimatedSprite2D>("Sprite");
-        _sprite.Scale = new Vector2(SizeMultiplier, SizeMultiplier);
         _feel = Balance.Data.Feel;
+        _sprite.Scale = new Vector2((float)_feel.BossSpriteScale, (float)_feel.BossSpriteScale);
         _ring = new RingBurst
         {
             Position = new Vector2(0, (float)-_feel.BossRingOffsetY),
@@ -53,10 +56,10 @@ public partial class BossView : Node2D
 
     public void Load(string spriteId)
     {
-        var frames = GD.Load<SpriteFrames>($"res://addons/duelyst_animated_sprites/spriteframes/units/{spriteId}.tres");
+        var frames = GD.Load<SpriteFrames>($"res://assets/spriteframes/{spriteId}.tres");
         if (frames is null)
         {
-            // PNG 는 저장소에 없다(tools/fetch_duelyst.py 가 받아 온다). 받기 전에는 .tres 파싱은
+            // PNG 는 저장소에 없다(tools/install_assets.py 가 받아둔 zip 을 푼다). 풀기 전에는 .tres 파싱은
             // 되고 그 안의 텍스처 ext_resource 만 못 풀려, **엔진이 ERROR 블록을 여러 건 찍는다** —
             // 여기서 null 을 받아 조용히 넘어가는 것이 아니다. 그 소음은 우리 코드의 버그가 아니라
             // 환경이라 tools/build.sh 의 judge_headless 가 그 경로만 면제하고 건수를 경고로 남긴다.
@@ -146,6 +149,7 @@ public partial class BossView : Node2D
         }
 
         // 선딜에만 attack 이다. 후딜까지 attack 으로 두면 "아직 온다" 와 "끝났다" 가 같은 그림이 된다.
+        // 팩에 attack 이 셋 있다(#28 의 세 패턴에 하나씩) — 패턴별 배정은 그 이슈에서 한다.
         return phase == BossPhase.Windup ? "attack" : "idle";
     }
 
@@ -193,7 +197,8 @@ public partial class BossView : Node2D
         if (!_sprite.SpriteFrames.HasAnimation(name))
         {
             // 없는 이름으로 Play 하면 엔진이 ERROR: 를 찍고, 그건 헤드리스 판정(judge_headless)을
-            // 실패시킨다 — 696종이 전부 같은 세트를 갖지 않는다 (실측 idle 695 · run 668 …).
+            // 실패시킨다. 지금 팩에는 다섯이 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 확인한다)
+            // 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
             Log.Warn("view", $"anim_missing name={name}");
             return;
         }
@@ -204,10 +209,15 @@ public partial class BossView : Node2D
 
     /// <summary>
     /// 타일 바닥을 노드 원점에 맞춘다. AnimatedSprite2D 는 centered 라 그냥 두면 타일 <b>중심</b>이
-    /// 바닥선에 놓여 몸의 절반이 지면 아래로 내려간다 — 보스는 4배라 230px 가 묻힌다.
+    /// 바닥선에 놓여 몸의 절반이 지면 아래로 내려간다 — 보스는 5.5배라 283px 가 묻힌다.
     /// 높이는 프레임에서 읽는다. <c>Offset</c> 은 로컬 좌표라 스프라이트의 <c>Scale</c> 이 곱해지므로
-    /// 4배 보스도 1배 파이터와 같은 구현으로 맞는다. 유닛마다, 그리고 애니메이션마다 타일 크기가
-    /// 다를 수 있어 바꿀 때마다 다시 잰다.
+    /// 큰 보스도 작은 파이터와 같은 구현으로 맞는다.
+    ///
+    /// <para>
+    /// 프레임 <b>아래끝이 곧 발바닥</b>이라는 것이 이 계산의 전제다. 지금 팩은 그렇지 않아서
+    /// (Martial Hero 는 200px 프레임 안에서 발이 y=122 다) <c>tools/install_assets.py</c> 가
+    /// SpriteFrames 의 region 을 팩 전체의 불투명 범위로 잘라 그 전제를 만들어 둔다.
+    /// </para>
     /// </summary>
     private void AlignToGround(string anim)
     {
