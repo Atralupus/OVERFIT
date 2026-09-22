@@ -50,6 +50,16 @@ public static class TestConfigs
         AttackReach = 90,
         AttackDamage = 8,
         AttackCost = 12,
+        // 기준값이라 **짧다.** 실제 캐릭터는 0 / 0.8 / 2.0 초인데(fighters.json) 그 값을 베끼면
+        // 차지 한 번을 재는 테스트가 120틱을 돌고, 무엇보다 캐릭터의 차지 시간을 고칠 때마다
+        // 무관한 테스트가 같이 빨개진다. 여기서 진짜여야 하는 것은 수치가 아니라 **모양**이다:
+        // 시간 오름차순 · 첫 칸은 0초 ×1.
+        ChargeTiers = new List<ChargeTierDef>
+        {
+            new() { Seconds = 0.0, DamageMultiplier = 1.0 },
+            new() { Seconds = 0.5, DamageMultiplier = 2.0 },
+            new() { Seconds = 1.0, DamageMultiplier = 3.0 },
+        },
         StaminaRegen = 40,
         Sprite = "test_unit",
     };

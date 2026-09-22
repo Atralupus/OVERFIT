@@ -12,6 +12,12 @@ public class FighterActionTests
     private static readonly InputFrame _parry = new(0, false, false, true, false);
     private static readonly InputFrame _attack = new(0, false, false, false, true);
 
+    /// <summary>공격 키를 <b>누르는 순간</b>. 엣지와 누름 유지가 같이 참이다 — 사람이 누르면 늘 이 모양이다.</summary>
+    private static readonly InputFrame _attackPress = new(0, false, false, false, true, AttackHeld: true);
+
+    /// <summary>공격 키를 <b>누르고 있는</b> 틱. 엣지는 이미 지났다.</summary>
+    private static readonly InputFrame _attackHold = new(0, false, false, false, false, AttackHeld: true);
+
     private static Fighter Spawn(double x = 960) => new(TestConfigs.Fighter(), TestConfigs.Arena(), x);
 
     [Fact]
@@ -286,6 +292,165 @@ public class FighterActionTests
 
         f.Action.ShouldBe(FighterAction.Attack);
         f.AttackActive.ShouldBeFalse();
+    }
+
+
+    // ── 차지 공격 (이슈 #40) ─────────────────────────────────────────────────
+
+    /// <summary>차지를 <paramref name="ticks"/> 틱 동안 붙들고 있는다.</summary>
+    private static void Hold(Fighter f, int ticks)
+    {
+        for (int i = 0; i < ticks; i++)
+        {
+            f.Tick(_attackHold, _dt);
+        }
+    }
+
+    /// <summary><paramref name="tier"/> 단계에 닿을 때까지 붙들고 있는다. <b>틱 수를 세지 않는다</b> —
+    /// 단계 시간은 데이터고, 여기서 세면 그 값을 손으로 베낀 사본이 된다.</summary>
+    private static void HoldToTier(Fighter f, int tier)
+    {
+        f.Tick(_attackPress, _dt);
+        int guard = 0;
+        while (f.ChargeTier < tier && guard++ < 600)
+        {
+            f.Tick(_attackHold, _dt);
+        }
+    }
+
+    [Fact]
+    public void 그냥_누르면_예전처럼_곧장_휘두른다()
+    {
+        // 누름 유지가 없는 입력(봇의 탭 · 옛 입력 시퀀스)은 **한 틱도 안 늘어나야 한다** —
+        // 늘어나면 지금까지의 모든 리플레이가 한 틱씩 밀린다.
+        Fighter f = Spawn();
+        f.Tick(_attack, _dt);
+
+        f.Action.ShouldBe(FighterAction.Attack);
+        f.Charging.ShouldBeFalse();
+        f.ChargeTier.ShouldBe(0);
+        f.AttackDamage.ShouldBe(8, "0단계는 배수 1 이다");
+    }
+
+    [Fact]
+    public void 누르고_있으면_차지에_들어간다()
+    {
+        Fighter f = Spawn();
+        f.Tick(_attackPress, _dt);
+
+        f.Action.ShouldBe(FighterAction.Charge);
+        f.Charging.ShouldBeTrue();
+        f.AttackActive.ShouldBeFalse("차지 중에는 판정이 없다");
+        f.Stamina.ShouldBe(100 - 12, "값은 누를 때 한 번 낸다");
+    }
+
+    [Fact]
+    public void 차지는_놓을_때까지_안_끝난다()
+    {
+        // 차지를 끝내는 것은 시간이 아니라 **손가락**이다. 최대에 닿아도 저절로 안 나간다 —
+        // 저절로 나가면 "언제 놓을까" 가 사라져 이 기술에 판단이 없어진다.
+        Fighter f = Spawn();
+        f.Tick(_attackPress, _dt);
+        Hold(f, 180);   // 3초 — 최대(1.0초)를 한참 지났다
+
+        f.Action.ShouldBe(FighterAction.Charge);
+        f.ChargeTier.ShouldBe(2);
+        f.ChargeProgress.ShouldBe(1.0, 1e-9, "진행도는 1 을 안 넘는다");
+    }
+
+    [Fact]
+    public void 놓으면_모은_만큼의_배수로_휘두른다()
+    {
+        Fighter f = Spawn();
+        HoldToTier(f, 2);
+        f.Tick(default, _dt);   // 놓았다
+
+        f.Action.ShouldBe(FighterAction.Attack);
+        f.Charging.ShouldBeFalse();
+        f.ChargeTier.ShouldBe(2);
+        f.AttackDamage.ShouldBe(24, "8 × 3");
+    }
+
+    [Fact]
+    public void 중간에_놓으면_중간_단계다()
+    {
+        Fighter f = Spawn();
+        HoldToTier(f, 1);
+        f.Tick(default, _dt);
+
+        f.Action.ShouldBe(FighterAction.Attack);
+        f.ChargeTier.ShouldBe(1);
+        f.AttackDamage.ShouldBe(16, "8 × 2");
+    }
+
+    [Fact]
+    public void 스윙이_끝나면_단계가_0_으로_돌아온다()
+    {
+        Fighter f = Spawn();
+        HoldToTier(f, 2);
+        f.Tick(default, _dt);
+        Idle(f, 30);   // 공격(0.28초)이 끝나고도 남는다
+
+        f.Action.ShouldBe(FighterAction.Idle);
+        f.ChargeTier.ShouldBe(0, "다음 탭이 지난 스윙의 배수를 물려받으면 안 된다");
+        f.AttackDamage.ShouldBe(8);
+    }
+
+    [Fact]
+    public void 차지_중에는_움직이지도_뛰지도_못한다()
+    {
+        // 차지의 값은 **아무것도 못 한다는 것**이다. 걸으면서 모을 수 있으면 위험이 없고,
+        // 위험이 없으면 greed 축이 재는 것이 사라진다.
+        Fighter f = Spawn();
+        f.Tick(_attackPress, _dt);
+        double x = f.X;
+
+        f.Tick(new InputFrame(1, Jump: true, false, false, false, AttackHeld: true), _dt);
+
+        f.X.ShouldBe(x, 1e-9, "차지 중에 걸었다");
+        f.Grounded.ShouldBeTrue("차지 중에 뛰었다");
+        f.Action.ShouldBe(FighterAction.Charge);
+    }
+
+    [Fact]
+    public void 차지_중에_맞으면_모은_것이_전부_날아간다()
+    {
+        // 끊기 대신 유지를 고르면 "패턴 위에 겹쳐 모으는 것" 이 가장 좋은 수가 되고,
+        // 그러면 보스의 패턴이 이 기술의 판단에서 통째로 빠진다. 값은 이미 냈으므로 돌려받지도 않는다.
+        Fighter f = Spawn();
+        HoldToTier(f, 2);
+        double paid = f.Stamina;
+
+        f.TakeDamage(9);
+
+        f.Action.ShouldBe(FighterAction.Idle);
+        f.Charging.ShouldBeFalse();
+        f.ChargeTier.ShouldBe(0);
+        f.Stamina.ShouldBe(paid, 1e-9, "끊겼다고 스태미나를 돌려주지 않는다");
+    }
+
+    [Fact]
+    public void 차지_중에는_스태미나가_안_찬다()
+    {
+        // 차지의 진짜 값이 여기 있다 — 회복은 Idle 일 때만 도므로 2초를 모으는 것은
+        // 그동안의 회복(40/s)을 통째로 포기하는 것이다. 그래서 차지에 값을 더 안 매긴다.
+        Fighter f = Spawn();
+        f.Tick(_attackPress, _dt);
+        double low = f.Stamina;
+        Hold(f, 60);
+
+        f.Stamina.ShouldBe(low, 1e-9);
+    }
+
+    [Fact]
+    public void 누름_유지만으로는_차지가_안_시작된다()
+    {
+        // 차지는 **엣지**에서만 시작한다. 레벨만 보고 시작하면 앞 스윙이 끝나는 순간
+        // 키를 놓지 않은 손가락이 저절로 다음 차지를 물고, 그건 누른 적 없는 입력이다.
+        Fighter f = Spawn();
+        f.Tick(_attackHold, _dt);
+
+        f.Action.ShouldBe(FighterAction.Idle);
     }
 
     [Fact]
