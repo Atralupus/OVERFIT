@@ -1,26 +1,13 @@
 {
-  "_comment": "캐릭터 3종. 사거리가 짧을수록 공격 사이클이 빠르다 — FighterDataTests 가 그 관계를 지킨다.",
+  "_comment": "캐릭터 하나. 셋(단검 · 중검 · 대검)이던 것을 이슈 #38 에서 줄였다 — 캐릭터 3택은 성장 루프와 같이 빠졌는데(이슈 #22) 데이터만 남아 있었고, 그림은 처음부터 셋이 같은 하나(martial_hero)였다. 수치는 게임이 실제로 돌리던 중검 그대로다(balance.json 이 가리키던 것이 그것이다) — 공격 타이밍 하나만 바꿨다. 그래야 대시 사거리 · 점프 정점 · 패턴 기하가 선 자리에서 안 움직인다. 표가 다시 여럿이 되면 FighterDataTests 의 가드들이 그대로 각 캐릭터를 순회한다.",
   "_units": "거리 px · 속도 px/s · 시간 초 · 스태미나 무차원",
-  "_note_dash": "사거리를 2배로 늘렸다 (이슈 #27 · 나인 솔즈). 늘린 것은 **속도뿐이고 지속과 무적 창은 그대로**다 — 지속을 늘려 거리를 벌면 무적 비율이 같이 움직여 '더 멀리 가는 같은 기술' 이 아니라 다른 기술이 된다. 패턴의 dash_window 도, 계측이 재는 타이밍 오차도, 봇의 반응 창도 전부 초 단위라 지속을 건드리면 그 셋이 한꺼번에 뜻을 바꾼다. 기준은 '보스 몸 하나를 한 번에 지나는가': 닿은 자리에서 반대편 닿은 자리까지가 보스 반폭 85 + 파이터 반폭의 두 배(222~242px)인데 옛 값은 실측 183px 라 못 지났다. FighterDataTests 가 실제로 대시를 돌려 대조한다.",
-  "_note_jump": "정점을 다시 올렸다 (이슈 #28). 단검 302.5 · 중검 300.0 · 대검 297.5 px 로, 선 몸통(120)의 2.5배이고 보스 키(297)와 거의 같다 — \"적의 낮은 공격을 확실히 넘는다\" 가 화면에서 그렇게 보이는 높이다. **#27 에서는 이 값을 못 올렸다**: 그때 막은 것은 물리가 아니라 패턴 기하였다(넘지 말아야 할 패턴 중 가장 낮은 상단이 180 이라 정점이 176 에 갇혔다). #28 이 패턴 일곱을 셋으로 갈아엎으면서 순서를 바로잡았다 — **점프를 먼저 정하고 패턴의 height 를 거기 맞췄다.** 지금 위쪽 천장은 점프 강타의 착지 충격 상단 330 이고, 아래쪽은 이단 올려베기의 150 이다(정점이 그 1.8배를 넘어야 \"겨우 넘는다\" 가 아니다). 그 둘을 옮기지 않는 한 이 값은 297~330 사이에만 설 수 있고, PatternDataTests 가 실제로 뛰게 해서(이산 적분) 대조한다. 몸 충돌이 없어져 점프는 보스를 넘는 수단이 아니다 — 낮은 판정을 넘는 것이 전부이고, 백장에게 그런 판정은 이단 올려베기 하나다.",
-  "_note_parry": "패리는 2단계다 (이슈 #27 · 나인 솔즈). 적중 parry_precise_window 이내에 눌렀으면 정확 패리(피해 0 · 보스 경직 · 기 +1 · 공중 대시 회복), parry_imprecise_window 이내면 부정확 패리(피해의 parry_internal_ratio 만 내상 · 지상이면 parry_lock 초 고정 · 기 +1)다. 세 캐릭터가 같은 값을 쓰는 이유는 이것이 캐릭터 성능이 아니라 **조작의 정의**이기 때문이다 — 캐릭터 차이는 parry_duration·parry_cost 가 내고, 패턴별 난이도는 patterns.json 의 parry_window 가 낸다(유효 창은 둘 중 좁은 쪽이다). parry_spam_window 는 연타 징벌: 공격이 안 오는데 앞 누름의 부정확 창 안에서 또 누르면 두 번째는 정확 창이 이만큼으로 줄고 세 번째부터는 아예 없다(부정확만). 봇이 매 틱 난사하면 규칙이 벌을 줘야 학습 데이터가 '노리고 누른' 기록이 된다.",
-  "_note_sprite": "셋이 같은 그림이다. 플레이어 팩(Martial Hero)에 캐릭터가 하나뿐이라 그렇다 — 셋을 그림으로 구분하려면 팩이 더 필요하고, 지금 화면에 서는 것은 balance.json 이 가리키는 하나뿐이다.",
+  "_note_dash": "사거리를 2배로 늘렸다 (이슈 #27 · 나인 솔즈). 늘린 것은 **속도뿐이고 지속과 무적 창은 그대로**다 — 지속을 늘려 거리를 벌면 무적 비율이 같이 움직여 '더 멀리 가는 같은 기술' 이 아니라 다른 기술이 된다. 패턴의 dash_window 도, 계측이 재는 타이밍 오차도, 봇의 반응 창도 전부 초 단위라 지속을 건드리면 그 셋이 한꺼번에 뜻을 바꾼다. 기준은 '보스 몸 하나를 한 번에 지나는가': 닿은 자리에서 반대편 닿은 자리까지가 보스 반폭 85 + 파이터 반폭 30 의 두 배(230px)인데 옛 값은 실측 183px 라 못 지났다. FighterDataTests 가 실제로 대시를 돌려 대조한다.",
+  "_note_jump": "정점을 다시 올렸다 (이슈 #28). 300.0px 로, 선 몸통(120)의 2.5배이고 보스 키(297)와 거의 같다 — \"적의 낮은 공격을 확실히 넘는다\" 가 화면에서 그렇게 보이는 높이다. **#27 에서는 이 값을 못 올렸다**: 그때 막은 것은 물리가 아니라 패턴 기하였다(넘지 말아야 할 패턴 중 가장 낮은 상단이 180 이라 정점이 176 에 갇혔다). #28 이 패턴 일곱을 셋으로 갈아엎으면서 순서를 바로잡았다 — **점프를 먼저 정하고 패턴의 height 를 거기 맞췄다.** 지금 위쪽 천장은 점프 강타의 착지 충격 상단 330 이고, 아래쪽은 이단 올려베기의 150 이다(정점이 그 1.8배를 넘어야 \"겨우 넘는다\" 가 아니다). 그 둘을 옮기지 않는 한 이 값은 297~330 사이에만 설 수 있고, PatternDataTests 가 실제로 뛰게 해서(이산 적분) 대조한다. 몸 충돌이 없어져 점프는 보스를 넘는 수단이 아니다 — 낮은 판정을 넘는 것이 전부이고, 백장에게 그런 판정은 이단 올려베기 하나다.",
+  "_note_parry": "패리는 2단계다 (이슈 #27 · 나인 솔즈). 적중 parry_precise_window 이내에 눌렀으면 정확 패리(피해 0 · 보스 경직 · 기 +1 · 공중 대시 회복), parry_imprecise_window 이내면 부정확 패리(피해의 parry_internal_ratio 만 내상 · 지상이면 parry_lock 초 고정 · 기 +1)다. 이 창들은 캐릭터 성능이 아니라 **조작의 정의**라, 캐릭터가 늘어도 같은 값으로 시작한다 — 패턴별 난이도는 patterns.json 의 parry_window 가 낸다(유효 창은 둘 중 좁은 쪽이다). parry_spam_window 는 연타 징벌: 공격이 안 오는데 앞 누름의 부정확 창 안에서 또 누르면 두 번째는 정확 창이 이만큼으로 줄고 세 번째부터는 아예 없다(부정확만). 봇이 매 틱 난사하면 규칙이 벌을 줘야 학습 데이터가 '노리고 누른' 기록이 된다.",
+  "_note_attack": "**공격 시간은 그림에서 거꾸로 정한다** (이슈 #38). attack1 시트는 6프레임 · 12fps = 0.50초이고, 시트를 열어 보면 칼이 실제로 나가는 것은 **4번 프레임**이다(0~3 은 칼을 뒤로 빼는 동작, 5 는 흰 궤적이 흩어지는 잔상). 그래서 선딜 = 0~3 네 장(0.3333) · 판정 = 4번 한 장(0.0833) · 후딜 = 5번 한 장(0.0834)이고 셋의 합이 정확히 0.50초다. 전에는 합이 0.30초라 액션이 끝나며 뷰가 idle 로 돌아갔고, 칼이 나가는 프레임까지 **간 적이 한 번도 없었다** — 유저가 \"공격 모션이 안 보인다\" 고 말한 것이 이것이다. attack_anim_* 세 값은 규칙이 안 읽는다. 그 관계를 FighterDataTests 가 지키라고 데이터에 적어 둔 것이다 — .tres 에만 있으면 테스트가 못 읽어 다시 조용히 어긋난다.",
+  "_note_sprite": "그림은 Martial Hero 팩 하나다. 캐릭터가 늘어나려면 팩이 더 필요하다 — 셋이던 때도 전부 같은 이 그림을 가리키고 있었다.",
 
-  "단검": {
-    "sprite": "martial_hero",
-    "move_speed": 480, "jump_velocity": 1225,
-    "max_health": 90, "max_stamina": 110,
-    "half_width": 26, "height": 120,
-    "dash_speed": 2500, "dash_duration": 0.16, "dash_i_frames": 0.13, "dash_cost": 22,
-    "parry_precise_window": 0.133, "parry_imprecise_window": 0.5, "parry_spam_window": 0.1,
-    "parry_lock": 0.6, "parry_internal_ratio": 0.5,
-    "parry_duration": 0.26, "parry_cost": 14,
-    "attack_windup": 0.06, "attack_active": 0.05, "attack_recover": 0.10,
-    "attack_reach": 70, "attack_damage": 6, "attack_cost": 10,
-    "stamina_regen": 46
-  },
-
-  "중검": {
+  "검객": {
     "sprite": "martial_hero",
     "move_speed": 420, "jump_velocity": 1220,
     "max_health": 110, "max_stamina": 100,
@@ -29,22 +16,9 @@
     "parry_precise_window": 0.133, "parry_imprecise_window": 0.5, "parry_spam_window": 0.1,
     "parry_lock": 0.6, "parry_internal_ratio": 0.5,
     "parry_duration": 0.30, "parry_cost": 15,
-    "attack_windup": 0.09, "attack_active": 0.06, "attack_recover": 0.15,
+    "attack_windup": 0.3333, "attack_active": 0.0833, "attack_recover": 0.0834,
+    "attack_anim_fps": 12, "attack_anim_frames": 6, "attack_anim_blade_frame": 4,
     "attack_reach": 110, "attack_damage": 10, "attack_cost": 14,
     "stamina_regen": 40
-  },
-
-  "대검": {
-    "sprite": "martial_hero",
-    "move_speed": 360, "jump_velocity": 1215,
-    "max_health": 130, "max_stamina": 95,
-    "half_width": 36, "height": 120,
-    "dash_speed": 2000, "dash_duration": 0.20, "dash_i_frames": 0.15, "dash_cost": 30,
-    "parry_precise_window": 0.133, "parry_imprecise_window": 0.5, "parry_spam_window": 0.1,
-    "parry_lock": 0.6, "parry_internal_ratio": 0.5,
-    "parry_duration": 0.34, "parry_cost": 18,
-    "attack_windup": 0.14, "attack_active": 0.08, "attack_recover": 0.22,
-    "attack_reach": 160, "attack_damage": 17, "attack_cost": 20,
-    "stamina_regen": 34
   }
 }

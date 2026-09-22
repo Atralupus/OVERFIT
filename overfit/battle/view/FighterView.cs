@@ -52,7 +52,19 @@ public partial class FighterView : Node2D
     /// <summary>부정확 패리에 굳은 동안의 몸 색. 어둡고 채도가 죽는다 — 안 보이면
     /// 0.6초 동안 키가 안 먹는 것이 버그로 읽힌다.</summary>
     private static readonly Color _lockedTint = new(0.50f, 0.46f, 0.58f);
-    private static readonly Color _attackFlash = new(2.10f, 2.10f, 1.70f);
+
+    /// <summary>
+    /// 공격 섬광. <b>일부러 약하다.</b> 전에는 (2.10, 2.10, 1.70) 이라 0.09초 동안 몸이 흰색으로
+    /// 날아갔는데, 그 0.09초가 정확히 <b>칼이 지나가는 한 프레임</b> 위에 떨어진다 —
+    /// 유일하게 보여줘야 할 그림을 섬광이 덮고 있었다(이슈 #38).
+    ///
+    /// <para>
+    /// 다른 섬광들(패리 2.60 · 피격 2.40)이 센 것은 그 자리에 <b>그림이 없기 때문</b>이다:
+    /// 팩에 패리 애니메이션이 없어 섬광이 곧 피드백이다. 공격은 반대다 — 작가가 흰 궤적을
+    /// 이미 그려 뒀으므로, 여기서 할 일은 말을 더 하는 것이 아니라 그 그림을 안 가리는 것이다.
+    /// </para>
+    /// </summary>
+    private static readonly Color _attackFlash = new(1.25f, 1.20f, 1.00f);
     private static readonly Color _slashColor = new(1.00f, 0.92f, 0.72f, 0.95f);
     private static readonly Color _hitFlash = new(2.40f, 0.45f, 0.45f);
 
@@ -130,8 +142,15 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 공격 판정이 선 틱. 몸 섬광 <b>하나로는 안 읽혔다</b> — 캐릭터가 130px 뿐이라
-    /// 살짝 밝아지는 것은 이 크기에서 보이지 않는다. 칼이 닿는 앞쪽에 섬광을 하나 더 세운다.
+    /// 공격 판정이 선 틱 — 시트에서 <b>칼이 실제로 지나가는 프레임</b>이다
+    /// (fighters.json 의 attack_anim_blade_frame).
+    ///
+    /// <para>
+    /// 여기서 하는 일은 둘이다. 몸을 <b>살짝</b> 밝히고(<see cref="_attackFlash"/>), 칼이 닿는
+    /// 앞쪽에 섬광을 하나 세운다. 몸 섬광만으로는 130px 짜리 캐릭터에서 안 읽혀서 앞쪽 섬광을
+    /// 더했었는데, 그 뒤 몸 섬광을 세게 올려 놓는 바람에 <b>정작 칼 그림을 덮고 있었다</b>(이슈 #38).
+    /// 앞쪽 섬광이 세기를 맡으므로 몸은 약해도 된다.
+    /// </para>
     /// </summary>
     public void AttackActive()
     {

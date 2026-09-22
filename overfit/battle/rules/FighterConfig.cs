@@ -71,11 +71,31 @@ public sealed class FighterConfig
 
     public required double AttackCost { get; init; }
 
+    // ── 공격 애니메이션의 사실 셋 ────────────────────────────────────────────────
+    //
+    // **규칙은 이 셋을 안 읽는다.** 여기 있는 이유는 위의 세 시간(선딜·판정·후딜)이
+    // 이 셋에서 **거꾸로 정해지기 때문**이다 — 그리고 그 관계를 지키는 것이 테스트의 일이다.
+    // 값을 뷰나 .tres 에만 두면 테스트가 못 읽어, 액션이 그림보다 짧아도 아무도 안 빨개진다.
+    // 실제로 그랬다(이슈 #38): 0.30초짜리 공격이 0.50초짜리 6프레임을 돌려 칼이 나가기 전에
+    // idle 로 돌아갔고, 그래서 **칼 휘두르는 그림이 한 번도 화면에 안 나왔다.**
+
+    /// <summary>공격 애니메이션의 재생 속도(fps). <c>.tres</c> 의 <c>speed</c> 와 같은 값이다.</summary>
+    public required double AttackAnimFps { get; init; }
+
+    /// <summary>공격 애니메이션의 프레임 수. 재생 시간은 <c>frames / fps</c> 다.</summary>
+    public required int AttackAnimFrames { get; init; }
+
+    /// <summary>
+    /// 칼이 실제로 지나가는 프레임의 번호(0부터). <b>시트를 열어서 정한다</b> —
+    /// 번호로 짐작하지 않는다. 선딜은 여기까지고, 판정은 여기서부터 선다.
+    /// </summary>
+    public required int AttackAnimBladeFrame { get; init; }
+
     /// <summary>초당 회복량. 행동 중에는 회복하지 않는다.</summary>
     public required double StaminaRegen { get; init; }
 
     /// <summary>
-    /// Duelyst SpriteFrames 의 id. <b>규칙은 이 값을 안 쓴다</b> — 뷰가 읽어 그릴 뿐이다.
+    /// <c>assets/spriteframes/&lt;id&gt;.tres</c> 의 id. <b>규칙은 이 값을 안 쓴다</b> — 뷰가 읽어 그릴 뿐이다.
     /// 여기 두는 이유는 "이 캐릭터가 무엇인가"의 진실이 data/fighters.json 한 곳이어야 하기 때문이다.
     /// </summary>
     public required string Sprite { get; init; }
