@@ -3,18 +3,32 @@
 **보스 하나를 다섯 번 잡는 2D 가로 소울라이크.** 단계를 넘을 때마다 보스가 쓰는 패턴이 늘고,
 그 패턴은 **이 플레이어가 지금까지 어떻게 피했는지에 따라 정해진다.**
 
-> **플레이 가능한 빌드가 있다** — [Releases](https://github.com/Atralupus/OVERFIT/releases/latest) 에서 macOS 판을 받는다.
-> 개발 중인 프로토타입이다. 서명하지 않은 빌드라 처음 열 때 우클릭 → 열기 가 필요하다.
+> ## 🚧 아직 만드는 중이다
+>
+> **완성된 게임이 아니라 개발 중인 프로토타입이다.** 전투 한 판은 처음부터 끝까지 돌아가지만,
+> 이 프로젝트의 핵심인 **"보스가 당신에게 맞춰진다" 는 아직 없다** — 패턴은 지금 무작위로 고른다
+> ([왜 일부러 무작위인지](#그래서-지금-패턴-선택이-무작위다)).
+>
+> | 되는 것 | 아직 안 되는 것 |
+> |---|---|
+> | 대시 · 점프 · 패리 · 공격, 보스 패턴 6종, 히트 판정 | **딥러닝 패턴 선택** — 이 저장소의 목적 그 자체 |
+> | 승패 · 결과 화면 · 5단계 진행 | 캐릭터 3택 · 스탯 강화 (이슈 #22 로 뺐다) |
+> | 회피 계측 10축, 헤드리스 전투 · 리플레이 골든 | 사운드 · 음악 |
+> | macOS 빌드 | 윈도우 · 리눅스 빌드 |
+>
+> 지금 시점의 빌드는 [Releases](https://github.com/Atralupus/OVERFIT/releases/latest) 에 있다.
+> 서명하지 않은 빌드라 처음 열 때 우클릭 → 열기 가 필요하다.
 
 | | |
 |---|---|
-| <img src="docs/shots/title.png" width="420"> | <img src="docs/shots/battle-3.png" width="420"> |
-| **타이틀** — 조작 안내는 `InputMap` 에서 뽑는다 | **전투** — 보스가 패턴을 도는 동안 붉게 물든다 |
-| <img src="docs/shots/battle-1.png" width="420"> | <img src="docs/shots/battle-5.png" width="420"> |
-| 보스가 다가온다 | 몸이 겹치지 않는다 — 그래서 거리가 축이 된다 |
+| <img src="docs/shots/title.png" width="420"> | <img src="docs/shots/battle-1-approach.png" width="420"> |
+| **타이틀** — 조작 안내는 `InputMap` 에서 뽑는다 | **전투** — 체력은 빨강 · 스태미나는 초록, 보스 체력은 숫자로도 읽힌다 |
+| <img src="docs/shots/battle-4-parry.png" width="420"> | <img src="docs/shots/battle-6-windup.png" width="420"> |
+| **패리** — 청록 링이 열려 있는 동안만 받아친다 | **보스 선딜** — 붉은 링이 조여 들면 판정이 온다 |
 
-> 그림체가 섞여 있고 연출이 없는 것은 프로토타입이기 때문이다. 스프라이트는 CC0 인 것을 모아 쓰고 있고,
-> 대시·패리 전용 애니메이션이 없어 색과 투명도로 대신한다.
+> 스프라이트는 CC0 인 것을 모아 쓰고 배경은 직접 그린다 — 에셋을 하나 더 들일 때마다
+> [`overfit/assets/LICENSES.md`](overfit/assets/LICENSES.md) 가 길어지고, 그 기록이 라이선스 주장의 전부다.
+> 대시·패리 전용 애니메이션이 팩에 없어 그 둘은 이펙트(잔상 · 링 · 히트스톱)로 만든다.
 
 ---
 
@@ -142,7 +156,7 @@
 |---|---|
 | 엔진 | Godot 4.7.2 (Mono / C#) · `forward_plus` · net8.0 · **데스크톱 전용** |
 | 화면 | 가로 1920×1080 |
-| 규칙 테스트 | Godot 없이 `tools/build.sh test` — **156건**, 0.3초 |
+| 규칙 테스트 | Godot 없이 `tools/build.sh test` — **159건**, 0.3초 |
 | 에셋 | [Duelyst](https://github.com/Jordyfel/duelyst-animated-sprites-godot) (**CC0 1.0**) — 유닛 696종 · 보스 50종 |
 
 ---
