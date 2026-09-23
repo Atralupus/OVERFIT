@@ -52,6 +52,13 @@ public class HitResolverTests
     /// <summary>바닥에서 140 위 — 선 키(120)를 넘으므로 지상이 안전한 대공.</summary>
     private static HitBox High() => new(0, 300, 140, 420, 20);
 
+    /// <summary>
+    /// 안쪽 190px 이 비어 있는 판정 (점프 강타의 착지 충격과 같은 모양).
+    /// <b>이 박스가 있어야 "너무 가까워서 안 맞았다" 를 물어볼 수 있다</b> — 안쪽이 0 이면
+    /// 그 갈래는 값으로 도달할 수 없는 자리라 테스트가 못 선다.
+    /// </summary>
+    private static HitBox Pocket() => new(190, 760, 0, 330, 14);
+
     private static Fighter Airborne(double x)
     {
         Fighter f = Spawn(x);
@@ -67,7 +74,7 @@ public class HitResolverTests
     [Fact]
     public void 거리_밖이면_안_맞는다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.MissedByRange);
+        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
     }
 
     [Fact]
@@ -133,8 +140,23 @@ public class HitResolverTests
     {
         // 여기서 이유를 버리면 BattleSim 은 "그 순간 무슨 행동 중이었나" 로 추측할 수밖에 없다.
         // 그 추측이 실제로 틀렸다 — 점프로 넘긴 판정이 같이 눌러둔 패리의 공으로 기록됐다.
-        HitResolver.Resolve(Spawn(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByRange);
+        HitResolver.Resolve(Spawn(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
         HitResolver.Resolve(Airborne(_bossX + 100), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
+    }
+
+    [Fact]
+    public void 거리로_빗나간_것이_안인지_밖인지까지_말한다()
+    {
+        // 한 갈래(MissedByRange)였을 때는 **파고들어 피한 것과 도망쳐 피한 것이 같은 한 점**이었다.
+        // 그 둘은 봉인할 것이 정반대라(안쪽 주머니를 덮는 변종 · 도주로를 덮는 변종),
+        // 계측이 못 가르면 2단계가 정반대 변종을 뽑는다.
+        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Pocket(), Tags(false))
+            .ShouldBe(HitVerdict.MissedTooClose);
+        HitResolver.Resolve(Spawn(_bossX + 900), _bossX, Pocket(), Tags(false))
+            .ShouldBe(HitVerdict.MissedTooFar);
+
+        // 주머니와 사거리 사이는 그냥 맞는다 — 위 둘이 "거리면 무조건 빗나간다" 가 아니라는 증거다.
+        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Pocket(), Tags(false)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -142,7 +164,7 @@ public class HitResolverTests
     {
         // 둘 다 어긋났을 때 무엇이라 말하는가. 거리를 먼저 보므로 거리로 답한다 —
         // 순서를 박아두지 않으면 같은 상황이 판마다 다른 라벨을 내 학습 데이터가 흔들린다.
-        HitResolver.Resolve(Airborne(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByRange);
+        HitResolver.Resolve(Airborne(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
     }
 
     [Fact]

@@ -24,6 +24,28 @@ public sealed class PlayerAxes
 {
     public double DashTimingBias { get; private init; }
 
+    /// <summary>
+    /// 대시 타이밍 오차의 분산.
+    ///
+    /// <para>
+    /// ⚠ <b>표본은 "판정이 설 때까지 살아 있던 대시" 뿐이다</b> (확인함 · 이슈 #46). 시작 시각은
+    /// 대시 행동이 끝나는 순간 지워지므로, <b>너무 일찍 시작해 무적이 이미 닫힌 채 맞은 대시</b>는
+    /// 이 분산에 안 들어간다 — 그 판정은 <c>Verb=None</c> 으로 기록된다. 즉 이 값은
+    /// "대시가 판정에 겹쳤다는 조건 아래의 분산" 이라 실제보다 <b>작게</b> 나온다.
+    /// </para>
+    ///
+    /// <para>
+    /// 일부러 이대로 둔다. 고치려면 관측을 판정 시점이 아니라 <b>판정 뒤까지 기다렸다</b> 내보내야
+    /// 하는데(이슈 #16 이 같은 구멍을 다른 각도에서 적어 뒀다 — "늦어서 못 피했다" 와
+    /// "아무것도 안 했다" 가 한 점이 되는 것), 그건 계측의 방출 구조를 바꾸는 일이라 이 이슈의 범위가
+    /// 아니다. 대신 <see cref="DashSamples"/> 가 몇 건으로 낸 값인지를 같이 나른다.
+    /// </para>
+    ///
+    /// <para>
+    /// 경계는 <c>BattleSim.CreditDistance</c> 와 <b>같은 규칙</b>이다: 대시의 공은 대시 행동이
+    /// 끝나는 곳까지다. 둘이 다른 경계를 쓰면 같은 대시가 축마다 다른 개수로 세어진다.
+    /// </para>
+    /// </summary>
     public double DashTimingVar { get; private init; }
 
     /// <summary>+1 에 가까울수록 안으로 파고들고 -1 에 가까울수록 밖으로 도망간다.</summary>
@@ -59,6 +81,26 @@ public sealed class PlayerAxes
 
     public double Greed { get; private init; }
 
+    /// <summary>
+    /// 평균 교전 거리(px). <b>안쪽 주머니로 파고들어 피한 판정만 부호가 반대다</b> (이슈 #46) —
+    /// <c>MissedTooClose</c> 는 "너무 가까워서 안 맞았다" 라, 그것을 +로 쌓으면 파고들수록
+    /// "멀리서 싸운다" 가 커진다. 축이 뭉개는 것이 아니라 <b>거꾸로 말하는</b> 자리였다.
+    ///
+    /// <para>
+    /// ⚠ <b>정규화가 없는 평균이라 개막 접근 구간이 이 값을 크게 끌어올린다</b> (재 봄 · 이슈 #46).
+    /// 파이터는 아레나 1/4 · 보스는 3/4 에서 시작해 교전 거리 <b>960px</b> 으로 출발하고, 붙기 전에
+    /// 서는 판정은 전부 그 큰 거리로 쌓인다. 실측(데모 시드 51 · 23건)으로 <b>개막 3건이 496px</b>
+    /// 이고 나머지 20건은 5~252px 인데, 그 3건(전체의 13%)이 축을 <b>72.5 → 127.7</b> 로 올린다 —
+    /// 실제 교전 거리의 <b>1.76배</b>다. 작은 오염이 아니라 이 축의 절반쯤이 개막 걸음이라는 뜻이고,
+    /// 판이 짧을수록(관측이 적을수록) 몫이 더 커진다.
+    /// </para>
+    ///
+    /// <para>
+    /// 그래도 이 이슈에서는 <b>재고 적어만 둔다.</b> 고치려면 "언제부터 교전인가" 를 정해야 하는데
+    /// (첫 접촉? 첫 판정? 몇 초?) 그건 데이터에 없는 새 수치이고, 그 수치가 곧 축의 정의를 바꾼다 —
+    /// 계측을 고치러 온 자리에서 축의 뜻을 말없이 바꾸면 이 이슈가 고치려던 것과 같은 사고가 난다.
+    /// </para>
+    /// </summary>
     public double DistanceBias { get; private init; }
 
     /// <summary>이 축들을 낸 관측 수. 축의 신뢰도가 여기 들어 있다.</summary>
@@ -101,6 +143,18 @@ public sealed class PlayerAxes
     /// </summary>
     public int ChargedGreedSamples { get; private init; }
 
+    /// <summary>
+    /// 관측들을 축으로 접는다.
+    ///
+    /// <para>
+    /// ⚠ <b><see cref="DodgeEvent.PatternId"/> 를 안 읽는다</b> — 열 축 전부가 모든 패턴을 뭉갠
+    /// 값이다 (확인함 · 이슈 #46). 계열이 하나로 줄어드는 동안에는 뭉갤 것이 없어 안 보이지만,
+    /// 계열이 여럿이 되는 순간 되살아난다: "내려찍기는 패리하고 올려베기는 점프한다" 는 사람이
+    /// "패리 반 점프 반" 한 명으로 읽혀, 봉인할 것을 못 고른다.
+    /// 계열별 집계는 이 이슈에서 만들지 않는다(이슈 #48 이 계열을 다시 세울 때 같이 선다) —
+    /// 여기 적어 두는 이유는 그때 이 줄을 지우고 만들라는 뜻이다.
+    /// </para>
+    /// </summary>
     public static PlayerAxes From(IReadOnlyList<DodgeEvent> events)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -117,7 +171,9 @@ public sealed class PlayerAxes
 
         foreach (DodgeEvent e in events)
         {
-            distance += e.Distance;
+            // 안쪽 주머니로 피한 것은 **반대 부호**다 (이슈 #46). 거리 자체는 양수이므로
+            // 여기서 뒤집지 않으면 "파고들어 피했다" 가 "멀리 떨어져 있었다" 와 같은 방향으로 쌓인다.
+            distance += e.Verdict == HitVerdict.MissedTooClose ? -e.Distance : e.Distance;
             if (e.Airborne)
             {
                 airborne++;

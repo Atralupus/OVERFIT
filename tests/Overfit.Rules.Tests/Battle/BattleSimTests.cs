@@ -408,9 +408,11 @@ public class BattleSimTests
         // 대공 판정은 distance [0,250] 이라 붙은 쪽만 거리 안에 든다 — 그쪽이 높이로 빠지는 것이
         // anti_air 의 증명이다. 떨어진 쪽은 거리에서 먼저 걸러지므로 "맞지 않았다" 까지만 말한다.
         hugging[0].Verdict.ShouldBe(HitVerdict.MissedByHeight, "붙어서 선 몸통이 대공 판정에 맞았다");
-        spacing[0].Verdict.ShouldBe(HitVerdict.MissedByRange, "250px 밖인데 대공 판정이 닿았다");
+        spacing[0].Verdict.ShouldBe(HitVerdict.MissedTooFar, "250px 밖인데 대공 판정이 닿았다");
 
-        hugging[1].Verdict.ShouldBe(HitVerdict.MissedByRange, "붙었는데 착지 충격에 맞았다 — 안쪽 주머니가 닫혔다");
+        // 안쪽 주머니로 피한 것은 **도망쳐 피한 것과 다른 점**이어야 한다 (이슈 #46).
+        // 한 갈래(MissedByRange)였을 때는 이 줄과 위의 spacing[0] 이 계측에서 같은 값이었다.
+        hugging[1].Verdict.ShouldBe(HitVerdict.MissedTooClose, "붙었는데 착지 충격에 맞았다 — 안쪽 주머니가 닫혔다");
         hugging[1].Distance.ShouldBeLessThan(190);
 
         spacing[1].Verdict.ShouldBe(HitVerdict.Hit, "떨어져 있는데 안 맞았다 — 이 테스트가 주머니를 안 본다");
@@ -634,6 +636,11 @@ public class BattleSimTests
     {
         // 간격 덕에 그냥 안 닿은 것이다. 그 순간 돌던 대시·패리의 공으로 적으면
         // dash_timing_bias 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
+        //
+        // **이 테스트가 이슈 #46 의 반례 가드다.** "대시가 돌고 있으면 거리 miss 를 대시의 공으로"
+        // 라고만 고치면 여기가 빨개진다 — 대시는 돌지만 그 대시가 이 거리를 만들지 않았다
+        // (960px 은 대시 전에도 사거리 100 밖이었다). 그래서 공을 돌리는 조건은 "대시 중" 이 아니라
+        // **"대시 시작 자리에서는 닿았는가"** 다.
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 100 },
             height: new double[] { 0, 300 },
@@ -648,8 +655,201 @@ public class BattleSimTests
 
         sim.Events.Count.ShouldBe(1);
         DodgeEvent e = sim.Events[0];
-        e.Verdict.ShouldBe(HitVerdict.MissedByRange);
-        e.Verb.ShouldBe(DodgeVerb.Spacing);
+        e.Verdict.ShouldBe(HitVerdict.MissedTooFar);
+        e.Verb.ShouldBe(DodgeVerb.Spacing, "대시가 만들지 않은 거리가 대시의 공이 됐다");
+        e.TimingError.ShouldBe(0);
+        e.Direction.ShouldBe(0);
+    }
+
+    [Fact]
+    public void 밖으로_한_대시가_만든_거리는_대시의_공이다()
+    {
+        // **이 이슈가 고치는 것이다** (이슈 #46). 판정 순서가 거리 → 높이 → 대시무적이라
+        // 대시로 사거리를 벗어나면 무적이 보이기도 전에 거리에서 빠진다. 실제 수치로:
+        // 유효 무적 8틱 · 대시 36.67px/틱 · 서는 자리 115 에서 밖으로 나가면 250 을 4틱째 넘으므로
+        // **무적 8틱 중 3틱만 Dodged** 이고 나머지는 Spacing 이었다 — 대시 의존자가 간격 의존자로
+        // 기록되고, 2단계가 정반대 변종을 뽑는다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 1000 },
+            height: new double[] { 0, 300 },
+            parryable: false,
+            at: 6 * BattleSim.Dt));
+
+        for (int i = 1; i <= 14; i++)
+        {
+            // 1틱: 보스 반대쪽을 본다 — 대시는 **바라보는 쪽으로만** 간다. 2틱: 대시.
+            // 파이터 480 · 보스 1440 이므로 대시 전 거리는 960 으로 사거리(1000) **안**이다.
+            // 그 한 줄이 이 테스트와 바로 위 반례 가드를 가른다.
+            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedTooFar);
+        e.Distance.ShouldBeGreaterThan(1000, "대시가 사거리 밖으로 못 데려갔다 — 이 테스트가 그 자리를 안 본다");
+        e.Verb.ShouldBe(DodgeVerb.Dash, "대시가 만든 거리인데 간격의 공이 됐다");
+        e.Direction.ShouldBe(-1, "밖으로 뛴 대시인데 방향이 안 실렸다");
+        e.TimingError.ShouldBeLessThan(0, "대시의 시작 시각이 안 실렸다");
+
+        // 축까지 따라가는지 본다 — 관측이 갈려도 집계가 안 받으면 망은 못 본다.
+        PlayerAxes axes = PlayerAxes.From(sim.Events);
+        axes.DashSamples.ShouldBe(1);
+        axes.DashDirectionBias.ShouldBe(-1, 1e-9, "밖으로 뛴 대시가 방향 축에 안 들어갔다");
+    }
+
+    [Fact]
+    public void 안쪽_주머니로_파고든_대시도_대시의_공이다()
+    {
+        // 밖으로만 고치면 반쪽이다. 안쪽 주머니(점프 강타의 착지 충격 190px)로 파고들어
+        // 피한 것도 **그 거리를 대시가 만들었으면** 대시다 — 안쪽을 쓰는 변종(II·III-쇄도)이
+        // 노리는 것이 정확히 이 습관이라, 여기가 간격으로 기록되면 그 변종을 고를 수 없다.
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighter(),
+            // 파이터가 주머니 앞까지 걸어갈 시간을 준다 (960 → 300 이 95틱이다).
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 100 * BattleSim.Dt),
+            PatternIds = new[] { "단타" },
+            Patterns = new Dictionary<string, PatternDef>
+            {
+                ["단타"] = OneHit(
+                    distance: new double[] { 190, 2000 },
+                    height: new double[] { 0, 300 },
+                    parryable: false,
+                    at: 6 * BattleSim.Dt),
+            },
+            Seed = 1,
+            MaxTicks = 60 * 5,
+        });
+
+        for (int i = 1; i <= 200 && sim.Events.Count == 0; i++)
+        {
+            // 주머니 밖 300px 에 자리를 잡고(여기서는 닿는다) 판정 직전에 안으로 뛴다.
+            double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
+            bool soon = sim.NextActiveIn is double left && left <= 6 * BattleSim.Dt;
+            sim.Tick(new InputFrame(
+                (sbyte)(!soon && gap > 300 ? 1 : 0),
+                false,
+                Dash: soon && sim.Fighter.Action == FighterAction.Idle,
+                false,
+                false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedTooClose);
+        e.Distance.ShouldBeLessThan(190, "대시가 주머니 안까지 못 데려갔다 — 이 테스트가 그 자리를 안 본다");
+        e.Verb.ShouldBe(DodgeVerb.Dash, "파고든 대시가 간격의 공이 됐다");
+        e.Direction.ShouldBe(1, "안으로 뛴 대시인데 방향이 안 실렸다");
+        e.TimingError.ShouldBeLessThan(0);
+    }
+
+    /// <summary>
+    /// 보스 코앞(간격 <c>Standoff</c>)에 서 있다가 판정 직전에 <b>밖으로</b> 뛰는 봇 한 판.
+    /// 이슈 #46 의 산수가 서는 자리 그대로다 — 진짜 patterns.json 으로 돈다.
+    ///
+    /// <para>
+    /// 대시는 바라보는 쪽으로만 가고 방향은 Idle 일 때만 바뀌므로, 판정이 다가오면
+    /// <b>뛸 쪽을 한 틱 먼저 보고</b> 그다음 틱에 뛴다.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<DodgeEvent> StandoffDasher(bool outward)
+    {
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighter(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999),
+            PatternIds = new[] { "내려찍기 3연", "이단 올려베기", "점프 강타" },
+            Patterns = Patterns(),
+            Seed = 51,
+            MaxTicks = 60 * 20,
+        });
+
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
+            double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
+            bool soon = sim.NextActiveIn is double left && left <= 0.10;
+
+            sbyte move;
+            bool dash = false;
+            if (soon)
+            {
+                int want = outward ? -toward : toward;
+                if (sim.Fighter.Facing == want)
+                {
+                    dash = true;
+                    move = 0;
+                }
+                else
+                {
+                    move = (sbyte)want;
+                }
+            }
+            else
+            {
+                move = (sbyte)(gap > Standoff() + 10 ? toward : 0);
+            }
+
+            outcome = sim.Tick(new InputFrame(move, false, dash, false, false));
+        }
+
+        return sim.Events;
+    }
+
+    [Fact]
+    public void 밖으로_뛰는_사람이_간격_의존자로_안_읽힌다()
+    {
+        // **이 이슈의 주장 그 자체다** (이슈 #46). 위의 단타 테스트가 규칙을 못박는다면
+        // 이것은 진짜 패턴 기하에서 그 규칙이 실제로 무엇을 바꾸는지를 잰다.
+        //
+        // 실측(시드 51 · 관측 19건): 고치기 전에는 대시 1 · 간격 15 였다. **일곱 번 뛴 사람이
+        // 한 번 뛴 사람으로 기록되고 나머지는 간격의 공이 됐다** — 2단계는 이 기록을 보고
+        // 대시가 아니라 간격을 봉인한다. 정확히 반대 변종이다.
+        IReadOnlyList<DodgeEvent> events = StandoffDasher(outward: true);
+        int dashMissed = events.Count(e => e.Verb == DodgeVerb.Dash
+            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedTooClose);
+        PlayerAxes axes = PlayerAxes.From(events);
+
+        axes.DashSamples.ShouldBeGreaterThan(0);
+        dashMissed.ShouldBeGreaterThan(axes.DashSamples / 2,
+            "대시 표본의 절반 이상이 간격으로 새던 자리다 — 여기가 0 이면 계측이 다시 거짓말한다");
+        axes.DashDirectionBias.ShouldBeLessThan(-0.5, "밖으로만 뛰었는데 방향 축이 안 따라온다");
+
+        // 안으로 뛰는 쪽은 이 변경에 **안 걸린다** — 코앞에서 안으로 뛰면 무적이 닫힐 때까지
+        // 사거리 안이라 판정이 거리로 빠지지 않는다. 한쪽만 움직이는 것이 이 고침이 좁다는 증거다.
+        IReadOnlyList<DodgeEvent> inward = StandoffDasher(outward: false);
+        inward.Count(e => e.Verb == DodgeVerb.Dash
+            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedTooClose)
+            .ShouldBe(0, "안으로 뛴 대시가 거리로 빠졌다 — 기하가 움직였다면 위 숫자도 다시 재야 한다");
+    }
+
+    [Fact]
+    public void 대시가_끝난_뒤에_선_판정은_간격이다()
+    {
+        // 이슈 #46 의 ⚠ 에 대한 답이다. 대시가 만든 거리인데 대시는 이미 끝난 자리 —
+        // **경계를 대시 행동이 끝나는 곳에 둔다.** 무적(8틱)은 대시(11틱)보다 짧으므로
+        // 무적 창은 통째로 대시의 공이 되고, 그 뒤로 사거리 밖에 남아 있는 것은 **그 자리에
+        // 서 있기로 한 것**이라 간격이다. 유예 창을 두면 "얼마나 오래 봐주나" 라는 수치가
+        // 새로 생기고(데이터에 없는 수치다) 그만큼 대시가 간격의 표본을 먹는다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 1000 },
+            height: new double[] { 0, 300 },
+            parryable: false,
+            at: 20 * BattleSim.Dt));
+
+        for (int i = 1; i <= 30; i++)
+        {
+            // 대시는 2틱에 시작해 12틱에 끝난다. 판정은 23틱 언저리다.
+            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedTooFar);
+        e.Verb.ShouldBe(DodgeVerb.Spacing, "대시는 이미 끝났는데 그 공이 계속 따라다닌다");
         e.TimingError.ShouldBe(0);
         e.Direction.ShouldBe(0);
     }

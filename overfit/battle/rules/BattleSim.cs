@@ -65,6 +65,19 @@ public sealed class BattleSim
 
     private int _dashDirection;
 
+    /// <summary>
+    /// 대시를 <b>시작하기 직전</b>의 교전 거리(px, NaN = 대시 중이 아니다).
+    /// "이 거리를 만든 것이 대시인가" 를 판정마다 물어보는 반사실(counterfactual)이다 —
+    /// 그 자리에서 판정이 닿았을 것이면 대시가 빼낸 것이고, 거기서도 안 닿았으면 간격이다.
+    ///
+    /// <para>
+    /// 대시 중이라는 것만으로는 부족하다. 사거리 100 짜리 판정 앞에서 960px 떨어져 대시하면
+    /// 대시는 돌지만 그 거리는 대시가 만든 것이 아니다 — 그것까지 대시의 공으로 돌리면
+    /// <c>dash_timing_bias</c> 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
+    /// </para>
+    /// </summary>
+    private double _dashStartDistance = double.NaN;
+
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
@@ -140,8 +153,11 @@ public sealed class BattleSim
         // 틱 시작의 접지 상태. "이번 틱에 땅에서 떨어졌는가" 는 이것과 비교해야만 알 수 있다 —
         // 공중에서 점프를 또 눌러도 Fall 이 물리적으로는 무시하지만, 그 입력만 보면 구별이 안 된다.
         bool wasGrounded = Fighter.Grounded;
+        // 틱 시작의 자리도 같이 잡아둔다. 대시가 시작된 틱에는 Fighter.Tick 이 이미 한 틱만큼
+        // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
+        double wasX = Fighter.X;
         Fighter.Tick(input, Dt);
-        RememberDodgeStart(input, wasGrounded);
+        RememberDodgeStart(input, wasGrounded, wasX);
         AdvanceBoss();
         Strike();
 
@@ -261,7 +277,9 @@ public sealed class BattleSim
     /// <param name="wasGrounded">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 접지 상태.
     /// 점프 엣지 검출에 쓴다 — <see cref="Fighter.Grounded"/> 만 보면 "떨어진 순간"과
     /// "이미 공중인데 또 눌렀다"를 구별할 수 없다.</param>
-    private void RememberDodgeStart(InputFrame input, bool wasGrounded)
+    /// <param name="wasX">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 파이터의 자리.
+    /// 대시가 시작된 틱에는 이미 한 틱을 이동한 뒤라, 대시 <b>전</b>의 거리는 이것으로만 잡힌다.</param>
+    private void RememberDodgeStart(InputFrame input, bool wasGrounded, double wasX)
     {
         double now = Ticks * Dt;
 
@@ -273,11 +291,14 @@ public sealed class BattleSim
             _dashStartedAt = now;
             // 보스 쪽으로 갔으면 안(+1), 반대면 밖(-1)
             _dashDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
+            // 보스는 아직 이번 틱을 안 밀었으므로(AdvanceBoss 는 뒤에 온다) 둘 다 틱 시작의 자리다.
+            _dashStartDistance = Math.Abs(wasX - Boss.X);
         }
         else if (Fighter.Action != FighterAction.Dash)
         {
             _dashStartedAt = double.NaN;
             _dashDirection = 0;
+            _dashStartDistance = double.NaN;
         }
 
         // 패리 칸은 **행동이 아니라 누름**을 따라 산다. 부정확 창(0.5초)이 패리 행동(0.30초)보다
@@ -308,7 +329,7 @@ public sealed class BattleSim
     /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다.
     /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
     /// </summary>
-    private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict) => verdict switch
+    private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict, HitBox box) => verdict switch
     {
         HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
 
@@ -323,12 +344,54 @@ public sealed class BattleSim
             ? (DodgeVerb.None, double.NaN)
             : (DodgeVerb.Jump, _jumpStartedAt),
 
-        // 거리로 빗나갔다. 행동이 아니라 서 있던 자리가 피하게 했으므로 타이밍이 없다.
-        HitVerdict.MissedByRange => (DodgeVerb.Spacing, double.NaN),
+        // 거리로 빗나갔다 — 안이든 밖이든. 서 있던 자리가 피하게 했으면 간격이지만,
+        // **그 자리를 대시가 만들었으면 대시다** (이슈 #46).
+        HitVerdict.MissedTooFar or HitVerdict.MissedTooClose => CreditDistance(box),
 
         // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
         _ => MostRecentAction(),
     };
+
+    /// <summary>
+    /// 거리로 빗나간 판정의 공을 <b>대시</b>와 <b>간격</b> 중 어디로 돌릴 것인가 (이슈 #46).
+    ///
+    /// <para>
+    /// 고치기 전에는 무조건 간격이었다. 판정 순서가 거리 → 높이 → 대시무적이라 대시로 사거리를
+    /// 벗어나면 무적이 보이기도 전에 거리에서 빠지는데, 그것을 전부 <c>Spacing</c> 으로 적고 있었다:
+    /// 무적 8틱 · 대시 36.67px/틱 · 서는 자리 115 에서 밖으로 나가면 250 을 4틱째 넘으므로
+    /// <b>무적 8틱 중 3틱만 <c>Dodged</c></b> 이었다. <b>대시 의존자가 간격 의존자로 기록된다</b> —
+    /// 그 둘은 봉인할 것이 정반대라 2단계가 정확히 반대 변종을 뽑는다.
+    /// </para>
+    ///
+    /// <para>
+    /// 조건은 "대시 중" 이 아니라 <b>"대시 시작 자리에서는 닿았는가"</b> 다. 대시가 돌기만 하면
+    /// 공을 주면, 애초에 사거리 밖에 서 있다 대시한 것까지 대시의 공이 되어
+    /// <c>dash_timing_bias</c> 가 판정과 무관한 대시들로 채워진다.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ <b>경계는 대시 행동이 끝나는 자리다.</b> 무적(0.14초 = 8틱)이 대시(0.18초 = 11틱)보다
+    /// 짧으므로 무적 창은 통째로 대시의 공이 되지만, 대시가 끝난 뒤에도 사거리 밖에 남아 있는 것은
+    /// <b>그 자리에 서 있기로 한 것</b>이라 간격이다. 유예 창(대시 종료 후 N초까지는 대시의 공)을
+    /// 두는 쪽도 생각했고, 되돌리지 않기 위해 왜 안 두는지를 적어 둔다.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>공에는 시각이 따라붙기 때문이다.</b> 이 함수가 돌려주는 시작 시각이 곧
+    /// <c>TimingError</c> 이고 그것이 <c>dash_timing_bias</c> · <c>dash_timing_var</c> 의 표본이다.
+    /// 연속타의 2타는 1타에서 0.35초 뒤에 서는데, 1타를 겨냥해 뛴 대시를 2타의 공으로도 돌리면
+    /// <b>-0.35초짜리 표본</b>이 하나 생긴다 — "이 사람은 판정 0.35초 전에 뛴다" 는 그가 한 적 없는 말이고,
+    /// 표본이 늘수록 축은 "늘 일찍 누른다" 쪽으로 끌려간다. 대시가 <b>어느 판정을 겨냥했나</b>가
+    /// 성립하는 구간이 딱 행동이 도는 동안이라, 거기를 경계로 삼는다.
+    /// 덤으로 데이터에 없는 수치("얼마나 오래 봐주나")를 새로 만들지 않아도 된다.
+    /// </para>
+    /// </summary>
+    private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box) =>
+        !double.IsNaN(_dashStartedAt)
+        && _dashStartDistance >= box.MinDistance
+        && _dashStartDistance <= box.MaxDistance
+            ? (DodgeVerb.Dash, _dashStartedAt)
+            : (DodgeVerb.Spacing, double.NaN);
 
     /// <summary>
     /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 판정에만 쓴다 —
@@ -387,7 +450,7 @@ public sealed class BattleSim
         }
 
         double now = Ticks * Dt;
-        (DodgeVerb verb, double startedAt) = Credit(verdict);
+        (DodgeVerb verb, double startedAt) = Credit(verdict, box);
         double error = double.IsNaN(startedAt) ? 0 : startedAt - now;
         int direction = verb == DodgeVerb.Dash ? _dashDirection : 0;
 
