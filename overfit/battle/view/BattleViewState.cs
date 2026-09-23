@@ -10,6 +10,12 @@ public enum FighterPose
     Idle,
     Run,
     Attack,
+
+    /// <summary>
+    /// 모으고 있다 (이슈 #40). <c>attack</c> 시트의 <b>선딜 마지막 프레임</b>에 몸을 세운 자세다 —
+    /// 칼을 끝까지 뒤로 뺀 그 그림이 곧 "모으는 중" 이라, 없는 애니메이션을 만들지 않는다.
+    /// </summary>
+    Charge,
     Dash,
     Parry,
     Hit,
@@ -49,6 +55,11 @@ public enum BossPhase
 /// 그 사본은 fighters.json 이 움직이는 순간 조용히 어긋난다.</param>
 /// <param name="Locked">부정확 패리에 굳었나(이슈 #27). 0.6초 동안 아무것도 못 한다 —
 /// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.</param>
+/// <param name="ChargeProgress">차지를 얼마나 모았나(0~1). 링의 반지름이 이것이다 —
+/// <c>ParryProgress</c> 와 같은 규약으로, 최대 시간(캐릭터마다 다르다)의 사본을 뷰에 두지 않는다.</param>
+/// <param name="ChargeMaxed">차지가 <b>최대에 닿았나</b> (이슈 #40). 진행도만 넘기고 뷰가
+/// <c>progress &gt;= 1</c> 로 판단하게 두지 않는다 — 단계는 구간이고 그 경계를 아는 곳은 규칙 하나다.
+/// <b>최대인지 모르면 2초를 셀 수가 없다</b>, 그래서 이 한 칸이 색과 섬광을 가른다.</param>
 public readonly record struct FighterFrame(
     double X,
     double Y,
@@ -57,7 +68,9 @@ public readonly record struct FighterFrame(
     bool Invulnerable,
     bool Parrying,
     double ParryProgress,
-    bool Locked);
+    bool Locked,
+    double ChargeProgress,
+    bool ChargeMaxed);
 
 /// <summary>
 /// 한 프레임에 보스의 <b>예고 표지</b>를 그리는 데 필요한 전부.

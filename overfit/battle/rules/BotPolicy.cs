@@ -30,6 +30,16 @@ public sealed class BotPolicy
     private readonly ulong _seed;
     private int _decisions;
 
+    /// <summary>지금까지 시작한 공격의 수. 차지 단계를 고르는 좌표의 키다.</summary>
+    private int _swings;
+
+    /// <summary>
+    /// 지금 모으는 차지의 목표 시간(초). 누를 때 정해 놓고, 닿으면 놓는다.
+    /// 매 틱 다시 뽑지 않는 이유는 그러면 "얼마나 모을 작정이었나" 가 기록에 안 남기 때문이다 —
+    /// 사람은 누를 때 정하고 그 판단이 곧 데이터다.
+    /// </summary>
+    private double _chargeGoal;
+
     public BotPolicy(ulong seed) => _seed = seed;
 
     /// <summary>이번 틱에 무엇을 할지. <see cref="BattleSim"/> 의 상태만 보고 정한다.</summary>
@@ -39,6 +49,16 @@ public sealed class BotPolicy
 
         double gap = Math.Abs(sim.Fighter.X - sim.Boss.X) - sim.Boss.HalfWidth;
         sbyte move = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
+
+        // 모으는 중이면 할 일은 하나다 — 놓을 때인가 (이슈 #40).
+        // **패턴 갈래보다 먼저 본다.** 아래에 맡기면 패턴이 서는 순간 default(누름 없음)가 나가
+        // 봇은 자기가 왜 놓았는지도 모른 채 모은 것을 잃는다. 여기서 두 조건으로 명시한다:
+        // ① 목표만큼 모았다, ② 칼이 닿기 전에 판정이 선다(모은 채로 맞으면 전부 날아간다).
+        if (sim.Fighter.Charging)
+        {
+            bool hold = sim.Fighter.ChargeSeconds < _chargeGoal && Safe(sim);
+            return new InputFrame(0, false, false, false, false, AttackHeld: hold);
+        }
 
         // 패턴이 돌고 있으면 셋 중 하나로 반응한다. 무엇을 고를지는 좌표 조회로 정한다 —
         // 호출 순서에 값이 끌려다니지 않아 같은 시드가 같은 판을 만든다.
@@ -50,7 +70,16 @@ public sealed class BotPolicy
         // 행동 중(Dash·Parry·Attack)에는 새로 고르지 않는다 — 그건 Fighter.Begin 이 어차피
         // 무시하므로 막을 필요는 없지만, 접지 여부는 **걸지 않는다**: 공중에서도 대시·패리를
         // 다시 걸 수 있어야 점프가 늦게 뜬 판정을 막판에 대시로 덮을 수 있다.
-        if (sim.Boss.CurrentPattern is not null)
+        // **"패턴이 돈다" 는 것만으로 회피할 이유가 되지 않는다.** 올 판정이 있어야 피할 것이 있다.
+        // 둘을 빼낸다.
+        // ① 굳은 보스 — 경직 동안에는 타임라인이 안 밀리므로 아무것도 안 온다. 봇은 그 0.5초를
+        //    회피로 버리고 있었다. 받아낸 뒤가 내 차례라는 것이 정확 패리의 상이고(나인 솔즈),
+        //    그 상을 쓰는 곳은 회피가 아니라 공격이다.
+        // ② 후딜 — 남은 판정이 없으면(NextActiveIn == null) 패턴은 돌지만 빈 시간이다.
+        //    사람은 마지막 판정이 지나간 그 순간부터 모으기 시작하는데, 봇이 패턴이 끝나기를
+        //    기다리면 최대 차지에 필요한 시간의 절반을 문 앞에서 버린다 — 그러면 학습 데이터에
+        //    최대 차지가 영영 안 들어간다.
+        if (sim.Boss.CurrentPattern is not null && !sim.Boss.Staggered && sim.NextActiveIn is not null)
         {
             if (sim.Fighter.Action != FighterAction.Idle)
             {
@@ -79,6 +108,25 @@ public sealed class BotPolicy
             return new InputFrame(move, false, false, false, false);
         }
 
-        return new InputFrame(0, false, false, false, Attack: true);
+        // 얼마나 모을지는 **누를 때** 좌표 조회로 정한다. 단계 수와 그 시간은 데이터가 알고
+        // (fighters.json 의 charge_tiers) 봇은 묻기만 한다 — 수치를 여기 베끼면 캐릭터를
+        // 고치는 순간 봇만 옛 값으로 계속 돈다.
+        _swings++;
+        int tier = Det.RollInt(_seed, Det.Domain.BotCharge, sim.Fighter.ChargeTierCount, k1: _swings);
+        _chargeGoal = sim.Fighter.ChargeTierSeconds(tier);
+
+        // 0단계는 누름 유지가 없다 — 옛 봇과 한 틱도 안 다른 그냥 한 대다.
+        return new InputFrame(0, false, false, false, Attack: true, AttackHeld: _chargeGoal > 0);
     }
+
+    /// <summary>
+    /// 지금 모으고 있어도 <b>칼이 닿을 때까지 안 맞는가.</b>
+    /// 굳은 보스는 타임라인이 안 밀리므로 안전하고, 남은 판정이 없어도(<c>null</c>) 안전하다.
+    /// 아니면 판정까지 남은 시간이 "선딜 + 판정"(<see cref="Fighter.AttackLead"/>)에 반응 여유를
+    /// 더한 것보다 길어야 한다 — 그보다 짧으면 지금 놓아도 칼이 판정에 먹힌다.
+    /// </summary>
+    private static bool Safe(BattleSim sim) =>
+        sim.Boss.Staggered
+        || sim.NextActiveIn is not double until
+        || until > sim.Fighter.AttackLead + _lateReact;
 }

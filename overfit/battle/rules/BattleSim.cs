@@ -399,7 +399,10 @@ public sealed class BattleSim
             Direction: direction,
             Airborne: !Fighter.Grounded,
             Distance: Math.Abs(Fighter.X - Boss.X),
-            GreedWindow: Fighter.Action == FighterAction.Attack,
+            // 모으고 선 것도 욕심이다 (이슈 #40). 차지는 휘두르는 0.5초가 아니라 최대 2.08초를
+            // 무방비로 서 있는 것이라, 여기서 빼면 축이 가장 크게 건 순간에만 눈을 감는다.
+            GreedWindow: Fighter.Action is FighterAction.Attack or FighterAction.Charge,
+            ChargeTier: Fighter.ChargeTier,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
             // 이 셋이 없으면 만들어지지 않는다.
@@ -415,7 +418,8 @@ public sealed class BattleSim
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
         Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
             + $" err={error:0.000} dir={direction} air={!Fighter.Grounded}"
-            + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}");
+            + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}"
+            + $" charge={Fighter.ChargeTier}");
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
@@ -434,8 +438,12 @@ public sealed class BattleSim
         double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
         if (gap <= Fighter.AttackReach)
         {
-            Boss.TakeDamage(Fighter.AttackDamage);
-            Log.Debug("strike", () => $"hit boss_hp={Boss.Health} gap={gap:0} tick={Ticks}");
+            // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
+            // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
+            int damage = Fighter.AttackDamage;
+            Boss.TakeDamage(damage);
+            Log.Debug("strike", () =>
+                $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
         }
 
         _struckThisSwing = true;

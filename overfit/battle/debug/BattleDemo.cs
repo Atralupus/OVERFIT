@@ -80,6 +80,9 @@ public partial class BattleDemo : Node
         // 수단도 가능했던** 판정만 분모라, jump_rel_n · parry_rel_n 을 따로 찍는다.
         Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
             + $" parry_n={axes.ParrySamples} parry_late_n={axes.ParryLateSamples}"
+            // charge_n 은 "모아 둔 칼을 들고 있다 판정을 맞은" 건수다 (이슈 #40) — greed 비율만으로는
+            // 휘두르다 맞은 0.5초와 모으고 선 2.08초가 한 점이라, 욕심의 깊이가 이 칸에만 있다.
+            + $" charge_n={axes.ChargedGreedSamples}"
             + $" jump_rel_n={axes.JumpChoiceSamples}"
             + $" parry_rel_n={axes.ParryChoiceSamples} dash_bias={axes.DashTimingBias:0.000}"
             + $" dash_var={axes.DashTimingVar:0.000} dash_dir={axes.DashDirectionBias:0.00}"

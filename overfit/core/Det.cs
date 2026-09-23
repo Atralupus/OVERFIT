@@ -71,11 +71,19 @@ public static class Det
         /// <summary>최소 봇이 회피 수단을 고를 때. 학습 데이터용 봇 함대는 이 스트림을 쓰지 않는다.</summary>
         public const uint BotChoice = 2;
 
+        /// <summary>
+        /// 최소 봇이 공격을 <b>얼마나 모을지</b> 고를 때 (이슈 #40).
+        /// 회피 선택과 <b>같은 스트림을 쓰지 않는다</b> — 한 스트림을 나눠 쓰면 봇이 회피를 한 번 더
+        /// 고른 것만으로 그 뒤의 모든 차지가 달라져, 두 판단이 서로를 흔든다.
+        /// </summary>
+        public const uint BotCharge = 3;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
             PatternPick => "pattern_pick",
             BotChoice => "bot_choice",
+            BotCharge => "bot_charge",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

@@ -68,6 +68,21 @@ public partial class FighterView : Node2D
     private static readonly Color _slashColor = new(1.00f, 0.92f, 0.72f, 0.95f);
     private static readonly Color _hitFlash = new(2.40f, 0.45f, 0.45f);
 
+    /// <summary>
+    /// 모으는 동안의 몸 색. <b>덥혀지듯 붉게 간다</b> — 최대(<see cref="_chargeMaxTint"/>)와
+    /// 같은 흰색으로 두면 "모으는 중" 과 "다 모았다" 가 한 그림이 되어, 2초를 셀 방법이 사라진다.
+    /// </summary>
+    private static readonly Color _chargeTint = new(1.35f, 1.00f, 0.70f);
+
+    /// <summary>
+    /// <b>최대</b> 차지의 몸 색. 희게 탄다 — 무적 창(<see cref="_invulnerableTint"/>)과 비슷한 밝기인데,
+    /// 그 둘은 같은 순간에 절대 안 나온다(대시 중에는 못 모은다). 색보다 중요한 것은 <b>한 번 터지는
+    /// 섬광과 멈춘 링</b>이고(<see cref="ChargeTierUp"/>), 이 색은 그 뒤로 계속 남아 "아직 최대다" 를 말한다.
+    /// </summary>
+    private static readonly Color _chargeMaxTint = new(2.10f, 2.10f, 1.90f);
+
+    private static readonly Color _chargeRingColor = new(1.00f, 0.72f, 0.30f, 0.85f);
+    private static readonly Color _chargeMaxRingColor = new(1.00f, 0.97f, 0.72f, 1.00f);
     private AnimatedSprite2D _sprite = null!;
     private RingBurst _ring = null!;
 
@@ -80,6 +95,16 @@ public partial class FighterView : Node2D
 
     private FeelBalance _feel = null!;
     private int _facing = 1;
+
+    /// <summary>
+    /// 차지 자세로 세울 프레임 번호. <b>데이터에서 온다</b> — <c>fighters.json</c> 의
+    /// <c>attack_anim_blade_frame</c> 바로 앞 장이 "칼을 끝까지 뒤로 뺀" 마지막 선딜 프레임이다.
+    /// 여기 숫자를 박으면 시트를 갈아끼울 때 조용히 엉뚱한 장에서 멈춘다.
+    /// </summary>
+    private int _chargeFrame;
+
+    /// <summary>지난 프레임에 차지 자세였나. 차지가 끝나면 시트를 처음부터 다시 돌려야 한다.</summary>
+    private bool _holdingCharge;
 
     private double _flashLeft;
     private double _flashTotal;
@@ -107,9 +132,15 @@ public partial class FighterView : Node2D
         AddChild(_slash);
     }
 
-    /// <summary>스프라이트를 갈아끼운다. id 는 data/fighters.json 의 sprite 값이다.</summary>
-    public void Load(string spriteId)
+    /// <summary>
+    /// 스프라이트를 갈아끼운다. id 는 data/fighters.json 의 sprite 값이다.
+    /// <paramref name="chargeFrame"/> 은 차지 자세로 세울 프레임 번호 — 부르는 쪽(<c>Battle</c>)이
+    /// 데이터에서 읽어 준다. 뷰가 fighters.json 을 직접 읽으면 규칙과 뷰가 같은 파일을 두 번 읽는다.
+    /// </summary>
+    public void Load(string spriteId, int chargeFrame)
     {
+        _chargeFrame = System.Math.Max(0, chargeFrame);
+
         var frames = GD.Load<SpriteFrames>($"res://assets/spriteframes/{spriteId}.tres");
         if (frames is null)
         {
@@ -137,7 +168,26 @@ public partial class FighterView : Node2D
         Advance(dt);
         Trail(frame, dt);
         Ring(frame);
-        Animate(AnimationFor(frame.Pose));
+
+        // 차지 자세는 이름이 아니라 **프레임**이라 Animate 로 못 말한다 — 스윙과 같은 attack 시트를
+        // 쓰면서 한 장에 멈춰 서는 것이라, 이름만 보는 Animate 는 둘을 구별하지 못한다.
+        // 맞았거나 죽었으면 그 그림이 이긴다: 모으던 것은 이미 규칙에서 끊겼다.
+        bool holding = frame.Pose == FighterPose.Charge && !_dead && _hitPoseLeft <= 0;
+        if (holding)
+        {
+            HoldCharge();
+        }
+        else
+        {
+            if (_holdingCharge)
+            {
+                Release();
+            }
+
+            Animate(AnimationFor(frame.Pose));
+        }
+
+        _holdingCharge = holding;
         _sprite.Modulate = Tint(frame);
     }
 
@@ -152,7 +202,10 @@ public partial class FighterView : Node2D
     /// 앞쪽 섬광이 세기를 맡으므로 몸은 약해도 된다.
     /// </para>
     /// </summary>
-    public void AttackActive()
+    /// <param name="tier">모아서 휘두른 단계 (0 = 그냥 한 대). <b>반지름은 안 건드린다</b> —
+    /// 이 링의 끝 반지름은 <c>attack_reach</c> 와 같은 눈금이라(balance.json) 키우면 사거리를
+    /// 속이는 그림이 된다. 모은 값은 <b>스파크와 색</b>이 말한다: 닿는 곳은 같고 실린 것이 다르다.</param>
+    public void AttackActive(int tier)
     {
         Flash(_attackFlash, _feel.FlashSeconds);
         _slash.Position = new Vector2(
@@ -162,7 +215,43 @@ public partial class FighterView : Node2D
             (float)_feel.AttackRingFrom,
             (float)_feel.AttackRingTo,
             _feel.FlashSeconds * 2.2,
-            _slashColor,
+            tier > 0 ? _chargeMaxRingColor : _slashColor,
+            sparks: tier > 0 ? _feel.SparkCount : 0,
+            sparkLength: (float)(_feel.SparkLength * 0.5));
+    }
+
+    /// <summary>
+    /// 차지 단계가 올랐다 (이슈 #40). <b>순간이라 상태가 아니다</b> — <c>Battle</c> 이 틱 전후를
+    /// 견줘 부른다.
+    ///
+    /// <para>
+    /// 최대와 중간을 <b>일부러 크게 다르게</b> 준다. 중간은 조용한 고리 하나지만 최대는
+    /// 섬광 + 스파크 + 흰 몸이다 — 최대에 닿은 것을 못 알아채면 플레이어는 2초를 셀 수가 없고,
+    /// 그러면 이 기술은 "언제 놓을지 모르는 기술" 이 된다. 정확 패리와 같은 세기를 쓰는 것은
+    /// 일부러다: 둘 다 "지금이다" 를 말하는 순간이고, 이 게임에서 가장 비싼 두 순간이다.
+    /// </para>
+    /// </summary>
+    /// <param name="maxed">이번에 오른 단계가 최대인가.</param>
+    public void ChargeTierUp(bool maxed)
+    {
+        if (maxed)
+        {
+            Flash(_parryFlash, _feel.FlashSeconds);
+            _ring.Burst(
+                (float)_feel.ChargeRingTo,
+                (float)_feel.ParryRingTo,
+                _feel.BurstSeconds,
+                _chargeMaxRingColor,
+                _feel.SparkCount,
+                (float)_feel.SparkLength);
+            return;
+        }
+
+        _ring.Burst(
+            (float)_feel.ChargeRingTo,
+            (float)((_feel.ChargeRingTo + _feel.ChargeRingFrom) / 2),
+            _feel.BurstSeconds * 0.5,
+            _chargeRingColor,
             sparks: 0,
             sparkLength: 0);
     }
@@ -254,16 +343,89 @@ public partial class FighterView : Node2D
         Afterimage.Spawn(GetParent(), _sprite, Position, _feel.DashGhostFade, _ghostTint);
     }
 
-    /// <summary>패리 창이 열려 있는 동안의 링. 반지름이 곧 "얼마나 남았나" 다.</summary>
+    /// <summary>
+    /// 창이 열려 있는 동안의 링. 패리와 차지가 <b>같은 노드를 쓴다</b> — 둘은 같은 순간에
+    /// 절대 안 나오고(모으는 중에는 패리를 못 누른다), 노드를 나누면 안 쓰는 링이 프레임마다
+    /// 자기 자리를 지키느라 코드만 두 벌이 된다.
+    ///
+    /// <para>
+    /// 방향이 반대다. 패리 링은 창이 닫히는 쪽으로 <b>퍼지고</b>, 차지 링은 몸으로 <b>조여 든다</b> —
+    /// 모이는 것은 퍼지는 것이 아니다. 최대에 닿으면 진행도가 1 에서 멈추므로 링도 멈추고,
+    /// 그 <b>멈춤</b>이 "더 모을 것이 없다" 는 말이 된다.
+    /// </para>
+    /// </summary>
     private void Ring(FighterFrame frame)
     {
+        if (frame.Pose == FighterPose.Charge)
+        {
+            float t = Mathf.Clamp((float)frame.ChargeProgress, 0.0f, 1.0f);
+            _ring.Charge(
+                Mathf.Lerp((float)_feel.ChargeRingFrom, (float)_feel.ChargeRingTo, t),
+                frame.ChargeMaxed ? _chargeMaxRingColor : _chargeRingColor);
+            return;
+        }
+
         if (!frame.Parrying)
         {
             return;
         }
 
-        float t = Mathf.Clamp((float)frame.ParryProgress, 0.0f, 1.0f);
-        _ring.Charge(Mathf.Lerp((float)_feel.ParryRingFrom, (float)_feel.ParryRingTo, t), _parryRingColor);
+        float u = Mathf.Clamp((float)frame.ParryProgress, 0.0f, 1.0f);
+        _ring.Charge(Mathf.Lerp((float)_feel.ParryRingFrom, (float)_feel.ParryRingTo, u), _parryRingColor);
+    }
+
+    /// <summary>
+    /// 모으는 자세. <b>시트를 처음부터 돌리다가 선딜 마지막 장에서 세운다</b> —
+    /// 칼을 뒤로 빼는 동작(0~3번 프레임)을 실제로 감고 나서 그 자세로 멈추는 것이라,
+    /// 규칙이 "붙드는 것이 곧 선딜" 이라고 말하는 것과 그림이 정확히 같은 말을 한다.
+    ///
+    /// <para>
+    /// 세우는 것이 핵심이다. <c>Play</c> 만 하고 두면 0.5초짜리 시트가 그대로 돌아
+    /// <b>모으는 중에 칼이 나간다.</b> 반대로 처음부터 멈춰 세우면(예전) 뒤로 빼는 동작이
+    /// 한 프레임에 건너뛰어져 "모으기 시작했다" 가 그림에 없다.
+    /// </para>
+    /// </summary>
+    private void HoldCharge()
+    {
+        if (_sprite.SpriteFrames is null || !_sprite.SpriteFrames.HasAnimation("attack"))
+        {
+            return;
+        }
+
+        if (_sprite.Animation != "attack")
+        {
+            _sprite.Play("attack");
+            _sprite.SetFrameAndProgress(0, 0.0f);
+            AlignToGround("attack");
+        }
+
+        int last = System.Math.Min(_chargeFrame, _sprite.SpriteFrames.GetFrameCount("attack") - 1);
+        if (_sprite.Frame >= last)
+        {
+            _sprite.Frame = last;
+            _sprite.Pause();
+        }
+    }
+
+    /// <summary>
+    /// 차지를 놓았다 — 멈춰 세운 그 장에서 <b>이어서</b> 돌린다. 처음부터 다시 돌리면 화면이
+    /// 칼을 두 번 뒤로 뺀다: 2초 동안 뺀 칼을 놓는 순간 다시 빼는 그림이 되고, 그건 규칙이
+    /// 말하는 것(선딜은 이미 지났다)과 반대다.
+    ///
+    /// <para>
+    /// 둘의 시계가 맞는 것은 우연이 아니다. 선딜(0.3333초)이 곧 시트의 0~3번 네 장이라,
+    /// t 초 붙들었으면 그림은 <c>t×fps</c> 번째 장에 있고 규칙의 남은 선딜은 <c>0.3333-t</c> 다 —
+    /// 같은 값이다. 그래서 중간에 놓아도 그림과 판정이 같이 간다.
+    /// </para>
+    /// </summary>
+    private void Release()
+    {
+        if (_sprite.SpriteFrames is null || !_sprite.SpriteFrames.HasAnimation(_sprite.Animation))
+        {
+            return;
+        }
+
+        _sprite.Play();
     }
 
     private void Flash(Color color, double seconds)
@@ -279,6 +441,9 @@ public partial class FighterView : Node2D
         Color baseTint = frame.Locked ? _lockedTint
             : frame.Invulnerable ? _invulnerableTint
             : frame.Pose == FighterPose.Dash ? _dashTailTint
+            // 모으는 중 · 다 모았다는 **서로 다른 색**이어야 한다. 하나로 두면 최대에 닿은 순간이
+            // 섬광 한 번뿐이라, 그 0.34초를 놓치면 지금이 최대인지 알 방법이 없다.
+            : frame.Pose == FighterPose.Charge ? (frame.ChargeMaxed ? _chargeMaxTint : _chargeTint)
             : frame.Parrying ? _parryTint
             : Colors.White;
 
@@ -310,7 +475,9 @@ public partial class FighterView : Node2D
         return pose switch
         {
             FighterPose.Run or FighterPose.Dash => "run",
-            FighterPose.Attack => "attack",
+            // 차지도 attack 이다 — 다만 한 장에 멈춰 선다(HoldCharge). 여기 있는 이유는
+            // 맞거나 죽어서 차지가 끊긴 프레임에 이 갈래로 떨어지기 때문이다.
+            FighterPose.Attack or FighterPose.Charge => "attack",
             FighterPose.Hit => "hit",
             FighterPose.Death => "death",
             _ => "idle",

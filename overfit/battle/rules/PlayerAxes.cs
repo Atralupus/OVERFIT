@@ -90,6 +90,17 @@ public sealed class PlayerAxes
     /// <summary>패리가 가능했고 다른 수단도 가능했던 관측 수 — <c>ParryReliance</c> 의 분모다.</summary>
     public int ParryChoiceSamples { get; private init; }
 
+    /// <summary>
+    /// <c>Greed</c> 로 센 것 중 <b>모아 둔 칼을 들고 있던</b> 관측 수 (이슈 #40).
+    /// <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
+    ///
+    /// <para>
+    /// 비율 하나로는 "휘두르다 맞았다"(0.5초)와 "2초를 모으고 서 있다 맞았다"(2.08초)가
+    /// 한 점이 된다. 욕심의 <b>깊이</b>가 여기 있고, <c>ParryLateSamples</c> 와 같은 자리다.
+    /// </para>
+    /// </summary>
+    public int ChargedGreedSamples { get; private init; }
+
     public static PlayerAxes From(IReadOnlyList<DodgeEvent> events)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -101,7 +112,7 @@ public sealed class PlayerAxes
         var dashErrors = new List<double>();
         var jumpErrors = new List<double>();
         int dashes = 0, jumps = 0, parries = 0, parried = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
-        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0, parriedLate = 0;
+        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0, parriedLate = 0, chargedGreed = 0;
         double distance = 0;
 
         foreach (DodgeEvent e in events)
@@ -115,6 +126,11 @@ public sealed class PlayerAxes
             if (e.GreedWindow)
             {
                 greedy++;
+            }
+
+            if (e.ChargeTier > 0)
+            {
+                chargedGreed++;
             }
 
             // 의존도의 분모는 **진짜 선택이 있었던** 판정뿐이다 — 그 수단이 가능했고,
@@ -193,6 +209,7 @@ public sealed class PlayerAxes
             ParryLateSamples = parriedLate,
             JumpChoiceSamples = jumpChoices,
             ParryChoiceSamples = parryChoices,
+            ChargedGreedSamples = chargedGreed,
         };
     }
 

@@ -66,6 +66,9 @@ public partial class Battle : Node2D
     private bool _lastAttackActive;
     private bool _walking;
 
+    /// <summary>지난 틱의 차지 단계. 늘어난 순간이 "단계가 올랐다" 는 사건이다 — 규칙 층에 콜백을 안 달고 여기서 견준다.</summary>
+    private int _lastChargeTier;
+
     /// <summary>
     /// 판이 끝났나. <b>디버그 전용 읽기</b> — <c>tools/build.sh shots</c> 의 <c>ShotRunner</c> 가
     /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 1.65~1.90초 패턴)와
@@ -89,6 +92,25 @@ public partial class Battle : Node2D
     /// 고치는 순간 조용히 어긋나 선딜 자세만 찍힌다 — 이슈 #38 전의 스크린샷이 그랬다.
     /// </summary>
     public bool FighterAttackActive => !_broken && !_over && _sim.Fighter.AttackActive;
+
+    /// <summary>
+    /// 지금 차지를 모으고 있나. 위와 같이 <b>디버그 전용 읽기</b>다 — 스크린샷이 "모으는 것이
+    /// 보이는가" 를 증명하려면 규칙에게 물어보고 셔터를 눌러야 한다. 프레임 수를 세면
+    /// 차지 시간을 데이터에서 고치는 순간 조용히 어긋난다(이슈 #38 에서 밟은 그 실패다).
+    /// </summary>
+    public bool FighterCharging => !_broken && !_over && _sim.Fighter.Charging;
+
+    /// <summary>
+    /// 차지를 얼마나 모았나(0~1). 위와 같이 디버그 전용 읽기다 — <b>중간 차지</b>를 찍으려면
+    /// "모으는 중" 만으로는 모자라고 어디쯤인지를 알아야 한다. 프레임을 세는 대신 이것을 본다.
+    /// </summary>
+    public double FighterChargeProgress => _broken || _over ? 0 : _sim.Fighter.ChargeProgress;
+
+    /// <summary>
+    /// 차지가 <b>최대</b>에 닿았나. 위와 같이 디버그 전용 읽기다 — "모으는 중" 과 "다 모았다" 가
+    /// 화면에서 갈리는지는 두 장을 나란히 놓아야만 증명된다.
+    /// </summary>
+    public bool FighterChargeMaxed => !_broken && !_over && _sim.Fighter.ChargeMaxed;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
@@ -178,7 +200,9 @@ public partial class Battle : Node2D
         _lastFighterHealth = _sim.Fighter.Health;
         _lastBossHealth = _sim.Boss.Health;
 
-        _fighterView.Load(_fighterConfig.Sprite);
+        // 차지 자세는 attack 시트의 **선딜 마지막 장**이다 — 칼이 나가는 프레임(blade) 바로 앞.
+        // 뷰가 fighters.json 을 직접 읽지 않게 여기서 건네준다.
+        _fighterView.Load(_fighterConfig.Sprite, _fighterConfig.AttackAnimBladeFrame - 1);
         _bossView.Load(_bossConfig.Sprite);
         Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={ids.Count}");
     }
@@ -273,12 +297,17 @@ public partial class Battle : Node2D
         // 넷은 엣지다 — "이번 물리 틱에 눌렸나"(IsActionJustPressed) 를 본다. 물리 콜백 안에서
         // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
         // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
+        //
+        // 공격만 **둘 다** 싣는다 (이슈 #40). 엣지가 차지를 시작하고 레벨이 그것을 붙든다 —
+        // 누른 그 틱에는 둘이 같이 참이라 차지가 곧장 서고, 손을 떼면 레벨이 꺼지며 칼이 나간다.
+        // 엣지를 레벨로 바꿔 한 칸으로 줄이지 않는 이유는 InputFrame 의 주석에 적어 뒀다.
         return new InputFrame(
             move,
             Input.IsActionJustPressed("jump"),
             Input.IsActionJustPressed("dash"),
             Input.IsActionJustPressed("parry"),
-            Input.IsActionJustPressed("attack"));
+            Input.IsActionJustPressed("attack"),
+            AttackHeld: Input.IsActionPressed("attack"));
     }
 
     /// <summary>
@@ -327,8 +356,18 @@ public partial class Battle : Node2D
         // 판정이 서는 **그 틱**에만 한 번. 계속 참인 동안 매 프레임 섬광을 내면 번쩍임이 아니라 조명이 된다.
         if (_sim.Fighter.AttackActive && !_lastAttackActive)
         {
-            _fighterView.AttackActive();
+            _fighterView.AttackActive(_sim.Fighter.ChargeTier);
         }
+
+        // 차지 단계가 오른 **그 틱**. 모으는 중이 아니면 0 으로 되돌려 다음 차지의 첫 단계도 사건이 되게 한다.
+        int tier = _sim.Fighter.Charging ? _sim.Fighter.ChargeTier : 0;
+        if (tier > _lastChargeTier)
+        {
+            _fighterView.ChargeTierUp(_sim.Fighter.ChargeMaxed);
+            Log.Debug("charge", () => $"tier={tier} max={_sim.Fighter.ChargeMaxed} tick={_sim.Ticks}");
+        }
+
+        _lastChargeTier = tier;
 
         _lastFighterHealth = _sim.Fighter.Health;
         _lastBossHealth = _sim.Boss.Health;
@@ -468,7 +507,9 @@ public partial class Battle : Node2D
             _sim.Fighter.PreciseParryWindow <= 0
                 ? 0
                 : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
-            _sim.Fighter.Locked));
+            _sim.Fighter.Locked,
+            _sim.Fighter.ChargeProgress,
+            _sim.Fighter.ChargeMaxed));
 
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
@@ -496,6 +537,7 @@ public partial class Battle : Node2D
             FighterAction.Dash => FighterPose.Dash,
             FighterAction.Parry => FighterPose.Parry,
             FighterAction.Attack => FighterPose.Attack,
+            FighterAction.Charge => FighterPose.Charge,
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
     }

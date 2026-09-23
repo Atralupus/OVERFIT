@@ -88,6 +88,75 @@ public class BotPolicyTests
     }
 
     [Fact]
+    public void 봇도_차지를_낸다()
+    {
+        // **입력 계약은 사람과 봇이 같이 쓰는 통로다.** 사람만 차지할 수 있으면 나중에 망이
+        // "차지가 없는 전투" 를 배우고, 그 데이터는 사람에게 아무 의미가 없다 (이슈 #40).
+        // 그래서 봇이 실제로 모아서 휘두르는지를 본다 — 계약에 칸이 있는지가 아니라.
+        var sim = new BattleSim(Setup(51));
+        var bot = new BotPolicy(51);
+        var swings = new HashSet<int>();
+        bool charged = false;
+
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(bot.Next(sim));
+            charged |= sim.Fighter.Charging;
+
+            // 칼이 나가는 틱의 단계가 곧 "얼마를 모아서 휘둘렀나" 다.
+            if (sim.Fighter.AttackActive)
+            {
+                swings.Add(sim.Fighter.ChargeTier);
+            }
+        }
+
+        charged.ShouldBeTrue("봇이 한 번도 안 모았다");
+        swings.ShouldContain(0, "봇이 그냥 누르는 공격을 아예 안 낸다");
+        swings.Count.ShouldBeGreaterThan(1, $"봇이 낸 차지 단계가 {string.Join(",", swings)} 뿐이다 — 한 종류면 차지가 데이터에 없는 것과 같다");
+    }
+
+    [Fact]
+    public void 최대_차지가_패리_없이_닿는다()
+    {
+        // **차지는 패리와 상관없는 기술이다** (이슈 #40). 최대 차지가 백장의 빈 시간에 들어간다는
+        // 것은 FighterDataTests 가 산수로 보지만, 산수는 "그런 자리가 있다" 까지만 말한다 —
+        // 실제로 한 판을 돌려서 최대로 모은 칼이 보스에 닿는지는 여기서 본다.
+        //
+        // 이 봇은 정확 패리를 노리고 치지 않는다(회피 셋을 좌표로 고를 뿐이다). 그래서 여기서
+        // 최대 차지가 나온다는 것은 **패리 없이도 닿는다**는 뜻이다.
+        //
+        // 시드를 여럿 도는 이유는 한 시드에 매다는 것이 증인을 하나만 세우는 일이기 때문이다 —
+        // 봇은 단계를 좌표로 고르고 패턴 순서도 시드가 정하므로, 한 판에 최대 차지가 없는 것은
+        // 흔한 일이고 그건 설계가 깨진 것이 아니다. 여덟 판을 다 뒤져도 한 번도 없다면 그때가
+        // 진짜 빨개져야 하는 자리다.
+        var landed = new HashSet<int>();
+        foreach (ulong seed in new ulong[] { 7, 51, 99, 777, 2024, 31337, 12345, 8 })
+        {
+            var sim = new BattleSim(Setup(seed));
+            var bot = new BotPolicy(seed);
+            BattleOutcome? outcome = null;
+            int lastBossHealth = sim.Boss.Health;
+
+            while (outcome is null)
+            {
+                outcome = sim.Tick(bot.Next(sim));
+
+                // 닿은 칼만 센다 — 휘두른 것이 아니라 보스 체력이 준 그 틱이다.
+                if (sim.Boss.Health < lastBossHealth)
+                {
+                    landed.Add(sim.Fighter.ChargeTier);
+                    lastBossHealth = sim.Boss.Health;
+                }
+            }
+        }
+
+        landed.ShouldContain(2,
+            $"여덟 판 동안 최대 차지가 한 번도 안 닿았다 — 닿은 단계는 {string.Join(",", landed)} 뿐이다. "
+            + "패리 없이는 최대 차지를 못 쓰는 상태라면 이 기술의 마지막 단계는 장식이다.");
+    }
+
+    [Fact]
     public void 같은_시드는_같은_판을_만든다()
     {
         (BattleOutcome a, BattleSim simA) = Play(51);
