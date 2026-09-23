@@ -125,14 +125,11 @@ public partial class ShotRunner : Node
         await Frames(12);
         await Screenshot.CaptureAsync(this, "battle-6-windup");
 
-        // ── 패리 불가 선딜: 크림슨 ────────────────────────────────────────
-        // 평소 예고(호박색)와 **같은 화면에서 견줄 수 있어야** 이 연출이 일한다.
-        // 두 장이 나란히 없으면 "붉은가" 만 알 수 있고 "다른가" 는 모른다.
-        // 12 → 4프레임. 조건은 선딜 **어디서든** 참이라 판정 직전에 걸릴 수 있고, 그때 12프레임을
-        // 더 기다리면 선딜이 끝나 있다 — 크림슨 예고 대신 판정 충격파가 찍혔다(실제로 그랬다).
-        await Until(() => _battle is { BossWindingUp: true, BossUnparryable: true }, _pollTimeout);
-        await Frames(4);
-        await Screenshot.CaptureAsync(this, "battle-6b-unparryable");
+        // ── 패리 불가 선딜(크림슨)은 **여기 없다** ────────────────────────
+        // 이슈 #48 이 유일한 패리 불가 패턴(점프 강타)을 뺐다. 조건이 영영 참이 안 되는 기다림은
+        // 16초를 버리고 경고 한 줄을 남긴 뒤 **아무 순간이나** 찍는다 — 그렇게 찍힌 장은
+        // 파일 이름이 거짓말을 하므로, 기다림을 지운다. 크림슨 경로 자체는 뷰에 그대로 있다
+        // (BossView._unparryableTint · Battle.BossUnparryable) — 패턴이 돌아오면 이 장도 돌아온다.
 
         // ── 피격: 체력이 줄어든 바로 다음 프레임 ──────────────────────────
         int before = _battle?.FighterHealth ?? 0;
@@ -140,14 +137,14 @@ public partial class ShotRunner : Node
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-7-hit");
 
-        // ── 패턴마다 다른 예고 (이슈 #28) ─────────────────────────────────
-        // **맨 뒤다.** 서로 다른 패턴 셋을 기다리는 것은 여러 주기가 걸리는데, 백장의 패턴은
-        // 셋 다 연속타라 그 사이에 파이터가 죽는다 — 앞에 두면 크림슨 예고와 피격 순간이
+        // ── 변종마다 다른 예고 (이슈 #28 · #48) ───────────────────────────
+        // **맨 뒤다.** 서로 다른 변종 셋을 기다리는 것은 여러 주기가 걸리는데, 내려찍기 계열은
+        // 전부 연속타라 그 사이에 파이터가 죽는다 — 앞에 두면 예고와 피격 순간이
         // 통째로 결과 화면으로 찍힌다(실제로 그렇게 찍혔다).
-        // 백장의 설계는 **칼이 땅에 있나 떠 있나**로 두 패턴을 가르는 것이다. 링은 셋 다 같으므로
-        // 링만 찍으면 그 설계가 화면에 있는지 없는지 알 수가 없다. **서로 다른** 패턴의 선딜을
-        // 세 장 찍어 나란히 두는 것이 그 증명이고, 그래서 id 를 보고 셔터를 누른다 —
-        // 같은 패턴을 세 번 찍으면 세 장이 똑같고 그건 우연이지 증명이 아니다.
+        // 계열이 하나가 된 뒤로 이 세 장이 **더** 중요해졌다: 2단계의 변종 셋은 같은 기술이라
+        // 링도 모션도 같고, 갈리는 것은 표지 하나뿐이다(끌기의 띠 · 쇄도의 갈매기표 · 쐐기의 눈금).
+        // 그 하나가 화면에서 실제로 갈리는지는 나란히 놓고 보는 수밖에 없고, 그래서 id 를 보고
+        // 셔터를 누른다 — 같은 변종을 세 번 찍으면 세 장이 똑같고 그건 우연이지 증명이 아니다.
         var shot = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
         for (int i = 1; i <= 3; i++)
         {
@@ -240,6 +237,11 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Guarding()
     {
+        // **3단계로 간다** (이슈 #48). 가드 불가는 3단계 변종의 마무리에만 붙으므로 1·2단계에서는
+        // 危 예고도 붕괴도 영원히 안 온다 — 그 명부에는 가드 불가 판정이 하나도 없다.
+        // 여기만 3단계인 이유는 위의 예고 세 장이 2단계의 변종 셋을 찍기 때문이다(3단계는 다섯이라
+        // 셋만 찍으면 어느 셋인지가 실행마다 달라진다).
+        Game.Instance.SetStage(3);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
@@ -273,6 +275,16 @@ public partial class ShotRunner : Node
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
         Hold("parry", false);
+
+        // ── 헛스윙: 칼은 지나갔는데 아무것도 안 나온 그 순간 (이슈 #48) ───
+        // 3단계에만 있는 III-역린 의 박자다. **판정과 다른 그림이어야** 이 변종이 배울 수 있는
+        // 함정이 된다 — 판정은 섬광 + 스파크 + 흔들림이고 헛스윙은 **빈 고리** 하나다.
+        // 0.34초짜리 사건이라 벽시계로는 못 노린다: 개수가 는 것을 보고 셔터를 누른다.
+        // 못 만나도 경고 한 줄이다 — 변종 다섯 중 하나라 여러 주기가 걸릴 수 있다.
+        int feints = _battle?.BossFeints ?? 0;
+        await Until(() => (_battle?.BossFeints ?? 0) > feints, _tellTimeout);
+        await Frames(3);
+        await Screenshot.CaptureAsync(this, "battle-11-feint");
     }
 
     /// <summary>

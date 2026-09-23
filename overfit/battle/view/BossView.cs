@@ -156,6 +156,25 @@ public partial class BossView : Node2D
     }
 
     /// <summary>
+    /// <b>헛스윙이 지나갔다</b> (이슈 #48). 판정이 <b>없는</b> 박자라 <see cref="ActiveNow"/> 와
+    /// 같은 그림이면 안 된다 — 같으면 화면이 거짓말을 하고, 플레이어는 그 변종을 배울 길이 없다.
+    ///
+    /// <para>
+    /// 그래서 셋을 뺀다: 몸의 섬광 · 스파크 · 링의 진하기. 남는 것은 <b>비어서 퍼지는 고리</b>
+    /// 하나이고, 그것이 "칼은 지나갔는데 아무것도 안 나왔다" 의 그림이다.
+    /// 안 그리는 쪽은 답이 아니다 — 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이다.
+    /// </para>
+    /// </summary>
+    public void FeintNow() =>
+        _ring.Burst(
+            (float)_feel.TellRingTo,
+            (float)_feel.BossRingTo * 0.6f,
+            _feel.BurstSeconds,
+            new Color(_shockRingColor.R, _shockRingColor.G, _shockRingColor.B, 0.35f),
+            sparks: 0,
+            sparkLength: 0);
+
+    /// <summary>
     /// 플레이어의 칼이 닿았다. 때린 것이 닿았는지가 보여야 공격에 값이 붙는다.
     ///
     /// <para>

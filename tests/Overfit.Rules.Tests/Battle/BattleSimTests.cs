@@ -22,7 +22,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(maxHealth: bossHealth),
-        PatternIds = new[] { "내려찍기 3연", "이단 올려베기" },
+        PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
         Patterns = Patterns(),
         Seed = 51,
         MaxTicks = maxTicks,
@@ -98,7 +98,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, patternGap: 1000),
-        PatternIds = new[] { "내려찍기 3연" },
+        PatternIds = new[] { "내려찍기 I" },
         Patterns = Patterns(),
         Seed = 1,
         MaxTicks = 60 * 60,
@@ -126,7 +126,7 @@ public class BattleSimTests
         // 몸 충돌을 걷었다(이슈 #27). 나인 솔즈처럼 적을 **그냥 지나갈 수 있어야** 한다 —
         // 밀어내기가 남아 있으면 보스가 붙는 순간 파이터는 벽 쪽으로 밀리고 빠져나갈 길이 없다.
         // 그 대가로 distance_bias 축을 겹침으로 세우던 방법은 잃는다 — 대신 패턴의 안전 거리대
-        // (점프 강타의 distance[0]=190)가 "붙어야 안전" 을 만든다. 설계 문서 §6 에 적어 뒀다.
+        // (II-끌기 의 distance[0]=290)가 "붙어야 안전" 을 만든다. 설계 문서 §6 에 적어 뒀다.
         var sim = Chaser();
         double standoff = Standoff();
         bool inside = false;
@@ -149,7 +149,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
-        PatternIds = new[] { "내려찍기 3연" },
+        PatternIds = new[] { "내려찍기 I" },
         Patterns = Patterns(),
         Seed = 1,
         MaxTicks = 60 * 60,
@@ -208,7 +208,7 @@ public class BattleSimTests
     {
         // 무적은 **위치가 아니라 행동 시계**로 돈다. 몸 충돌이 있던 때는 "벽에 막혀도 무적은
         // 그대로" 를 못박았고, 지금은 반대쪽 — 몸을 통과해 반대편으로 나가도 그대로다.
-        // 어느 쪽이든 깨지면 "파고들어야 사는" 패턴(점프 강타)을 아무도 못 피한다.
+        // 어느 쪽이든 깨지면 "파고들어야 사는" 변종(II·III-끌기)을 아무도 못 피한다.
         var setup = new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -277,7 +277,7 @@ public class BattleSimTests
         // 이 축이 존재하는 이유 자체다. "값이 0 이 아니다" 로는 부족하고 **둘이 갈려야** 한다.
         // 몸 충돌을 걷은 뒤에도(이슈 #27) 갈리는지가 여기서 증명된다 — 붙는 봇은 보스 몸 안으로
         // 들어가고 떨어지는 봇은 제 간격을 지킨다. 축을 살리는 것은 이제 겹침이 아니라
-        // **거리를 고를 이유**(점프 강타의 안쪽 안전지대)다.
+        // **거리를 고를 이유**(II-끌기 의 안쪽 안전지대)다.
         PlayerAxes hugger = Engage(0);
         PlayerAxes spacer = Engage(500);
 
@@ -290,56 +290,18 @@ public class BattleSimTests
     }
 
     /// <summary>
-    /// 봇이 판정을 기다리며 잡는 자리(px). 대시 사거리(396)보다 멀어야 "파고든다" 가 성립한다.
-    ///
-    /// <para>
-    /// 450 → 620 으로 올렸다 (이슈 #28). 백장의 패턴은 셋 다 <b>연속타</b>라 판정과 판정 사이가
-    /// 0.10~0.35초뿐인데, 그 사이에도 봇은 조준 구간(0.30초)에 있어 계속 보스 쪽으로 걷는다.
-    /// 450 에서 출발하면 조준 걸음 + 앞선 대시가 보스 중심을 <b>넘겨</b>, 걷는 방향은 그대로인데
-    /// "안" 과 "밖" 이 틱마다 뒤집혔다 — 실측 13건 중 5건이 반대 라벨이었다. 방향 라벨이 성향이
-    /// 아니라 부산물이 되는 자리이고, 이 파일의 주석이 원래 경고하던 바로 그 실패다.
-    /// </para>
-    /// </summary>
-    private const double _dashHold = 620;
-
-    /// <summary>
     /// 판정 직전에 대시하는 봇 한 판. <paramref name="inward"/> 면 보스 쪽을, 아니면 반대쪽을 보고 뛴다.
     /// 대시는 <b>바라보는 쪽으로만</b> 가므로 어디를 보고 있었나가 곧 방향이다.
+    ///
+    /// <para>
+    /// ⚠ <b>보스 코앞에서 뛴다</b>(<see cref="StandoffDasher"/> 와 같은 봇이다). 전에는 620px 떨어져
+    /// 기다렸는데, 그 자리는 계열이 하나로 줄기 전의 기하에서 나온 값이다 — 점프 강타의 착지 충격이
+    /// 760px 까지 닿아서 멀리 서 있어도 대시가 <b>판정을 피하는</b> 일이 됐다. 지금 내려찍기 계열의
+    /// 사거리는 250~270 뿐이라(끌기의 마무리만 620) 620px 에서는 대시를 하든 말든 어차피 안 닿고,
+    /// 그러면 대시 표본이 <b>0</b> 이 되어 이 축이 아무것도 못 가른다(실제로 그렇게 빨개졌다).
+    /// </para>
     /// </summary>
-    private static PlayerAxes DashingBot(bool inward)
-    {
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999),
-            PatternIds = new[] { "내려찍기 3연", "이단 올려베기", "점프 강타" },
-            Patterns = Patterns(),
-            Seed = 51,
-            MaxTicks = 60 * 20,
-        });
-
-        BattleOutcome? outcome = null;
-        while (outcome is null)
-        {
-            var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
-            double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
-            double? left = sim.NextActiveIn;
-
-            // 몸 충돌이 없어진 뒤로(이슈 #27) "매 틱 보스 쪽으로" 는 봇이 아니라 진동이 된다 —
-            // 보스 중심에 얹혀 오가면 안팎이 틱마다 뒤집혀 방향 라벨이 성향이 아니라 부산물이 된다.
-            // 그래서 ① 평소에는 대역 안에 자리를 잡고 ② 판정이 다가오면 **뛸 쪽을 먼저 본 뒤**
-            // ③ 직전에 뛴다. 대시는 바라보는 쪽으로만 가므로 ②가 곧 방향이다.
-            bool aiming = left is double lead && lead <= 0.30;
-            sbyte move = aiming
-                ? (inward ? toward : (sbyte)-toward)
-                : gap < _dashHold ? (sbyte)-toward : toward;
-            bool soon = left is double remaining && remaining <= 0.10;
-            outcome = sim.Tick(new InputFrame(move, false, Dash: soon, false, false));
-        }
-
-        return PlayerAxes.From(sim.Events);
-    }
+    private static PlayerAxes DashingBot(bool inward) => PlayerAxes.From(StandoffDasher(outward: !inward));
 
     [Fact]
     public void 파고드는_봇과_도망가는_봇을_대시_방향_축이_가른다()
@@ -357,29 +319,30 @@ public class BattleSimTests
     }
 
     /// <summary>
-    /// 점프 강타 한 판을 보스로부터 <paramref name="standoff"/> px 떨어진 자리에서 맞아 본다.
+    /// <c>II-끌기</c> 한 판을 보스로부터 <paramref name="standoff"/> px 떨어진 자리에서 맞아 본다.
     /// 패턴은 2.0초 뒤에 서므로 그 전에 자리를 잡는다. <b>걸음 수가 아니라 거리로 준다</b> —
     /// 몸 충돌이 없어져 "끝까지 걸으면 붙는다" 가 더는 참이 아니다(지나쳐 버린다).
     ///
     /// <para>
-    /// 이 패턴은 판정이 <b>둘</b>이라(이슈 #28) 관측도 둘 난다 — 내리꽂는 몸(대공)과 착지 충격이다.
-    /// 둘을 그대로 돌려준다: 하나만 골라 오면 "지상이 안전" 과 "발밑이 안전" 중 한쪽을 안 보게 된다.
+    /// 이 변종은 판정이 <b>셋</b>이라 관측도 셋 난다 — 붙어야 닿는 앞의 둘([0,250])과
+    /// <b>밖으로 한 대시의 착지점</b>에 서는 마무리([290,620])다. 셋을 그대로 돌려준다:
+    /// 마무리만 보면 "앞의 둘은 그대로다" 를, 앞의 둘만 보면 주머니를 못 본다.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<DodgeEvent> LeapSlam(double standoff)
+    private static IReadOnlyList<DodgeEvent> Lure(double standoff)
     {
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
-            PatternIds = new[] { "점프 강타" },
+            PatternIds = new[] { "내려찍기 II-끌기" },
             Patterns = Patterns(),
             Seed = 1,
             MaxTicks = 60 * 10,
         });
 
-        for (int i = 0; i < 300 && sim.Events.Count < 2; i++)
+        for (int i = 0; i < 400 && sim.Events.Count < 3; i++)
         {
             double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
             sim.Tick(new InputFrame((sbyte)(gap > standoff ? 1 : 0), false, false, false, false));
@@ -389,34 +352,38 @@ public class BattleSimTests
     }
 
     [Fact]
-    public void 점프_강타는_발밑만_살려주고_공중을_벌한다()
+    public void 끌기는_대시_착지점만_때리고_품_안을_살려준다()
     {
-        // 이 패턴 하나가 축 둘을 먹여 살린다 (이슈 #28 · 설계 문서 §6).
+        // **이 변종 하나가 지금 축 둘을 먹여 살린다** (이슈 #48 · 설계 §2.3). 점프 강타가 지던
+        // 일을 물려받은 자리다 — 계열이 하나로 줄면서 안쪽 주머니를 가진 판정이 여기만 남았다.
         //
-        // ① 착지 충격의 안쪽 190px 이 비어 있다 — **몸 충돌을 걷은 지금(이슈 #27) distance_bias 를
-        //    살려 두는 것이 이 주머니 하나다.** 충돌이 있던 때는 "밀려나서" 거리가 갈렸지만 이제는
-        //    "붙는 것이 정답인 패턴이 있어서" 갈린다 — 후자가 판단이고 전자는 부산물이다.
-        //    주머니가 닫히면(patterns.json 의 190 이 내려가면) 축은 조용히 다시 죽는다 — 여기서 빨개진다.
-        // ② 내리꽂는 몸의 아래끝이 150 이라 **선 몸통(120)에는 절대 안 닿는다.** anti_air 축이
-        //    이 한 줄에 걸려 있다 — 여기가 지상까지 닿으면 "점프하면 더 맞는다" 가 거짓이 된다.
-        IReadOnlyList<DodgeEvent> hugging = LeapSlam(60);
-        IReadOnlyList<DodgeEvent> spacing = LeapSlam(400);
+        // ① 마무리의 안쪽 290px 이 비어 있다 — **몸 충돌을 걷은 지금(이슈 #27) distance_bias 와
+        //    MissedTooClose 를 살려 두는 것이 이 주머니 하나다.** 주머니가 닫히면
+        //    (patterns.json 의 290 이 0 으로 내려가면) 두 축은 조용히 죽는다 — 여기서 빨개진다.
+        // ② 바깥끝 620 은 밖으로 한 대시의 착지점(서는 자리 115 + 대시 367 = 482)을 덮는다.
+        //    **대시 의존을 봉인하는 것이 이 한 줄**이고, 붙어 있는 사람에게는 아무 일도 안 일어난다.
+        //
+        // ⚠ anti_air 를 재던 짝(내리꽂는 몸)은 여기 없다 — 계열이 하나가 되면서 대공 판정이
+        // 데이터에서 사라졌다(이슈 #48). 축은 지우지 않고 표본 0 으로 둔다(PlayerAxes 의 주석).
+        IReadOnlyList<DodgeEvent> hugging = Lure(60);
+        IReadOnlyList<DodgeEvent> landing = Lure(450);
 
-        hugging.Count.ShouldBe(2, "점프 강타의 판정은 둘이다");
-        spacing.Count.ShouldBe(2);
+        hugging.Count.ShouldBe(3, "II-끌기 의 판정은 셋이다");
+        landing.Count.ShouldBe(3);
 
-        // 대공 판정은 distance [0,250] 이라 붙은 쪽만 거리 안에 든다 — 그쪽이 높이로 빠지는 것이
-        // anti_air 의 증명이다. 떨어진 쪽은 거리에서 먼저 걸러지므로 "맞지 않았다" 까지만 말한다.
-        hugging[0].Verdict.ShouldBe(HitVerdict.MissedByHeight, "붙어서 선 몸통이 대공 판정에 맞았다");
-        spacing[0].Verdict.ShouldBe(HitVerdict.MissedTooFar, "250px 밖인데 대공 판정이 닿았다");
+        // 앞의 둘은 [0,250] 이라 붙은 쪽만 든다. 착지점(450)은 그 밖이라 안 닿는다 —
+        // 그래서 이 변종은 대시로 빠지는 사람에게 **마지막 한 대만** 준다.
+        hugging[0].Verdict.ShouldBe(HitVerdict.Hit, "붙었는데 앞 판정이 안 닿았다");
+        landing[0].Verdict.ShouldBe(HitVerdict.MissedTooFar, "250px 밖인데 앞 판정이 닿았다");
 
         // 안쪽 주머니로 피한 것은 **도망쳐 피한 것과 다른 점**이어야 한다 (이슈 #46).
-        // 한 갈래(MissedByRange)였을 때는 이 줄과 위의 spacing[0] 이 계측에서 같은 값이었다.
-        hugging[1].Verdict.ShouldBe(HitVerdict.MissedTooClose, "붙었는데 착지 충격에 맞았다 — 안쪽 주머니가 닫혔다");
-        hugging[1].Distance.ShouldBeLessThan(190);
+        // 한 갈래(MissedByRange)였을 때는 이 줄과 위의 landing[0] 이 계측에서 같은 값이었다.
+        hugging[2].Verdict.ShouldBe(HitVerdict.MissedTooClose, "붙었는데 마무리에 맞았다 — 안쪽 주머니가 닫혔다");
+        hugging[2].Distance.ShouldBeLessThan(290);
 
-        spacing[1].Verdict.ShouldBe(HitVerdict.Hit, "떨어져 있는데 안 맞았다 — 이 테스트가 주머니를 안 본다");
-        spacing[1].Distance.ShouldBeGreaterThan(190);
+        landing[2].Verdict.ShouldBe(HitVerdict.Hit, "대시 착지점에 서 있는데 마무리가 안 왔다");
+        landing[2].Distance.ShouldBeGreaterThan(290);
+        landing[2].Distance.ShouldBeLessThan(620);
     }
 
     [Fact]
@@ -500,7 +467,7 @@ public class BattleSimTests
     public void 단계가_쓰는_패턴만_나온다()
     {
         var setup = Setup();
-        setup.PatternIds = new[] { "이단 올려베기" };
+        setup.PatternIds = new[] { "내려찍기 II-쇄도" };
         var sim = new BattleSim(setup);
 
         for (int i = 0; i < 900; i++)
@@ -508,7 +475,7 @@ public class BattleSimTests
             sim.Tick(default);
             if (sim.Boss.CurrentPattern is { } id)
             {
-                id.ShouldBe("이단 올려베기");
+                id.ShouldBe("내려찍기 II-쇄도");
             }
         }
     }
@@ -702,7 +669,7 @@ public class BattleSimTests
     [Fact]
     public void 안쪽_주머니로_파고든_대시도_대시의_공이다()
     {
-        // 밖으로만 고치면 반쪽이다. 안쪽 주머니(점프 강타의 착지 충격 190px)로 파고들어
+        // 밖으로만 고치면 반쪽이다. 안쪽 주머니(II-끌기 의 마무리 290px)로 파고들어
         // 피한 것도 **그 거리를 대시가 만들었으면** 대시다 — 안쪽을 쓰는 변종(II·III-쇄도)이
         // 노리는 것이 정확히 이 습관이라, 여기가 간격으로 기록되면 그 변종을 고를 수 없다.
         var sim = new BattleSim(new BattleSetup
@@ -762,7 +729,7 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
-            PatternIds = new[] { "내려찍기 3연", "이단 올려베기", "점프 강타" },
+            PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
             Patterns = Patterns(),
             Seed = 51,
             MaxTicks = 60 * 20,
@@ -1190,4 +1157,69 @@ public class BattleSimTests
         axes.ParrySamples.ShouldBe(0, "가드가 패리로 세어졌다");
     }
 
+    // ── 헛스윙 (이슈 #48) ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 진짜 판정 앞에 헛스윙 하나가 서는 패턴. <c>III-역린</c> 의 모양이다 —
+    /// 거기 패리를 지르면 연타 사슬이 걸려 <b>진짜 판정의 정확 창이 좁아진다.</b>
+    /// </summary>
+    private static PatternDef WithFeint() => new()
+    {
+        Tell = TestConfigs.Tell(),
+        Tags = new PatternTags
+        {
+            DashWindow = 0.14,
+            DashDirection = "out",
+            Jumpable = false,
+            AntiAir = false,
+            Parryable = true,
+            ParryWindow = 0.18,
+            PunishGreed = false,
+            Reach = "close",
+            Feint = true,
+            MultiHit = 1,
+            Tracking = false,
+            HasGuardBreak = false,
+        },
+        Timeline = new List<PatternStep>
+        {
+            new() { T = 6 * BattleSim.Dt, Kind = "feint" },
+            new() { T = 24 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
+            new() { T = 30 * BattleSim.Dt, Kind = "end" },
+        },
+    };
+
+    [Fact]
+    public void 헛스윙은_관측을_안_남긴다()
+    {
+        // **이것이 feint 를 타임라인 종류로 만든 이유다** (이슈 #48). damage 0 판정으로 흉내 내면
+        // 판정 하나가 실제로 서서 DodgeEvent 가 한 건 남고, 그러면 "안 맞았다" 가 일어난 적 없는
+        // 판정으로 계측에 쌓인다 — 거리·verb·가능했던 수단이 전부 허구인 한 줄이다.
+        // 회피 기록이 곧 변종 선택의 입력이라 그 한 줄이 반대 변종을 뽑는다.
+        var sim = OnePattern(WithFeint());
+        for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Events.Count.ShouldBe(1, "헛스윙이 관측을 남겼다 — 계측이 일어난 적 없는 판정을 배운다");
+        sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit);
+        sim.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth - 5, "헛스윙이 피해를 줬다");
+    }
+
+    [Fact]
+    public void 헛스윙은_지나갔다는_것만_화면에_실린다()
+    {
+        // 안 보이는 헛스윙은 미끼가 아니다 — 칼이 지나가는 것이 보여야 패리를 지른다.
+        // 규칙은 뷰를 모르므로(콜백이 없다) 값의 차이로 알린다: 관측과 같은 규약이다.
+        var sim = OnePattern(WithFeint());
+        sim.Feints.ShouldBe(0);
+
+        for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Feints.ShouldBe(1);
+    }
 }

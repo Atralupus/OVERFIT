@@ -16,7 +16,19 @@ public static class BossTellShapes
 {
     private static readonly Dictionary<string, IBossTellShape> _byId = new(System.StringComparer.Ordinal)
     {
+        // 내려찍기 계열 (이슈 #48). 하나가 밑그림이고 넷이 그 위의 변종 표시다 —
+        // 변종 아홉에 모양 여섯인 것은 2·3단계의 같은 변종이 **같은 그림 + 危** 로 갈리기 때문이다.
         ["blade_drag"] = new BladeDragTell(),
+        ["drag_lure"] = new DragLureTell(),
+        ["drag_sweep"] = new DragSweepTell(),
+        ["drag_wedge"] = new DragWedgeTell(),
+        ["drag_feint"] = new DragFeintTell(),
+        ["drag_bait"] = new DragBaitTell(),
+
+        // ⚠ 아래 둘은 **지금 데이터가 안 쓴다** — 이슈 #48 이 이단 올려베기와 점프 강타를 뺐다.
+        // 그래도 지우지 않는 이유는 BossView 의 크림슨 틴트를 남겨 둔 이유와 같다: 계열이 돌아올 때
+        // 데이터 한 줄이면 다시 서는 그림이고, 다시 그리는 값이 지우는 값보다 크다.
+        // 등록만 되어 있는 모양은 아무 비용도 안 낸다 — 표는 조회될 때만 일한다.
         ["blade_raised"] = new BladeRaisedTell(),
         ["leap_mark"] = new LeapMarkTell(),
     };

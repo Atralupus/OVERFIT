@@ -30,6 +30,18 @@ public sealed class PatternRunner
 
     public bool Finished => Elapsed >= _def.Duration;
 
+    /// <summary>
+    /// 지금까지 지나간 <b>헛스윙</b>(<c>feint</c> 단계) 수 — 이슈 #48.
+    ///
+    /// <para>
+    /// 헛스윙은 판정을 안 내지만 <b>화면에는 있어야 한다.</b> 안 보이는 헛스윙은 미끼가 아니다 —
+    /// 칼이 지나가는 것이 보여야 거기에 패리를 지르고, 그 습관을 <c>III-역린</c> 이 벌한다.
+    /// 규칙 층은 뷰를 모르므로(콜백을 두면 헤드리스 봇이 그 콜백을 들고 다닌다) 관측 수와
+    /// 같은 규약으로 <b>개수</b>만 싣는다: 값이 는 틱이 곧 "칼이 지나갔다" 다.
+    /// </para>
+    /// </summary>
+    public int Feints { get; private set; }
+
     /// <summary>한 틱 민다. 이 틱에 새로 선 판정을 돌려준다 — 없으면 빈 목록.</summary>
     public IReadOnlyList<HitBox> Tick(double dt)
     {
@@ -45,6 +57,16 @@ public sealed class PatternRunner
         {
             PatternStep step = _def.Timeline[_next];
             _next++;
+
+            // 헛스윙은 **판정이 아니라 박자**다 (이슈 #48). 여기서 HitBox 를 하나도 안 내는 것이
+            // 요점이라, damage 0 판정으로 흉내 내지 않는다 — 그러면 BattleSim 이 관측을 한 건
+            // 남기고, 일어난 적 없는 판정이 "안 맞았다" 로 계측에 쌓인다.
+            if (step.Kind == "feint")
+            {
+                Feints++;
+                continue;
+            }
+
             if (step.Kind != "active" || step.Distance is null || step.Height is null)
             {
                 continue;

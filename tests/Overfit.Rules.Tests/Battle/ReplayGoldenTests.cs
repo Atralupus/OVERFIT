@@ -113,7 +113,9 @@ public class ReplayGoldenTests
             Boss = TestConfigs.Boss(),
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
-            PatternIds = StageRoster.For(stages, 5),
+            // **마지막 단계로 돈다** — 명부가 가장 길어 관측이 가장 두껍다. 숫자가 5 에서 3 이 된 것은
+            // 이슈 #48 이 단계를 셋으로 줄였기 때문이다(전에는 없는 단계를 물어 잘려 쓰이고 있었다).
+            PatternIds = StageRoster.For(stages, 3),
             Patterns = JsonData<PatternDef>.ParseTable(
                 File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
             Seed = seed,
