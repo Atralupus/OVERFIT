@@ -119,6 +119,19 @@ public sealed class BattleSim
     public IReadOnlyList<DodgeEvent> Events => _events;
 
     /// <summary>
+    /// 이 판에서 지나간 <b>헛스윙</b> 수 (이슈 #48). <b>관측이 아니다</b> — 판정이 없으므로
+    /// <see cref="DodgeEvent"/> 도 없고 축도 안 움직인다.
+    ///
+    /// <para>
+    /// 그런데도 세는 이유는 <b>화면</b> 때문이다. 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이고,
+    /// 그러면 <c>III-역린</c> 은 아무도 안 무는 함정이 된다. 규칙 층은 뷰를 모르므로
+    /// (콜백을 두면 헤드리스 봇이 그것을 들고 다닌다) 뷰가 <see cref="Events"/> 개수를 보는 것과
+    /// 같은 규약으로 <b>값의 차이</b>를 읽게 한다.
+    /// </para>
+    /// </summary>
+    public int Feints { get; private set; }
+
+    /// <summary>
     /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
     ///
     /// <para>
@@ -235,9 +248,18 @@ public sealed class BattleSim
             return;
         }
 
+        // 헛스윙은 러너가 누적으로 센다 (이슈 #48). 차이를 여기서 옮기는 것은 판이 패턴을
+        // 여러 번 돌기 때문이다 — 러너는 패턴마다 새로 서므로 그 값은 이번 패턴의 것뿐이다.
+        int feintsBefore = _runner.Feints;
         foreach (HitBox box in _runner.Tick(Dt))
         {
             Land(box);
+        }
+
+        if (_runner.Feints > feintsBefore)
+        {
+            Feints += _runner.Feints - feintsBefore;
+            Log.Debug("boss", () => $"feint id={Boss.CurrentPattern} n={Feints} tick={Ticks}");
         }
 
         if (_runner.Finished)

@@ -22,6 +22,25 @@ public class StageRosterTests
     private static Dictionary<string, PatternDef> Patterns() =>
         JsonData<PatternDef>.ParseTable(File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json");
 
+    /// <summary>
+    /// 정의된 마지막 단계. <b>숫자를 안 베낀다</b> — 단계 수는 설계가 바뀌면 같이 바뀐다
+    /// (이슈 #48 이 다섯을 셋으로 줄였다). 베껴 두면 그때마다 무관한 테스트가 빨개지고,
+    /// 더 나쁘게는 "5단계" 를 물어보는 테스트가 <b>잘린 3단계</b>를 보면서 통과한다.
+    /// </summary>
+    private static int LastStage()
+    {
+        int last = 0;
+        foreach (string key in Stages().Keys)
+        {
+            if (int.TryParse(key, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int n))
+            {
+                last = System.Math.Max(last, n);
+            }
+        }
+
+        return last;
+    }
+
     [Fact]
     public void 실제_stages_json_이_읽힌다()
     {
@@ -32,7 +51,7 @@ public class StageRosterTests
     public void 명부가_적힌_그대로_순서까지_나온다()
     {
         // 순서가 계약이다 — Det 의 뽑기 좌표가 이 리스트의 인덱스다.
-        StageRoster.For(Stages(), 1).ShouldBe(new[] { "내려찍기 3연", "점프 강타" });
+        StageRoster.For(Stages(), 1).ShouldBe(new[] { "내려찍기 I" });
     }
 
     [Fact]
@@ -62,7 +81,7 @@ public class StageRosterTests
     public void 단계가_오를수록_명부가_줄지_않는다()
     {
         IReadOnlyList<string> before = StageRoster.For(Stages(), 1);
-        for (int stage = 2; stage <= 5; stage++)
+        for (int stage = 2; stage <= LastStage(); stage++)
         {
             IReadOnlyList<string> now = StageRoster.For(Stages(), stage);
             now.Count.ShouldBeGreaterThanOrEqualTo(before.Count, $"{stage}단계가 앞 단계보다 짧다");
@@ -73,7 +92,7 @@ public class StageRosterTests
     [Fact]
     public void 명부가_설계한_패턴_수를_넘지_않는다()
     {
-        // want 는 설계가 정한 단계별 패턴 수(2·3·5·7·10)다. 모자란 것은 로그로 드러나지만
+        // want 는 설계가 정한 단계별 변종 수(1·3·5 · 이슈 #48)다. 모자란 것은 로그로 드러나지만
         // 넘치는 것은 아무 데도 안 남는다 — 새 패턴을 명부에 끼워 넣을 때 아직 자리가 없는
         // 낮은 단계에 얹으면 그 단계의 난이도 곡선이 조용히 달라진다.
         foreach ((string stage, StageDef def) in Stages())
@@ -90,7 +109,7 @@ public class StageRosterTests
         // 죽은 입력은 망의 용량만 먹고 아무것도 가르치지 않는다.
         // patterns.json 에 있는 것만으로는 부족하다. 실제로 뽑히는 명부에 있어야 한다.
         Dictionary<string, PatternDef> patterns = Patterns();
-        IReadOnlyList<string> roster = StageRoster.For(Stages(), 5);
+        IReadOnlyList<string> roster = StageRoster.For(Stages(), LastStage());
 
         roster.ShouldContain(
             id => patterns[id].Timeline.Any(s => s.Kind == "active" && s.Distance![0] > 0),
@@ -100,13 +119,34 @@ public class StageRosterTests
     [Fact]
     public void 설계보다_짧은_단계는_조용히_넘어가지_않는다()
     {
-        // 백장의 패턴은 셋뿐이라(이슈 #28) 3~5단계가 설계(5·7·10)에 못 미친다. 줄여서 감추면
-        // 나중에 "단계가 올라도 왜 안 어려워지지" 를 로그에서 찾을 수 없다.
+        // 모자람을 조용히 삼키면 나중에 "단계가 올라도 왜 안 어려워지지" 를 로그에서 찾을 수 없다.
+        //
+        // ⚠ **손으로 세운 명부로 본다.** 전에는 진짜 stages.json 의 5단계를 물어봤다 — 백장의 패턴이
+        // 셋뿐이라 3~5단계가 설계(5·7·10)에 늘 못 미쳤기 때문이다. 이슈 #48 이 단계를 셋으로 줄이면서
+        // **세 단계 모두 want 를 정확히 채운다**(1·3·5). 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
+        // 그렇다고 이 가드를 지우면 다음에 모자란 단계가 생겼을 때 아무 데도 안 남는다.
+        // 단언은 그대로 두고 **보는 대상만** 옮긴다.
         using var log = new LogCapture();
+        var shortened = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 5, Patterns = new[] { "내려찍기 I" } },
+        };
 
-        StageRoster.For(Stages(), 5);
+        StageRoster.For(shortened, 1);
 
-        log.Lines.ShouldContain(l => l.Contains("short stage=5", System.StringComparison.Ordinal));
+        log.Lines.ShouldContain(l => l.Contains("short stage=1 want=5 have=1", System.StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void 지금_명부는_설계한_수를_정확히_채운다()
+    {
+        // 위 가드가 진짜 데이터에서 떠난 이유를 **데이터로** 못박는다 (이슈 #48). 세 단계가
+        // want 를 정확히 채우는 것이 지금의 사실이고, 그게 깨지면 위 가드가 아니라 여기가 빨개진다 —
+        // "모자란 단계가 생겼다" 를 아무도 안 보는 채로 두지 않기 위해서다.
+        foreach ((string stage, StageDef def) in Stages())
+        {
+            def.Patterns.Count.ShouldBe(def.Want, $"{stage}단계 명부가 want={def.Want} 와 다르다");
+        }
     }
 
     [Fact]
@@ -118,8 +158,8 @@ public class StageRosterTests
         using var log = new LogCapture();
         var holed = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 2, Patterns = new[] { "내려찍기 3연", "점프 강타" } },
-            ["3"] = new() { Want = 5, Patterns = new[] { "내려찍기 3연" } },
+            ["1"] = new() { Want = 1, Patterns = new[] { "내려찍기 I" } },
+            ["3"] = new() { Want = 5, Patterns = new[] { "내려찍기 III-역린" } },
         };
 
         StageRoster.For(holed, 2).ShouldBeEmpty();
@@ -151,9 +191,9 @@ public class StageRosterTests
         // 데이터 손상이 아니라 호출자의 범위 문제라 경고가 맞다.
         using var log = new LogCapture();
 
-        StageRoster.For(Stages(), 99).ShouldBe(StageRoster.For(Stages(), 5));
+        StageRoster.For(Stages(), 99).ShouldBe(StageRoster.For(Stages(), LastStage()));
 
-        log.Lines.ShouldContain(l => l.Contains("out_of_range asked=99 used=5", System.StringComparison.Ordinal));
+        log.Lines.ShouldContain(l => l.Contains($"out_of_range asked=99 used={LastStage()}", System.StringComparison.Ordinal));
         log.Lines.ShouldNotContain(l => l.StartsWith("[stage][E]", System.StringComparison.Ordinal));
     }
 }

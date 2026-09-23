@@ -125,35 +125,47 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 점프_정점이_넘을_판정과_못_넘을_판정_사이에_있다()
+    public void 점프로_넘을_수_있는_판정이_지금은_하나도_없다()
     {
-        // jumpable 가드는 참거짓만 본다 — 정점이 판정 상단보다 1px 높아도 초록이다.
-        // 요구는 **여유**다: 낮은 공격(이단 올려베기 150)을 확실히 넘되 높은 판정
-        // (내려찍기 3연 340 · 점프 강타의 착지 충격 330)은 못 넘어야 "점프로 피할 수 있는가" 가 축이 된다.
+        // **빈 집합 위의 가드는 아무것도 안 보면서 초록이다.** 전에는 여기서 jumpable 패턴들의
+        // 판정 상단을 Max 로 뽑아 "정점이 그 1.8배를 넘는가" 를 봤는데, 이슈 #48 이 계열을
+        // 내려찍기 하나로 줄이면서 그 집합이 **비었다** — 빈 집합에 Max 는 던지고 All 은 공허하게
+        // 참이라, 어느 쪽으로 적어도 "본 적 없는데 통과" 가 된다.
         //
-        // ⚠ 이 둘은 **같이 움직인다.** 이슈 #27 에서는 패턴 기하가 먼저 서 있어서 정점이 176 에
-        // 갇혔고, 이슈 #28 이 패턴을 통째로 갈아엎으며 순서를 뒤집었다 — 점프를 먼저 정하고
-        // 세 패턴의 height 를 거기 맞췄다. 한쪽만 고치면 여기서 빨개진다.
-        const double margin = 1.8;
+        // 그래서 비었다는 사실 자체를 **직접** 단언한다. 지금의 진실은 "점프로 넘을 판정이 없다" 이고,
+        // 그 값이 축 셋(jump_reliance · jump_timing_bias · airborne_at_impact)을 표본 0 으로 만든다
+        // (PlayerAxes 의 주석에 적어 뒀다). **여기가 빨개지면 계열이 돌아온 것이다** —
+        // 그때 아래 천장 가드 옆에 "넘어야 할 판정을 여유 있게 넘는가"(margin 1.8)를 되살려라.
         Dictionary<string, PatternDef> patterns = Load();
+        patterns.ShouldNotBeEmpty("패턴이 하나도 없다 — 이 가드가 아무것도 안 본다");
+
+        patterns.Values.Count(d => d.Tags.Jumpable).ShouldBe(0,
+            "점프로 넘을 수 있는 패턴이 생겼다 — 점프 축이 살아났으니 여유 가드(정점 > 상단 × 1.8)를 되살려라");
+    }
+
+    [Fact]
+    public void 점프_정점이_못_넘을_판정을_안_넘는다()
+    {
+        // 천장은 계열이 하나가 된 뒤에도 살아 있다. 넘지 말아야 할 판정(내려찍기의 상단 340)을
+        // 정점이 넘으면 이 계열 전체가 **점프 한 번으로 공짜**가 되고, 그 순간 jumpable 태그도
+        // 거짓말이 된다 — 위 가드가 "없다" 고 말한 그 집합이 실제로는 전부이기 때문이다.
+        //
+        // ⚠ 이 둘은 **같이 움직인다.** 점프를 먼저 정하고 패턴의 height 를 거기 맞추는 것이
+        // 이슈 #28 이 바로잡은 순서다(#27 은 반대로 갇혔다). 한쪽만 고치면 여기서 빨개진다.
+        List<double> tops = Load().Values
+            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
+            .Select(s => s.Height![1])
+            .ToList();
         Dictionary<string, double> apexes = TestConfigs.Fighters()
             .ToDictionary(f => f.Key, f => JumpApex(f.Value));
 
-        // 위 가드와 같은 이유로 못박는다 — 캐릭터 표가 비면 아래 foreach 가 공허하게 참이다.
-        // 캐릭터를 셋에서 하나로 줄이면서(이슈 #38) 이 집합이 실제로 작아졌다.
+        // 위 가드와 같은 이유로 못박는다 — 두 집합 중 하나라도 비면 아래 foreach 가 공허하게 참이다.
+        tops.ShouldNotBeEmpty("판정이 하나도 없다 — 이 가드가 아무것도 안 본다");
         apexes.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
 
-        double clearable = patterns.Values.Where(d => d.Tags.Jumpable)
-            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
-            .Max(s => s.Height![1]);
-        double ceiling = patterns.Values.Where(d => !d.Tags.Jumpable)
-            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
-            .Min(s => s.Height![1]);
-
+        double ceiling = tops.Min();
         foreach ((string who, double apex) in apexes)
         {
-            apex.ShouldBeGreaterThan(clearable * margin,
-                $"{who}: 정점 {apex:0.00}px 이 넘어야 할 판정({clearable}px)을 겨우 넘는다");
             apex.ShouldBeLessThanOrEqualTo(ceiling,
                 $"{who}: 정점 {apex:0.00}px 이 못 넘어야 할 판정({ceiling}px)까지 넘는다");
         }
@@ -236,13 +248,17 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 패턴마다_자기_예고가_있고_서로_다르다()
+    public void 화면의_예고가_변종마다_다르다()
     {
         // 선딜 링은 "뭔가 온다" 까지만 말한다 — **무엇이** 오는지는 안 말한다(이슈 #28).
-        // 백장의 두 패턴은 "칼이 땅에 있나 떠 있나" 로만 갈리므로, 예고가 같으면 그 둘은
-        // 화면에서 같은 공격이다. 그래서 id(모양) · anim(보스 모션) 둘 다 패턴마다 달라야 한다.
-        var shapes = new Dictionary<string, string>(StringComparer.Ordinal);
-        var anims = new Dictionary<string, string>(StringComparer.Ordinal);
+        // 계열이 하나가 되면서(이슈 #48) 이 문제가 더 날카로워졌다: 아홉이 같은 기술이라
+        // 화면이 안 가르면 플레이어에게는 한 공격이다.
+        //
+        // **화면의 서명은 (모양 + 危) 쌍이다.** 아홉에 모양 아홉을 주지 않는 이유는 2단계와
+        // 3단계의 같은 변종(II-끌기 ↔ III-끌기)이 **정말 같은 그림**이어야 하기 때문이다 —
+        // 둘의 차이는 '마무리를 가드로 못 막는다' 하나뿐이고, 그것을 말하는 것이 危 표지다.
+        // 그래서 모양은 같이 쓰되 그 쌍은 달라야 한다.
+        var seen = new Dictionary<(string Shape, bool GuardBreak), string>();
         foreach ((string id, PatternDef def) in Load())
         {
             def.Tell.Id.ShouldNotBeNullOrWhiteSpace($"{id}: tell.id 가 비었다");
@@ -250,17 +266,54 @@ public class PatternDataTests
             def.Tell.Length.ShouldBeGreaterThan(0, $"{id}: tell.length 가 0 이면 아무것도 안 그려진다");
             def.Tell.Y.ShouldBeGreaterThanOrEqualTo(0, $"{id}: tell.y 가 바닥 아래다");
 
-            shapes.ShouldNotContainKey(def.Tell.Id,
-                $"{id}: 예고 모양 {def.Tell.Id} 를 {shapes.GetValueOrDefault(def.Tell.Id)} 와 같이 쓴다 — 화면에서 두 패턴이 같아진다");
-            shapes[def.Tell.Id] = id;
-
-            anims.ShouldNotContainKey(def.Tell.Anim,
-                $"{id}: 보스 모션 {def.Tell.Anim} 를 {anims.GetValueOrDefault(def.Tell.Anim)} 와 같이 쓴다 — 선딜 모션으로 종류가 안 갈린다");
-            anims[def.Tell.Anim] = id;
+            (string, bool) signature = (def.Tell.Id, def.Tags.HasGuardBreak);
+            seen.ShouldNotContainKey(signature,
+                $"{id}: 예고 {def.Tell.Id}(危={def.Tags.HasGuardBreak})를 {seen.GetValueOrDefault(signature)} 와"
+                + " 같이 쓴다 — 화면에서 두 변종이 완전히 같아진다");
+            seen[signature] = id;
         }
 
-        // 위 두 루프는 패턴이 없으면 공허하게 참이다. 이 가드가 실제로 무언가를 봤는지 못박는다.
-        shapes.ShouldNotBeEmpty("패턴이 하나도 없다 — 이 가드가 아무것도 안 본다");
+        // 위 루프는 패턴이 없으면 공허하게 참이다. 이 가드가 실제로 무언가를 봤는지 못박는다.
+        seen.ShouldNotBeEmpty("패턴이 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
+    [Fact]
+    public void 예고_모션은_스윙_수를_말한다()
+    {
+        // **보스 팩의 모션은 셋뿐이다**(attack · attack2 · attack3). 변종 아홉에 1:1 로 못 붙으므로
+        // 모션이 무엇을 말할지를 정해야 하고, 답은 "보스가 몇 번 휘두르는가"(판정 + 헛스윙)다 —
+        // 그것이 모션으로 실제로 보이는 유일한 차이이기 때문이다. 변종을 가르는 일은 표지가 한다.
+        //
+        // 함수여야 하고(같은 스윙 수는 같은 모션) 단사여야 한다(다른 스윙 수는 다른 모션).
+        // 한쪽만 보면 "전부 같은 모션" 도 "패턴마다 아무 모션" 도 통과한다.
+        var bySwings = new Dictionary<int, string>();
+        var byAnim = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach ((string id, PatternDef def) in Load())
+        {
+            int swings = def.Timeline.Count(s => s.Kind is "active" or "feint");
+            swings.ShouldBeGreaterThan(0, $"{id}: 휘두르지 않는 패턴이다");
+
+            if (bySwings.TryGetValue(swings, out string? anim))
+            {
+                def.Tell.Anim.ShouldBe(anim, $"{id}: 스윙 {swings}번인데 모션이 다른 변종과 갈린다");
+            }
+            else
+            {
+                bySwings[swings] = def.Tell.Anim;
+            }
+
+            if (byAnim.TryGetValue(def.Tell.Anim, out int already))
+            {
+                swings.ShouldBe(already, $"{id}: 모션 {def.Tell.Anim} 이 스윙 {already}번과 {swings}번을 같이 쓴다");
+            }
+            else
+            {
+                byAnim[def.Tell.Anim] = swings;
+            }
+        }
+
+        bySwings.Count.ShouldBeGreaterThan(1,
+            "스윙 수가 한 가지뿐이라 모션이 아무것도 안 가른다 — 박자가 다른 변종이 계열에 있어야 한다");
     }
 
     [Fact]
@@ -317,4 +370,43 @@ public class PatternDataTests
         }
     }
 
+    [Fact]
+    public void 타임라인의_kind_는_정해진_다섯뿐이다()
+    {
+        // **오타는 조용하다.** PatternRunner 는 모르는 kind 를 그냥 건너뛰므로 "actvie" 라고 적으면
+        // 그 판정은 아무 일도 안 하고, 게임은 멀쩡히 돌면서 한 대를 덜 때린다.
+        // feint 를 종류로 더한 이슈 #48 에서 이 목록이 처음 필요해졌다 — 종류가 둘일 때는
+        // 타임라인 모양만 봐도 알았지만, 이제는 "판정이 없는 단계" 가 정상이라 눈으로 안 갈린다.
+        string[] kinds = { "windup", "active", "feint", "recover", "end" };
+        foreach ((string id, PatternDef def) in Load())
+        {
+            foreach (PatternStep step in def.Timeline)
+            {
+                kinds.ShouldContain(step.Kind, $"{id}: 모르는 kind={step.Kind} — 조용히 무시된다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 헛스윙이_있으면_feint_태그가_참이다()
+    {
+        // 태그는 망의 입력이고 타임라인은 실제로 일어나는 일이다 — multi_hit · has_guard_break 와
+        // 같은 규약이다. **한쪽 방향만 본다**: feint 태그는 "판정 없는 헛스윙" 보다 넓은 뜻이라
+        // (II-끌기 는 헛스윙 없이 3타를 밀어 속인다) 타임라인에서 되짚을 수 없다.
+        // 되짚을 수 있는 쪽만 못박는다 — 헛스윙 단계가 있는데 태그가 거짓이면 그건 그냥 거짓이다.
+        int withFeint = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            if (!def.Timeline.Any(s => s.Kind == "feint"))
+            {
+                continue;
+            }
+
+            withFeint++;
+            def.Tags.Feint.ShouldBeTrue($"{id}: 타임라인에 헛스윙이 있는데 feint 태그가 거짓이다");
+        }
+
+        withFeint.ShouldBeGreaterThan(0,
+            "헛스윙이 든 패턴이 하나도 없다 — feint 종류가 데이터에서 한 번도 안 도는 채로 초록이 된다");
+    }
 }

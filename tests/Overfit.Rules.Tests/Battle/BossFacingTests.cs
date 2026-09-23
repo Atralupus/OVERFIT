@@ -11,8 +11,8 @@ namespace Overfit.Rules.Tests.Battle;
 ///
 /// <para>
 /// 여기서 지켜야 하는 것은 <b>잠금</b>이다. 패턴이 도는 동안 보스가 따라 돌면 예고가 거짓말이 된다 —
-/// 이 게임에서 예고는 패리를 가르치는 유일한 수단이고, 백장의 <c>이단 올려베기</c> 는
-/// "칼이 땅에 있나 떠 있나" 가 설계 전부라 스윙 도중에 방향이 바뀌면 통째로 무의미해진다.
+/// 이 게임에서 예고는 패리를 가르치는 유일한 수단이고, 내려찍기 계열은 <b>변종 아홉이 같은 칼</b>이라
+/// (이슈 #48) 표지 하나로만 갈린다 — 스윙 도중에 방향이 바뀌면 그 표지가 등 뒤로 가서 통째로 무의미해진다.
 /// </para>
 /// </summary>
 public class BossFacingTests
@@ -26,7 +26,7 @@ public class BossFacingTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         Boss = TestConfigs.Boss(),
-        PatternIds = new[] { "내려찍기 3연", "이단 올려베기" },
+        PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
         Patterns = TestConfigs.Patterns(),
         Seed = 51,
         MaxTicks = 60 * 120,
@@ -63,7 +63,7 @@ public class BossFacingTests
         Boss boss = Spawn();
         boss.Face(500);
 
-        boss.CurrentPattern = "내려찍기 3연";
+        boss.CurrentPattern = "내려찍기 I";
         boss.Face(1500);
         boss.Facing.ShouldBe(-1, "휘두르는 중에 돌아서면 예고가 거짓말이 된다");
 
@@ -122,10 +122,15 @@ public class BossFacingTests
             sim.Tick(default);
         }
 
+        // **쉬는 동안에는 서 있는다.** 지나가는 순간이 반드시 패턴 중이어야 이 테스트가 잠금을 본다 —
+        // 계속 걸으면 보스도 쉬는 동안 다가오므로 둘이 가장 빨리 가까워지는 때가 **쉬는 틈**이고,
+        // 거기서 지나가면 보스는 그냥 돌아서면 된다(잠금이 일할 자리가 아니다).
+        // 전에는 계속 걸으며 우연에 기댔는데, 계열이 하나로 바뀌며 패턴 길이(1.9 → 2.9~3.25초)와
+        // 그 우연이 같이 움직였다(이슈 #48). 단언은 그대로 두고 **걷는 때만** 못박는다.
         string? running = null;
         int locked = 0;
         bool mismatched = false;
-        for (int i = 0; i < 600 && sim.Tick(_right) is null; i++)
+        for (int i = 0; i < 600 && sim.Tick(sim.Boss.CurrentPattern is null ? default : _right) is null; i++)
         {
             if (sim.Boss.CurrentPattern is not string id)
             {

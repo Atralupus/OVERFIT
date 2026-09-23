@@ -50,7 +50,17 @@ public sealed class PatternTags
     public required bool HasGuardBreak { get; init; }
 }
 
-/// <summary>타임라인 한 단계. <c>kind</c> 는 windup · active · recover · end.</summary>
+/// <summary>
+/// 타임라인 한 단계. <c>kind</c> 는 windup · active · <b>feint</b> · recover · end.
+///
+/// <para>
+/// <b><c>feint</c> 는 판정이 없는 박자다</b> (이슈 #48) — 칼은 지나가는데 아무것도 안 닿는다.
+/// <c>damage: 0</c> 짜리 active 로 흉내 내지 않는 이유는 그것이 <b>계측을 오염시키기</b> 때문이다:
+/// 0 짜리도 판정이라 <c>DodgeEvent</c> 가 한 건 남고, 일어난 적 없는 판정에 대한
+/// "안 맞았다"(거리 · verb · 가능했던 수단)가 학습 데이터에 그대로 실린다.
+/// 회피 기록이 곧 변종 선택의 입력이므로 그 한 줄이 정반대 변종을 뽑는다.
+/// </para>
+/// </summary>
 public sealed class PatternStep
 {
     public required double T { get; init; }

@@ -63,6 +63,10 @@ public partial class Battle : Node2D
     private int _lastFighterHealth;
     private int _lastBossHealth;
     private int _lastEventCount;
+
+    /// <summary>지난 프레임까지 지나간 헛스윙 수 (이슈 #48). 관측 수와 <b>같은 규약</b>이다 —
+    /// 규칙 층은 뷰를 모르므로 사건을 값의 차이로 읽는다.</summary>
+    private int _lastFeintCount;
     private bool _lastAttackActive;
     private bool _walking;
 
@@ -143,8 +147,20 @@ public partial class Battle : Node2D
     /// <summary>
     /// 지금 도는 패턴이 <b>패리 불가</b>인가. 위와 같이 디버그 전용 읽기다 —
     /// 크림슨 예고가 화면에서 구별되는지를 스크린샷으로 증명하려면 그 순간을 기다려야 한다.
+    ///
+    /// <para>
+    /// ⚠ <b>지금 데이터에는 패리 불가가 없다</b> (이슈 #48 · 유일했던 점프 강타가 빠졌다).
+    /// 그래서 이 값은 늘 false 이고 크림슨 스크린샷도 같이 빠졌다. 읽기를 남겨 두는 이유는
+    /// 뷰의 크림슨 경로가 그대로 살아 있기 때문이다 — 패리 불가 패턴이 돌아오면 데이터 한 줄로 선다.
+    /// </para>
     /// </summary>
     public bool BossUnparryable => !_broken && !_over && !CurrentParryable();
+
+    /// <summary>
+    /// 지금까지 지나간 <b>헛스윙</b> 수 (이슈 #48). 위와 같이 디버그 전용 읽기다 — 헛스윙은
+    /// 0.34초짜리 <b>사건</b>이라 상태로는 못 노린다. 늘어난 그 순간이 셔터를 누를 때다.
+    /// </summary>
+    public int BossFeints => _sim.Feints;
 
     /// <summary>
     /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 예고</b>를
@@ -383,6 +399,15 @@ public partial class Battle : Node2D
             }
 
             _lastEventCount = _sim.Events.Count;
+        }
+
+        // 헛스윙은 관측을 안 남기므로 위 갈래에 안 걸린다 (이슈 #48) — 그런데 **화면에는 있어야 한다.**
+        // 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이고, 그러면 III-역린 은 아무도 안 무는 함정이다.
+        // 그림은 판정과 **다르다**: 빈 고리만 퍼지고 섬광도 흔들림도 없다(BossView.FeintNow).
+        if (_sim.Feints > _lastFeintCount)
+        {
+            _bossView.FeintNow();
+            _lastFeintCount = _sim.Feints;
         }
 
         if (_sim.Fighter.Health < _lastFighterHealth)

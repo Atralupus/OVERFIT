@@ -24,7 +24,7 @@ public class PlayerAxesTests
         bool dashAvailable = true,
         bool jumpAvailable = true,
         bool parryAvailable = true) =>
-        new("내려찍기 3연", verb, verdict, timingError, direction, airborne, distance, greedWindow, chargeTier,
+        new("내려찍기 I", verb, verdict, timingError, direction, airborne, distance, greedWindow, chargeTier,
             dashAvailable, jumpAvailable, parryAvailable);
 
     [Fact]
