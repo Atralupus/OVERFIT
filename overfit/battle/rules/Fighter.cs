@@ -15,6 +15,13 @@ public enum FighterAction
     /// 손가락을 떼는 것이 끝이고, 그 순간 <see cref="Attack"/> 으로 넘어간다.
     /// </summary>
     Charge,
+
+    /// <summary>
+    /// 패리 키를 누른 채 버티고 있다 (이슈 #47). <see cref="Charge"/> 와 같이 <b>시간이 안 끝낸다</b> —
+    /// 손가락을 떼는 것이 끝이다. 들어오는 길은 하나뿐이다: <see cref="Parry"/> 동작이 끝났는데
+    /// 아직 누르고 있으면 여기로 넘어온다.
+    /// </summary>
+    Guard,
 }
 
 /// <summary>
@@ -117,6 +124,12 @@ public sealed class Fighter
     /// 부정확 창은 행동보다 오래 살아서 이 값으로는 안 보인다 (<see cref="SinceParryPress"/>).
     /// </summary>
     public bool Parrying => _sinceParryPress < PreciseParryWindow;
+
+    /// <summary>
+    /// 가드 자세인가 (이슈 #47). 가드 중에는 못 걷고 못 뛰고 스태미나도 안 찬다 —
+    /// <b>가드와 간격이 배타적이어야</b> 둘 중 하나를 고르는 것이 판단이 된다.
+    /// </summary>
+    public bool Guarding => Action == FighterAction.Guard;
 
     /// <summary>이 캐릭터의 대시 무적 폭(초). <see cref="HitResolver"/> 가 패턴의 창과 견준다.</summary>
     public double DashIFrames => _config.DashIFrames;
@@ -246,6 +259,51 @@ public sealed class Fighter
     }
 
     /// <summary>
+    /// 이만한 피해를 가드로 받아내는 데 드는 스태미나. <b>피해에 비례한다</b> —
+    /// 무거운 한 방이 가드를 깨는 것이 가드 퍼니쉬의 레버다 (이슈 #47).
+    /// 판정기(<see cref="HitResolver"/>)가 이것과 남은 스태미나를 견줘 붕괴를 정한다.
+    /// </summary>
+    public double GuardStaminaCost(int fullDamage) => fullDamage * _config.GuardStaminaPerDamage;
+
+    /// <summary>
+    /// 가드가 받아냈다. 피해의 <c>guard_chip_ratio</c> 만 흘려 받고, 값은 <b>스태미나</b>로 낸다.
+    /// <b>자세는 안 풀린다</b> — 놓을 때까지 버티는 것이 이 기술이다.
+    ///
+    /// <para>
+    /// 반올림을 <see cref="MidpointRounding.AwayFromZero"/> 로 고정한다.
+    /// <see cref="ParryImprecise"/> 와 같은 이유다 — 기본 반올림(짝수로)은 같은 비율이
+    /// 홀짝에 따라 다른 규칙을 내서 리플레이가 재현되지 않는다.
+    /// </para>
+    /// </summary>
+    /// <param name="fullDamage">막지 않았다면 받았을 피해.</param>
+    public void GuardChip(int fullDamage)
+    {
+        Spend(GuardStaminaCost(fullDamage));
+
+        int chip = (int)Math.Round(fullDamage * _config.GuardChipRatio, MidpointRounding.AwayFromZero);
+        Health = Math.Max(0, Health - chip);
+    }
+
+    /// <summary>
+    /// 가드가 <b>깨졌다.</b> 스태미나가 모자랐거나, 가드 불가 판정이 들어왔거나 —
+    /// 어느 쪽이든 결과는 같다: <b>전액</b>을 맞고 <c>guard_break_lock</c> 동안 굳는다.
+    /// 그 고정이 "남은 타격을 그대로 맞는 길이" 이고, 그게 가드를 고른 값이다.
+    ///
+    /// <para>
+    /// <b>스태미나는 안 쓴다.</b> 값은 <b>막아낸 만큼</b>에 매기는 것인데 깨진 가드는 아무것도
+    /// 안 막았다 — 대신 전액과 0.9초를 낸다. 여기서 또 깎으면 고갈로 깨진 사람이 값을 두 번 낸다.
+    /// </para>
+    /// </summary>
+    /// <param name="fullDamage">막지 않았다면 받았을 피해. <b>그대로</b> 들어간다.</param>
+    public void GuardBreak(int fullDamage)
+    {
+        Health = Math.Max(0, Health - fullDamage);
+        _lockLeft = _config.GuardBreakLock;
+        Action = FighterAction.Idle;
+        ActionElapsed = 0;
+    }
+
+    /// <summary>
     /// 정확 패리가 받아냈다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> —
     /// "잘 받아내면 다시 움직일 수 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈).
     /// 보스를 굳히는 것은 보스를 아는 <see cref="BattleSim"/> 이 한다.
@@ -288,14 +346,19 @@ public sealed class Fighter
         // Begin 을 Advance 보다 먼저 불러 행동이 시작된 틱도 경과 시간에 들어가게 한다 —
         // 안 그러면 시작 틱이 공짜가 되어 무적 창 · 패리 창 · 선딜 경계가 테스트 값보다 한 틱 늦게 닫힌다.
         Begin(input);
-        Advance(dt);
+        Advance(input, dt);
         Move(input, dt);
         Fall(input, dt);
         Regen(dt);
     }
 
-    /// <summary>진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다.</summary>
-    private void Advance(double dt)
+    /// <summary>
+    /// 진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다.
+    /// <b>입력을 받는 이유는 하나다</b> — 패리가 끝나는 그 자리에서 "아직 누르고 있나" 를 봐야
+    /// 가드가 선다 (이슈 #47). 그 판단을 <see cref="Begin"/> 으로 올리면 한 틱 늦어지고,
+    /// 그 한 틱에 판정이 서면 가드가 아니라 맨몸으로 맞는다.
+    /// </summary>
+    private void Advance(InputFrame input, double dt)
     {
         // 행동과 무관한 시계 둘은 **Idle 이어도 돈다.** 부정확 패리 창(0.5초)이 패리 행동
         // (0.26~0.34초)보다 길고, 고정(0.6초)은 아예 Idle 상태에서 흐른다 — 여기서 같이
@@ -318,8 +381,22 @@ public sealed class Fighter
             return;
         }
 
+        // 가드도 시간이 안 끝낸다 — 손가락이 끝낸다(Begin 이 본다). 차지와 같은 규약이라
+        // Duration 표에도 자리가 없다.
+        if (Action == FighterAction.Guard)
+        {
+            return;
+        }
+
         if (ActionElapsed >= Duration(Action))
         {
+            // 패리가 끝났는데 아직 누르고 있으면 **가드로 이어진다** (이슈 #47).
+            if (Action == FighterAction.Parry && input.ParryHeld)
+            {
+                EnterGuard();
+                return;
+            }
+
             Action = FighterAction.Idle;
             ActionElapsed = 0;
 
@@ -388,6 +465,19 @@ public sealed class Fighter
             return;
         }
 
+        // 가드 중에도 할 일은 하나뿐이다 — 놓았는지 본다 (이슈 #47). 차지와 같은 모양이다.
+        // 누르고 있는 동안에는 새 행동도 못 고른다: 손가락 하나가 두 기술을 살 수 없다.
+        if (Action == FighterAction.Guard)
+        {
+            if (!input.ParryHeld)
+            {
+                Action = FighterAction.Idle;
+                ActionElapsed = 0;
+            }
+
+            return;
+        }
+
         if (Action != FighterAction.Idle || Locked)
         {
             return;
@@ -448,6 +538,32 @@ public sealed class Fighter
         _windup = Math.Max(0, _config.AttackWindup - ActionElapsed);
         Action = FighterAction.Attack;
         ActionElapsed = 0;
+    }
+
+    /// <summary>
+    /// 패리 동작이 끝났는데 아직 누르고 있다 — 가드로 이어진다 (이슈 #47).
+    /// 값은 여기서 안 든다: 가드의 값은 <b>막아낼 때</b> 피해에 비례해 나간다.
+    ///
+    /// <para>
+    /// ⚠ <b>누름 시계를 여기서 끝낸다.</b> 부정확 창(0.5초)이 패리 동작(0.30초)보다 길어
+    /// 0.2초가 가드 안까지 살아 있는데, <see cref="HitResolver"/> 는
+    /// <c>SinceParryPress &lt; ImpreciseParryWindow</c> 면 <c>ParriedLate</c> 를 돌려준다 —
+    /// 그러면 <b>가드 불가 판정이 늦은 패리로 먹혀</b> "가드로는 못 막는다" 는 성질이
+    /// 한 번도 안 일어난다(구멍 뚫기에서 나온 자리다). 한 번의 누름이 패리와 가드를 겹쳐 사지
+    /// 않는다는 뜻이기도 하다: 정확 창도 부정확 창도 이미 그 누름의 몫으로 다 흘렀다.
+    /// </para>
+    ///
+    /// <para>
+    /// 연타 사슬(<c>_parryChain</c>)은 여기서 <b>안</b> 건드린다. 시계가 무한대가 되므로 다음
+    /// 누름은 사슬 1 로 시작하는데, 그게 맞다 — 징벌이 노리는 것은 <b>난사</b>이고 가드에
+    /// 들어가려면 0.30초를 붙들어야 해서 난사로는 여기 못 온다.
+    /// </para>
+    /// </summary>
+    private void EnterGuard()
+    {
+        Action = FighterAction.Guard;
+        ActionElapsed = 0;
+        _sinceParryPress = double.PositiveInfinity;
     }
 
     /// <summary>

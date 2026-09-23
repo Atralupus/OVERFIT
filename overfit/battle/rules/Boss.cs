@@ -21,6 +21,18 @@ public sealed class BossConfig
     /// <summary>정확 패리에 굳는 시간(초). 이 동안 걷지도 않고 돌던 패턴의 타임라인도 안 민다.</summary>
     public required double StaggerSeconds { get; init; }
 
+    /// <summary>
+    /// <b>가드 불가</b> 판정을 정확 패리로 받아쳤을 때 굳는 시간(초) — 평소보다 길다 (이슈 #47).
+    ///
+    /// <para>
+    /// 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이고, 그러면 예고(호박 링 + 危)가 말하는
+    /// "받아쳐라" 에 값이 없다. 길이는 <b>최대 차지 한 번이 들어가는가</b>로 정해진다 —
+    /// 이 경직 + <see cref="PatternGap"/> 이 그 창이다. <c>BossDataTests</c> 가 그 산수를
+    /// <c>fighters.json</c> 과 대조한다.
+    /// </para>
+    /// </summary>
+    public required double GuardBreakParryStagger { get; init; }
+
     public required string Sprite { get; init; }
 }
 
@@ -76,8 +88,13 @@ public sealed class Boss
     /// </summary>
     public bool Staggered => _staggerLeft > 0;
 
-    /// <summary>정확 패리가 들어왔다. 굳는 길이는 데이터(bosses.json)가 정한다.</summary>
-    public void Stagger() => _staggerLeft = _config.StaggerSeconds;
+    /// <summary>
+    /// 정확 패리가 들어왔다. 굳는 길이는 데이터(bosses.json)가 정한다.
+    /// <paramref name="guardBreak"/> 면 <b>가드 불가를 받아친 것</b>이라 더 오래 굳는다 (이슈 #47) —
+    /// 최대 차지 한 번이 들어가는 길이이고, 그게 "받아쳐라" 의 값이다.
+    /// </summary>
+    public void Stagger(bool guardBreak) =>
+        _staggerLeft = guardBreak ? _config.GuardBreakParryStagger : _config.StaggerSeconds;
 
     /// <summary>경직 시계를 민다. <b>굳어 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
     public void Tick(double dt) => _staggerLeft = Math.Max(0, _staggerLeft - dt);

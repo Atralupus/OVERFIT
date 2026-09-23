@@ -28,6 +28,7 @@ public class HitResolverTests
         Feint = false,
         MultiHit = 1,
         Tracking = false,
+        HasGuardBreak = false,
     };
 
     /// <summary><paramref name="ticks"/> 틱째의 파이터. 1틱째면 행동 경과가 정확히 한 틱이다.</summary>
@@ -254,4 +255,82 @@ public class HitResolverTests
 
         f.Health.ShouldBe(before);
     }
+
+    // ── 가드 (이슈 #47) ──────────────────────────────────────────────────────
+
+    /// <summary>패리 키를 붙들어 <b>가드가 설 때까지</b> 민 파이터. 틱 수를 세지 않는다.</summary>
+    private static Fighter Guarding()
+    {
+        Fighter f = Spawn(_bossX + 100);
+        f.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
+        for (int i = 0; i < 120 && f.Action != FighterAction.Guard; i++)
+        {
+            f.Tick(new InputFrame(0, false, false, false, false, ParryHeld: true), _dt);
+        }
+
+        f.Guarding.ShouldBeTrue("가드가 안 섰다 — 아래 테스트들이 전부 다른 갈래를 본다");
+        return f;
+    }
+
+    /// <summary><c>guard_break</c> 가 붙은 판정. 마무리 한 대만 이것을 단다 (판정 단위다).</summary>
+    private static HitBox Unguardable() => new(0, 260, 0, 200, 18, GuardBreak: true);
+
+    [Fact]
+    public void 가드_중이면_깎여서_막는다()
+    {
+        HitResolver.Resolve(Guarding(), _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Guarded);
+    }
+
+    [Fact]
+    public void 패리_불가_패턴도_가드로는_막는다()
+    {
+        // 가드는 패리가 아니다. 크림슨(parryable:false)은 "받아치지 마라" 이지 "막지 마라" 가 아니라,
+        // 가드 갈래는 그 태그를 안 본다 — 못 막게 하는 것은 판정 쪽의 guard_break 하나뿐이다.
+        HitResolver.Resolve(Guarding(), _bossX, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Guarded);
+    }
+
+    [Fact]
+    public void 스태미나가_모자라면_가드가_깨진다()
+    {
+        Fighter f = Guarding();
+        f.Spend(f.Stamina - 1);   // 1 남는다. Mid() 는 18피해라 32.4 가 든다
+
+        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
+    }
+
+    [Fact]
+    public void 가드_불가는_스태미나가_남아도_깨지고_ParriedLate_가_아니다()
+    {
+        // ⚠ **구멍 뚫기에서 나온 자리다.** 가드는 패리와 같은 키를 붙들어 들어가므로 누름 시각이
+        // 아직 부정확 창(0.5초) 안이다 — 그 갈래가 가드보다 먼저 서 있으면 가드 불가 판정이
+        // ParriedLate 로 먹혀 "가드로는 못 막는다" 가 한 번도 안 일어난다.
+        Fighter f = Guarding();
+
+        f.Stamina.ShouldBeGreaterThan(f.GuardStaminaCost(Unguardable().Damage),
+            "스태미나가 모자라 이 테스트가 고갈 갈래를 본다");
+        HitResolver.Resolve(f, _bossX, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
+    }
+
+    [Fact]
+    public void 가드_불가도_안_막고_있으면_평범한_판정이다()
+    {
+        // guard_break 는 **가드에만** 무는 성질이다. 정확 패리는 그대로 받아친다 —
+        // 받아치는 것이 이 판정의 답이고, 그 상(연장 경직)이 설계의 절반이다.
+        Fighter f = Spawn(_bossX + 100);
+        f.Tick(new InputFrame(0, false, false, true, false), _dt);
+
+        HitResolver.Resolve(f, _bossX, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Unguardable(), Tags(parryable: false))
+            .ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 가드는_거리와_높이보다_뒤다()
+    {
+        // 순서를 박아둔다. 안 닿은 판정까지 "막았다" 로 적으면 가드 개수가 실제로 막은 것보다
+        // 부풀고, 그 개수가 곧 계측이다.
+        HitResolver.Resolve(Guarding(), _bossX, new HitBox(0, 10, 0, 200, 18), Tags(parryable: true))
+            .ShouldBe(HitVerdict.MissedTooFar);
+    }
+
 }

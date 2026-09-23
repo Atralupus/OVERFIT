@@ -4,7 +4,10 @@ using System.Collections.Generic;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 플레이어가 어떻게 싸우는가, 10개 숫자로. <see cref="DodgeEvent"/> 목록만 받으므로
+/// 플레이어가 어떻게 싸우는가, 10개 숫자로. <b>열이라는 것이 계약이다</b> — 망의 입력 모양이라
+/// 늘리는 것은 수치 하나를 고치는 것과 다른 종류의 변경이고, 새 기술의 신호는 축이 아니라
+/// <b>개수</b>로 실린다 (<see cref="ParryLateSamples"/> · <see cref="ChargedGreedSamples"/> ·
+/// <see cref="GuardSamples"/>). <see cref="DodgeEvent"/> 목록만 받으므로
 /// <b>전투를 안 돌려도 테스트된다.</b>
 ///
 /// <para>
@@ -133,6 +136,36 @@ public sealed class PlayerAxes
     public int ParryChoiceSamples { get; private init; }
 
     /// <summary>
+    /// <b>가드로 버틴</b> 관측 수 (이슈 #47). <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
+    ///
+    /// <para>
+    /// <b>왜 11번째 축이 아닌가.</b> 10축은 망의 <b>입력 모양</b>이라, 하나 늘리는 것은 지금까지의
+    /// 모든 입력 벡터를 다른 길이로 만드는 일이다. 그럴 만한 값이 지금 가드에는 없다:
+    /// 의존도 축(<see cref="JumpReliance"/> · <see cref="ParryReliance"/>)의 셈법은
+    /// "그 수단이 가능했고 <b>다른 수단도</b> 가능했던" 판정을 분모로 삼는데, 가드는
+    /// <c>guard_break</c> 가 아닌 <b>모든</b> 판정에서 가능하다 — 분모가 사실상 전부라
+    /// "가드 의존도" 는 그냥 사용 비율이 되고, 그건 이 두 축이 피하려고 만들어진 바로 그 값이다.
+    /// 진짜 대조(가드가 되는 판정 · 안 되는 판정)는 이슈 #48 이 가드 불가 변종을 세울 때 생긴다.
+    /// </para>
+    ///
+    /// <para>
+    /// 그때까지는 <see cref="ParryLateSamples"/> · <see cref="ChargedGreedSamples"/> 와 같은 자리에
+    /// 개수로 싣는다. 잃는 것도 적다 — 가드는 이미 다른 축을 움직인다:
+    /// 가드로 받은 판정은 <see cref="ParryReliance"/> 의 분모에 들어가되 분자에는 안 들어가고
+    /// ("패리 말고 다른 것을 골랐다"), 거리는 <see cref="DistanceBias"/> 에 그대로 쌓인다.
+    /// </para>
+    /// </summary>
+    public int GuardSamples { get; private init; }
+
+    /// <summary>
+    /// 그중 <b>깨진</b> 가드의 수 (이슈 #47). <see cref="ParryLateSamples"/> 와 같은 자리다 —
+    /// 개수 하나가 없으면 "버텨냈다" 와 "버티다 무너졌다" 가 한 점이 되는데, 그 둘은 결과가 정반대다
+    /// (흘린 피해 0.25 · 자세 유지 ↔ 전액 · 0.9초 고정). 무엇이 깼는지(고갈 · 가드 불가)는
+    /// 여기서 안 가른다: 고른 것도 겪은 것도 같은 "깨졌다" 이고, 가르려면 축이 아니라 이벤트를 본다.
+    /// </summary>
+    public int GuardBrokenSamples { get; private init; }
+
+    /// <summary>
     /// <c>Greed</c> 로 센 것 중 <b>모아 둔 칼을 들고 있던</b> 관측 수 (이슈 #40).
     /// <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
     ///
@@ -167,6 +200,7 @@ public sealed class PlayerAxes
         var jumpErrors = new List<double>();
         int dashes = 0, jumps = 0, parries = 0, parried = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
         int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0, parriedLate = 0, chargedGreed = 0;
+        int guards = 0, guardsBroken = 0;
         double distance = 0;
 
         foreach (DodgeEvent e in events)
@@ -241,6 +275,16 @@ public sealed class PlayerAxes
                     }
 
                     break;
+                case DodgeVerb.Guard:
+                    // 막아냈든 깨졌든 **고른 것은 가드**다. 둘의 차이는 verb 가 아니라 Verdict 가 나른다 —
+                    // 정확·부정확 패리를 한 verb 로 둔 것과 같은 규약이다.
+                    guards++;
+                    if (e.Verdict == HitVerdict.GuardBroken)
+                    {
+                        guardsBroken++;
+                    }
+
+                    break;
                 default:
                     break;
             }
@@ -263,6 +307,8 @@ public sealed class PlayerAxes
             JumpSamples = jumps,
             ParrySamples = parries,
             ParryLateSamples = parriedLate,
+            GuardSamples = guards,
+            GuardBrokenSamples = guardsBroken,
             JumpChoiceSamples = jumpChoices,
             ParryChoiceSamples = parryChoices,
             ChargedGreedSamples = chargedGreed,

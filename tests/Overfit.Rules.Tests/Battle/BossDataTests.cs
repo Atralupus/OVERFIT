@@ -54,4 +54,29 @@ public class BossDataTests
         // 그 패배가 학습 데이터에 "못 피해서 죽었다" 로 섞인다.
         TestConfigs.Balance().Battle.MaxTicks.ShouldBeGreaterThan(60 * 60);
     }
+
+    [Fact]
+    public void 가드_불가를_받아친_경직이_평소보다_길고_최대_차지가_들어간다()
+    {
+        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다 (이슈 #47). 상은 **최대 차지 한 번**이고,
+        // 그것이 들어가는 길이가 경직 + 패턴 간격이다 — 둘 중 하나만 줄여도 이 한 동작이 안 이어진다.
+        Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
+        fighters.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
+
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            boss.GuardBreakParryStagger.ShouldBeGreaterThan(boss.StaggerSeconds,
+                $"{id}: 가드 불가를 받아친 상이 평소 패리와 같다");
+
+            foreach ((string who, FighterConfig c) in fighters)
+            {
+                // 칼이 닿기까지 = 최대 차지 시간 + 판정. **붙든 시간이 곧 선딜**이라 선딜이 안 더해진다.
+                double lead = c.ChargeTiers[^1].Seconds + c.AttackActive;
+                (boss.GuardBreakParryStagger + boss.PatternGap).ShouldBeGreaterThanOrEqualTo(lead,
+                    $"{id}: 경직 {boss.GuardBreakParryStagger} + 간격 {boss.PatternGap} 에"
+                    + $" {who} 의 최대 차지({lead:0.000}초)가 안 들어간다");
+            }
+        }
+    }
+
 }

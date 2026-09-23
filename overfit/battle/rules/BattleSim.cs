@@ -63,6 +63,14 @@ public sealed class BattleSim
 
     private double _jumpStartedAt = double.NaN;
 
+    /// <summary>
+    /// 가드 자세가 선 시각(초, NaN = 지금 가드가 아니다) — 이슈 #47.
+    /// 패리 칸과 <b>따로</b> 둔다. 가드에 들어가는 순간 누름 시계가 끝나므로(Fighter.EnterGuard)
+    /// <c>_parryStartedAt</c> 은 곧 NaN 이 되고, 그러면 가드로 받은 판정의 TimingError 가 0 이 되어
+    /// "아무것도 안 했다" 와 같은 점이 된다 — 부정확 패리에서 고쳤던 바로 그 붕괴다.
+    /// </summary>
+    private double _guardStartedAt = double.NaN;
+
     private int _dashDirection;
 
     /// <summary>
@@ -314,6 +322,20 @@ public sealed class BattleSim
             _parryStartedAt = double.NaN;
         }
 
+        // 가드는 **자세**라 누름이 아니라 그 자세가 선 순간을 잡는다. 서 있는 동안 계속 살아 있고
+        // (연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 풀리면 지워진다.
+        if (Fighter.Guarding)
+        {
+            if (double.IsNaN(_guardStartedAt))
+            {
+                _guardStartedAt = now;
+            }
+        }
+        else
+        {
+            _guardStartedAt = double.NaN;
+        }
+
         if (input.Jump && wasGrounded && !Fighter.Grounded)
         {
             _jumpStartedAt = now;
@@ -337,6 +359,11 @@ public sealed class BattleSim
         // 나른다 — verb 를 갈라 놓으면 parry_reliance("다른 수단이 있는데 패리를 골랐나")가
         // 늦게 누른 패리를 "패리를 안 골랐다" 로 세게 된다. 고른 것은 같고 결과가 다르다.
         HitVerdict.Parried or HitVerdict.ParriedLate => (DodgeVerb.Parry, _parryStartedAt),
+
+        // 막아냈든 깨졌든 **고른 것은 가드**다 (이슈 #47) — 위와 같은 규약이고, 둘의 차이는
+        // verb 가 아니라 Verdict 가 나른다. 시각은 가드가 **선** 순간이다: 누름 시각이 아니라
+        // 자세가 선 시각이라야 "얼마나 오래 버티고 있었나" 가 오차로 실린다.
+        HitVerdict.Guarded or HitVerdict.GuardBroken => (DodgeVerb.Guard, _guardStartedAt),
 
         // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에
         // 그냥 서 있었던 것이다 — 후자를 점프로 세면 jump_reliance 가 **정반대 행동**으로 부푼다.
@@ -437,12 +464,22 @@ public sealed class BattleSim
 
             case HitVerdict.Parried:
                 // 보스를 굳히는 것은 여기다 — 파이터는 보스를 모른다.
+                // **가드 불가를 받아치면 더 오래 굳는다** (이슈 #47): 최대 차지 한 번이 들어가는
+                // 길이이고, 그 상이 "가드 불가는 받아쳐라" 를 말이 되게 한다.
                 Fighter.ParryPrecise();
-                Boss.Stagger();
+                Boss.Stagger(box.GuardBreak);
                 break;
 
             case HitVerdict.ParriedLate:
                 Fighter.ParryImprecise(box.Damage);
+                break;
+
+            case HitVerdict.Guarded:
+                Fighter.GuardChip(box.Damage);
+                break;
+
+            case HitVerdict.GuardBroken:
+                Fighter.GuardBreak(box.Damage);
                 break;
 
             default:
@@ -482,6 +519,9 @@ public sealed class BattleSim
         Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
             + $" err={error:0.000} dir={direction} air={!Fighter.Grounded}"
             + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}"
+            // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
+            // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
+            + $" stam={Fighter.Stamina:0}"
             + $" charge={Fighter.ChargeTier}");
     }
 

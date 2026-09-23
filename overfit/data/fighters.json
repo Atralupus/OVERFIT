@@ -11,6 +11,8 @@
 
   "_note_charge_cost": "스태미나는 **누를 때 한 번, 정액 attack_cost 다.** 차지에 값을 더 안 매기는 이유는 이미 같은 화폐로 내고 있기 때문이다 — 스태미나는 Idle 일 때만 차므로(stamina_regen 40/s) 2초를 모으는 것은 80 을 포기하는 것이고, 그건 대시 세 번보다 크다. 그리고 선불이라 **차지가 끊겨도 14 는 이미 나갔다** — 맞으면 모은 것이 전부 날아가는 것과 같이, 욕심의 값이다.",
 
+  "_note_guard": "**패리 키를 붙들고 있으면 가드다** (이슈 #47). 누름은 예전 그대로 즉시 패리 시도이고(정확 0.133 · 부정확 0.5 창이 거기서 흐른다), 패리 동작(parry_duration 0.30초)이 끝났는데 아직 누르고 있으면 가드가 선다 — 홀드인지 보고 시작하면 정확 창이 통째로 밀려 게임의 모든 패리가 나빠지므로, 판정을 **뒤로** 미룬 것이 이 설계의 전부다. 가드 중에는 못 움직이고(가드와 간격이 배타적이어야 고르는 것이 판단이 된다) 스태미나도 안 찬다(Idle 일 때만 40/s).\n\n값은 체력이 아니라 **스태미나**로 낸다. guard_chip_ratio(0.25)만 흘려 받고 guard_stamina_per_damage(1.8)를 피해에 비례해 문다 — **정액이 아니라 비례인 것이 이 기술의 레버다**: 8피해는 14 · 26피해는 46 이라 무거운 마무리 한 방이 가드를 깬다. 깨지면 전액을 맞고 guard_break_lock(0.9초) 동안 굳는데, 그 길이가 '남은 타격을 그대로 맞는' 값이고 부정확 패리의 고정(0.6)보다 길다. 깨진 가드는 스태미나를 안 쓴다 — 값은 막아낸 만큼에 매기는 것이고 깨진 가드는 아무것도 안 막았다.\n\n가드가 깨지는 길은 둘이다: 스태미나가 모자라거나, patterns.json 의 guard_break 판정이거나. 뒤의 것은 스태미나가 남아 있어도 깨지고, 그 답은 '받아쳐라' 다 — 상은 bosses.json 의 guard_break_parry_stagger 다.",
+
   "_note_sprite": "그림은 Martial Hero 팩 하나다. 캐릭터가 늘어나려면 팩이 더 필요하다 — 셋이던 때도 전부 같은 이 그림을 가리키고 있었다.",
 
   "검객": {
@@ -25,6 +27,7 @@
     "attack_windup": 0.3333, "attack_active": 0.0833, "attack_recover": 0.0834,
     "attack_anim_fps": 12, "attack_anim_frames": 6, "attack_anim_blade_frame": 4,
     "attack_reach": 110, "attack_damage": 10, "attack_cost": 14,
+    "guard_chip_ratio": 0.25, "guard_stamina_per_damage": 1.8, "guard_break_lock": 0.9,
     "charge_tiers": [
       { "seconds": 0.0, "damage_multiplier": 1.0 },
       { "seconds": 0.8, "damage_multiplier": 2.0 },

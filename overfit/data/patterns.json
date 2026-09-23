@@ -10,20 +10,23 @@
 
   "_note_내려찍기": "**셋 다 패리 가능이고 그것이 유일한 답이다.** 판정 상단이 340 이라 점프로 못 넘고(정점 302), distance[0]=0 이라 파고들 안쪽도 없다. 대시 창은 0.12 로 셋 중 가장 좁다 — 세 번을 전부 대시로 넘기려면 스태미나(대시 25 × 3 = 75 / 최대 100)가 거의 바닥나므로, 대시는 '한 대는 봐준다' 이지 답이 아니다. 나인 솔즈의 백장이 패리를 가르치는 방식이 정확히 이것이다.",
 
+  "_note_가드불가": "**guard_break 는 판정 단위다** (이슈 #47) — `내려찍기 3연` 의 마지막 한 대에만 붙는다. 앞의 두 대는 가드로 버티고 마지막에 받아치는 것이 이 기술의 문장이라, 패턴 단위로 두면 그 문장이 통째로 사라진다. has_guard_break 는 그 요약이고(예고가 선딜에 읽는다) PatternDataTests 가 둘의 정합을 대조한다.\n\n⚠ **이 한 줄은 이슈 #47 이 임시로 놓은 것이다.** 설계(2026-09-24-내려찍기-단일계열-design.md §2.4)는 가드 불가를 3단계 변종의 마지막 판정에 두는데 그 변종들은 이슈 #48 이 만든다. 그때까지 가드 불가 판정이 데이터에 하나도 없으면 규칙 · 예고(危) · 연장 경직이 게임에서 **한 번도 안 도는 채로** 초록이 되므로, 계열이 살아남는 이 패턴의 마무리에 붙여 길을 열어 두었다. #48 이 변종을 세우면 여기 둘지 옮길지를 그쪽에서 정한다.",
+
   "내려찍기 3연": {
     "tags": {
       "dash_window": 0.12, "dash_direction": "out",
       "jumpable": false, "anti_air": false,
       "parryable": true, "parry_window": 0.13,
       "punish_greed": true, "reach": "close",
-      "feint": false, "multi_hit": 3, "tracking": false
+      "feint": false, "multi_hit": 3, "tracking": false,
+      "has_guard_break": true
     },
     "tell": { "id": "blade_drag", "anim": "attack2", "x": 150, "y": 6, "length": 250 },
     "timeline": [
       { "t": 0.00, "kind": "windup" },
       { "t": 0.50, "kind": "active", "distance": [0, 250], "height": [0, 340], "damage": 9 },
       { "t": 0.85, "kind": "active", "distance": [0, 250], "height": [0, 340], "damage": 9 },
-      { "t": 1.20, "kind": "active", "distance": [0, 270], "height": [0, 340], "damage": 12 },
+      { "t": 1.20, "kind": "active", "distance": [0, 270], "height": [0, 340], "damage": 12, "guard_break": true },
       { "t": 1.42, "kind": "recover" },
       { "t": 1.80, "kind": "end" }
     ]
@@ -37,7 +40,8 @@
       "jumpable": true, "anti_air": false,
       "parryable": true, "parry_window": 0.18,
       "punish_greed": false, "reach": "mid",
-      "feint": false, "multi_hit": 2, "tracking": false
+      "feint": false, "multi_hit": 2, "tracking": false,
+      "has_guard_break": false
     },
     "tell": { "id": "blade_raised", "anim": "attack3", "x": -170, "y": 215, "length": 230 },
     "timeline": [
@@ -57,7 +61,8 @@
       "jumpable": false, "anti_air": true,
       "parryable": false, "parry_window": 0,
       "punish_greed": true, "reach": "far",
-      "feint": false, "multi_hit": 2, "tracking": false
+      "feint": false, "multi_hit": 2, "tracking": false,
+      "has_guard_break": false
     },
     "tell": { "id": "leap_mark", "anim": "attack", "x": 0, "y": 330, "length": 190 },
     "timeline": [

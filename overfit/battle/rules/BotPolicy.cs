@@ -9,8 +9,9 @@ namespace Overfit.Battle.Rules;
 ///
 /// <para>
 /// ⚠ <b>이것은 학습 데이터용 봇이 아니다.</b> 파라미터로 성향을 바꾸는 봇 함대는 스펙 5 의 몫이다.
-/// 다만 회피 수단 셋을 <b>전부</b> 쓰도록 만든다 — 한 수단만 쓰는 봇은 나머지 축을 영원히 0 으로 만들고,
-/// 그러면 계측이 제대로 도는지조차 확인할 수 없다.
+/// 다만 회피 수단을 <b>전부</b> 쓰도록 만든다 — 한 수단만 쓰는 봇은 나머지 축을 영원히 0 으로 만들고,
+/// 그러면 계측이 제대로 도는지조차 확인할 수 없다. 가드(이슈 #47)도 같은 이유로 여기 있다:
+/// 봇이 못 내는 기술은 봇 함대가 만드는 데이터에 영영 안 들어간다.
 /// </para>
 ///
 /// <para>
@@ -27,8 +28,25 @@ public sealed class BotPolicy
     /// </summary>
     private const double _lateReact = 0.10;
 
+    /// <summary>
+    /// 몇 패턴에 한 번 가드로 받을까. <b>수치가 아니라 봇의 성향이라</b> 데이터가 아니라 여기 있다
+    /// (<see cref="_lateReact"/> 와 같은 자리다) — fighters.json 의 어느 캐릭터 값도 아니고,
+    /// 학습 데이터용 봇 함대는 이 값을 파라미터로 받는다.
+    /// 셋에 하나면 한 판(패턴 20~40회)에 가드가 여러 번 들어가 계측이 실제로 도는지 보인다.
+    /// </summary>
+    private const int _guardOdds = 3;
+
     private readonly ulong _seed;
     private int _decisions;
+
+    /// <summary>지난 틱에 돌던 패턴 id (null = 쉬는 중). 바뀌는 순간이 "새 패턴" 이다.</summary>
+    private string? _lastPattern;
+
+    /// <summary>지금까지 본 패턴 수. 가드 주사위의 좌표다.</summary>
+    private int _patterns;
+
+    /// <summary>이번 패턴을 가드로 받기로 했나.</summary>
+    private bool _guardThis;
 
     /// <summary>지금까지 시작한 공격의 수. 차지 단계를 고르는 좌표의 키다.</summary>
     private int _swings;
@@ -49,6 +67,12 @@ public sealed class BotPolicy
 
         double gap = Math.Abs(sim.Fighter.X - sim.Boss.X) - sim.Boss.HalfWidth;
         sbyte move = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
+
+        // 가드는 **패턴이 시작할 때** 정한다. 다른 셋과 달리 미리 서야 하기 때문이다 —
+        // 누름에서 parry_duration(0.30초) 뒤에야 가드가 서는데, 아래의 반응 창(_lateReact 0.10초)
+        // 안에서 걸면 가드는 판정이 지나간 **뒤에** 선다. 매 틱 다시 고르지 않는 이유도 같다:
+        // 버티는 것이 곧 이 기술이라, 틱마다 마음이 바뀌면 가드는 한 번도 안 선다.
+        DecideGuard(sim);
 
         // 모으는 중이면 할 일은 하나다 — 놓을 때인가 (이슈 #40).
         // **패턴 갈래보다 먼저 본다.** 아래에 맡기면 패턴이 서는 순간 default(누름 없음)가 나가
@@ -81,6 +105,15 @@ public sealed class BotPolicy
         //    최대 차지가 영영 안 들어간다.
         if (sim.Boss.CurrentPattern is not null && !sim.Boss.Staggered && sim.NextActiveIn is not null)
         {
+            // **행동 갈래보다 먼저 본다.** 아래에 맡기면 패리 동작이 도는 동안 default(누름 없음)가
+            // 나가 레벨이 꺼지고, 가드는 서기도 전에 풀린다 — 차지가 같은 자리에서 같은 이유로 깨졌다.
+            if (_guardThis)
+            {
+                // 누름은 서 있을 때 한 번, 그 뒤로는 **유지**다. 엣지가 시작하고 레벨이 붙든다.
+                bool press = sim.Fighter.Action == FighterAction.Idle;
+                return new InputFrame(0, false, false, Parry: press, false, ParryHeld: true);
+            }
+
             if (sim.Fighter.Action != FighterAction.Idle)
             {
                 return default;
@@ -117,6 +150,30 @@ public sealed class BotPolicy
 
         // 0단계는 누름 유지가 없다 — 옛 봇과 한 틱도 안 다른 그냥 한 대다.
         return new InputFrame(0, false, false, false, Attack: true, AttackHeld: _chargeGoal > 0);
+    }
+
+    /// <summary>
+    /// 새 패턴이 시작됐으면 이번 것을 가드로 받을지 <b>한 번</b> 정한다 (이슈 #47).
+    /// 패턴이 끝나면 가드도 놓는다 — 쉬는 시간에 버티고 있으면 스태미나가 안 차고,
+    /// 그건 봇이 아무것도 못 하게 되는 길이다.
+    /// </summary>
+    private void DecideGuard(BattleSim sim)
+    {
+        string? now = sim.Boss.CurrentPattern;
+        if (now == _lastPattern)
+        {
+            return;
+        }
+
+        _lastPattern = now;
+        if (now is null)
+        {
+            _guardThis = false;
+            return;
+        }
+
+        _patterns++;
+        _guardThis = Det.RollInt(_seed, Det.Domain.BotGuard, _guardOdds, k1: _patterns) == 0;
     }
 
     /// <summary>

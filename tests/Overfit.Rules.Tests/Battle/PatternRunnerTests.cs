@@ -25,6 +25,7 @@ public class PatternRunnerTests
             Feint = false,
             MultiHit = 1,
             Tracking = false,
+            HasGuardBreak = false,
         },
         Timeline = new List<PatternStep>
         {

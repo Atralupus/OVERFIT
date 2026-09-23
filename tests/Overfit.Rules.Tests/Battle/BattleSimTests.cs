@@ -568,29 +568,31 @@ public class BattleSimTests
     }
 
     /// <summary>판정 하나짜리 패턴. 기하와 태그를 부르는 쪽이 정한다.</summary>
-    private static PatternDef OneHit(double[] distance, double[] height, bool parryable, double at) => new()
-    {
-        Tell = TestConfigs.Tell(),
-        Tags = new PatternTags
+    private static PatternDef OneHit(
+        double[] distance, double[] height, bool parryable, double at, bool guardBreak = false) => new()
         {
-            DashWindow = 0.14,
-            DashDirection = "out",
-            Jumpable = false,
-            AntiAir = false,
-            Parryable = parryable,
-            ParryWindow = parryable ? 0.12 : 0,
-            PunishGreed = false,
-            Reach = "far",
-            Feint = false,
-            MultiHit = 1,
-            Tracking = false,
-        },
-        Timeline = new List<PatternStep>
+            Tell = TestConfigs.Tell(),
+            Tags = new PatternTags
+            {
+                DashWindow = 0.14,
+                DashDirection = "out",
+                Jumpable = false,
+                AntiAir = false,
+                Parryable = parryable,
+                ParryWindow = parryable ? 0.12 : 0,
+                PunishGreed = false,
+                Reach = "far",
+                Feint = false,
+                MultiHit = 1,
+                Tracking = false,
+                HasGuardBreak = guardBreak,
+            },
+            Timeline = new List<PatternStep>
         {
-            new() { T = at, Kind = "active", Distance = distance, Height = height, Damage = 5 },
+            new() { T = at, Kind = "active", Distance = distance, Height = height, Damage = 5, GuardBreak = guardBreak },
             new() { T = at + (6 * BattleSim.Dt), Kind = "end" },
         },
-    };
+        };
 
     /// <summary>보스를 제자리에 세우고 <paramref name="pattern"/> 하나만 돌리는 판.</summary>
     private static BattleSim OnePattern(PatternDef pattern) => new(new BattleSetup
@@ -1040,6 +1042,7 @@ public class BattleSimTests
                 Feint = false,
                 MultiHit = 2,
                 Tracking = false,
+                HasGuardBreak = false,
             },
             Timeline = new List<PatternStep>
             {
@@ -1071,4 +1074,120 @@ public class BattleSimTests
         sim.Events[0].Verb.ShouldBe(DodgeVerb.Dash);
         sim.Events[1].Verb.ShouldBe(DodgeVerb.Dash);
     }
+
+    // ── 가드 (이슈 #47) ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 판정 하나를 <b>가드로</b> 받아 본다. 첫 틱에 누르고 그 뒤로 붙들면 패리 동작(0.30초)이
+    /// 끝나는 자리에서 가드가 서고, 판정은 그보다 뒤(0.5초)에 선다.
+    /// </summary>
+    private static BattleSim GuardOne(bool guardBreak)
+    {
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 30 * BattleSim.Dt,
+            guardBreak: guardBreak));
+
+        for (int i = 1; i <= 40 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(0, false, false, Parry: i == 1, false, ParryHeld: true));
+        }
+
+        return sim;
+    }
+
+    /// <summary>판정 하나를 <b>정확 패리</b>로 받아 본다.</summary>
+    private static BattleSim ParryOne(bool guardBreak)
+    {
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 2000 },
+            height: new double[] { 0, 300 },
+            parryable: true,
+            at: 24 * BattleSim.Dt,
+            guardBreak: guardBreak));
+
+        for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(0, false, false, Parry: i == 24, false));
+        }
+
+        return sim;
+    }
+
+    /// <summary>보스가 굳어 있는 시간(초). <b>틱을 세어 잰다</b> — 데이터 값을 손으로 안 베낀다.</summary>
+    private static double StaggerLeft(BattleSim sim)
+    {
+        int ticks = 0;
+        while (sim.Boss.Staggered && ticks < 60 * 10)
+        {
+            sim.Tick(default);
+            ticks++;
+        }
+
+        return ticks * BattleSim.Dt;
+    }
+
+    [Fact]
+    public void 가드로_받으면_깎여서_맞고_스태미나를_문다()
+    {
+        BattleSim sim = GuardOne(guardBreak: false);
+        DodgeEvent e = sim.Events.Single();
+        FighterConfig c = TestConfigs.Fighter();
+
+        e.Verdict.ShouldBe(HitVerdict.Guarded);
+        e.Verb.ShouldBe(DodgeVerb.Guard);
+        e.TimingError.ShouldBeLessThan(0, "가드가 판정보다 먼저 섰는데 시각이 안 실렸다");
+
+        // OneHit 의 피해는 5 — 0.25 는 반올림해 1 이고 값은 5 × 1.8 = 9 다.
+        sim.Fighter.Health.ShouldBe(c.MaxHealth - 1);
+        sim.Fighter.Stamina.ShouldBe(c.MaxStamina - c.ParryCost - 9, 1e-9);
+        sim.Fighter.Locked.ShouldBeFalse("깨지지도 않았는데 굳었다");
+        sim.Fighter.Guarding.ShouldBeTrue("받아낸 가드가 풀렸다");
+    }
+
+    [Fact]
+    public void 가드_불가는_가드를_깨고_전액을_준다()
+    {
+        BattleSim sim = GuardOne(guardBreak: true);
+        DodgeEvent e = sim.Events.Single();
+        FighterConfig c = TestConfigs.Fighter();
+
+        e.Verdict.ShouldBe(HitVerdict.GuardBroken,
+            "가드 불가가 ParriedLate 로 먹혔다 — 같은 키를 붙들어 들어가는 가드의 함정이다");
+        e.Verb.ShouldBe(DodgeVerb.Guard);
+        sim.Fighter.Health.ShouldBe(c.MaxHealth - 5, "깨진 가드는 전액이다");
+        sim.Fighter.Locked.ShouldBeTrue();
+        sim.Fighter.Guarding.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 가드_불가를_정확_패리하면_보스가_더_오래_굳는다()
+    {
+        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다. 상은 **최대 차지 한 번 들어갈 길이**이고,
+        // 그 길이를 bosses.json 이 정한다 — BossDataTests 가 그 산수를 본다.
+        BossConfig boss = TestConfigs.Boss();
+        BattleSim plain = ParryOne(guardBreak: false);
+        BattleSim broken = ParryOne(guardBreak: true);
+
+        plain.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
+        broken.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
+
+        StaggerLeft(plain).ShouldBe(boss.StaggerSeconds, 2 * BattleSim.Dt);
+        StaggerLeft(broken).ShouldBe(boss.GuardBreakParryStagger, 2 * BattleSim.Dt);
+    }
+
+    [Fact]
+    public void 가드는_다른_수단을_안_고른_것으로도_세어진다()
+    {
+        // 의존도 축의 분모는 그대로여야 한다 — 가드로 받은 판정은 "패리를 안 골랐다" 가 맞다.
+        BattleSim sim = GuardOne(guardBreak: false);
+        PlayerAxes axes = PlayerAxes.From(sim.Events);
+
+        axes.GuardSamples.ShouldBe(1);
+        axes.GuardBrokenSamples.ShouldBe(0);
+        axes.ParrySamples.ShouldBe(0, "가드가 패리로 세어졌다");
+    }
+
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Overfit.Battle.Rules;
 using Shouldly;
 using Xunit;
@@ -306,4 +307,42 @@ public class PlayerAxesTests
         axes.JumpReliance.ShouldBe(0.25, 0.001);
         axes.ParryReliance.ShouldBe(0.25, 0.001);
     }
+
+    [Fact]
+    public void 가드는_축이_아니라_개수로_실린다()
+    {
+        // **10축 계약을 안 깬다** (이슈 #47). 지금 가드에는 의존도 축이 될 분모가 없다 —
+        // guard_break 가 아닌 모든 판정에서 가드가 되므로 "고를 수 있었는데 골랐나" 가 사실상
+        // 사용 비율이고, 그건 JumpReliance · ParryReliance 가 피하려고 만들어진 바로 그 값이다.
+        // 그래서 ParryLateSamples · ChargedGreedSamples 와 같은 자리에 **개수**로 싣는다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.GuardBroken),
+            Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Parried),
+        });
+
+        axes.GuardSamples.ShouldBe(3);
+        axes.GuardBrokenSamples.ShouldBe(1, "깨진 가드가 막아낸 가드와 한 점이 됐다");
+
+        // 가드는 **다른 수단을 안 고른 것**으로도 세어진다 — 의존도의 분모는 그대로다.
+        axes.ParryChoiceSamples.ShouldBe(4);
+        axes.ParryReliance.ShouldBe(0.25, 0.001);
+        axes.DashSamples.ShouldBe(0);
+        axes.JumpSamples.ShouldBe(0);
+        axes.ParrySamples.ShouldBe(1);
+    }
+
+    [Fact]
+    public void 축은_열_개_그대로다()
+    {
+        // 10축 계약은 **망의 입력 모양**이다. 축을 하나 늘리면 지금까지의 입력 벡터가 전부
+        // 다른 길이가 되므로, 수치 하나를 고치는 것과 다른 종류의 변경이다.
+        // 이름 목록으로 세지 않는 이유는 그러면 축을 더하면서 목록을 같이 고치는 것이
+        // "계약을 지켰다" 로 보이기 때문이다 — 리플렉션이 그 손을 막는다.
+        typeof(PlayerAxes).GetProperties().Count(p => p.PropertyType == typeof(double))
+            .ShouldBe(10, "축의 수가 바뀌었다 — 10축 계약은 가볍게 못 바꾼다");
+    }
+
 }

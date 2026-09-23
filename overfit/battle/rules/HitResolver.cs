@@ -40,6 +40,20 @@ public enum HitVerdict
     /// 늦음(ParriedLate) · 무반응(Hit + Verb=None). 전에는 뒤의 둘이 같은 점이었다.
     /// </summary>
     ParriedLate,
+
+    /// <summary>
+    /// 닿았고 <b>가드</b>가 받아냈다 (이슈 #47). 피해는 <c>guard_chip_ratio</c> 만 흘러 들어오고
+    /// 값은 <b>스태미나</b>로 낸다 — 그 값이 피해에 비례하므로 무거운 한 방이 가드를 깬다.
+    /// </summary>
+    Guarded,
+
+    /// <summary>
+    /// 닿았고 가드가 <b>깨졌다</b> (이슈 #47). 두 길로 온다 — 스태미나가 모자랐거나,
+    /// <c>guard_break</c> 판정이었거나. 어느 쪽이든 <b>전액</b>이고 <c>guard_break_lock</c> 동안 굳는다.
+    /// 둘을 한 값으로 두는 것은 일부러다: 플레이어가 겪는 것도 화면이 말하는 것도 같은 "깨졌다" 이고,
+    /// 왜 깨졌는지는 그 순간의 스태미나가 이미 말한다.
+    /// </summary>
+    GuardBroken,
 }
 
 /// <summary>
@@ -91,6 +105,25 @@ public static class HitResolver
         if (fighter.Action == FighterAction.Dash && Within(fighter.ActionElapsed, fighter.DashIFrames, tags.DashWindow))
         {
             return HitVerdict.Dodged;
+        }
+
+        // 가드가 패리보다 **먼저**다 (이슈 #47). 두 갈래가 겹칠 수 있기 때문이다 —
+        // 가드는 패리와 같은 키를 붙들어 들어가므로 가드가 선 뒤에도 그 누름의 부정확 창(0.5초)이
+        // 0.2초쯤 남는데, 패리 갈래가 먼저면 **가드 불가 판정이 ParriedLate 로 먹혀**
+        // "가드로는 못 막는다" 는 성질이 한 번도 안 일어난다.
+        //
+        // 값으로는 이미 못 겹친다 — Fighter.EnterGuard 가 그 시계를 끝내기 때문이다. 그래도
+        // 순서를 이렇게 두는 것은 **규칙과 구조가 같은 말을 하게** 하기 위해서다: 나중에 가드로
+        // 들어오는 길이 하나 더 생겨 시계를 안 끝내더라도, 이 자리에서 다시 안 새게 된다.
+        //
+        // parryable 태그는 여기서 **안 본다.** 크림슨은 "받아치지 마라" 이지 "막지 마라" 가 아니다 —
+        // 가드를 막는 것은 판정 쪽의 guard_break 하나뿐이다.
+        if (fighter.Guarding)
+        {
+            // 깨지는 길이 둘이다. 스태미나가 모자라거나, 애초에 가드로는 못 막는 판정이거나.
+            return box.GuardBreak || fighter.Stamina < fighter.GuardStaminaCost(box.Damage)
+                ? HitVerdict.GuardBroken
+                : HitVerdict.Guarded;
         }
 
         if (tags.Parryable)
