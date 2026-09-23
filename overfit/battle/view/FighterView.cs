@@ -375,8 +375,15 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 차지 자세로 세운다 — <c>attack</c> 시트의 선딜 마지막 장이다. 재생을 멈추는 것이 핵심이라
-    /// <c>Play</c> 만 하고 두면 0.5초짜리 시트가 그대로 돌아 <b>모으는 중에 칼이 나간다.</b>
+    /// 모으는 자세. <b>시트를 처음부터 돌리다가 선딜 마지막 장에서 세운다</b> —
+    /// 칼을 뒤로 빼는 동작(0~3번 프레임)을 실제로 감고 나서 그 자세로 멈추는 것이라,
+    /// 규칙이 "붙드는 것이 곧 선딜" 이라고 말하는 것과 그림이 정확히 같은 말을 한다.
+    ///
+    /// <para>
+    /// 세우는 것이 핵심이다. <c>Play</c> 만 하고 두면 0.5초짜리 시트가 그대로 돌아
+    /// <b>모으는 중에 칼이 나간다.</b> 반대로 처음부터 멈춰 세우면(예전) 뒤로 빼는 동작이
+    /// 한 프레임에 건너뛰어져 "모으기 시작했다" 가 그림에 없다.
+    /// </para>
     /// </summary>
     private void HoldCharge()
     {
@@ -388,17 +395,28 @@ public partial class FighterView : Node2D
         if (_sprite.Animation != "attack")
         {
             _sprite.Play("attack");
+            _sprite.SetFrameAndProgress(0, 0.0f);
             AlignToGround("attack");
         }
 
-        _sprite.Frame = System.Math.Min(_chargeFrame, _sprite.SpriteFrames.GetFrameCount("attack") - 1);
-        _sprite.Pause();
+        int last = System.Math.Min(_chargeFrame, _sprite.SpriteFrames.GetFrameCount("attack") - 1);
+        if (_sprite.Frame >= last)
+        {
+            _sprite.Frame = last;
+            _sprite.Pause();
+        }
     }
 
     /// <summary>
-    /// 차지를 놓았다 — 시트를 <b>처음부터</b> 다시 돌린다. <see cref="Animate"/> 는 이름이 바뀔 때만
-    /// 일하는데 차지와 스윙은 이름이 같아서(<c>attack</c>) 그냥 두면 멈춰 세운 그 장에서 이어진다:
-    /// 선딜 없이 칼부터 나가고, 그 뒤로 영영 멈춘 채 남는다.
+    /// 차지를 놓았다 — 멈춰 세운 그 장에서 <b>이어서</b> 돌린다. 처음부터 다시 돌리면 화면이
+    /// 칼을 두 번 뒤로 뺀다: 2초 동안 뺀 칼을 놓는 순간 다시 빼는 그림이 되고, 그건 규칙이
+    /// 말하는 것(선딜은 이미 지났다)과 반대다.
+    ///
+    /// <para>
+    /// 둘의 시계가 맞는 것은 우연이 아니다. 선딜(0.3333초)이 곧 시트의 0~3번 네 장이라,
+    /// t 초 붙들었으면 그림은 <c>t×fps</c> 번째 장에 있고 규칙의 남은 선딜은 <c>0.3333-t</c> 다 —
+    /// 같은 값이다. 그래서 중간에 놓아도 그림과 판정이 같이 간다.
+    /// </para>
     /// </summary>
     private void Release()
     {
@@ -407,7 +425,6 @@ public partial class FighterView : Node2D
             return;
         }
 
-        _sprite.SetFrameAndProgress(0, 0.0f);
         _sprite.Play();
     }
 

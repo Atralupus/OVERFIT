@@ -399,7 +399,7 @@ public sealed class BattleSim
             Direction: direction,
             Airborne: !Fighter.Grounded,
             Distance: Math.Abs(Fighter.X - Boss.X),
-            // 모으고 선 것도 욕심이다 (이슈 #40). 차지는 휘두르는 0.5초가 아니라 최대 2.4초를
+            // 모으고 선 것도 욕심이다 (이슈 #40). 차지는 휘두르는 0.5초가 아니라 최대 2.08초를
             // 무방비로 서 있는 것이라, 여기서 빼면 축이 가장 크게 건 순간에만 눈을 감는다.
             GreedWindow: Fighter.Action is FighterAction.Attack or FighterAction.Charge,
             ChargeTier: Fighter.ChargeTier,

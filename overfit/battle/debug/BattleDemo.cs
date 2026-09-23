@@ -81,7 +81,7 @@ public partial class BattleDemo : Node
         Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
             + $" parry_n={axes.ParrySamples} parry_late_n={axes.ParryLateSamples}"
             // charge_n 은 "모아 둔 칼을 들고 있다 판정을 맞은" 건수다 (이슈 #40) — greed 비율만으로는
-            // 휘두르다 맞은 0.5초와 모으고 선 2.4초가 한 점이라, 욕심의 깊이가 이 칸에만 있다.
+            // 휘두르다 맞은 0.5초와 모으고 선 2.08초가 한 점이라, 욕심의 깊이가 이 칸에만 있다.
             + $" charge_n={axes.ChargedGreedSamples}"
             + $" jump_rel_n={axes.JumpChoiceSamples}"
             + $" parry_rel_n={axes.ParryChoiceSamples} dash_bias={axes.DashTimingBias:0.000}"

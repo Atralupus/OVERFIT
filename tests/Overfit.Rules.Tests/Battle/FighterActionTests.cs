@@ -397,6 +397,73 @@ public class FighterActionTests
     }
 
     [Fact]
+    public void 붙들고_있는_시간이_곧_선딜이다()
+    {
+        // **차지는 선딜 앞에 붙는 것이 아니라 선딜 그 자체다** (이슈 #40). 그림이 먼저 그렇게 말하고
+        // 있었다 — 차지 자세는 attack 시트의 선딜 마지막 장(칼을 끝까지 뒤로 뺀 그림)이라,
+        // 놓은 뒤에 선딜을 처음부터 또 기다리면 화면에서 **같은 동작을 두 번** 감는 셈이다.
+        // 그래서 놓는 순간 칼이 곧장 나간다 — 선딜은 붙들고 있는 동안 이미 다 지났다.
+        Fighter f = Spawn();
+        HoldToTier(f, 2);
+
+        f.Tick(default, _dt);   // 놓았다
+
+        f.Action.ShouldBe(FighterAction.Attack);
+        f.AttackActive.ShouldBeTrue("붙들고 있었는데 선딜을 또 기다린다");
+    }
+
+    [Fact]
+    public void 짧게_붙들면_남은_선딜만큼만_기다린다()
+    {
+        // 경계가 계단이 아니라 연속이어야 한다. 선딜(0.08)보다 짧게 붙들었으면 남은 만큼만
+        // 더 기다린다 — 안 그러면 "0.07초 붙들기" 가 그냥 누르기보다 느려지는 구멍이 생긴다.
+        Fighter f = Spawn();
+        f.Tick(_attackPress, _dt);
+        f.Tick(_attackHold, _dt);   // 두 틱(0.0333초) 붙들었다 — 선딜 0.08 의 절반쯤
+        f.Tick(default, _dt);       // 놓았다
+
+        f.AttackActive.ShouldBeFalse("남은 선딜이 있는데 칼이 나갔다");
+
+        f.Tick(default, _dt);
+        f.Tick(default, _dt);       // 0.05초 — 남은 선딜(0.0467)을 지났다
+        f.AttackActive.ShouldBeTrue("남은 선딜보다 오래 기다렸다");
+    }
+
+    [Fact]
+    public void 붙들어도_그냥_누른_것보다_빨라지지_않는다()
+    {
+        // 위 둘의 당연한 따름이지만 못박아 둔다. 칼이 닿기까지는 **max(붙든 시간, 선딜) + 판정**이라
+        // 붙드는 것으로 공짜 속도를 얻을 수 없다 — 얻을 수 있으면 아무도 그냥 안 누른다.
+        Fighter tap = Spawn();
+        tap.Tick(_attack, _dt);
+        int tapTicks = 1;
+        while (!tap.AttackActive)
+        {
+            tap.Tick(default, _dt);
+            tapTicks++;
+        }
+
+        Fighter held = Spawn();
+        held.Tick(_attackPress, _dt);
+        int heldTicks = 1;
+        for (int i = 0; i < 4; i++)   // 0.0667초 — 선딜(0.08)보다 짧게 붙든다
+        {
+            held.Tick(_attackHold, _dt);
+            heldTicks++;
+        }
+
+        held.Tick(default, _dt);
+        heldTicks++;
+        while (!held.AttackActive)
+        {
+            held.Tick(default, _dt);
+            heldTicks++;
+        }
+
+        heldTicks.ShouldBeGreaterThanOrEqualTo(tapTicks, "붙드는 것이 그냥 누르는 것보다 빠르다");
+    }
+
+    [Fact]
     public void 차지_중에는_움직이지도_뛰지도_못한다()
     {
         // 차지의 값은 **아무것도 못 한다는 것**이다. 걸으면서 모을 수 있으면 위험이 없고,

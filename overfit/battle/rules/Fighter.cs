@@ -52,6 +52,20 @@ public sealed class Fighter
     /// </summary>
     private int _tier;
 
+    /// <summary>
+    /// <b>이번</b> 칼질의 남은 선딜(초). 그냥 누르면 데이터의 선딜 그대로이고, 붙들고 있었으면
+    /// 그만큼 깎여 0 이 된다 — <b>붙드는 것이 곧 선딜이기 때문이다</b> (이슈 #40).
+    ///
+    /// <para>
+    /// 설정값(<c>attack_windup</c>)을 그대로 안 읽고 칼질마다 들고 있는 이유가 여기다. 그림이 먼저
+    /// 그렇게 말하고 있었다: 차지 자세는 attack 시트의 <b>선딜 마지막 장</b>(칼을 끝까지 뒤로 뺀 그림)이라,
+    /// 놓은 뒤에 선딜을 처음부터 또 기다리면 같은 동작을 두 번 감는 셈이다. 규칙으로도 그 편이 옳다 —
+    /// 그래야 2초 차지가 칼 닿기까지 2.4166초가 아니라 <b>2.0833초</b>가 되어 백장의 빈 시간
+    /// (1.90~2.40초)에 실제로 들어간다.
+    /// </para>
+    /// </summary>
+    private double _windup;
+
     public Fighter(FighterConfig config, Arena arena, double x)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -142,8 +156,8 @@ public sealed class Fighter
 
     /// <summary>공격 판정이 서 있는가. 선딜을 지나고 후딜 전.</summary>
     public bool AttackActive => Action == FighterAction.Attack
-        && ActionElapsed >= _config.AttackWindup
-        && ActionElapsed < _config.AttackWindup + _config.AttackActive;
+        && ActionElapsed >= _windup
+        && ActionElapsed < _windup + _config.AttackActive;
 
     public double AttackReach => _config.AttackReach;
 
@@ -180,11 +194,13 @@ public sealed class Fighter
         _config.ChargeTiers[Math.Clamp(tier, 0, _config.ChargeTiers.Count - 1)].Seconds;
 
     /// <summary>
-    /// 지금 휘두르면 칼이 닿기까지 걸리는 시간(초) — 선딜 + 판정이다.
-    /// 봇이 "지금 놓아도 판정 전에 닿나" 를 이것으로 잰다. 수치를 봇 쪽에 베끼면
-    /// 공격 타이밍을 그림에 맞출 때마다(이슈 #38) 봇만 옛 값으로 남는다.
+    /// <b>지금</b> 휘두르면 칼이 닿기까지 걸리는 시간(초) — 남은 선딜 + 판정이다.
+    /// 모으고 있으면 붙든 만큼 선딜이 이미 지났으므로 <b>짧아진다</b>.
+    /// 봇이 "지금 놓아도 판정 전에 닿나" 를 이것으로 잰다 — 설정값을 그대로 돌려주면
+    /// 봇은 실제보다 최대 0.33초 일찍 손을 놓아, 닿을 수 있는 차지를 스스로 버린다.
     /// </summary>
-    public double AttackLead => _config.AttackWindup + _config.AttackActive;
+    public double AttackLead =>
+        Math.Max(0, _config.AttackWindup - ChargeSeconds) + _config.AttackActive;
 
     /// <summary>최대 차지 시간(초). <b>마지막 단계의 시간이 곧 그것</b>이라 데이터에 따로 없다.</summary>
     public double ChargeMaxSeconds => _config.ChargeTiers[^1].Seconds;
@@ -344,7 +360,8 @@ public sealed class Fighter
     {
         FighterAction.Dash => _config.DashDuration,
         FighterAction.Parry => _config.ParryDuration,
-        FighterAction.Attack => _config.AttackWindup + _config.AttackActive + _config.AttackRecover,
+        // 선딜은 설정값이 아니라 **이번 칼질의 남은 선딜**이다. 붙들고 있었으면 그만큼 짧다.
+        FighterAction.Attack => _windup + _config.AttackActive + _config.AttackRecover,
         _ => 0,
     };
 
@@ -402,6 +419,9 @@ public sealed class Fighter
         ActionElapsed = 0;
         _tier = 0;
 
+        // 그냥 누른 칼질은 선딜을 통째로 기다린다 — 붙든 시간이 0 이니 깎일 것이 없다.
+        _windup = _config.AttackWindup;
+
         if (wanted == FighterAction.Dash && !Grounded)
         {
             _airDashUsed = true;
@@ -421,6 +441,11 @@ public sealed class Fighter
     private void Swing()
     {
         _tier = TierFor(ActionElapsed);
+
+        // 붙들고 있던 시간이 곧 선딜이다 — 남은 만큼만 더 기다린다. 0.8초(1단계)면 이미 한참
+        // 넘겼으므로 칼이 곧장 나간다. 경계를 계단이 아니라 연속으로 두는 이유는, 선딜보다
+        // 짧게 붙든 경우(0.07초)가 그냥 누르기보다 느려지는 구멍을 만들지 않기 위해서다.
+        _windup = Math.Max(0, _config.AttackWindup - ActionElapsed);
         Action = FighterAction.Attack;
         ActionElapsed = 0;
     }

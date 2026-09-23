@@ -153,9 +153,10 @@ public class FighterDataTests
     /// <summary>
     /// 한 패턴의 <b>마지막 판정</b>부터 다음 패턴의 <b>첫 판정</b>까지 맞을 일이 없는 시간(초).
     /// 패턴 꼬리(마지막 판정 → 끝) + 패턴 간격 + 다음 패턴의 선딜이다.
-    /// <paramref name="stagger"/> 는 정확 패리로 보스를 굳힌 시간 — 그 동안 타임라인이 안 밀린다.
+    /// <b>패리는 안 센다</b> — 차지는 패리와 상관없는 기술이라, 이 창은 아무것도 안 하고
+    /// 서 있기만 해도 주어지는 시간이어야 한다.
     /// </summary>
-    private static double Window(PatternDef ended, PatternDef next, double gap, double stagger)
+    private static double Window(PatternDef ended, PatternDef next, double gap)
     {
         double lastActive = 0;
         double firstActive = double.PositiveInfinity;
@@ -175,12 +176,19 @@ public class FighterDataTests
             }
         }
 
-        return (ended.Duration - lastActive) + gap + firstActive + stagger;
+        return (ended.Duration - lastActive) + gap + firstActive;
     }
 
-    /// <summary>차지 <paramref name="tier"/> 단계의 칼이 닿기까지 서 있어야 하는 시간(초) — 모으고 · 선딜을 지나고 · 판정이 설 때까지.</summary>
-    private static double StandingTime(FighterConfig c, int tier) =>
-        c.ChargeTiers[tier].Seconds + c.AttackWindup + c.AttackActive;
+    /// <summary>
+    /// 차지 <paramref name="tier"/> 단계의 칼이 닿기까지 서 있어야 하는 시간(초).
+    /// <b>붙들고 있는 시간이 곧 선딜이다</b> — 그래서 더해지는 것은 모은 시간과 <b>남은</b> 선딜뿐이고,
+    /// 0.8초 이상을 모으면 선딜은 이미 다 지나 판정까지의 시간만 남는다.
+    /// </summary>
+    private static double StandingTime(FighterConfig c, int tier)
+    {
+        double held = c.ChargeTiers[tier].Seconds;
+        return held + Math.Max(0, c.AttackWindup - held) + c.AttackActive;
+    }
 
     [Fact]
     public void 중간_차지는_백장의_빈_시간에_언제나_들어간다()
@@ -198,7 +206,7 @@ public class FighterDataTests
             {
                 foreach ((string b, PatternDef next) in patterns)
                 {
-                    Window(ended, next, boss.PatternGap, stagger: 0).ShouldBeGreaterThan(need,
+                    Window(ended, next, boss.PatternGap).ShouldBeGreaterThan(need,
                         $"{id}: {a} → {b} 사이에 1단계 차지({need:0.000}초)가 안 들어간다");
                 }
             }
@@ -206,47 +214,43 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 최대_차지는_정확_패리의_상이다()
+    public void 최대_차지가_백장의_빈_시간에_들어간다()
     {
-        // **이 이슈에서 가장 중요한 숫자다** (이슈 #40). 최대 차지는 2.4166초를 서 있어야 칼이
-        // 닿는데, 백장의 맨 빈 시간은 가장 넓은 짝이 2.40초다 — **아홉 짝 중 한 짝도 안 들어간다.**
-        // 들어가는 길은 하나뿐이다: 정확 패리로 0.5초를 굳히면(bosses.json 의 stagger_seconds)
-        // 창이 2.40~2.90 이 되어 대부분의 짝이 들어간다.
+        // **이 이슈에서 가장 중요한 숫자다** (이슈 #40). 최대 차지는 2.0833초를 서 있어야 칼이 닿고
+        // (모으기 2.0 + 남은 선딜 0 + 판정 0.0833 — 붙드는 것이 곧 선딜이다),
+        // 백장의 빈 시간은 1.90~2.40초다. 그래서 **패리 없이, 그냥 선 채로 여섯 짝에서 들어간다.**
         //
-        // 그래서 최대 차지는 평상시의 선택지가 아니라 **받아낸 사람의 상**이고, 그건 이 저장소가
-        // 이미 서 있는 보상 구조(정확 패리 → 보스 경직 · 공중 대시 회복 · 내 차례)와 같은 자리다.
-        // 밸런스를 여기서 고치지 않는다 — 패턴 간격을 넓히면 차지가 아니라 전투 전체가 달라진다.
+        // 안 들어가는 셋은 전부 **다음 패턴이 `내려찍기 3연`** 인 경우다 — 선딜이 0.50초로 가장 짧다.
+        // 그게 이 기술의 도박이고, 눈감고 하는 도박이 아니다: 다음 패턴의 예고는 모으기 시작한 지
+        // 1.4~1.5초에 서므로 최대(2.0초)에 닿기 0.5초 전에 보인다. 끌리는 칼을 보면 놓아서
+        // 1단계로 바꾸면 된다 — patterns.json 의 예고가 패턴마다 다른 이유가 정확히 이것이다.
         //
-        // 두 단언이 같이 있어야 이 설계가 지켜진다. 위가 깨지면 최대 차지가 공짜가 되고,
-        // 아래가 깨지면 최대 차지는 아무도 못 쓰는 장식이 된다.
+        // 두 단언이 같이 있어야 이 설계가 지켜진다. 위가 깨지면 최대 차지는 아무도 못 쓰는
+        // 장식이 되고, 아래가 깨지면 다음 패턴이 무엇이든 늘 되는 공짜가 된다.
         BossConfig boss = TestConfigs.Boss();
         Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
 
         foreach ((string id, FighterConfig c) in Load())
         {
             double need = StandingTime(c, c.ChargeTiers.Count - 1);
-            int pairs = 0, bareFits = 0, staggeredFits = 0;
+            int pairs = 0, fits = 0;
 
             foreach ((_, PatternDef ended) in patterns)
             {
                 foreach ((_, PatternDef next) in patterns)
                 {
                     pairs++;
-                    if (Window(ended, next, boss.PatternGap, stagger: 0) >= need)
+                    if (Window(ended, next, boss.PatternGap) >= need)
                     {
-                        bareFits++;
-                    }
-
-                    if (Window(ended, next, boss.PatternGap, boss.StaggerSeconds) >= need)
-                    {
-                        staggeredFits++;
+                        fits++;
                     }
                 }
             }
 
-            bareFits.ShouldBe(0, $"{id}: 그냥 선 채로도 최대 차지가 들어간다 — 패리의 상이 아니게 됐다");
-            staggeredFits.ShouldBeGreaterThanOrEqualTo(pairs * 3 / 4,
-                $"{id}: 정확 패리로 굳히고도 최대 차지({need:0.000}초)가 {staggeredFits}/{pairs} 짝에만 들어간다 — 쓸 수 없는 기술이다");
+            fits.ShouldBeGreaterThanOrEqualTo(pairs / 2,
+                $"{id}: 최대 차지({need:0.000}초)가 {fits}/{pairs} 짝에만 들어간다 — 쓸 수 없는 기술이다");
+            fits.ShouldBeLessThan(pairs,
+                $"{id}: 다음 패턴이 무엇이든 최대 차지가 들어간다 — 2초를 서 있는 데 도박이 없다");
         }
     }
 

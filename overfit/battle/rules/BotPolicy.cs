@@ -70,11 +70,16 @@ public sealed class BotPolicy
         // 행동 중(Dash·Parry·Attack)에는 새로 고르지 않는다 — 그건 Fighter.Begin 이 어차피
         // 무시하므로 막을 필요는 없지만, 접지 여부는 **걸지 않는다**: 공중에서도 대시·패리를
         // 다시 걸 수 있어야 점프가 늦게 뜬 판정을 막판에 대시로 덮을 수 있다.
-        // **굳은 보스는 패턴이 아니다.** 경직 동안에는 타임라인이 안 밀리므로 회피는 아무것도
-        // 안 막고, 그 0.5초가 정확 패리의 상이다(나인 솔즈: 받아내면 내 차례가 온다).
-        // 최대 차지가 실제로 닿을 수 있는 유일한 자리이기도 하다 — 맨 빈 시간으로는 모자란다
-        // (fighters.json 의 _note_charge · FighterDataTests 가 그 산수를 지킨다).
-        if (sim.Boss.CurrentPattern is not null && !sim.Boss.Staggered)
+        // **"패턴이 돈다" 는 것만으로 회피할 이유가 되지 않는다.** 올 판정이 있어야 피할 것이 있다.
+        // 둘을 빼낸다.
+        // ① 굳은 보스 — 경직 동안에는 타임라인이 안 밀리므로 아무것도 안 온다. 봇은 그 0.5초를
+        //    회피로 버리고 있었다. 받아낸 뒤가 내 차례라는 것이 정확 패리의 상이고(나인 솔즈),
+        //    그 상을 쓰는 곳은 회피가 아니라 공격이다.
+        // ② 후딜 — 남은 판정이 없으면(NextActiveIn == null) 패턴은 돌지만 빈 시간이다.
+        //    사람은 마지막 판정이 지나간 그 순간부터 모으기 시작하는데, 봇이 패턴이 끝나기를
+        //    기다리면 최대 차지에 필요한 시간의 절반을 문 앞에서 버린다 — 그러면 학습 데이터에
+        //    최대 차지가 영영 안 들어간다.
+        if (sim.Boss.CurrentPattern is not null && !sim.Boss.Staggered && sim.NextActiveIn is not null)
         {
             if (sim.Fighter.Action != FighterAction.Idle)
             {
