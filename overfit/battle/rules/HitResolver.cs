@@ -5,8 +5,22 @@ namespace Overfit.Battle.Rules;
 /// <summary>판정 하나가 파이터에게 어떻게 끝났나.</summary>
 public enum HitVerdict
 {
-    /// <summary>거리가 안 닿았다 — 간격으로 피한 것이다.</summary>
-    MissedByRange,
+    /// <summary>
+    /// <b>사거리 밖</b>이라 안 닿았다 — 도망쳐 피한 것이다(그 거리를 대시가 만들었을 수도 있다).
+    ///
+    /// <para>
+    /// 안쪽(<see cref="MissedTooClose"/>)과 <b>따로</b> 둔다 (이슈 #46). 한 갈래였을 때는
+    /// 파고들어 피한 것과 도망쳐 피한 것이 계측에서 같은 한 점이었다 — 그 둘은 성향이 정반대고
+    /// 봉인할 것도 정반대라, 뭉개면 2단계가 정반대 변종을 뽑는다.
+    /// </para>
+    /// </summary>
+    MissedTooFar,
+
+    /// <summary>
+    /// <b>안쪽 주머니</b>라 안 닿았다 — 파고들어 피한 것이다.
+    /// 값으로 도달하려면 패턴의 <c>distance[0] &gt; 0</c> 이어야 한다 (지금은 점프 강타의 착지 충격 하나).
+    /// </summary>
+    MissedTooClose,
 
     /// <summary>높이가 어긋났다 — 점프로 넘었거나 대공 아래 서 있었다.</summary>
     MissedByHeight,
@@ -46,10 +60,17 @@ public static class HitResolver
         ArgumentNullException.ThrowIfNull(fighter);
         ArgumentNullException.ThrowIfNull(tags);
 
+        // 안과 밖을 **갈라서** 말한다. 둘 다 "거리 때문에 안 맞았다" 지만 플레이어가 한 일은
+        // 정반대다 — 뭉치면 DistanceBias 가 파고든 사람을 "멀리서 싸운다" 로 읽는다 (이슈 #46).
         double distance = Math.Abs(fighter.X - bossX);
-        if (distance < box.MinDistance || distance > box.MaxDistance)
+        if (distance > box.MaxDistance)
         {
-            return HitVerdict.MissedByRange;
+            return HitVerdict.MissedTooFar;
+        }
+
+        if (distance < box.MinDistance)
+        {
+            return HitVerdict.MissedTooClose;
         }
 
         // 몸통은 발밑(Y)에서 키만큼 위까지다. 판정 구간과 겹쳐야 닿는다 —

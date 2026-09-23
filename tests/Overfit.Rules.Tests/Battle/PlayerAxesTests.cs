@@ -226,6 +226,34 @@ public class PlayerAxesTests
     }
 
     [Fact]
+    public void 거리_성향은_안으로_피한_것을_반대_부호로_읽는다()
+    {
+        // 한 갈래(MissedByRange)였을 때는 **도망쳐 피한 것과 파고들어 피한 것이 같은 부호**로
+        // 쌓였다 (이슈 #46). 둘은 정반대 성향이고 봉인할 것도 정반대라, 같은 부호면 축이
+        // 뭉개는 것이 아니라 **거꾸로 말한다** — 파고들수록 "멀리서 싸운다" 가 커진다.
+        PlayerAxes outward = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooFar, distance: 400),
+        });
+        PlayerAxes inward = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooClose, distance: 400),
+        });
+
+        outward.DistanceBias.ShouldBe(400, 0.001);
+        inward.DistanceBias.ShouldBe(-400, 0.001, "안쪽 주머니로 피한 것이 '멀리서 싸운다' 로 쌓였다");
+
+        // 같은 거리에서 하나씩이면 서로를 지운다 — 둘 다 쓰는 사람은 한쪽으로 치우치지 않았다.
+        PlayerAxes both = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooFar, distance: 400),
+            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooClose, distance: 400),
+        });
+
+        both.DistanceBias.ShouldBe(0, 0.001);
+    }
+
+    [Fact]
     public void 표본_수를_같이_들고_다닌다()
     {
         // 축만 보면 "3건으로 낸 0.5" 와 "300건으로 낸 0.5" 를 구별할 수 없다.
