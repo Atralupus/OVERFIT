@@ -69,6 +69,9 @@ public partial class Battle : Node2D
     /// <summary>지난 틱의 차지 단계. 늘어난 순간이 "단계가 올랐다" 는 사건이다 — 규칙 층에 콜백을 안 달고 여기서 견준다.</summary>
     private int _lastChargeTier;
 
+    /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
+    private int _guardBreaks;
+
     /// <summary>
     /// 판이 끝났나. <b>디버그 전용 읽기</b> — <c>tools/build.sh shots</c> 의 <c>ShotRunner</c> 가
     /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 1.65~1.90초 패턴)와
@@ -111,6 +114,25 @@ public partial class Battle : Node2D
     /// 화면에서 갈리는지는 두 장을 나란히 놓아야만 증명된다.
     /// </summary>
     public bool FighterChargeMaxed => !_broken && !_over && _sim.Fighter.ChargeMaxed;
+
+    /// <summary>
+    /// 지금 가드 자세인가 (이슈 #47). 위와 같이 <b>디버그 전용 읽기</b>다 — 가드는 누름에서
+    /// 0.30초 뒤에 서므로 프레임을 세서 노리면 parry_duration 을 고치는 순간 조용히 어긋난다.
+    /// </summary>
+    public bool FighterGuarding => !_broken && !_over && _sim.Fighter.Guarding;
+
+    /// <summary>
+    /// 지금까지 가드가 깨진 횟수. 위와 같이 디버그 전용 읽기다 — 붕괴는 <b>사건</b>이라 상태로는
+    /// 못 본다(0.9초 고정은 부정확 패리의 고정과 같은 모양이라 구별이 안 된다).
+    /// 늘어난 그 순간이 셔터를 누를 때다.
+    /// </summary>
+    public int FighterGuardBreaks => _guardBreaks;
+
+    /// <summary>
+    /// 지금 도는 패턴에 <b>가드 불가</b> 판정이 있나 (<c>has_guard_break</c>). 위와 같이 디버그 전용 읽기다 —
+    /// 危 예고가 화면에서 구별되는지를 증명하려면 그 패턴의 선딜을 기다려야 한다.
+    /// </summary>
+    public bool BossGuardBreak => !_broken && !_over && Current()?.Tags.HasGuardBreak == true;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
@@ -298,16 +320,21 @@ public partial class Battle : Node2D
         // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
         // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
         //
-        // 공격만 **둘 다** 싣는다 (이슈 #40). 엣지가 차지를 시작하고 레벨이 그것을 붙든다 —
-        // 누른 그 틱에는 둘이 같이 참이라 차지가 곧장 서고, 손을 떼면 레벨이 꺼지며 칼이 나간다.
+        // 공격과 패리는 **둘 다** 싣는다 (이슈 #40 · #47). 엣지가 시작하고 레벨이 붙든다 —
+        // 누른 그 틱에는 둘이 같이 참이라 차지/패리가 곧장 서고, 손을 떼면 레벨이 꺼진다.
         // 엣지를 레벨로 바꿔 한 칸으로 줄이지 않는 이유는 InputFrame 의 주석에 적어 뒀다.
+        //
+        // ⚠ 패리는 **여전히 엣지에서 즉시 시작한다.** 레벨을 보고 "탭인가 홀드인가" 를 기다렸다
+        // 시작하면 정확 창(0.133초)이 통째로 밀려 게임의 모든 패리가 나빠진다 — 레벨은
+        // 패리 동작이 끝나는 순간에만 읽히고, 그때 아직 눌려 있으면 가드로 이어진다.
         return new InputFrame(
             move,
             Input.IsActionJustPressed("jump"),
             Input.IsActionJustPressed("dash"),
             Input.IsActionJustPressed("parry"),
             Input.IsActionJustPressed("attack"),
-            AttackHeld: Input.IsActionPressed("attack"));
+            AttackHeld: Input.IsActionPressed("attack"),
+            ParryHeld: Input.IsActionPressed("parry"));
     }
 
     /// <summary>
@@ -329,13 +356,29 @@ public partial class Battle : Node2D
             {
                 // 정확과 부정확은 **다른 피드백**이어야 한다. 히트스톱은 정확에만 준다 —
                 // 시간을 세우는 것은 "완전히 받아냈다" 의 표현이고, 절반 흘린 것에 주면 거짓말이다.
-                if (_sim.Events[i].Verdict == HitVerdict.Parried)
+                switch (_sim.Events[i].Verdict)
                 {
-                    ParryLanded();
-                }
-                else if (_sim.Events[i].Verdict == HitVerdict.ParriedLate)
-                {
-                    _fighterView.ParryImprecise();
+                    case HitVerdict.Parried:
+                        ParryLanded();
+                        break;
+
+                    case HitVerdict.ParriedLate:
+                        _fighterView.ParryImprecise();
+                        break;
+
+                    // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
+                    // "막았다" 만 말하고 "무너졌다" 는 안 말하는데, 그 뒤 0.9초는 아무것도 못 한다.
+                    case HitVerdict.Guarded:
+                        _fighterView.GuardChip();
+                        break;
+
+                    case HitVerdict.GuardBroken:
+                        _fighterView.GuardBroken();
+                        _guardBreaks++;
+                        break;
+
+                    default:
+                        break;
                 }
             }
 
@@ -509,7 +552,10 @@ public partial class Battle : Node2D
                 : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
             _sim.Fighter.Locked,
             _sim.Fighter.ChargeProgress,
-            _sim.Fighter.ChargeMaxed));
+            _sim.Fighter.ChargeMaxed,
+            // 남은 스태미나를 **비율로** 넘긴다 (이슈 #47) — 최대값의 사본을 뷰에 두면
+            // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다(차지 링과 같은 규약이다).
+            _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina));
 
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
@@ -538,6 +584,7 @@ public partial class Battle : Node2D
             FighterAction.Parry => FighterPose.Parry,
             FighterAction.Attack => FighterPose.Attack,
             FighterAction.Charge => FighterPose.Charge,
+            FighterAction.Guard => FighterPose.Guard,
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
     }
@@ -577,7 +624,10 @@ public partial class Battle : Node2D
             return null;
         }
 
-        return new BossTell(def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length);
+        // 가드 불가는 **태그**에서 온다 (이슈 #47). 선딜에는 아직 어느 판정이 올지가 아니라
+        // "무엇이 오는가" 만 정해져 있으므로, 타임라인이 아니라 그 요약을 읽는다.
+        return new BossTell(
+            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length, def.Tags.HasGuardBreak);
     }
 
     /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>

@@ -51,7 +51,8 @@ public sealed class PatternRunner
             }
 
             hits ??= new List<HitBox>();
-            hits.Add(new HitBox(step.Distance[0], step.Distance[1], step.Height[0], step.Height[1], step.Damage));
+            hits.Add(new HitBox(
+                step.Distance[0], step.Distance[1], step.Height[0], step.Height[1], step.Damage, step.GuardBreak));
         }
 
         return (IReadOnlyList<HitBox>?)hits ?? _none;

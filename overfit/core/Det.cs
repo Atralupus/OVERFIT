@@ -78,12 +78,21 @@ public static class Det
         /// </summary>
         public const uint BotCharge = 3;
 
+        /// <summary>
+        /// 최소 봇이 이번 패턴을 <b>가드로 받을지</b> 고를 때 (이슈 #47).
+        /// 회피 선택(<see cref="BotChoice"/>)과 <b>같은 스트림을 안 쓴다</b> — 나눠 쓰면 가드 주사위
+        /// 하나가 그 뒤의 모든 회피 선택을 밀어, 이미 박아둔 골든과 데모가 가드와 무관하게 통째로
+        /// 달라진다. 번호는 <b>뒤에 더할 뿐</b>이고 1~3 은 손대지 않는다.
+        /// </summary>
+        public const uint BotGuard = 4;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
             PatternPick => "pattern_pick",
             BotChoice => "bot_choice",
             BotCharge => "bot_charge",
+            BotGuard => "bot_guard",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

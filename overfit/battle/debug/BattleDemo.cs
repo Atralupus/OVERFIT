@@ -83,6 +83,10 @@ public partial class BattleDemo : Node
             // charge_n 은 "모아 둔 칼을 들고 있다 판정을 맞은" 건수다 (이슈 #40) — greed 비율만으로는
             // 휘두르다 맞은 0.5초와 모으고 선 2.08초가 한 점이라, 욕심의 깊이가 이 칸에만 있다.
             + $" charge_n={axes.ChargedGreedSamples}"
+            // guard_n · guard_broken_n 도 **축이 아니라 개수**다 (이슈 #47). 둘을 같이 찍는 이유는
+            // "버텨냈다" 와 "버티다 무너졌다" 가 결과가 정반대이기 때문이다 — 한 칸만 보면
+            // 가드가 도는지는 알아도 그것이 일하는지는 모른다.
+            + $" guard_n={axes.GuardSamples} guard_broken_n={axes.GuardBrokenSamples}"
             + $" jump_rel_n={axes.JumpChoiceSamples}"
             + $" parry_rel_n={axes.ParryChoiceSamples} dash_bias={axes.DashTimingBias:0.000}"
             + $" dash_var={axes.DashTimingVar:0.000} dash_dir={axes.DashDirectionBias:0.00}"

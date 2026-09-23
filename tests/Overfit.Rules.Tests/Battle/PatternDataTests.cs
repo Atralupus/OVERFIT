@@ -274,4 +274,47 @@ public class PatternDataTests
             reaches.ShouldContain(def.Tags.Reach, $"{id}: reach 가 이상하다");
         }
     }
+
+    [Fact]
+    public void 가드_불가_태그가_타임라인과_같은_말을_한다()
+    {
+        // 태그는 망의 입력이고 타임라인은 실제로 일어나는 일이다 — multi_hit · jumpable 과 같은 규약이다.
+        // guard_break 는 **판정 단위**다(마무리 한 대에만 붙는다). 태그는 그 요약일 뿐이라
+        // 둘이 갈리면 망은 "이 패턴은 가드로 막힌다" 를 거짓으로 배운다.
+        int withBreak = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            bool inTimeline = def.Timeline.Any(s => s.Kind == "active" && s.GuardBreak);
+            def.Tags.HasGuardBreak.ShouldBe(inTimeline,
+                $"{id}: has_guard_break={def.Tags.HasGuardBreak} 인데 타임라인은 {inTimeline} 라고 말한다");
+            if (inTimeline)
+            {
+                withBreak++;
+            }
+
+            def.Timeline.Where(s => s.Kind != "active").ShouldNotContain(s => s.GuardBreak,
+                $"{id}: active 가 아닌 단계에 guard_break 가 붙었다 — 판정이 없으면 깰 가드도 없다");
+        }
+
+        withBreak.ShouldBeGreaterThan(0,
+            "가드 불가 판정이 하나도 없다 — 이 가드가 아무것도 안 보고, 가드가 언제나 답인 게임이 된다");
+    }
+
+    [Fact]
+    public void 가드_불가는_패리로_받아칠_수_있다()
+    {
+        // "가드 불가" 는 **답이 없다**가 아니라 "받아쳐라" 다 — 예고가 붉은 링이 아니라
+        // 호박 링 + 危 인 이유가 그것이다. 패리도 안 되는 가드 불가는 거리로만 피할 수 있는데,
+        // 사거리를 덮는 변종 하나가 그 패턴을 통째로 무답으로 만든다.
+        foreach ((string id, PatternDef def) in Load())
+        {
+            if (!def.Tags.HasGuardBreak)
+            {
+                continue;
+            }
+
+            def.Tags.Parryable.ShouldBeTrue($"{id}: 가드 불가인데 패리도 안 된다 — 받아칠 길이 없다");
+        }
+    }
+
 }

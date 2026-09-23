@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Overfit.Battle.Rules;
 using Overfit.Core;
 using Shouldly;
@@ -296,4 +297,37 @@ public class FighterDataTests
                 $"{id}: 판정이 애니메이션 밖으로 넘친다");
         }
     }
+
+    [Fact]
+    public void 가드는_늦은_패리보다_덜_흘리고_깨지면_더_오래_굳는다()
+    {
+        // 가드의 값은 **스태미나**로 낸다 (이슈 #47). 그래서 흘리는 피해는 부정확 패리보다 적어야
+        // 하고(아니면 가드를 고를 이유가 없다), 대신 깨졌을 때의 고정은 더 길어야 한다
+        // (아니면 깨져도 부정확 패리와 같은 값이라 버티는 것에 위험이 없다).
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 막는 것에 값이 없다");
+            c.GuardChipRatio.ShouldBeLessThan(c.ParryInternalRatio, $"{id}: 가드가 늦은 패리보다 더 흘린다");
+            c.GuardStaminaPerDamage.ShouldBeGreaterThan(0, $"{id}: 가드 비용이 0 이다");
+            c.GuardBreakLock.ShouldBeGreaterThan(c.ParryLock, $"{id}: 가드가 깨져도 부정확 패리와 같은 값이다");
+        }
+    }
+
+    [Fact]
+    public void 가장_센_판정_하나는_가득_찬_스태미나로_받아낸다()
+    {
+        // 값이 피해에 비례하므로(guard_stamina_per_damage) 한 방이 스태미나를 통째로 넘으면
+        // 가드는 **언제나 깨지는** 기술이 되고, 그러면 guard_break 라는 성질도 뜻을 잃는다 —
+        // 깰 것이 이미 없다.
+        double heaviest = TestConfigs.Patterns().Values
+            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
+            .Max(s => (double)s.Damage);
+
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            (heaviest * c.GuardStaminaPerDamage).ShouldBeLessThanOrEqualTo(c.MaxStamina,
+                $"{id}: 가장 센 판정({heaviest})이 스태미나를 통째로 넘는다 — 가드가 언제나 깨진다");
+        }
+    }
+
 }

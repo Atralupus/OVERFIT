@@ -81,6 +81,41 @@ public partial class FighterView : Node2D
     /// </summary>
     private static readonly Color _chargeMaxTint = new(2.10f, 2.10f, 1.90f);
 
+    /// <summary>
+    /// 버티는 동안의 몸 색 (이슈 #47). <b>차갑고 단단한 쪽</b>이다 — 패리(따뜻한 노랑)와
+    /// 색상환에서 갈라 두는 것이 요점이다: 둘은 같은 키에서 나오므로 화면이 안 가르면
+    /// 플레이어는 자기가 패리를 한 건지 가드를 선 건지 모른다.
+    /// </summary>
+    private static readonly Color _guardTint = new(0.80f, 0.78f, 1.32f);
+
+    /// <summary>
+    /// 가드 링의 색 — <b>보라 쪽</b>이다.
+    ///
+    /// <para>
+    /// 처음에는 푸른 청록이었는데 <b>패리 링(<see cref="_parryRingColor"/>)과 한 장의 그림에서
+    /// 구별이 안 됐다</b>(docs/shots 를 나란히 놓고 봤다). 움직임으로는 갈린다 — 패리 링은 퍼지고
+    /// 이것은 안 움직인다 — 지만 <b>정지 화면에는 움직임이 없다</b>, 그리고 그 정지 화면이
+    /// 플레이어가 한순간에 보는 것이다. 그래서 색상환에서 옮겼다.
+    /// </para>
+    /// </summary>
+    private static readonly Color _guardRingColor = new(0.68f, 0.58f, 1.00f, 0.95f);
+
+    /// <summary>가드가 깎여 받아냈을 때의 고리. 부정확 패리와 같이 <b>탁하고 좁다</b> — 막은 것은 사건이 아니다.</summary>
+    private static readonly Color _guardChipColor = new(0.70f, 0.62f, 0.95f, 0.85f);
+
+    /// <summary>
+    /// 가드가 <b>깨졌을</b> 때. 이것만은 크게 터진다 — 0.9초 동안 아무것도 못 하는데 화면이
+    /// 조용하면 그건 버그로 읽힌다(부정확 패리의 고정에서 이미 밟은 실패다).
+    ///
+    /// <para>
+    /// 가드와 <b>같은 보라 계열</b>이되 희게 탄다 — "버티던 그 고리가 부서졌다" 로 읽혀야 한다.
+    /// 주황으로 해 봤더니 보스의 판정 충격파(호박색)와 같은 프레임에 겹쳐 둘이 한 덩어리가 됐다.
+    /// 가드가 깨지는 순간에는 <b>언제나</b> 그 충격파가 같이 있으므로, 이 둘은 반드시 갈려야 한다.
+    /// </para>
+    /// </summary>
+    private static readonly Color _guardBreakColor = new(0.86f, 0.70f, 1.00f, 1.00f);
+
+    private static readonly Color _guardBreakFlash = new(2.30f, 1.70f, 2.70f);
     private static readonly Color _chargeRingColor = new(1.00f, 0.72f, 0.30f, 0.85f);
     private static readonly Color _chargeMaxRingColor = new(1.00f, 0.97f, 0.72f, 1.00f);
     private AnimatedSprite2D _sprite = null!;
@@ -280,6 +315,37 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
+    /// 가드가 깎여 받아냈다 (이슈 #47). 부정확 패리와 같이 <b>일부러 약하다</b> —
+    /// 버텨낸 것은 사건이 아니라 상태의 연속이고, 크게 터뜨리면 "깨졌다" 와 구별이 안 된다.
+    /// </summary>
+    public void GuardChip()
+    {
+        _ring.Burst(
+            (float)_feel.ParryRingFrom,
+            (float)((_feel.ParryRingFrom + _feel.ParryRingTo) / 2),
+            _feel.BurstSeconds * 0.5,
+            _guardChipColor,
+            sparks: 0,
+            sparkLength: 0);
+    }
+
+    /// <summary>
+    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 0.9초 굳는데
+    /// 화면이 조용하면 "키가 안 먹는다" 로 읽힌다. 그 뒤의 고정은 <see cref="_lockedTint"/> 가 말한다.
+    /// </summary>
+    public void GuardBroken()
+    {
+        Flash(_guardBreakFlash, _feel.BurstSeconds);
+        _ring.Burst(
+            (float)_feel.ParryRingFrom,
+            (float)_feel.ParryRingTo,
+            _feel.BurstSeconds,
+            _guardBreakColor,
+            _feel.SparkCount,
+            (float)_feel.SparkLength);
+    }
+
+    /// <summary>
     /// 부정확 패리가 받아냈다. <b>일부러 약하다</b> — 섬광도 스파크도 히트스톱도 없이
     /// 탁한 고리 하나다. 정확 패리와 같은 연출을 주면 "정확히 눌렀나" 가 화면에서 사라진다.
     /// </summary>
@@ -365,6 +431,20 @@ public partial class FighterView : Node2D
             return;
         }
 
+        // 가드 링은 **안 움직인다** (이슈 #47). 패리는 퍼지고 차지는 조여 드는데 가드는 그대로 선다 —
+        // 버티는 동안 아무것도 안 변하는 것이 이 기술이고, 그 정지가 곧 그림이다.
+        // 대신 남은 스태미나가 **밝기**로 빠진다: 바닥에 가까울수록 링이 꺼져 가, 깨지기 직전을
+        // 숫자가 아니라 색으로 읽는다(HUD 의 스태미나 바를 볼 겨를이 없는 순간이다).
+        if (frame.Pose == FighterPose.Guard)
+        {
+            float left = Mathf.Clamp((float)frame.GuardStamina, 0.0f, 1.0f);
+            _ring.Charge(
+                (float)_feel.ParryRingFrom,
+                new Color(_guardRingColor.R, _guardRingColor.G, _guardRingColor.B,
+                    _guardRingColor.A * (0.30f + (0.70f * left))));
+            return;
+        }
+
         if (!frame.Parrying)
         {
             return;
@@ -444,6 +524,9 @@ public partial class FighterView : Node2D
             // 모으는 중 · 다 모았다는 **서로 다른 색**이어야 한다. 하나로 두면 최대에 닿은 순간이
             // 섬광 한 번뿐이라, 그 0.34초를 놓치면 지금이 최대인지 알 방법이 없다.
             : frame.Pose == FighterPose.Charge ? (frame.ChargeMaxed ? _chargeMaxTint : _chargeTint)
+            // 가드는 패리보다 **먼저** 본다. 둘이 같은 키에서 나오지만 규칙상 겹칠 수 없고
+            // (가드에 들어가면 누름 시계가 끝난다), 순서를 박아 두면 그 사실이 화면에서도 참이다.
+            : frame.Pose == FighterPose.Guard ? _guardTint
             : frame.Parrying ? _parryTint
             : Colors.White;
 
@@ -459,6 +542,15 @@ public partial class FighterView : Node2D
     /// 자세 → 애니메이션 이름. 대시는 <c>run</c> 을 빌려 쓰고 나머지는 이펙트가 말한다 —
     /// 팩에 대시·패리 그림이 없다. 패리는 <c>idle</c> 이다: 제자리에서 받는 행동이라
     /// 달리는 그림을 붙이면 무엇을 하는지가 오히려 흐려진다.
+    ///
+    /// <para>
+    /// <b>가드도 <c>idle</c> 이다</b> (이슈 #47). 팩(Martial Hero)에 있는 것은
+    /// <c>idle · run · jump · fall · attack · attack2 · hit · hit_white · death</c> 뿐이고
+    /// 막는 자세는 없다. 후보가 <c>fall</c>(웅크린 자세)과 <c>idle</c> 이었는데 <c>fall</c> 은
+    /// 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽히고, <c>attack2</c> 는 칼이 나가는 그림이라
+    /// 거짓말이다. 그래서 <c>idle</c> 을 빌리고 갈라 보이게 하는 일은 <b>색과 멈춘 링</b>이 맡는다 —
+    /// 대시·패리에서 이미 쓰는 규약이다.
+    /// </para>
     /// </summary>
     private string AnimationFor(FighterPose pose)
     {
@@ -478,6 +570,8 @@ public partial class FighterView : Node2D
             // 차지도 attack 이다 — 다만 한 장에 멈춰 선다(HoldCharge). 여기 있는 이유는
             // 맞거나 죽어서 차지가 끊긴 프레임에 이 갈래로 떨어지기 때문이다.
             FighterPose.Attack or FighterPose.Charge => "attack",
+            // 가드 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 가드를 가른다.
+            FighterPose.Guard => "idle",
             FighterPose.Hit => "hit",
             FighterPose.Death => "death",
             _ => "idle",

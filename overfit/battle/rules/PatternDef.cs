@@ -35,6 +35,19 @@ public sealed class PatternTags
     public required int MultiHit { get; init; }
 
     public required bool Tracking { get; init; }
+
+    /// <summary>
+    /// 이 패턴에 <b>가드 불가 판정이 하나라도</b> 있나 (이슈 #47). 망의 입력용 <b>요약</b>이고,
+    /// 진실은 타임라인 쪽의 <see cref="PatternStep.GuardBreak"/> 다 — 가드 불가는 판정 단위라
+    /// 계열의 마지막 한 대에만 붙는다. 둘이 같은 말을 하는지는 <c>PatternDataTests</c> 가 본다
+    /// (<c>multi_hit</c> ↔ active 개수와 같은 규약이다).
+    ///
+    /// <para>
+    /// 요약을 따로 두는 이유는 <b>예고</b> 때문이기도 하다. 화면은 선딜에 "이번 것은 못 막는다" 를
+    /// 말해야 하는데, 그때는 아직 어느 판정이 올지가 아니라 <b>무엇이 오는가</b>만 정해져 있다.
+    /// </para>
+    /// </summary>
+    public required bool HasGuardBreak { get; init; }
 }
 
 /// <summary>타임라인 한 단계. <c>kind</c> 는 windup · active · recover · end.</summary>
@@ -51,6 +64,13 @@ public sealed class PatternStep
     public IReadOnlyList<double>? Height { get; init; }
 
     public int Damage { get; init; }
+
+    /// <summary>
+    /// 이 판정을 <b>가드로는 못 막나</b> (이슈 #47). 스태미나가 남아 있어도 가드가 깨지고 피해는 전액이다.
+    /// <b>판정 단위인 것이 설계다</b> — 계열의 마지막 한 대에만 붙으므로, 패턴 단위로 두면
+    /// 앞의 연타까지 못 막게 되어 "버티다 마지막에 받아쳐라" 라는 이 기술의 문장이 사라진다.
+    /// </summary>
+    public bool GuardBreak { get; init; }
 }
 
 /// <summary>

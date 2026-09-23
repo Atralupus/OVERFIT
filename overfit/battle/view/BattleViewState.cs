@@ -18,6 +18,13 @@ public enum FighterPose
     Charge,
     Dash,
     Parry,
+
+    /// <summary>
+    /// 버티고 있다 (이슈 #47). 팩에 가드 그림이 <b>없어서</b> 패리와 같은 <c>idle</c> 을 빌려 쓰고,
+    /// 갈라 보이게 하는 것은 <b>색과 링</b>이다 — 패리 링은 창이 닫히는 쪽으로 퍼지고 가드 링은
+    /// 크기가 <b>안 변한 채 버틴다</b>. 움직이지 않는 링이 "누르고 있는 동안" 을 말하는 유일한 그림이다.
+    /// </summary>
+    Guard,
     Hit,
     Death,
 }
@@ -60,6 +67,9 @@ public enum BossPhase
 /// <param name="ChargeMaxed">차지가 <b>최대에 닿았나</b> (이슈 #40). 진행도만 넘기고 뷰가
 /// <c>progress &gt;= 1</c> 로 판단하게 두지 않는다 — 단계는 구간이고 그 경계를 아는 곳은 규칙 하나다.
 /// <b>최대인지 모르면 2초를 셀 수가 없다</b>, 그래서 이 한 칸이 색과 섬광을 가른다.</param>
+/// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.
+/// 가드 링의 굵기가 아니라 <b>밝기</b>가 이것이라, 바닥에 가까울수록 링이 꺼져 간다.
+/// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다 — <c>ChargeProgress</c> 와 같은 규약이다.</param>
 public readonly record struct FighterFrame(
     double X,
     double Y,
@@ -70,7 +80,8 @@ public readonly record struct FighterFrame(
     double ParryProgress,
     bool Locked,
     double ChargeProgress,
-    bool ChargeMaxed);
+    bool ChargeMaxed,
+    double GuardStamina);
 
 /// <summary>
 /// 한 프레임에 보스의 <b>예고 표지</b>를 그리는 데 필요한 전부.
@@ -86,11 +97,19 @@ public readonly record struct FighterFrame(
 /// <param name="X">보스 발밑 기준 가로 오프셋(px). <b>이미 보스가 보는 쪽으로 뒤집혀 있다.</b></param>
 /// <param name="Y">바닥에서의 높이(px, 위가 +). <b>이 숫자 하나가 "칼이 땅에 있나" 를 말한다.</b></param>
 /// <param name="Length">모양의 주된 크기(px). 칼이면 날 길이, 고리면 반지름이다.</param>
+/// <param name="GuardBreak">이번 패턴에 <b>가드 불가</b> 판정이 있나 (이슈 #47 · 태그의 <c>has_guard_break</c>).
+///
+/// <para>
+/// <b>색이 아니라 기호로 말한다.</b> 붉은색은 이미 반대 뜻으로 차 있다 — 크림슨은 "패리 불가 ·
+/// 대시해라" 인데, 가드 불가는 "<b>받아쳐라</b>" 다. 둘 다 빨갛게 하면 플레이어가 정확히 거꾸로
+/// 반응한다. 그래서 링은 평소대로 호박색이고, 그 위에 <c>危</c> 한 글자가 더 뜬다.
+/// </para></param>
 public readonly record struct BossTell(
     string ShapeId,
     double X,
     double Y,
-    double Length);
+    double Length,
+    bool GuardBreak);
 
 /// <summary>
 /// 한 렌더 프레임에 보스를 그리는 데 필요한 전부. <see cref="FighterFrame"/> 과 같은 규약이다 —

@@ -123,7 +123,32 @@ public sealed class FighterConfig
     /// </summary>
     public required int AttackAnimBladeFrame { get; init; }
 
-    /// <summary>초당 회복량. 행동 중에는 회복하지 않는다.</summary>
+    // ── 가드 (이슈 #47) ─────────────────────────────────────────────────────────
+    //
+    // 가드는 **패리와 같은 키**다. 누름은 언제나 패리 시도이고, 패리 동작(parry_duration)이
+    // 끝났는데 아직 누르고 있으면 가드가 선다. 가드의 값은 피해가 아니라 **스태미나**로 내고,
+    // 그래서 세 수치가 전부 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
+
+    /// <summary>
+    /// 가드가 <b>흘려보내는</b> 피해의 비율. <see cref="ParryInternalRatio"/> 보다 작아야
+    /// 가드를 고를 이유가 있다 — 그 관계를 <c>FighterDataTests</c> 가 지킨다.
+    /// </summary>
+    public required double GuardChipRatio { get; init; }
+
+    /// <summary>
+    /// 막아낸 피해 1 당 드는 스태미나. <b>정액이 아니라 비례인 것이 이 기술의 레버다</b> —
+    /// 무거운 마무리 한 방이 가드를 깨고, 그 붕괴가 곧 가드 퍼니쉬다. 정액이면 연타든 마무리든
+    /// 같은 값이라 "무엇을 가드할까" 라는 판단이 통째로 사라진다.
+    /// </summary>
+    public required double GuardStaminaPerDamage { get; init; }
+
+    /// <summary>
+    /// 가드가 깨졌을 때 굳는 시간(초). <see cref="ParryLock"/> 보다 길다 —
+    /// 붕괴가 부정확 패리와 같은 값이면 버티는 것에 위험이 없다.
+    /// </summary>
+    public required double GuardBreakLock { get; init; }
+
+    /// <summary>초당 회복량. 행동 중에는 회복하지 않는다 — <b>가드 중에도 안 찬다.</b></summary>
     public required double StaminaRegen { get; init; }
 
     /// <summary>

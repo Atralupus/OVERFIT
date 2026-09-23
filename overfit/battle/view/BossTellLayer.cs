@@ -22,6 +22,15 @@ public partial class BossTellLayer : Node2D
     /// <summary>선 두께(px). <c>balance.json</c> 의 feel 이 정한다.</summary>
     public float LineWidth { get; set; } = 6.0f;
 
+    /// <summary>
+    /// 가드 불가 표지(<c>危</c>)를 띄울 높이(px, 발밑에서 위로) — 이슈 #47.
+    /// <b>보스 키보다 위여야</b> 몸과 겹쳐 획이 먹히지 않는다. <c>BossView</c> 가 데이터에서 준다.
+    /// </summary>
+    public float MarkHeight { get; set; } = 340.0f;
+
+    /// <summary>가드 불가 표지의 글자 크기(px).</summary>
+    public float MarkSize { get; set; } = 96.0f;
+
     /// <summary>이번 프레임의 표지. <b>매 프레임 부른다</b> — 안 부르면 그 프레임에 사라진다.</summary>
     public void Show(BossTell tell, Color color)
     {
@@ -45,5 +54,13 @@ public partial class BossTellLayer : Node2D
         }
 
         BossTellShapes.Find(_tell.ShapeId)?.Draw(this, _tell, LineWidth, _color);
+
+        // 가드 불가는 **모양이 아니라 표지**다 (이슈 #47) — 패턴마다 다른 것이 아니라
+        // 태그 하나에 붙는 하나뿐인 그림이라 등록표를 안 탄다. 색은 링과 같은 호박색이다:
+        // 붉은색은 이미 "패리 불가" 로 차 있어, 같이 붉게 두면 정확히 거꾸로 반응하게 만든다.
+        if (_tell.GuardBreak)
+        {
+            GuardBreakMark.Draw(this, new Vector2(0, -MarkHeight), MarkSize, _color);
+        }
     }
 }

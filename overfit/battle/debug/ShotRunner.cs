@@ -170,6 +170,7 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-8-result");
 
         await Charging();
+        await Guarding();
         await Facing();
 
         Log.Marker("shots", "shots=done");
@@ -220,6 +221,58 @@ public partial class ShotRunner : Node
         Hold("attack", false);
         await Until(() => _battle?.FighterAttackActive == true, _pollTimeout);
         await Screenshot.CaptureAsync(this, "battle-5e-charged-swing");
+    }
+
+    /// <summary>
+    /// 가드 세 장 (이슈 #47). <b>버티는 자세 · 깨지는 순간 · 危 예고.</b>
+    ///
+    /// <para>
+    /// 증명할 것은 <b>셋이 서로 다르게 읽히는가</b> 하나다. 가드와 패리는 같은 키에서 나오므로
+    /// 화면이 안 가르면 플레이어는 자기가 무엇을 했는지 모르고, 가드 불가 예고가 평범한 예고와
+    /// 같아 보이면 "버티면 된다" 를 그대로 믿다 깨진다.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>붙어서 찍는다.</b> 가드는 판정이 닿아야 일이 일어나고, 그 판정은 보스 사거리 안에서만 선다.
+    /// 그리고 <b>누르고만 있는다</b> — 가드는 누름이 아니라 <b>유지</b>로 사는 유일한 기술이라
+    /// <c>Tap</c> 으로는 영원히 안 선다(패리 동작 0.30초가 끝나기 전에 손을 떼는 셈이다).
+    /// </para>
+    /// </summary>
+    private async Task Guarding()
+    {
+        Game.Instance.GoTo(Game.Scene.Battle);
+        await Frames(4);
+        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+
+        // ── 危 예고: 가드 불가 판정을 가진 패턴의 선딜 ────────────────────
+        // **맨 앞이다.** 아래 두 장은 맞아 가며 찍으므로 체력이 줄고, 뒤로 미루면 결과 화면이 찍힌다
+        // (이 파일의 다른 주석들이 이미 밟은 실패다). 평소 예고(battle-6-windup)와 **나란히 놓고**
+        // 봐야 이 연출이 일한다 — 한 장만으로는 "글자가 있다" 까지만 알 수 있다.
+        await Until(() => _battle is { BossWindingUp: true, BossGuardBreak: true }, _tellTimeout);
+        await Frames(6);
+        await Screenshot.CaptureAsync(this, "battle-10c-guard-break-tell");
+
+        // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
+        Hold("move_right", true);
+        await Wait(1.1);
+        Hold("move_right", false);
+
+        // ── 버티는 자세 ───────────────────────────────────────────────────
+        // **프레임을 세지 않는다.** 가드가 서는 시각은 parry_duration 이고 그건 데이터다 —
+        // 세어 두면 그 값을 고치는 순간 패리 자세가 "가드" 로 찍힌다(이슈 #38 에서 밟은 실패다).
+        Hold("parry", true);
+        await Until(() => _battle?.FighterGuarding == true, _pollTimeout);
+        await Frames(2);
+        await Screenshot.CaptureAsync(this, "battle-10-guard");
+
+        // ── 붕괴: 가드 불가를 가드로 받은 그 순간 ─────────────────────────
+        // 깨지는 것은 **사건**이라 상태로는 못 노린다(0.9초 고정은 부정확 패리의 고정과 같은
+        // 모양이다). 그래서 횟수가 늘어난 것을 보고 셔터를 누른다 — 피격 스크린샷과 같은 규약이다.
+        int broke = _battle?.FighterGuardBreaks ?? 0;
+        await Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _tellTimeout);
+        await Frames(3);
+        await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
+        Hold("parry", false);
     }
 
     /// <summary>

@@ -68,7 +68,16 @@ public partial class BossView : Node2D
 
         // 예고 표지는 링과 **다른 노드**다. 링은 "언제" 를 말하고 표지는 "무엇" 을 말하므로
         // 수명이 다르다 — 한 노드에서 둘 다 그리면 링을 끄는 프레임에 표지도 같이 사라진다.
-        _tell = new BossTellLayer { LineWidth = (float)_feel.RingWidth * 1.3f };
+        //
+        // 危 표지는 보스 **머리 위**에 선다 (이슈 #47). 몸에 겹치면 획이 실루엣에 먹혀
+        // "무슨 글자인가" 가 안 읽힌다. 높이는 링이 도는 자리(boss_ring_offset_y)의 두 배 남짓이라
+        // 보스 키(297px)를 넘고, 크기는 링 굵기에서 끌어온다 — 숫자를 여기 박으면 feel 을 고쳐도 안 따라온다.
+        _tell = new BossTellLayer
+        {
+            LineWidth = (float)_feel.RingWidth * 1.3f,
+            MarkHeight = (float)_feel.BossRingOffsetY * 2.4f,
+            MarkSize = (float)_feel.RingWidth * 14.0f,
+        };
         AddChild(_tell);
     }
 

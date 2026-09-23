@@ -71,16 +71,40 @@ public class BotPolicyTests
         }
     }
 
+    /// <summary>
+    /// 여러 판에서 실제로 나온 회피 수단들.
+    ///
+    /// <para>
+    /// ⚠ <b>증인을 여럿 세운다.</b> 한 판은 관측이 15건 안팎뿐이고 봇은 수단을 좌표로 고르므로,
+    /// 어느 한 수단이 한 판에 안 나오는 것은 흔한 일이지 설계가 깨진 것이 아니다
+    /// (<c>최대_차지가_패리_없이_닿는다</c> 가 같은 이유로 같은 시드 목록을 돈다).
+    /// 수단이 넷이 되면서(가드 · 이슈 #47) 한 판의 관측이 더 얇게 나뉘어, 시드 51 한 판은
+    /// 실제로 점프 없이 끝난다 — <b>단언이 아니라 표본을 넓힌다.</b>
+    /// </para>
+    /// </summary>
+    private static HashSet<DodgeVerb> VerbsUsed()
+    {
+        var used = new HashSet<DodgeVerb>();
+        foreach (ulong seed in _seeds)
+        {
+            (_, BattleSim sim) = Play(seed);
+            foreach (DodgeEvent e in sim.Events)
+            {
+                used.Add(e.Verb);
+            }
+        }
+
+        return used;
+    }
+
+    /// <summary>봇을 여러 판 돌려볼 시드들. 한 판의 주사위에 매달지 않기 위한 목록이다.</summary>
+    private static readonly ulong[] _seeds = { 7, 51, 99, 777, 2024, 31337, 12345, 8 };
+
     [Fact]
     public void 봇이_회피_수단_셋을_다_쓴다()
     {
         // 한 수단만 쓰는 봇은 나머지 축을 영원히 0 으로 만든다 — 그 데이터로는 개인화를 못 배운다.
-        (_, BattleSim sim) = Play(51);
-        var used = new HashSet<DodgeVerb>();
-        foreach (DodgeEvent e in sim.Events)
-        {
-            used.Add(e.Verb);
-        }
+        HashSet<DodgeVerb> used = VerbsUsed();
 
         used.ShouldContain(DodgeVerb.Dash);
         used.ShouldContain(DodgeVerb.Parry);
@@ -175,4 +199,35 @@ public class BotPolicyTests
 
         a.Ticks.ShouldNotBe(b.Ticks);
     }
+
+    [Fact]
+    public void 봇도_가드를_낸다()
+    {
+        // **사람과 봇이 같은 통로를 타야 학습 데이터가 뜻을 가진다** (이슈 #47). 봇이 못 내는
+        // 기술은 봇 함대가 만드는 데이터에 영영 안 들어가고, 망은 그 기술이 없는 게임을 배운다.
+        // 가드는 다른 셋과 달리 **미리** 서야 한다(누름에서 parry_duration 뒤에 선다) —
+        // 판정 직전에 거는 창으로는 구조적으로 못 만들어지므로 여기서 실제로 나오는지 본다.
+        VerbsUsed().ShouldContain(DodgeVerb.Guard, "봇이 한 번도 안 막았다");
+    }
+
+    [Fact]
+    public void 봇의_가드가_막아내기도_하고_깨지기도_한다()
+    {
+        // 개수 둘(GuardSamples · GuardBrokenSamples)이 갈리는지는 PlayerAxesTests 가 보지만,
+        // **실제 전투에서 두 결과가 다 나오는지**는 여기서만 보인다. 한쪽만 나오면 그 칸은
+        // 데이터에 늘 0 이고, 그러면 개수를 둘로 나눈 것이 아무 일도 안 한 셈이다.
+        var verdicts = new HashSet<HitVerdict>();
+        foreach (ulong seed in _seeds)
+        {
+            (_, BattleSim sim) = Play(seed);
+            foreach (DodgeEvent e in sim.Events)
+            {
+                verdicts.Add(e.Verdict);
+            }
+        }
+
+        verdicts.ShouldContain(HitVerdict.Guarded, "봇의 가드가 한 번도 안 버텼다");
+        verdicts.ShouldContain(HitVerdict.GuardBroken, "봇의 가드가 한 번도 안 깨졌다");
+    }
+
 }
