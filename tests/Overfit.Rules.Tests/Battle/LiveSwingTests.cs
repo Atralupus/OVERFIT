@@ -1,4 +1,8 @@
+using System;
+using System.Linq;
 using Overfit.Battle.Rules;
+using Overfit.Core;
+using Overfit.Rules.Tests.Support;
 using Shouldly;
 using Xunit;
 
@@ -124,5 +128,40 @@ public class LiveSwingTests
         sim.Events[0].Verb.ShouldBe(DodgeVerb.Dash);
         sim.Events[0].TimingError.ShouldBeLessThan(0, "대시는 피한 그 틱보다 먼저 시작됐다 — 창이 닫힌 틱 기준으로 다시 재면 0 이 된다");
         sim.Events[0].Direction.ShouldBe(-1, "보스를 등지고 뛰었다 — 밖이다. 창이 닫힌 뒤에 다시 재면 대시가 끝나 0 이 된다");
+    }
+
+    [Fact]
+    public void 미룬_회피의_로그_줄은_관측한_틱의_공중과_거리를_찍는다()
+    {
+        // 미룬 Dodged 는 무적이 처음 먹은 틱에 관측을 지어 두고 창이 닫히는 틱에 확정한다(Commit) — 그 사이 몸은
+        // 움직인다. 확정하는 틱의 라이브 값을 찍으면 한 줄에 두 틱이 섞인다: 관측은 "사거리 안에서 땅에서 대시로
+        // 피했다" 인데 air= · dist= 는 창이 닫힐 때의 자리를 말한다. 설계 §9.4 의 데모 로그 감사가 읽는 것이 바로
+        // 이 dist= 다 (이슈 #59 · 최종 리뷰). 셋업은 위 테스트와 같다 — 등지고 대시해 사거리 밖으로 밀려나고,
+        // 대시가 끝난 뒤 한 번 뛰어서 창이 닫힐 때는 공중이다.
+        using var log = new LogCapture(LogLevel.Info);
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 1120, activeSeconds: 0.5);
+
+        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스를 등진다 (Facing = -1)
+        TestConfigs.UntilNear(sim);
+        sim.Tick(new InputFrame(0, false, true, false, false));     // 대시 — 등진 채라 보스 반대(밖)로 튄다
+        for (int i = 0; i < 40 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(0, Jump: i == 15, false, false, false));   // 대시(11틱)가 끝난 뒤 한 번 뛴다
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent seen = sim.Events[0];
+        seen.Verdict.ShouldBe(HitVerdict.Dodged);
+
+        // 두 틱이 정말 갈리는지부터 — 안 갈리면 아래 단언은 아무것도 안 본다.
+        seen.Airborne.ShouldBeFalse("땅에서 대시로 피했다");
+        sim.Fighter.Grounded.ShouldBeFalse("창이 닫히는 틱에 공중이 아니다 — 셋업이 움직였다");
+        $"{Math.Abs(sim.Fighter.X - sim.Boss.X):0}".ShouldNotBe($"{seen.Distance:0}",
+            "창이 닫히는 틱의 거리가 관측과 같다 — 셋업이 두 틱을 못 가른다");
+
+        string line = log.Lines.Single(l => l.StartsWith("[dodge]", StringComparison.Ordinal));
+        line.ShouldContain($" air={seen.Airborne} ", Case.Sensitive, "공중이 관측이 아니라 창이 닫힌 틱의 값이다");
+        line.ShouldContain($" dist={seen.Distance:0} ", Case.Sensitive, "거리가 관측이 아니라 창이 닫힌 틱의 값이다");
+        line.ShouldContain($" charge={seen.ChargeTier}", Case.Sensitive);
     }
 }

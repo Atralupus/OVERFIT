@@ -761,13 +761,18 @@ public sealed class BattleSim
         // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
         // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
+        //
+        // air · dist · charge 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
+        // 먹은 틱에 지어 두고 창이 닫히는 틱에 여기로 오므로, 그때의 라이브 값을 읽으면 한 줄에 두 틱이 섞인다 —
+        // 땅에서 사거리 안에서 피한 관측이 "공중 · 사거리 밖" 으로 찍혔다. hp · qi · stam 은 관측에 없는 값이라
+        // 지금 값이다: 판정의 결과가 몸에 실린 뒤의 잔량이다.
         Log.Info("dodge", () => $"pattern={evt.PatternId} verb={evt.Verb} verdict={evt.Verdict}"
-            + $" err={evt.TimingError:0.000} dir={evt.Direction} air={!Fighter.Grounded}"
-            + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}"
+            + $" err={evt.TimingError:0.000} dir={evt.Direction} air={evt.Airborne}"
+            + $" dist={evt.Distance:0} hp={Fighter.Health} qi={Fighter.Qi}"
             // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
             // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
             + $" stam={Fighter.Stamina:0}"
-            + $" charge={Fighter.ChargeTier}");
+            + $" charge={evt.ChargeTier}");
     }
 
     /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
