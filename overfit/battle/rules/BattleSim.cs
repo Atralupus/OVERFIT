@@ -66,6 +66,16 @@ public sealed class BattleSim
     /// </summary>
     private readonly List<LiveSwing> _live = new();
 
+    /// <summary>
+    /// 이 틱에 파이터에게 대 본 보스 판정 — (모양, 놓은 자리). <b>기록만 한다</b> (이슈 #59 · 설계 §6.1).
+    /// 사각형으로 펴는 것은 디버그 표시가 물을 때(<see cref="BossTestedRects"/>)다: 봇이 수백만 판을 돌리는
+    /// 동안 이 목록은 용량을 다시 쓸 뿐 새로 할당하지 않는다.
+    /// </summary>
+    private readonly List<(HitShape Shape, Placement At)> _tested = new();
+
+    /// <summary>이 틱에 보스에게 대 본 파이터 칼의 자리. 안 댔으면 null.</summary>
+    private Placement? _attackTested;
+
     // 회피 수단마다 **따로** 시작 시각을 들고 있는다(초, NaN = 지금 그 수단이 없다).
     // 슬롯이 하나였을 때는 "가장 최근에 시작한 행동" 이 판정을 다 가져갔다 —
     // 점프로 넘긴 지면쓸기가 같이 눌러둔 패리의 공이 되어, 데모 10건 중 4건이
@@ -221,6 +231,37 @@ public sealed class BattleSim
     /// </para>
     /// </summary>
     public bool NextActiveGuardBreak => NextActive() is { GuardBreak: true };
+
+    /// <summary>
+    /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드) — 디버그 표시용 (이슈 #59 · 설계 §6.1).
+    /// 표시가 이것을 받아 그리기만 하므로, 판정이 틀린 자리에 서면 화면도 그 틀린 자리를 보여 준다.
+    /// </summary>
+    public IReadOnlyList<HitRect> BossTestedRects
+    {
+        get
+        {
+            var rects = new List<HitRect>();
+            foreach ((HitShape shape, Placement at) in _tested)
+            {
+                rects.AddRange(shape.Place(at));
+            }
+
+            return rects;
+        }
+    }
+
+    /// <summary>
+    /// 선딜 중이면 <b>다음</b> 판정이 칠 자리 (월드) — 어디로 올지 미리 보인다. 러너가 그 판정을 낼 때와
+    /// 같은 함수(<see cref="PatternRunner.ShapeOf"/>)로 짓는다. 더 올 판정이 없으면 빈 목록.
+    /// </summary>
+    public IReadOnlyList<HitRect> BossNextRects =>
+        NextActive() is { } step
+            ? PatternRunner.ShapeOf(step).Place(new Placement(Boss.X, Boss.Y, Boss.Facing))
+            : Array.Empty<HitRect>();
+
+    /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
+    public IReadOnlyList<HitRect> FighterTestedRects =>
+        _attackTested is { } at ? _attackShape.Place(at) : Array.Empty<HitRect>();
 
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
@@ -555,11 +596,15 @@ public sealed class BattleSim
     /// <summary>살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다.</summary>
     private void ResolveLive()
     {
+        _tested.Clear();
+        var at = new Placement(Boss.X, Boss.Y, Boss.Facing);
+
         int kept = 0;
         for (int i = 0; i < _live.Count; i++)
         {
             LiveSwing swing = _live[i];
-            if (!Step(swing))
+            _tested.Add((swing.Box.Shape, at));
+            if (!Step(swing, at))
             {
                 _live[kept++] = swing;
             }
@@ -578,9 +623,9 @@ public sealed class BattleSim
     /// 관측(<see cref="LiveSwing.DodgeSnapshot"/>), 아니면 마지막 틱의 빗나간 이유다.
     /// </para>
     /// </summary>
-    private bool Step(LiveSwing swing)
+    private bool Step(LiveSwing swing, Placement at)
     {
-        HitVerdict verdict = HitResolver.Resolve(Fighter, new Placement(Boss.X, Boss.Y, Boss.Facing), swing.Box, swing.Tags);
+        HitVerdict verdict = HitResolver.Resolve(Fighter, at, swing.Box, swing.Tags);
         swing.TicksLeft--;
 
         switch (verdict)
@@ -735,6 +780,7 @@ public sealed class BattleSim
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
     private void Strike()
     {
+        _attackTested = null;
         if (!Fighter.AttackActive || _struckThisSwing)
         {
             if (!Fighter.AttackActive)
@@ -746,7 +792,9 @@ public sealed class BattleSim
         }
 
         double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-        if (ShapeHit.Test(_attackShape, new Placement(Fighter.X, Fighter.Y, Fighter.Facing), Boss.Body)
+        var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
+        _attackTested = at;
+        if (ShapeHit.Test(_attackShape, at, Boss.Body)
             == ShapeContact.Overlap)
         {
             // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
