@@ -52,7 +52,7 @@ public static class TestConfigs
         // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
         GuardChipRatio = 0.25,
         GuardStaminaPerDamage = 1.8,
-        GuardBreakLock = 0.9,
+        GuardBreakLock = 1.1,
         // 기준값이라 **짧다.** 실제 캐릭터는 0 / 0.8 / 2.0 초인데(fighters.json) 그 값을 베끼면
         // 차지 한 번을 재는 테스트가 120틱을 돌고, 무엇보다 캐릭터의 차지 시간을 고칠 때마다
         // 무관한 테스트가 같이 빨개진다. 여기서 진짜여야 하는 것은 수치가 아니라 **모양**이다:

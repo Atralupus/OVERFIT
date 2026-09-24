@@ -719,7 +719,7 @@ public class FighterActionTests
         f.Tick(new InputFrame(1, false, false, false, false), _dt);
         f.X.ShouldBe(x, 1e-9, "굳었는데 걸었다");
 
-        Idle(f, 51);   // 합쳐 0.883초 — 붕괴 고정(0.9)이 아직 안 풀렸다
+        Idle(f, 63);   // 합쳐 1.083초 — 붕괴 고정(1.1 · 이슈 #54 전에는 0.9)이 아직 안 풀렸다
         f.Locked.ShouldBeTrue();
         Idle(f, 2);
         f.Locked.ShouldBeFalse();

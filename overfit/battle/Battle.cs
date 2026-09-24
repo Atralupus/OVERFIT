@@ -404,7 +404,7 @@ public partial class Battle : Node2D
                         break;
 
                     // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
-                    // "막았다" 만 말하고 "무너졌다" 는 안 말하는데, 그 뒤 0.9초는 아무것도 못 한다.
+                    // "막았다" 만 말하고 "무너졌다" 는 안 말하는데, 그 뒤 guard_break_lock 동안은 아무것도 못 한다.
                     case HitVerdict.Guarded:
                         _fighterView.GuardChip();
                         break;

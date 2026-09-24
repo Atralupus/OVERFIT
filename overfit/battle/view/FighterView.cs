@@ -377,7 +377,7 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 0.9초 굳는데
+    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 guard_break_lock 동안 굳는데
     /// 화면이 조용하면 "키가 안 먹는다" 로 읽힌다. 그 뒤의 고정은 <see cref="_lockedTint"/> 가 말한다.
     /// </summary>
     public void GuardBroken()
