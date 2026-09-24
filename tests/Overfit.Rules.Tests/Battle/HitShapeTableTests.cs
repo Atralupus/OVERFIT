@@ -80,6 +80,29 @@ public class HitShapeTableTests
         bounds.Y1.ShouldBe(y1, oneCell, $"{id} 높이가 어긋났다 — 발바닥을 region 아래끝으로 잡았나");
     }
 
+    /// <summary>
+    /// <c>attack3</c> 의 답은 <b>왕을 끌어안는 것</b>이다 — 초승달은 왕의 코앞이 비어 있어서, 공중에서 보스에게
+    /// 바짝 붙으면 궤적이 위와 앞으로 비켜 간다. 설계의 성공 기준 "안 보이는 자리(초승달 안쪽 포함)에 있으면
+    /// 안 맞는다" 가 이 기술에서 말하는 것이 바로 이 자리다. 아래 몸통(보는 쪽 +66 · 발 100 · 60×120)은 그 빈 곳에
+    /// 떠 있고, 그림에서도 거기에는 궤적이 없다 — 왕의 머리와 수염이 있을 뿐이다
+    /// (region 픽셀로 x 86~97 · y 63~84, 순백 0개).
+    ///
+    /// <para>
+    /// 실제로 무너져 있었다 (최종 리뷰): 도구가 왕의 흰 수염·털깃(#F5EEEE)을 칼 궤적(#FFFFFF)과 같은
+    /// "흰 픽셀" 로 쳐서 이 자리에 사각형 [44, 88, 126.5, 148.5] 하나를 세웠다 — 궤적이 안 그려진 곳에서
+    /// 맞는다. 보스 칼이 모양으로 맞는 날(설계 §10 의 3번) 이 자리가 그대로 거짓말이 된다.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void 왕을_끌어안으면_attack3_의_초승달_안쪽이라_안_맞는다()
+    {
+        HitShape shape = HitShapeTable.Parse(Json(), "hitboxes.json")["medieval_king/attack3/2"];
+        var hugging = new HitRect(36, 96, 100, 220);
+
+        ShapeHit.Test(shape, new Placement(0, 0, 1), hugging).ShouldBe(ShapeContact.ByGap,
+            "초승달 안쪽 빈 곳인데 닿는다 — 궤적이 아닌 흰 그림(왕의 수염·털깃)이 판정이 됐다");
+    }
+
     [Fact]
     public void 사각형이_없는_칸은_거절한다()
     {
