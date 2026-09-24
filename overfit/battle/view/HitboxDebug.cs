@@ -51,7 +51,18 @@ public partial class HitboxDebug : Node2D
         Log.Debug("debug", "hitboxes=on");
     }
 
-    /// <summary>파이터 몸통의 색 — 왜 안 맞았는지가 그 자리에서 보이게 한다.</summary>
+    /// <summary>
+    /// 파이터 몸통의 색 — <b>파이터 쪽</b> 상태만 칠한다: 대시 무적 창(회색) · 패리 창(노랑) · 방어 자세(보라),
+    /// 셋 다 아니면 초록이다.
+    ///
+    /// <para>
+    /// ⚠ 이 색은 "왜 안 맞았나" 의 답이 <b>아니다</b>. 규칙(<see cref="HitResolver"/>)은 패턴 쪽도 본다 — 대시는
+    /// 파이터의 무적과 패턴의 <c>dash_window</c> 중 좁은 쪽 안이어야 피하고, 패리는 패턴이 <c>parryable</c> 이고
+    /// 창도 좁은 쪽으로 재며, 가드는 <c>guard_break</c> 판정이나 모자란 스태미나에 깨진다. 그래서
+    /// <c>dash_window</c> 가 0 인 III-끌기 앞에서는 몸통이 회색인데 규칙은 맞음(Hit)을 낸다. 두 쪽을 합친 실제
+    /// 상태를 칠하는 것은 계획 3(보스 칼이 모양으로 맞는 단계 — 설계 §10)의 몫이다.
+    /// </para>
+    /// </summary>
     public static Color FighterColor(bool invulnerable, bool parrying, bool guarding) =>
         invulnerable ? _invulnerable
         : parrying ? _parrying
