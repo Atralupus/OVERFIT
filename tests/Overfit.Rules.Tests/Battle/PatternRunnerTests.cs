@@ -173,4 +173,76 @@ public class PatternRunnerTests
 
         runner.Feints.ShouldBe(1);
     }
+
+    /// <summary>판정이 셋인 패턴. <b>마무리</b>는 마지막 active 하나다.</summary>
+    private static PatternDef Triple() => new()
+    {
+        Tell = TestConfigs.Tell(),
+        Tags = new PatternTags
+        {
+            DashWindow = 0.18,
+            DashDirection = "out",
+            Jumpable = false,
+            AntiAir = false,
+            Parryable = true,
+            ParryWindow = 0.12,
+            PunishGreed = false,
+            Reach = "mid",
+            Feint = false,
+            MultiHit = 3,
+            Tracking = false,
+            HasGuardBreak = false,
+        },
+        Timeline = new List<PatternStep>
+        {
+            new() { T = 0.00, Kind = "windup" },
+            new() { T = 0.20, Kind = "active", Distance = new[] { 0.0, 260.0 }, Height = new[] { 0.0, 200.0 }, Damage = 8 },
+            new() { T = 0.40, Kind = "active", Distance = new[] { 0.0, 260.0 }, Height = new[] { 0.0, 200.0 }, Damage = 8 },
+            new() { T = 0.60, Kind = "active", Distance = new[] { 0.0, 260.0 }, Height = new[] { 0.0, 200.0 }, Damage = 14 },
+            new() { T = 0.72, Kind = "recover" },
+            new() { T = 0.90, Kind = "end" },
+        },
+    };
+
+    [Fact]
+    public void 마지막_판정만_마무리다()
+    {
+        // **마무리가 이 계열의 상이 걸리는 자리다** (이슈 #53) — 받아치면 보스가 굳고,
+        // 그 경직 하나에 최대 차지가 들어간다. 앞의 연타에 같은 상을 주면 타임라인이
+        // 패턴 도중에 서서 3타가 오는 시각이 매번 달라진다(유저가 말한 "딜레이가 매번 다르다").
+        //
+        // **데이터에 손으로 적지 않고 타임라인에서 뽑는다.** finisher: true 를 사람이 달면
+        // 판정을 하나 끼워 넣는 날 옛 마무리에 그 표가 남고, 그 거짓말은 테스트가 아니라
+        // 플레이 중에만 보인다.
+        var runner = new PatternRunner(Triple());
+        var finishers = new List<bool>();
+
+        while (!runner.Finished)
+        {
+            foreach (HitBox box in runner.Tick(_dt))
+            {
+                finishers.Add(box.Finisher);
+            }
+        }
+
+        finishers.ShouldBe(new[] { false, false, true });
+    }
+
+    [Fact]
+    public void 판정이_하나뿐이면_그것이_마무리다()
+    {
+        // 경계다. "마지막" 을 "두 번째부터" 로 잘못 짜면 단타 패턴에 상이 영영 안 걸린다.
+        var runner = new PatternRunner(Slash());
+        var finishers = new List<bool>();
+
+        while (!runner.Finished)
+        {
+            foreach (HitBox box in runner.Tick(_dt))
+            {
+                finishers.Add(box.Finisher);
+            }
+        }
+
+        finishers.ShouldBe(new[] { true });
+    }
 }

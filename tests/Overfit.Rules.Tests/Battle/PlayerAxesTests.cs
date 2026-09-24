@@ -23,9 +23,11 @@ public class PlayerAxesTests
         int chargeTier = 0,
         bool dashAvailable = true,
         bool jumpAvailable = true,
-        bool parryAvailable = true) =>
+        bool parryAvailable = true,
+        bool guardAvailable = true,
+        bool finisher = false) =>
         new("내려찍기 I", verb, verdict, timingError, direction, airborne, distance, greedWindow, chargeTier,
-            dashAvailable, jumpAvailable, parryAvailable);
+            dashAvailable, jumpAvailable, parryAvailable, guardAvailable, finisher);
 
     [Fact]
     public void 욕심_축은_모으고_선_것도_센다()
@@ -46,7 +48,7 @@ public class PlayerAxesTests
     [Fact]
     public void 모으고_맞은_판정은_따로_센다()
     {
-        // 축이 아니라 **개수**다 (parry_late_n 과 같은 자리). 비율만으로는 "휘두르다 맞았다" 와
+        // 축이 아니라 **개수**다 (guard_n 과 같은 자리). 비율만으로는 "휘두르다 맞았다" 와
         // "2초를 모으고 서 있다 맞았다" 가 한 점이 되는데, 그 둘은 위험의 크기가 다르다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
@@ -314,7 +316,7 @@ public class PlayerAxesTests
         // **10축 계약을 안 깬다** (이슈 #47). 지금 가드에는 의존도 축이 될 분모가 없다 —
         // guard_break 가 아닌 모든 판정에서 가드가 되므로 "고를 수 있었는데 골랐나" 가 사실상
         // 사용 비율이고, 그건 JumpReliance · ParryReliance 가 피하려고 만들어진 바로 그 값이다.
-        // 그래서 ParryLateSamples · ChargedGreedSamples 와 같은 자리에 **개수**로 싣는다.
+        // 그래서 ChargedGreedSamples 와 같은 자리에 **개수**로 싣는다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),

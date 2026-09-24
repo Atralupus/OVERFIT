@@ -56,25 +56,45 @@ public class BossDataTests
     }
 
     [Fact]
-    public void 가드_불가를_받아친_경직이_평소보다_길고_최대_차지가_들어간다()
+    public void 경직_하나만으로_최대_차지가_들어간다()
     {
-        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다 (이슈 #47). 상은 **최대 차지 한 번**이고,
-        // 그것이 들어가는 길이가 경직 + 패턴 간격이다 — 둘 중 하나만 줄여도 이 한 동작이 안 이어진다.
+        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다 (이슈 #47). 상은 **최대 차지 한 번**이다.
+        //
+        // ⚠ **패턴 간격을 더해서 재지 않는다** (이슈 #53). 전에는 경직 1.6 + 간격 0.8 = 2.4 로 쟀는데
+        // 그 셈은 둘을 다 밟는다: 간격은 경직이 **풀린 뒤**의 시간이라 한 동작으로 안 이어지고,
+        // 무엇보다 patterns.json 의 간격을 고치는 날 이 상이 말없이 사라진다.
+        // 이제 경직 하나만으로 들어가야 한다.
         Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
         fighters.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
 
         foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
         {
-            boss.GuardBreakParryStagger.ShouldBeGreaterThan(boss.StaggerSeconds,
-                $"{id}: 가드 불가를 받아친 상이 평소 패리와 같다");
-
             foreach ((string who, FighterConfig c) in fighters)
             {
                 // 칼이 닿기까지 = 최대 차지 시간 + 판정. **붙든 시간이 곧 선딜**이라 선딜이 안 더해진다.
                 double lead = c.ChargeTiers[^1].Seconds + c.AttackActive;
-                (boss.GuardBreakParryStagger + boss.PatternGap).ShouldBeGreaterThanOrEqualTo(lead,
-                    $"{id}: 경직 {boss.GuardBreakParryStagger} + 간격 {boss.PatternGap} 에"
+                boss.FinisherParryStagger.ShouldBeGreaterThanOrEqualTo(lead,
+                    $"{id}: 경직 {boss.FinisherParryStagger} 초에"
                     + $" {who} 의 최대 차지({lead:0.000}초)가 안 들어간다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 경직에_받아친_것을_알아차릴_여유가_남는다()
+    {
+        // 딱 맞으면 **사람이 못 쓴다.** 받아친 것을 보고 손을 공격 키로 옮기는 시간이 있어야
+        // "받아쳤다 → 제일 센 걸 꽂는다" 가 한 동작이 된다. 0.15초는 사람 반응의 아래쪽이다 —
+        // 이 여유가 0 이 되면 경직 길이가 산수로만 맞고 손으로는 안 맞는다.
+        Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
+
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            foreach ((string who, FighterConfig c) in fighters)
+            {
+                double lead = c.ChargeTiers[^1].Seconds + c.AttackActive;
+                (boss.FinisherParryStagger - lead).ShouldBeGreaterThanOrEqualTo(0.15,
+                    $"{id}: {who} 의 최대 차지({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
             }
         }
     }

@@ -21,10 +21,10 @@ namespace Overfit.Battle.Rules;
 public sealed class BotPolicy
 {
     /// <summary>
-    /// 대시·패리를 걸 창(초). 무적창(0.14) · <b>정확</b> 패리창(0.133)보다 좁게 잡아
-    /// 판정이 서는 순간까지 창이 열려 있게 한다 — 일찍 걸면 정확을 놓치고 부정확 패리가 된다
-    /// (그건 절반을 내상으로 받고 굳는다). 연타 징벌(이슈 #27)도 여기에 걸려 있다:
-    /// 이 창 안에서만 누르므로 누름은 거의 항상 무언가를 받아내고, 받아낸 누름은 사슬을 푼다.
+    /// 대시·패리를 걸 창(초). 무적창(0.14) · 패리창(0.133)보다 좁게 잡아 판정이 서는 순간까지
+    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 <b>가드</b>가 된다 (이슈 #53).
+    /// 연타 징벌(이슈 #27)도 여기에 걸려 있다: 이 창 안에서만 누르므로 누름은 거의 항상
+    /// 받아치고, 받아친 누름은 사슬을 푼다.
     /// </summary>
     private const double _lateReact = 0.10;
 
@@ -68,10 +68,10 @@ public sealed class BotPolicy
         double gap = Math.Abs(sim.Fighter.X - sim.Boss.X) - sim.Boss.HalfWidth;
         sbyte move = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
 
-        // 가드는 **패턴이 시작할 때** 정한다. 다른 셋과 달리 미리 서야 하기 때문이다 —
-        // 누름에서 parry_duration(0.30초) 뒤에야 가드가 서는데, 아래의 반응 창(_lateReact 0.10초)
-        // 안에서 걸면 가드는 판정이 지나간 **뒤에** 선다. 매 틱 다시 고르지 않는 이유도 같다:
-        // 버티는 것이 곧 이 기술이라, 틱마다 마음이 바뀌면 가드는 한 번도 안 선다.
+        // 가드는 **패턴이 시작할 때** 정한다. 자세는 이제 누르는 그 틱에 서지만(이슈 #53)
+        // 아래의 반응 창(_lateReact 0.10초) 안에서 누르면 그건 가드가 아니라 **패리**다 —
+        // 창 안에 판정이 서기 때문이다. 가드를 실제로 내려면 일찍 눌러 창을 흘려보내야 하고,
+        // 그 판단은 패턴마다 한 번이어야 한다: 틱마다 마음이 바뀌면 버티는 일이 없다.
         DecideGuard(sim);
 
         // 모으는 중이면 할 일은 하나다 — 놓을 때인가 (이슈 #40).
@@ -114,6 +114,16 @@ public sealed class BotPolicy
                 return new InputFrame(0, false, false, Parry: press, false, ParryHeld: true);
             }
 
+            // 패리로 선 자세는 **판정이 지나갈 때까지만** 붙든다 (이슈 #53). 놓으면 그 자리에서
+            // 무방비이고, 다시 누르면 연타 사슬이 패리 창을 깎는다 — 전에는 0.30초짜리 패리
+            // 행동이 그 사이를 막아 줬는데 그 행동이 없어졌다.
+            // **계속** 붙들지는 않는다: 그러면 남은 연타를 전부 가드가 받아 대시·점프 표본이 마른다.
+            if (sim.Fighter.Guarding)
+            {
+                bool keep = sim.NextActiveIn is double left && left <= _lateReact;
+                return new InputFrame(0, false, false, false, false, ParryHeld: keep);
+            }
+
             if (sim.Fighter.Action != FighterAction.Idle)
             {
                 return default;
@@ -131,7 +141,8 @@ public sealed class BotPolicy
             {
                 0 => new InputFrame(0, false, Dash: true, false, false),
                 1 => new InputFrame(0, Jump: true, false, false, false),
-                _ => new InputFrame(0, false, false, Parry: true, false),
+                // 누르는 그 틱부터 붙든다 — 자세가 곧 방어라 엣지만 보내면 다음 틱에 풀린다.
+                _ => new InputFrame(0, false, false, Parry: true, false, ParryHeld: true),
             };
         }
 

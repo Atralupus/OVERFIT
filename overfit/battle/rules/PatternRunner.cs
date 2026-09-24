@@ -18,12 +18,21 @@ public sealed class PatternRunner
     private static readonly HitBox[] _none = Array.Empty<HitBox>();
 
     private readonly PatternDef _def;
+
+    /// <summary>
+    /// 마지막 <c>active</c> 단계의 자리 — <b>마무리</b>다 (이슈 #53). 판정이 없으면 -1.
+    /// 데이터의 깃발이 아니라 여기서 뽑는 이유는 <see cref="HitBox.Finisher"/> 에 적어 두었다:
+    /// 손으로 단 표는 판정을 하나 끼워 넣는 날 옛 마무리에 남는다.
+    /// </summary>
+    private readonly int _finisher;
+
     private int _next;
 
     public PatternRunner(PatternDef def)
     {
         ArgumentNullException.ThrowIfNull(def);
         _def = def;
+        _finisher = def.Timeline.FindLastIndex(s => s.Kind == "active");
     }
 
     public double Elapsed { get; private set; }
@@ -74,7 +83,8 @@ public sealed class PatternRunner
 
             hits ??= new List<HitBox>();
             hits.Add(new HitBox(
-                step.Distance[0], step.Distance[1], step.Height[0], step.Height[1], step.Damage, step.GuardBreak));
+                step.Distance[0], step.Distance[1], step.Height[0], step.Height[1], step.Damage,
+                step.GuardBreak, Finisher: _next - 1 == _finisher));
         }
 
         return (IReadOnlyList<HitBox>?)hits ?? _none;

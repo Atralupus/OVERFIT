@@ -41,28 +41,17 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 패리_창은_패리_지속보다_짧다()
+    public void 패리_창_셋이_연타_패리_기억_순으로_선다()
     {
-        foreach ((string id, FighterConfig c) in Load())
-        {
-            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryDuration, $"{id}: 패리 실패가 안 비싸면 의존도가 축이 안 된다");
-        }
-    }
-
-    [Fact]
-    public void 패리_창_셋이_연타_정확_부정확_순으로_선다()
-    {
-        // 세 창의 **순서가 곧 규칙**이다 (이슈 #27).
-        // 연타 창이 정확 창보다 넓으면 난사가 벌이 아니라 상이 되고,
-        // 부정확 창이 정확 창보다 좁으면 "늦게 눌렀다" 가 다시 "아무것도 안 했다" 와 같은 점이 된다.
-        // 부정확 창은 패리 **행동**보다도 길어야 한다 — 행동이 끝난 뒤가 바로 그 늦은 자리다.
+        // 세 창의 **순서가 곧 규칙**이다 (이슈 #27 · #53).
+        // 연타 창이 패리 창보다 넓으면 난사가 벌이 아니라 상이 되고,
+        // 기억 창이 패리 창보다 좁으면 "늦게 눌렀다" 가 다시 "아무것도 안 했다" 와 같은 점이 된다 —
+        // 그 창이 계측의 공을 그 누름에 붙들어 두는 것이라 판정보다 오래 살아야 한다.
         foreach ((string id, FighterConfig c) in Load())
         {
             c.ParrySpamWindow.ShouldBeLessThan(c.ParryPreciseWindow, $"{id}: 연타 징벌이 창을 안 좁힌다");
-            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryImpreciseWindow, $"{id}: 정확 창이 부정확 창보다 넓다");
-            c.ParryDuration.ShouldBeLessThan(c.ParryImpreciseWindow, $"{id}: 부정확 창이 패리 행동 안에서 끝난다");
-            c.ParryInternalRatio.ShouldBeInRange(0, 1, $"{id}: 내상 비율이 0~1 이 아니다");
-            c.ParryLock.ShouldBeGreaterThan(0, $"{id}: 부정확 패리에 고정이 없다");
+            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryMemoryWindow, $"{id}: 패리 창이 기억 창보다 넓다");
+            c.ParryCost.ShouldBeGreaterThan(0, $"{id}: 방어 자세가 공짜다 — 난사에 값이 없다");
         }
     }
 
@@ -299,17 +288,19 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 가드는_늦은_패리보다_덜_흘리고_깨지면_더_오래_굳는다()
+    public void 가드는_흘리되_받아치는_것보다는_나쁘다()
     {
-        // 가드의 값은 **스태미나**로 낸다 (이슈 #47). 그래서 흘리는 피해는 부정확 패리보다 적어야
-        // 하고(아니면 가드를 고를 이유가 없다), 대신 깨졌을 때의 고정은 더 길어야 한다
-        // (아니면 깨져도 부정확 패리와 같은 값이라 버티는 것에 위험이 없다).
+        // 가드의 값은 **스태미나**로 낸다 (이슈 #47). 흘리는 피해가 0 이면 받아칠 이유가 없어지고
+        // (패리의 상은 피해 0 이다), 1 이면 막는 것에 뜻이 없다 — 그 사이여야 창을 노릴 값이 생긴다.
+        //
+        // ⚠ 전에는 이 관계를 <c>parry_internal_ratio</c> 와 견줬다. 그 중간 단계가 없어지면서
+        // (이슈 #53) 비교 대상이 **패리 그 자체**로 바뀌었다: 받아치면 0, 막으면 이만큼이다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 막는 것에 값이 없다");
-            c.GuardChipRatio.ShouldBeLessThan(c.ParryInternalRatio, $"{id}: 가드가 늦은 패리보다 더 흘린다");
+            c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 받아칠 이유가 없다");
+            c.GuardChipRatio.ShouldBeLessThan(1, $"{id}: 가드가 전액을 흘린다 — 막는 것에 뜻이 없다");
             c.GuardStaminaPerDamage.ShouldBeGreaterThan(0, $"{id}: 가드 비용이 0 이다");
-            c.GuardBreakLock.ShouldBeGreaterThan(c.ParryLock, $"{id}: 가드가 깨져도 부정확 패리와 같은 값이다");
+            c.GuardBreakLock.ShouldBeGreaterThan(0, $"{id}: 가드가 깨져도 굳지 않는다 — 붕괴에 값이 없다");
         }
     }
 

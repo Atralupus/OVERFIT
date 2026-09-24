@@ -56,8 +56,10 @@ public partial class BossTellLayer : Node2D
         BossTellShapes.Find(_tell.ShapeId)?.Draw(this, _tell, LineWidth, _color);
 
         // 가드 불가는 **모양이 아니라 표지**다 (이슈 #47) — 패턴마다 다른 것이 아니라
-        // 태그 하나에 붙는 하나뿐인 그림이라 등록표를 안 탄다. 색은 링과 같은 호박색이다:
-        // 붉은색은 이미 "패리 불가" 로 차 있어, 같이 붉게 두면 정확히 거꾸로 반응하게 만든다.
+        // 깃발 하나에 붙는 하나뿐인 그림이라 등록표를 안 탄다. 색은 부르는 쪽이 준 링 색이고
+        // 여기서는 언제나 빨강이다: 링과 글자가 **같은 깃발**을 읽는다(이슈 #53). 빨강과 같은
+        // 말을 하는 글자를 굳이 두는 이유는 GuardBreakMark 에 있다 — 색각 이상에서는 빨강이
+        // 호박과 같은 색이 되고, 그때 남는 것은 이 모양뿐이다.
         if (_tell.GuardBreak)
         {
             GuardBreakMark.Draw(this, new Vector2(0, -MarkHeight), MarkSize, _color);

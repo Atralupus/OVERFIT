@@ -17,7 +17,9 @@ public static class BossTellShapes
     private static readonly Dictionary<string, IBossTellShape> _byId = new(System.StringComparer.Ordinal)
     {
         // 내려찍기 계열 (이슈 #48). 하나가 밑그림이고 넷이 그 위의 변종 표시다 —
-        // 변종 아홉에 모양 여섯인 것은 2·3단계의 같은 변종이 **같은 그림 + 危** 로 갈리기 때문이다.
+        // 변종 아홉에 모양 여섯인 것은 2·3단계의 같은 변종이 **같은 그림**을 쓰기 때문이다.
+        // 한 판은 한 단계의 변종만 만나므로 모양은 **단계 안에서만** 달라야 하고(PatternDataTests),
+        // 단계를 넘는 같은 변종은 같은 그림이어야 "같은 기술의 윗단계" 로 읽힌다 (이슈 #53).
         ["blade_drag"] = new BladeDragTell(),
         ["drag_lure"] = new DragLureTell(),
         ["drag_sweep"] = new DragSweepTell(),

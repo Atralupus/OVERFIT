@@ -32,11 +32,8 @@ public static class TestConfigs
         DashIFrames = 0.14,
         DashCost = 25,
         ParryPreciseWindow = 0.133,
-        ParryImpreciseWindow = 0.5,
+        ParryMemoryWindow = 0.5,
         ParrySpamWindow = 0.1,
-        ParryLock = 0.6,
-        ParryInternalRatio = 0.5,
-        ParryDuration = 0.30,
         ParryCost = 15,
         AttackWindup = 0.08,
         AttackActive = 0.06,
@@ -50,7 +47,7 @@ public static class TestConfigs
         AttackReach = 90,
         AttackDamage = 8,
         AttackCost = 12,
-        // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창·비율과 같은 자리라 캐릭터 성능이 아니라
+        // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
         // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
         GuardChipRatio = 0.25,
         GuardStaminaPerDamage = 1.8,
@@ -116,8 +113,7 @@ public static class TestConfigs
             MoveSpeed = moveSpeed ?? data.MoveSpeed,
             HalfWidth = data.HalfWidth,
             PatternGap = patternGap ?? data.PatternGap,
-            StaggerSeconds = data.StaggerSeconds,
-            GuardBreakParryStagger = data.GuardBreakParryStagger,
+            FinisherParryStagger = data.FinisherParryStagger,
             Sprite = data.Sprite,
         };
     }
