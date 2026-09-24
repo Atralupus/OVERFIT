@@ -796,7 +796,6 @@ public sealed class BattleSim
             return;
         }
 
-        double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
         var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
         _attackTested = at;
         if (ShapeHit.Test(_attackShape, at, Boss.Body)
@@ -806,8 +805,17 @@ public sealed class BattleSim
             // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
             int damage = Fighter.AttackDamage;
             Boss.TakeDamage(damage);
-            Log.Debug("strike", () =>
-                $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
+
+            // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
+            // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
+            // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
+            // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
+            // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
+            if (Log.IsEnabled(LogLevel.Debug))
+            {
+                double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
+                Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
+            }
         }
 
         _struckThisSwing = true;
