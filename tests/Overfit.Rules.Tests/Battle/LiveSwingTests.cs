@@ -98,4 +98,31 @@ public class LiveSwingTests
         sim.Events[0].PatternId.ShouldBe(TestConfigs.SweepId);
         sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit);
     }
+
+    [Fact]
+    public void 창이_닫히기_전에_대시가_끝나도_피한_틱의_크레딧으로_남는다()
+    {
+        // 보스를 등지고(Facing=-1) 대시하면 무적(0.14초 = 8틱) 동안은 아직 사거리(1120) 안이라
+        // Dodged 지만, 대시(0.18초 · 367px)가 등진 방향으로 계속 밀어내 곧 사거리 밖(MissedTooFar)이
+        // 되고, 창(30틱)이 닫힐 때는 대시가 완전히 끝나 있다(대시는 11틱 안에 끝난다). 창이 닫히는
+        // 그 틱의 라이브 _dashStartedAt/_dashDirection 으로 다시 크레딧을 매기면 이미 NaN/0 이 된 뒤라
+        // "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 관측이 나간다(이슈 #59 · 리뷰 라운드 1) —
+        // 무적이 처음 먹은 틱의 크레딧을 지어 둬야 맞다.
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 1120, activeSeconds: 0.5);
+
+        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스를 등진다 (Facing = -1)
+        TestConfigs.UntilNear(sim);
+        sim.Tick(new InputFrame(0, false, true, false, false));     // 대시 — 등진 채라 보스 반대(밖)로 튄다
+
+        for (int i = 0; i < 40 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Events.Count.ShouldBe(1, "한 번 휘두르면 관측은 하나다");
+        sim.Events[0].Verdict.ShouldBe(HitVerdict.Dodged, "무적 동안 사거리 안이었다 — 대시가 끝난 뒤 사거리 밖으로 밀려났다고 미스가 되면 안 된다");
+        sim.Events[0].Verb.ShouldBe(DodgeVerb.Dash);
+        sim.Events[0].TimingError.ShouldBeLessThan(0, "대시는 피한 그 틱보다 먼저 시작됐다 — 창이 닫힌 틱 기준으로 다시 재면 0 이 된다");
+        sim.Events[0].Direction.ShouldBe(-1, "보스를 등지고 뛰었다 — 밖이다. 창이 닫힌 뒤에 다시 재면 대시가 끝나 0 이 된다");
+    }
 }

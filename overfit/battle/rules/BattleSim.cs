@@ -421,6 +421,14 @@ public sealed class BattleSim
     /// 이 판정을 <b>무엇이</b> 그렇게 만들었나. 결과가 이미 답을 들고 있다 —
     /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다.
     /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
+    ///
+    /// <para>
+    /// <b>Dodged 는 무적이 먹은 그 틱에만 크레딧을 문다</b> (이슈 #59 · 리뷰 라운드 1). 창이 몇 틱 더
+    /// 사는 동안 미뤘다 나중에 물으면 그새 대시가 끝나 <c>_dashStartedAt</c> 이 NaN 으로 돌아가 있을 수
+    /// 있고, 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 크레딧이 나간다 — 그래서 <see cref="Step"/> 은
+    /// Dodged 를 처음 본 틱에 곧장 <see cref="BuildEvent"/> 를 불러 관측을 지어 두고, 창이 닫힐 때
+    /// 그 스냅샷을 그대로 내보낸다(다시 묻지 않는다).
+    /// </para>
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict, HitBox box) => verdict switch
     {
@@ -551,8 +559,8 @@ public sealed class BattleSim
     /// <para>
     /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
     /// 무적이 먹은 틱은 넘어가고 창은 계속 산다: 무적이 창보다 먼저 풀리면 그 뒤 틱에 맞는다(다크소울과 같다).
-    /// 창이 닫힐 때까지 안 닿았으면 관측을 <b>하나</b> 남긴다 — 어느 틱에 무적이 먹었으면 대시,
-    /// 아니면 마지막 틱의 빗나간 이유다.
+    /// 창이 닫힐 때까지 안 닿았으면 관측을 <b>하나</b> 남긴다 — 무적이 먹었으면 <b>그 틱에 지어 둔</b>
+    /// 관측(<see cref="LiveSwing.DodgeSnapshot"/>), 아니면 마지막 틱의 빗나간 이유다.
     /// </para>
     /// </summary>
     private bool Step(LiveSwing swing)
@@ -567,7 +575,11 @@ public sealed class BattleSim
                 return true;
 
             case HitVerdict.Dodged:
-                swing.Dodged = true;
+                // 처음 무적이 먹은 틱에서만 짓는다 (이슈 #59 · 리뷰 라운드 1) — 그 틱의 크레딧(대시
+                // 시작 시각·방향)이 아직 살아 있다. 창이 몇 틱 더 사는 동안 다시 Dodged 여도 안 다시
+                // 짓는다: 미뤘다 나중에 지으면 그새 대시가 끝나 _dashStartedAt 이 NaN 이 됐을 수 있고,
+                // 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 관측이 나간다.
+                swing.DodgeSnapshot ??= BuildEvent(swing, swing.Box, verdict);
                 break;
 
             default:
@@ -580,14 +592,25 @@ public sealed class BattleSim
             return false;
         }
 
-        Land(swing, swing.Dodged ? HitVerdict.Dodged : swing.LastMiss);
+        if (swing.DodgeSnapshot is { } snapshot)
+        {
+            Commit(snapshot);
+        }
+        else
+        {
+            Land(swing, swing.LastMiss);
+        }
+
         return true;
     }
 
-    /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
-    private void Land(LiveSwing swing, HitVerdict verdict)
+    /// <summary>
+    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴의 부작용. 회피(Dodged)와 빗나감은
+    /// 아무것도 안 한다(<c>default</c> 갈래). <see cref="Land"/> 와 <see cref="Step"/> 의 무적 스냅샷
+    /// 양쪽에서 같은 부작용을 내야 하므로 <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔다.
+    /// </summary>
+    private void ApplyVerdict(HitBox box, HitVerdict verdict)
     {
-        HitBox box = swing.Box;
         switch (verdict)
         {
             case HitVerdict.Hit:
@@ -627,13 +650,21 @@ public sealed class BattleSim
             default:
                 break;
         }
+    }
 
+    /// <summary>
+    /// 이 판정의 관측을 짓는다 — <b>부른 그 틱</b>의 크레딧 · 방향 · 공중 · 거리 · 욕심을 그대로 담는다.
+    /// 아직 스트림에 남기지는 않는다(<see cref="Commit"/> 이 한다) — Dodged 는 무적이 먹은 틱에 지어
+    /// 두었다가 창이 닫힐 때 그대로 내보내야 하기 때문이다(<see cref="Step"/>).
+    /// </summary>
+    private DodgeEvent BuildEvent(LiveSwing swing, HitBox box, HitVerdict verdict)
+    {
         double now = Ticks * Dt;
         (DodgeVerb verb, double startedAt) = Credit(verdict, box);
         double error = double.IsNaN(startedAt) ? 0 : startedAt - now;
         int direction = verb == DodgeVerb.Dash ? _dashDirection : 0;
 
-        _events.Add(new DodgeEvent(
+        return new DodgeEvent(
             PatternId: swing.PatternId,
             Verb: verb,
             Verdict: verdict,
@@ -656,7 +687,13 @@ public sealed class BattleSim
             // 판정 단위라 같은 패턴 안에서 대마다 값이 다르다 — 태그(has_guard_break)를 읽으면
             // 1·2타까지 "못 막는 판정" 으로 실려 계측이 거짓말을 한다.
             GuardAvailable: !box.GuardBreak,
-            Finisher: box.Finisher));
+            Finisher: box.Finisher);
+    }
+
+    /// <summary>관측을 확정한다 — 스트림에 남기고 로그 한 줄을 찍는다. <see cref="_events"/> 에 붙는 곳은 여기뿐이다.</summary>
+    private void Commit(DodgeEvent evt)
+    {
+        _events.Add(evt);
 
         // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
@@ -664,13 +701,20 @@ public sealed class BattleSim
         // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
         // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
-        Log.Info("dodge", () => $"pattern={swing.PatternId} verb={verb} verdict={verdict}"
-            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded}"
+        Log.Info("dodge", () => $"pattern={evt.PatternId} verb={evt.Verb} verdict={evt.Verdict}"
+            + $" err={evt.TimingError:0.000} dir={evt.Direction} air={!Fighter.Grounded}"
             + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}"
             // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
             // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
             + $" stam={Fighter.Stamina:0}"
             + $" charge={Fighter.ChargeTier}");
+    }
+
+    /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
+    private void Land(LiveSwing swing, HitVerdict verdict)
+    {
+        ApplyVerdict(swing.Box, verdict);
+        Commit(BuildEvent(swing, swing.Box, verdict));
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
@@ -725,8 +769,13 @@ public sealed class BattleSim
         /// <summary>남은 틱. 대 볼 때마다 하나씩 준다.</summary>
         public int TicksLeft { get; set; }
 
-        /// <summary>어느 틱에 무적이 먹었나 — 창이 안 닿고 닫히면 이것이 관측의 답이다.</summary>
-        public bool Dodged { get; set; }
+        /// <summary>
+        /// 무적이 <b>처음</b> 먹은 틱에 지어 둔 관측 (이슈 #59 · 리뷰 라운드 1). 창이 안 닿고 닫히면
+        /// 이것이 그대로 나간다 — <b>그 틱의</b> 크레딧(대시 시작 시각 · 방향) · 공중 · 거리로 지었으므로,
+        /// 창이 그 뒤로 몇 틱을 더 살아 무적이 풀려도(라이브 <c>_dashStartedAt</c> 이 NaN 이 돼도)
+        /// 이 기록은 안 바뀐다. null 이면 아직 한 번도 안 먹었다.
+        /// </summary>
+        public DodgeEvent? DodgeSnapshot { get; set; }
 
         /// <summary>마지막으로 빗나간 이유 — 창이 닫힐 때 무적이 한 번도 안 먹었으면 이것이 답이다.</summary>
         public HitVerdict LastMiss { get; set; } = HitVerdict.MissedTooFar;
