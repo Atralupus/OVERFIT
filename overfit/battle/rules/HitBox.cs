@@ -30,6 +30,8 @@ namespace Overfit.Battle.Rules;
 /// <c>finisher: true</c> 를 사람이 달면 판정을 하나 끼워 넣는 날 옛 마무리에 그 표가 남고,
 /// 그 거짓말은 테스트가 아니라 플레이 중에만 보인다.
 /// </para></param>
+/// <param name="ActiveSeconds">이 판정이 살아 있는 초 (이슈 #59). 0 이면 한 틱이다 —
+/// <see cref="PatternStep.ActiveSeconds"/> 를 그대로 싣는다. 틱으로 바꾸는 것은 <c>BattleSim.TicksFor</c> 다.</param>
 public readonly record struct HitBox(
     double MinDistance,
     double MaxDistance,
@@ -37,4 +39,5 @@ public readonly record struct HitBox(
     double HighHeight,
     int Damage,
     bool GuardBreak = false,
-    bool Finisher = false);
+    bool Finisher = false,
+    double ActiveSeconds = 0);
