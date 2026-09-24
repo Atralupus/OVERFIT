@@ -354,6 +354,36 @@ public class PatternDataTests
     }
 
     [Fact]
+    public void 가드_불가는_언제나_마무리_한_대다()
+    {
+        // **빨강과 危 가 겹쳐 뜨는 근거다** (이슈 #53). 화면은 둘을 나눠 말한다:
+        // 빨강은 "마무리 — 받아치면 값이 크다", 危 는 "게다가 막을 수조차 없다".
+        // 가드 불가가 마무리가 아닌 자리에 붙으면 危 만 뜨고 링은 호박인 장면이 생기고,
+        // 그러면 두 표지가 서로 다른 대를 가리켜 둘 다 안 읽힌다.
+        //
+        // 규칙 층에도 같은 말이 걸려 있다 — 경직은 **마무리**에 걸리므로, 가드 불가가 마무리가
+        // 아니면 "가드로 못 막는데 받아쳐도 상이 없는" 답 없는 판정이 된다.
+        int checkedHits = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            List<PatternStep> actives = def.Timeline.Where(s => s.Kind == "active").ToList();
+            for (int i = 0; i < actives.Count; i++)
+            {
+                if (!actives[i].GuardBreak)
+                {
+                    continue;
+                }
+
+                i.ShouldBe(actives.Count - 1,
+                    $"{id}: {i + 1}번째 판정이 가드 불가인데 마무리가 아니다 — 받아쳐도 상이 없다");
+                checkedHits++;
+            }
+        }
+
+        checkedHits.ShouldBeGreaterThan(0, "가드 불가 판정이 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
+    [Fact]
     public void 가드_불가는_패리로_받아칠_수_있다()
     {
         // "가드 불가" 는 **답이 없다**가 아니라 "받아쳐라" 다 — 예고가 붉은 링이 아니라

@@ -18,20 +18,32 @@ public sealed class BossConfig
     /// <summary>패턴과 패턴 사이의 쉬는 시간(초). 이 동안 플레이어가 때릴 틈이 난다.</summary>
     public required double PatternGap { get; init; }
 
-    /// <summary>정확 패리에 굳는 시간(초). 이 동안 걷지도 않고 돌던 패턴의 타임라인도 안 민다.</summary>
-    public required double StaggerSeconds { get; init; }
-
     /// <summary>
-    /// <b>가드 불가</b> 판정을 정확 패리로 받아쳤을 때 굳는 시간(초) — 평소보다 길다 (이슈 #47).
+    /// 패턴의 <b>마무리</b>를 패리로 받아쳤을 때 굳는 시간(초) — 이 게임에 <b>하나뿐인</b> 경직이다
+    /// (이슈 #53).
     ///
     /// <para>
-    /// 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이고, 그러면 예고(호박 링 + 危)가 말하는
-    /// "받아쳐라" 에 값이 없다. 길이는 <b>최대 차지 한 번이 들어가는가</b>로 정해진다 —
-    /// 이 경직 + <see cref="PatternGap"/> 이 그 창이다. <c>BossDataTests</c> 가 그 산수를
-    /// <c>fighters.json</c> 과 대조한다.
+    /// 전에는 경직이 둘이었다: 평범한 패리의 0.5초와 가드 불가를 받아친 1.6초. 평범한 쪽을 없앤
+    /// 것이 이 이슈의 절반이다 — 1·2타를 패리하면 패턴 타임라인이 0.5초 서고 뷰의 히트스톱까지
+    /// 겹쳐, <b>같은 패턴인데 3타가 올 때까지의 시간이 매번 달랐다</b>(0.90초 → 1.52초).
+    /// 그게 유저가 말한 "딜레이가 매번 다르다" 이고, 리듬이 흔들리면 외울 것이 없어진다.
+    /// 이제 앞의 연타를 받아친 상은 <b>피해 0 · 기 +1 · 공중 대시 회복</b>이고 박자는 고정이다.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>남은 하나를 가드 불가가 아니라 마무리에 건 이유</b>는 <see cref="HitBox.Finisher"/> 에
+    /// 적어 두었다 — 가드 불가는 3단계 다섯 변종에만 있어서, 거기 걸면 유저가 실제로 하고 있는
+    /// 1단계에 이 상이 통째로 없다. 마무리에 거는 것이 안전하기도 하다: 그 뒤에는 올 판정이
+    /// 없어서 타임라인이 서도 미룰 것이 없다.
+    /// </para>
+    ///
+    /// <para>
+    /// 길이는 <b>최대 차지 한 번이 이 경직 안에 들어가는가</b>로 정해진다. 전에는
+    /// 경직 + <see cref="PatternGap"/> 을 합쳐서 쟀는데, 그러면 패턴 간격을 고치는 날
+    /// 이 상이 조용히 사라진다. <c>BossDataTests</c> 가 그 산수를 <c>fighters.json</c> 과 대조한다.
     /// </para>
     /// </summary>
-    public required double GuardBreakParryStagger { get; init; }
+    public required double FinisherParryStagger { get; init; }
 
     public required string Sprite { get; init; }
 }
@@ -83,18 +95,20 @@ public sealed class Boss
     public double PatternGap => _config.PatternGap;
 
     /// <summary>
-    /// 정확 패리에 굳었나. <b>패턴을 취소하지 않고 세운다</b> — 취소로 하면 연속타 패턴이
-    /// 첫 대만 받아내도 통째로 지워져, 조작을 맞추는 이슈(#27)가 밸런스를 통째로 바꾸게 된다.
+    /// 굳었나. <b>패턴을 취소하지 않고 세운다</b> — 취소로 하면 연속타 패턴이 첫 대만 받아내도
+    /// 통째로 지워져, 조작을 맞추는 이슈(#27)가 밸런스를 통째로 바꾸게 된다.
     /// </summary>
     public bool Staggered => _staggerLeft > 0;
 
     /// <summary>
-    /// 정확 패리가 들어왔다. 굳는 길이는 데이터(bosses.json)가 정한다.
-    /// <paramref name="guardBreak"/> 면 <b>가드 불가를 받아친 것</b>이라 더 오래 굳는다 (이슈 #47) —
-    /// 최대 차지 한 번이 들어가는 길이이고, 그게 "받아쳐라" 의 값이다.
+    /// <b>패턴의 마무리를 받아쳤다</b> (이슈 #53). 굳는 길이는 데이터(bosses.json)가 정한다.
+    ///
+    /// <para>
+    /// 부르는 자리가 하나뿐인 것이 계약이다 — 앞의 연타를 패리해도 보스는 <b>안 굳는다.</b>
+    /// 굳으면 패턴 타임라인이 서고, 그 순간 같은 패턴의 박자가 플레이어마다 · 시도마다 달라진다.
+    /// </para>
     /// </summary>
-    public void Stagger(bool guardBreak) =>
-        _staggerLeft = guardBreak ? _config.GuardBreakParryStagger : _config.StaggerSeconds;
+    public void Stagger() => _staggerLeft = _config.FinisherParryStagger;
 
     /// <summary>경직 시계를 민다. <b>굳어 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
     public void Tick(double dt) => _staggerLeft = Math.Max(0, _staggerLeft - dt);

@@ -64,10 +64,14 @@ public sealed class BattleSim
     private double _jumpStartedAt = double.NaN;
 
     /// <summary>
-    /// 가드 자세가 선 시각(초, NaN = 지금 가드가 아니다) — 이슈 #47.
-    /// 패리 칸과 <b>따로</b> 둔다. 가드에 들어가는 순간 누름 시계가 끝나므로(Fighter.EnterGuard)
-    /// <c>_parryStartedAt</c> 은 곧 NaN 이 되고, 그러면 가드로 받은 판정의 TimingError 가 0 이 되어
-    /// "아무것도 안 했다" 와 같은 점이 된다 — 부정확 패리에서 고쳤던 바로 그 붕괴다.
+    /// 방어 자세가 선 시각(초, NaN = 지금 자세가 아니다) — 이슈 #47 · #53.
+    ///
+    /// <para>
+    /// 패리 칸과 <b>따로</b> 둔다. 둘은 이제 같은 누름에서 같은 틱에 시작하지만(이슈 #53)
+    /// 수명이 다르다: 누름 기억은 손을 뗀 뒤에도 <c>parry_memory_window</c> 동안 살아 있고,
+    /// 자세는 놓는 그 틱에 사라진다. 한 칸으로 합치면 "놓고 나서 맞았다" 와 "붙든 채 맞았다" 가
+    /// 같은 시각을 싣게 되고, 그 둘은 계측이 갈라야 하는 바로 그 둘이다.
+    /// </para>
     /// </summary>
     private double _guardStartedAt = double.NaN;
 
@@ -146,26 +150,72 @@ public sealed class BattleSim
     /// 배우고, 그건 사람에게 아무 의미가 없다.
     /// </para>
     /// </summary>
-    public double? NextActiveIn
+    public double? NextActiveIn => NextActive() is { } step ? step.T - _runner!.Elapsed : null;
+
+    /// <summary>
+    /// 아직 안 지나간 첫 <c>active</c> 단계 — <b>다음 판정</b>이다. 없거나 패턴이 없으면 null.
+    ///
+    /// <para>
+    /// 세 조회가 이 한 자리를 본다(<see cref="NextActiveIn"/> · <see cref="NextActiveGuardBreak"/> ·
+    /// <see cref="NextActiveFinisher"/>). 각자 타임라인을 훑게 두면 "다음 판정" 의 뜻이 조용히
+    /// 갈리고, 그러면 링의 크기와 색이 서로 다른 대를 가리킨다.
+    /// </para>
+    /// </summary>
+    private PatternStep? NextActive()
     {
-        get
+        if (_runner is null || _current is null)
         {
-            if (_runner is null || _current is null)
-            {
-                return null;
-            }
-
-            foreach (PatternStep step in _current.Timeline)
-            {
-                if (step.Kind == "active" && step.T > _runner.Elapsed)
-                {
-                    return step.T - _runner.Elapsed;
-                }
-            }
-
             return null;
         }
+
+        foreach (PatternStep step in _current.Timeline)
+        {
+            if (step.Kind == "active" && step.T > _runner.Elapsed)
+            {
+                return step;
+            }
+        }
+
+        return null;
     }
+
+    /// <summary>이 패턴의 <b>마무리</b> — 마지막 <c>active</c> 단계. 판정이 없으면 null.</summary>
+    private PatternStep? LastActive() => _current?.Timeline.FindLast(s => s.Kind == "active");
+
+    /// <summary>
+    /// <b>다음</b> active 판정이 가드 불가인가 (이슈 #53). 더 올 판정이 없거나 패턴이 없으면 false.
+    ///
+    /// <para>
+    /// <see cref="NextActiveIn"/> 과 같은 자리이고 같은 이유로 있다 — 화면이 "지금 오는 이 한 대를
+    /// 막을 수 있나" 를 말해야 하기 때문이다. <c>PatternTags.HasGuardBreak</c> 로는 그 말을 못 한다:
+    /// 그건 <b>패턴 단위 요약</b>이라 3단계 변종의 선딜 내내 참이고, 그러면 <b>1·2타도 빨갛게</b> 뜬다.
+    /// 실제로 그렇게 떴고, 스크린샷에서 보고 고쳤다 — 막을 수 있는 판정을 "못 막는다" 고 말하는 예고는
+    /// 없는 예고보다 나쁘다.
+    /// </para>
+    ///
+    /// <para>
+    /// 규칙 층은 이 값을 <b>안 읽는다</b>. 판정이 실제로 가드를 깨는지는 <see cref="HitBox.GuardBreak"/> 이
+    /// 정하고(<see cref="Land"/>), 여기 있는 것은 그 사실을 <b>미리</b> 말해 주는 예고용 조회다.
+    /// </para>
+    /// </summary>
+    public bool NextActiveGuardBreak => NextActive() is { GuardBreak: true };
+
+    /// <summary>
+    /// <b>다음</b> active 판정이 이 패턴의 <b>마무리</b>인가 (이슈 #53). 더 올 판정이 없으면 false.
+    ///
+    /// <para>
+    /// 화면의 <b>빨강</b>이 이 값이다 — "이 한 대가 받아칠 값이 있는 대" 다. 위의
+    /// <see cref="NextActiveGuardBreak"/>(危)와 <b>둘로 둔 이유</b>는 <see cref="HitBox.Finisher"/> 에
+    /// 적어 두었다: 마무리는 아홉 변종 전부에 있고 가드 불가는 3단계 다섯에만 있어서,
+    /// 한 깃발로 묶으면 1단계에 빨강이 영영 안 뜬다.
+    /// </para>
+    ///
+    /// <para>
+    /// 규칙 층은 이 값을 <b>안 읽는다</b>. 실제로 상이 걸리는지는 <see cref="HitBox.Finisher"/> 가
+    /// 정하고(<see cref="Land"/>), 여기 있는 것은 그 사실을 <b>미리</b> 말해 주는 예고용 조회다.
+    /// </para>
+    /// </summary>
+    public bool NextActiveFinisher => NextActive() is { } step && ReferenceEquals(step, LastActive());
 
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
@@ -331,21 +381,22 @@ public sealed class BattleSim
             _dashStartDistance = double.NaN;
         }
 
-        // 패리 칸은 **행동이 아니라 누름**을 따라 산다. 부정확 창(0.5초)이 패리 행동(0.30초)보다
-        // 길어서, 행동이 끝날 때 지우면 늦게 누른 패리가 판정을 받아낸 바로 그 순간에
-        // 시작 시각이 사라진다 — TimingError 가 0 이 되어 "아무것도 안 했다" 와 같은 점이 된다.
-        // 그 붕괴를 없애려고 만든 것이 부정확 단계인데, 그러면 아무것도 안 고친 셈이 된다.
+        // 패리 칸은 **자세가 아니라 누름**을 따라 산다. 누르자마자 놓아도 그 누름은 시도였고,
+        // 그 뒤 창 안에 선 판정은 그 시도의 결과다 — 자세가 풀릴 때 지우면 "늦어서 못 받았다" 가
+        // TimingError 0 이 되어 "아무것도 안 했다" 와 같은 점이 된다.
+        // 지우는 경계는 **누름의 기억 창**이다: 그보다 오래된 누름을 이 판정의 시도로 세면
+        // 사람이 한 적 없는 -0.6초짜리 표본이 축에 섞인다.
         if (Fighter.SinceParryPress <= Dt)
         {
             _parryStartedAt = now;
         }
-        else if (Fighter.SinceParryPress > Fighter.ImpreciseParryWindow)
+        else if (Fighter.SinceParryPress > Fighter.ParryMemoryWindow)
         {
             _parryStartedAt = double.NaN;
         }
 
-        // 가드는 **자세**라 누름이 아니라 그 자세가 선 순간을 잡는다. 서 있는 동안 계속 살아 있고
-        // (연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 풀리면 지워진다.
+        // 자세는 **누름이 아니라 서 있는 동안**을 잡는다. 서 있는 내내 살아 있고
+        // (연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
         if (Fighter.Guarding)
         {
             if (double.IsNaN(_guardStartedAt))
@@ -377,14 +428,13 @@ public sealed class BattleSim
     {
         HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
 
-        // 정확이든 부정확이든 **받아낸 것은 패리다.** 둘의 차이는 verb 가 아니라 판정(Verdict)이
-        // 나른다 — verb 를 갈라 놓으면 parry_reliance("다른 수단이 있는데 패리를 골랐나")가
-        // 늦게 누른 패리를 "패리를 안 골랐다" 로 세게 된다. 고른 것은 같고 결과가 다르다.
-        HitVerdict.Parried or HitVerdict.ParriedLate => (DodgeVerb.Parry, _parryStartedAt),
+        // 받아친 것은 패리다. 시각은 **누름**이다 — 창 안에 들어왔는가가 이 판정의 전부라,
+        // 재야 하는 것은 "언제 눌렀나" 이지 "언제부터 서 있었나" 가 아니다.
+        HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
 
-        // 막아냈든 깨졌든 **고른 것은 가드**다 (이슈 #47) — 위와 같은 규약이고, 둘의 차이는
-        // verb 가 아니라 Verdict 가 나른다. 시각은 가드가 **선** 순간이다: 누름 시각이 아니라
-        // 자세가 선 시각이라야 "얼마나 오래 버티고 있었나" 가 오차로 실린다.
+        // 막아냈든 깨졌든 **고른 것은 가드**다 (이슈 #47) — 둘의 차이는 verb 가 아니라
+        // Verdict 가 나른다. 시각은 자세가 **선** 순간이다: 그래야 "얼마나 오래 버티고
+        // 있었나" 가 오차로 실리고, 누름 시각을 쓰면 패리와 같은 값이 되어 둘이 뭉친다.
         HitVerdict.Guarded or HitVerdict.GuardBroken => (DodgeVerb.Guard, _guardStartedAt),
 
         // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에
@@ -485,15 +535,24 @@ public sealed class BattleSim
                 break;
 
             case HitVerdict.Parried:
-                // 보스를 굳히는 것은 여기다 — 파이터는 보스를 모른다.
-                // **가드 불가를 받아치면 더 오래 굳는다** (이슈 #47): 최대 차지 한 번이 들어가는
-                // 길이이고, 그 상이 "가드 불가는 받아쳐라" 를 말이 되게 한다.
                 Fighter.ParryPrecise();
-                Boss.Stagger(box.GuardBreak);
-                break;
 
-            case HitVerdict.ParriedLate:
-                Fighter.ParryImprecise(box.Damage);
+                // **굳히는 것은 마무리를 받아쳤을 때뿐이다** (이슈 #53). 앞의 연타를 받아쳐도
+                // 타임라인이 서지 않으므로 마무리까지의 시간이 언제나 같다 — 그 고정이 이 계열을
+                // 외울 수 있게 만든다. 전에는 1·2타 패리가 0.5초 경직 + 히트스톱 7프레임을
+                // 붙여 같은 패턴의 3타가 0.90초 뒤에 오기도, 1.52초 뒤에 오기도 했다.
+                //
+                // 마무리에 거는 것이 안전한 이유이기도 하다: 그 뒤에는 올 판정이 없어서
+                // 타임라인이 서도 미룰 것이 없다. 앞의 연타에 걸면 **남은 대들이 통째로 밀린다.**
+                //
+                // 가드 불가인가는 **안 따진다** — 그 갈래는 3단계 다섯 변종에만 있어서, 묶으면
+                // 유저가 하고 있는 1단계에 이 고리가 통째로 없다 (<see cref="HitBox.Finisher"/>).
+                // 보스를 굳히는 것이 여기인 이유는 그대로다 — 파이터는 보스를 모른다.
+                if (box.Finisher)
+                {
+                    Boss.Stagger();
+                }
+
                 break;
 
             case HitVerdict.Guarded:
@@ -530,7 +589,13 @@ public sealed class BattleSim
             // 이 셋이 없으면 만들어지지 않는다.
             DashAvailable: _current.Tags.DashWindow > 0,
             JumpAvailable: _current.Tags.Jumpable,
-            ParryAvailable: _current.Tags.Parryable));
+            ParryAvailable: _current.Tags.Parryable,
+
+            // 뒤의 둘만 **태그가 아니라 판정**에서 온다 (이슈 #53). guard_break 도 마무리도
+            // 판정 단위라 같은 패턴 안에서 대마다 값이 다르다 — 태그(has_guard_break)를 읽으면
+            // 1·2타까지 "못 막는 판정" 으로 실려 계측이 거짓말을 한다.
+            GuardAvailable: !box.GuardBreak,
+            Finisher: box.Finisher));
 
         // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.

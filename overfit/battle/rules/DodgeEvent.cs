@@ -31,7 +31,15 @@ public enum DodgeVerb
     /// <summary>
     /// <b>가드로 버텼다</b> (이슈 #47). 막아냈는지 깨졌는지는 verb 가 아니라
     /// <c>Verdict</c>(<see cref="HitVerdict.Guarded"/> · <see cref="HitVerdict.GuardBroken"/>)가 나른다 —
-    /// 패리에서 정확·부정확을 verb 로 안 가른 것과 같은 이유다: <b>고른 것은 같고 결과가 다르다.</b>
+    /// 고른 것은 같고 결과가 다르다.
+    ///
+    /// <para>
+    /// ⚠ <b><see cref="Parry"/> 와 갈리는 자리가 바뀌었다</b> (이슈 #53). 둘은 이제 <b>같은 키의
+    /// 같은 자세</b>라 "무엇을 골랐나" 로는 안 갈린다 — 가르는 것은 <b>언제 눌렀나</b> 하나다:
+    /// 판정이 창 안에 서면 <see cref="Parry"/>, 밖이면 여기다. 그래도 둘을 한 verb 로 뭉치지
+    /// 않는 이유는 계측이 재려는 것이 정확히 그 차이이기 때문이다 — 셋(패리 · 가드 · 무반응)이
+    /// 갈려야 "이 사람이 얼마나 정확한가" 가 남는다.
+    /// </para>
     ///
     /// <para>
     /// ⚠ <b>11번째 축을 만들지 않는다.</b> 가드의 개수는 <c>PlayerAxes.GuardSamples</c> ·
@@ -70,6 +78,37 @@ public enum DodgeVerb
 /// <param name="DashAvailable">이 판정을 대시로 피할 수 있었나 (<c>dash_window &gt; 0</c>).</param>
 /// <param name="JumpAvailable">점프로 넘을 수 있었나 (<c>jumpable</c>).</param>
 /// <param name="ParryAvailable">패리로 받을 수 있었나 (<c>parryable</c>).</param>
+/// <param name="GuardAvailable">가드로 막을 수 있었나 — <c>guard_break</c> 가 <b>아닌</b> 판정이다 (이슈 #53).
+///
+/// <para>
+/// 앞의 셋과 같은 자리다: <b>무엇을 골랐나</b>뿐 아니라 <b>무엇을 고를 수 있었나</b>를 같이 싣는다.
+/// 계열 하나에 변종 아홉인 지금, 3단계의 마무리만 이 값이 false 라 "막을 수 있는 판정" 과
+/// "받아칠 수밖에 없는 판정" 이 관측에서 실제로 갈린다.
+/// </para>
+///
+/// <para>
+/// 스태미나 고갈로 깨지는 것은 여기 안 든다. 이 칸은 <b>판정의 성질</b>이지 그 순간 플레이어의
+/// 상태가 아니다 — 섞으면 같은 판정이 남은 스태미나에 따라 다른 값으로 실린다.
+/// </para>
+///
+/// <para>
+/// 뷰도 이 값을 읽는다: <c>危</c> 표지가 걸리는 자리가 여기다. 규칙 층에 뷰용 콜백을 달지
+/// 않으므로 그 사실이 관측에 실려 있어야 한다.
+/// </para></param>
+/// <param name="Finisher">이 패턴의 <b>마지막</b> 판정이었나 (이슈 #53).
+///
+/// <para>
+/// 앞의 넷과 같은 자리 — <b>무엇을 고를 수 있었나</b>가 아니라 <b>무엇을 건 판정이었나</b>다.
+/// 계열 하나에 연타 셋인 지금, 같은 패턴 안에서도 이 한 대만 받아치면 보스가 굳는다:
+/// "앞의 둘은 흘리고 마지막을 받아친 사람" 과 "아무거나 받아친 사람" 이 관측에서 갈려야
+/// 그 차이를 망이 볼 수 있다.
+/// </para>
+///
+/// <para>
+/// 뷰도 이 값을 읽는다 (<c>Battle.Observe</c>): 히트스톱 · 화면 흔들림 · 보스가 지친 그림이
+/// <b>마무리를 받아친 순간에만</b> 걸린다. <see cref="GuardAvailable"/> 이 아니라 이 칸인 것이
+/// 요점이다 — 가드 불가는 3단계에만 있어서 그 칸으로 가르면 1단계에는 연출이 하나도 안 뜬다.
+/// </para></param>
 public readonly record struct DodgeEvent(
     string PatternId,
     DodgeVerb Verb,
@@ -87,4 +126,6 @@ public readonly record struct DodgeEvent(
     // "점프로만 피할 수 있는 패턴만 만났다" 를 구별하지 못한다.
     bool DashAvailable,
     bool JumpAvailable,
-    bool ParryAvailable);
+    bool ParryAvailable,
+    bool GuardAvailable,
+    bool Finisher);

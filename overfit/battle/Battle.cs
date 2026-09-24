@@ -34,7 +34,7 @@ public partial class Battle : Node2D
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
 
-    /// <summary>패턴 표. 뷰가 <b>태그</b>(지금은 parryable)를 그리는 데만 쓴다 — 규칙은 시뮬레이션이 본다.</summary>
+    /// <summary>패턴 표. 뷰가 <b>태그</b>(지금은 has_guard_break)와 예고를 그리는 데만 쓴다 — 규칙은 시뮬레이션이 본다.</summary>
     private Dictionary<string, PatternDef> _patterns = null!;
     private FeelBalance _feel = null!;
 
@@ -53,6 +53,15 @@ public partial class Battle : Node2D
     /// 남은 히트스톱(프레임). <b>0 보다 크면 그 물리 프레임에 <c>BattleSim.Tick</c> 을 안 부른다.</b>
     /// <c>BattleSim.Dt</c> 는 절대 안 건드린다 — 한 틱의 길이가 달라지면 같은 입력이 다른 판을 내고
     /// 리플레이도 학습 데이터도 통째로 못 쓰게 된다. 여기서는 시계를 늘이는 게 아니라 <b>세운다.</b>
+    ///
+    /// <para>
+    /// <b>규칙 층이 아니라 여기 있는 것은 판단이다</b> (이슈 #53). 세우는 것이라 시뮬레이션이
+    /// 지나가는 상태의 열은 걸든 안 걸든 한 칸도 안 다르다 — 헤드리스 봇과 사람이 <b>같은 판</b>을
+    /// 살고, 그래서 학습 데이터에 sim-to-real 간극이 안 생긴다. 규칙으로 옮기면 반대로 이 숫자가
+    /// 리플레이의 일부가 되어, 손맛을 눈으로 고칠 때마다 지금까지의 리플레이가 못 쓰게 된다.
+    /// 남는 차이는 사람이 벽시계로 <c>hitstop_frames</c> 만큼 더 쉰다는 것 하나이고, 이제 그것이
+    /// 걸리는 자리는 <b>3타를 받아친 순간</b> 하나뿐이다 — 2.3초짜리 경직 안이라 아무 판단도 안 민다.
+    /// </para>
     /// </summary>
     private int _hitstopLeft;
 
@@ -75,6 +84,9 @@ public partial class Battle : Node2D
 
     /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
     private int _guardBreaks;
+
+    /// <summary>이 판에서 받아친 횟수 (이슈 #53). 위와 같이 스크린샷 전용이다.</summary>
+    private int _parries;
 
     /// <summary>
     /// 판이 끝났나. <b>디버그 전용 읽기</b> — <c>tools/build.sh shots</c> 의 <c>ShotRunner</c> 가
@@ -120,41 +132,49 @@ public partial class Battle : Node2D
     public bool FighterChargeMaxed => !_broken && !_over && _sim.Fighter.ChargeMaxed;
 
     /// <summary>
-    /// 지금 가드 자세인가 (이슈 #47). 위와 같이 <b>디버그 전용 읽기</b>다 — 가드는 누름에서
-    /// 0.30초 뒤에 서므로 프레임을 세서 노리면 parry_duration 을 고치는 순간 조용히 어긋난다.
+    /// 지금 <b>방어 자세</b>인가. 위와 같이 디버그 전용 읽기다 — 자세는 누르는 그 틱에 서지만
+    /// (이슈 #53) 규칙에게 물어보는 규약은 그대로 둔다: 프레임을 세면 입력이 한 틱 밀리는 날
+    /// 조용히 어긋난다.
     /// </summary>
     public bool FighterGuarding => !_broken && !_over && _sim.Fighter.Guarding;
 
     /// <summary>
     /// 지금까지 가드가 깨진 횟수. 위와 같이 디버그 전용 읽기다 — 붕괴는 <b>사건</b>이라 상태로는
-    /// 못 본다(0.9초 고정은 부정확 패리의 고정과 같은 모양이라 구별이 안 된다).
-    /// 늘어난 그 순간이 셔터를 누를 때다.
+    /// 못 본다. 늘어난 그 순간이 셔터를 누를 때다.
     /// </summary>
     public int FighterGuardBreaks => _guardBreaks;
 
     /// <summary>
-    /// 지금 도는 패턴에 <b>가드 불가</b> 판정이 있나 (<c>has_guard_break</c>). 위와 같이 디버그 전용 읽기다 —
-    /// 危 예고가 화면에서 구별되는지를 증명하려면 그 패턴의 선딜을 기다려야 한다.
+    /// 지금까지 <b>받아친</b> 횟수 (이슈 #53). 위와 같이 디버그 전용 읽기다 — 받아친 것도 사건이라
+    /// 상태로는 못 노린다. 연출이 일부러 약해진 뒤로는 더 그렇다: 고리 하나가 0.17초 떴다 사라진다.
     /// </summary>
-    public bool BossGuardBreak => !_broken && !_over && Current()?.Tags.HasGuardBreak == true;
+    public int FighterParries => _parries;
+
+    /// <summary>
+    /// <b>다음 판정</b>이 가드 불가인가. 위와 같이 디버그 전용 읽기다 — 빨강 · 危 예고가 화면에서
+    /// 구별되는지를 증명하려면 그것이 실제로 떠 있는 순간을 기다려야 한다.
+    ///
+    /// <para>
+    /// <b>패턴 태그가 아니라 다음 판정을 본다</b> (이슈 #53). 태그(<c>has_guard_break</c>)로 기다리면
+    /// 3단계 변종의 선딜 어디서나 참이라 1·2타 앞에서 셔터가 눌리고, 그 장은 "빨간 3타 예고" 라는
+    /// 이름으로 호박색 1타를 찍는다.
+    /// </para>
+    /// </summary>
+    public bool BossGuardBreak => !_broken && !_over && _sim.NextActiveGuardBreak;
+
+    /// <summary>
+    /// 보스가 <b>굳어 있나</b> (이슈 #53). 위와 같이 디버그 전용 읽기다 — 마무리를 받아친 상이
+    /// 화면에서 "지쳤다" 로 읽히는지를 증명하려면 그 2.3초 안에서 셔터를 눌러야 한다.
+    /// 프레임을 세지 않는 이유는 늘 같다: 경직 길이는 데이터라 세어 두면 그 값을 고치는 날
+    /// 이 장이 조용히 다른 순간을 찍는다.
+    /// </summary>
+    public bool BossStaggered => !_broken && !_over && _sim.Boss.Staggered;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
     /// 순간이고(이슈 #28), 그건 0.2초뿐이라 벽시계로 노리면 대부분 놓친다.
     /// </summary>
     public int BossHealth => _broken ? 0 : _sim.Boss.Health;
-
-    /// <summary>
-    /// 지금 도는 패턴이 <b>패리 불가</b>인가. 위와 같이 디버그 전용 읽기다 —
-    /// 크림슨 예고가 화면에서 구별되는지를 스크린샷으로 증명하려면 그 순간을 기다려야 한다.
-    ///
-    /// <para>
-    /// ⚠ <b>지금 데이터에는 패리 불가가 없다</b> (이슈 #48 · 유일했던 점프 강타가 빠졌다).
-    /// 그래서 이 값은 늘 false 이고 크림슨 스크린샷도 같이 빠졌다. 읽기를 남겨 두는 이유는
-    /// 뷰의 크림슨 경로가 그대로 살아 있기 때문이다 — 패리 불가 패턴이 돌아오면 데이터 한 줄로 선다.
-    /// </para>
-    /// </summary>
-    public bool BossUnparryable => !_broken && !_over && !CurrentParryable();
 
     /// <summary>
     /// 지금까지 지나간 <b>헛스윙</b> 수 (이슈 #48). 위와 같이 디버그 전용 읽기다 — 헛스윙은
@@ -370,16 +390,13 @@ public partial class Battle : Node2D
 
             for (int i = _lastEventCount; i < _sim.Events.Count; i++)
             {
-                // 정확과 부정확은 **다른 피드백**이어야 한다. 히트스톱은 정확에만 준다 —
-                // 시간을 세우는 것은 "완전히 받아냈다" 의 표현이고, 절반 흘린 것에 주면 거짓말이다.
-                switch (_sim.Events[i].Verdict)
+                DodgeEvent e = _sim.Events[i];
+                switch (e.Verdict)
                 {
                     case HitVerdict.Parried:
-                        ParryLanded();
-                        break;
-
-                    case HitVerdict.ParriedLate:
-                        _fighterView.ParryImprecise();
+                        // **마무리를 받아쳤나**가 연출의 크기를 정한다 (이슈 #53) — 보스가 굳는
+                        // 조건과 같은 칸이다. 규칙 층에 뷰용 콜백이 없으므로 그 사실은 관측에 실려 온다.
+                        ParryLanded(finisher: e.Finisher);
                         break;
 
                     // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
@@ -443,12 +460,35 @@ public partial class Battle : Node2D
     }
 
     /// <summary>
-    /// 패리가 받아냈다. 섬광 + 스파크 + 히트스톱. <b>실패에는 아무것도 없다</b> —
-    /// 없음이 곧 피드백이라, 실패용 연출을 만들면 "막았는지" 가 오히려 흐려진다.
+    /// 받아쳤다 (이슈 #53). <b>1·2타에는 작은 고리와 약한 흔들림뿐</b>이고, <b>가드 불가인 3타에만</b>
+    /// 히트스톱이 붙는다.
+    ///
+    /// <para>
+    /// 전에는 모든 패리가 섬광 + 스파크 + 히트스톱 7프레임을 받았다. 그 히트스톱이 경직 0.5초와
+    /// 겹쳐 <b>같은 패턴의 3타가 0.90초 뒤에 오기도 1.52초 뒤에 오기도 했다</b> — 유저가
+    /// "딜레이가 매번 다르다" 고 말한 것이 이것이다. 시간을 세우는 것은 "이건 특별하다" 는 말이라,
+    /// 매번 일어나는 일에 걸면 그 말이 박자를 먹는다.
+    /// </para>
+    ///
+    /// <para>
+    /// 흔들림은 <b>판정마다 도는 것(0.45)보다 조금 세고 피격(1.0)보다 훨씬 약하다.</b>
+    /// 요청이 "화면이 약간 흔들리고 작은 성공 표시" 였고, 받아친 것은 맞은 것이 아니다.
+    /// </para>
     /// </summary>
-    private void ParryLanded()
+    /// <param name="finisher">그 판정이 패턴의 <b>마무리</b>였나. 규칙 층이 보스를 굳히는 조건과
+    /// 같은 칸이다 — 화면이 서는 것과 보스가 굳는 것이 다른 조건으로 갈리면 히트스톱이 경직 없는
+    /// 자리에 걸려 박자만 먹는다.</param>
+    private void ParryLanded(bool finisher)
     {
+        _parries++;
         _fighterView.ParrySuccess();
+        ShakeFor(0.7);
+
+        if (!finisher)
+        {
+            return;
+        }
+
         _hitstopLeft = _feel.HitstopFrames;
         Freeze(true);
     }
@@ -571,10 +611,6 @@ public partial class Battle : Node2D
             _sim.Fighter.Facing,
             Pose(),
             _sim.Fighter.Invulnerable,
-            _sim.Fighter.Parrying,
-            _sim.Fighter.PreciseParryWindow <= 0
-                ? 0
-                : _sim.Fighter.SinceParryPress / _sim.Fighter.PreciseParryWindow,
             _sim.Fighter.Locked,
             _sim.Fighter.ChargeProgress,
             _sim.Fighter.ChargeMaxed,
@@ -587,7 +623,7 @@ public partial class Battle : Node2D
             _sim.Boss.Facing,
             Phase(),
             _sim.NextActiveIn,
-            CurrentParryable(),
+            _sim.Boss.Staggered,
             CurrentAnim(),
             CurrentTell()));
 
@@ -606,23 +642,12 @@ public partial class Battle : Node2D
         return _sim.Fighter.Action switch
         {
             FighterAction.Dash => FighterPose.Dash,
-            FighterAction.Parry => FighterPose.Parry,
             FighterAction.Attack => FighterPose.Attack,
             FighterAction.Charge => FighterPose.Charge,
             FighterAction.Guard => FighterPose.Guard,
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
     }
-
-    /// <summary>
-    /// 지금 도는 패턴을 받아칠 수 있나 (이슈 #27 · 패리 불가는 크림슨으로 예고한다).
-    /// 패턴이 안 도는 중이면 <b>받아칠 수 있는 쪽</b>으로 둔다 — 쉬는 보스를 붉게 칠하면
-    /// "지금 뭔가 온다" 는 거짓말이 된다.
-    /// </summary>
-    private bool CurrentParryable() =>
-        _sim.Boss.CurrentPattern is not string id
-        || !_patterns.TryGetValue(id, out PatternDef? def)
-        || def.Tags.Parryable;
 
     /// <summary>지금 도는 패턴의 선딜 모션 이름. 패턴이 안 돌면 null.</summary>
     private string? CurrentAnim() => Current()?.Tell.Anim;
@@ -649,10 +674,16 @@ public partial class Battle : Node2D
             return null;
         }
 
-        // 가드 불가는 **태그**에서 온다 (이슈 #47). 선딜에는 아직 어느 판정이 올지가 아니라
-        // "무엇이 오는가" 만 정해져 있으므로, 타임라인이 아니라 그 요약을 읽는다.
+        // 둘 다 **다음 판정**에서 온다 (이슈 #53). 마무리면 예고가 호박에서 **빨강**이 되고,
+        // 가드 불가면 그 위에 危 가 얹힌다 — 색과 글자가 서로 다른 말을 지므로 칸도 둘이다.
+        //
+        // ⚠ 이슈 #47 은 여기서 패턴 태그(has_guard_break)를 읽었다. 그때는 그 요약이 "무엇이
+        // 오는가" 를 말하는 유일한 값이었지만, 계열이 연속타뿐인 지금 그 요약은 **선딜 내내 참**이라
+        // 1·2타까지 빨갛게 칠한다 — 막을 수 있는 판정을 "못 막는다" 고 말하는 예고다.
+        // 다음 판정 하나만 보면 색이 1·2타에 호박 · 3타에 빨강으로 제때 갈린다.
         return new BossTell(
-            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length, def.Tags.HasGuardBreak);
+            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length,
+            _sim.NextActiveFinisher, _sim.NextActiveGuardBreak);
     }
 
     /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>

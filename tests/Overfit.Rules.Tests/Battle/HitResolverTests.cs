@@ -31,7 +31,11 @@ public class HitResolverTests
         HasGuardBreak = false,
     };
 
-    /// <summary><paramref name="ticks"/> 틱째의 파이터. 1틱째면 행동 경과가 정확히 한 틱이다.</summary>
+    /// <summary>
+    /// <paramref name="ticks"/> 틱째의 파이터. 첫 틱에 <paramref name="start"/> 를 넣고
+    /// 그 뒤로는 <b>아무것도 안 누른다</b> — 패리에 쓰면 "눌렀다 곧장 놓았다" 가 된다.
+    /// 그래서 방어 자세는 한 틱 만에 풀리고 누름의 창만 남는다 (이슈 #53).
+    /// </summary>
     private static Fighter Acting(InputFrame start, int ticks)
     {
         Fighter f = Spawn(_bossX + 100);
@@ -112,11 +116,25 @@ public class HitResolverTests
     }
 
     [Fact]
+    public void 탭도_창_안이면_받아친다()
+    {
+        // **창은 자세가 아니라 누름에 붙는다** (이슈 #53). 눌렀다 곧장 놓아도 그 누름의 창은
+        // 끝까지 흐르므로 탭 패리는 여전히 받아친다 — 이 줄이 빠지면 "패리하려면 붙들고 있어야
+        // 한다" 가 되고, 그건 이 이슈가 없앤 바로 그 지연이 이름만 바꿔 돌아온 것이다.
+        Fighter f = Acting(new InputFrame(0, false, false, true, false), 5);
+
+        f.Guarding.ShouldBeFalse("손을 뗐는데 자세가 남아 있다 — 이 테스트가 다른 갈래를 본다");
+        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+    }
+
+    [Fact]
     public void 패리_불가_패턴은_패리해도_맞는다()
     {
-        Fighter f = Spawn(_bossX + 100);
-        f.Tick(new InputFrame(0, false, false, true, false), _dt);
+        // 눌렀다 **놓은** 뒤라 자세가 없다. 붙들고 있었다면 가드가 받는다(아래 테스트) —
+        // 그 둘이 갈리는 것이 이 이슈의 전부다 (이슈 #53).
+        Fighter f = Acting(new InputFrame(0, false, false, true, false), 5);
 
+        f.Parrying.ShouldBeTrue("창은 아직 열려 있어야 이 테스트가 parryable 갈래를 본다");
         HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Hit);
     }
 
@@ -197,26 +215,37 @@ public class HitResolverTests
         Fighter late = Acting(parry, 4);
         late.Parrying.ShouldBeTrue("파이터 창은 아직 열려 있어야 이 테스트가 좁은 쪽을 본다");
 
-        // **정확**을 잃는다. 패턴이 요구하는 정밀도를 못 맞췄으니 정확 패리는 아니고,
-        // 누른 지 0.5초를 안 넘겼으니 부정확 패리로 받아낸다(이슈 #27) — 전에는 그냥 맞았다.
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.ParriedLate);
+        // 패턴이 요구하는 정밀도를 못 맞췄다. **놓은 뒤라** 막을 것도 없으니 그냥 맞는다 —
+        // 중간 단계(ParriedLate)가 있던 자리이고, 이슈 #53 이 그것을 가드로 바꿨다.
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 좁은_패턴_창을_놓쳐도_붙들고_있으면_막는다()
+    {
+        // **실패한 패리도 막는다** (이슈 #53). 위 테스트와 유일하게 다른 것은 손을 안 뗐다는 것뿐이고,
+        // 그 하나가 "그냥 맞았다" 를 "막았다" 로 바꾼다 — 이 이슈가 요청받은 것이 정확히 이것이다.
+        Fighter f = Spawn(_bossX + 100);
+        f.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
+        for (int i = 1; i < 4; i++)
+        {
+            f.Tick(new InputFrame(0, false, false, false, false, ParryHeld: true), _dt);
+        }
+
+        f.Guarding.ShouldBeTrue();
+        HitResolver.Resolve(f, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Guarded);
     }
 
     [Fact]
     public void 패턴_창이_더_넓으면_파이터_창이_이긴다()
     {
-        // 좁은 쪽이 이긴다는 것은 양방향이다. 패턴이 넉넉해도 파이터의 정확 창이 닫혔으면
-        // 정확 패리가 아니다 — 안 그러면 패턴 태그가 캐릭터 차이를 지워 버린다.
+        // 좁은 쪽이 이긴다는 것은 양방향이다. 패턴이 넉넉해도 파이터의 창이 닫혔으면
+        // 패리가 아니다 — 안 그러면 패턴 태그가 캐릭터 차이를 지워 버린다.
         InputFrame parry = new(0, false, false, true, false);
-        Fighter late = Acting(parry, 9);   // 0.15 > 기준 파이터의 정확 창 0.133
+        Fighter late = Acting(parry, 9);   // 0.15 > 기준 파이터의 창 0.133
 
         late.Parrying.ShouldBeFalse();
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.ParriedLate);
-
-        // 부정확 창(0.5초)까지 넘기면 그때야 그냥 맞는다. 이 줄이 없으면 "늦으면 늘 받아낸다" 가
-        // 되어 패리에 실패가 없어진다.
-        Fighter tooLate = Acting(parry, 31);   // 0.5167 > 0.5
-        HitResolver.Resolve(tooLate, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -256,19 +285,24 @@ public class HitResolverTests
         f.Health.ShouldBe(before);
     }
 
-    // ── 가드 (이슈 #47) ──────────────────────────────────────────────────────
+    // ── 방어 자세 (이슈 #47 · #53) ───────────────────────────────────────────
 
-    /// <summary>패리 키를 붙들어 <b>가드가 설 때까지</b> 민 파이터. 틱 수를 세지 않는다.</summary>
+    /// <summary>
+    /// 방어 자세로 서 있고 <b>패리 창은 이미 닫힌</b> 파이터. 창이 열린 채로 두면 아래 테스트가
+    /// 전부 <c>Parried</c> 갈래로 떨어진다 — 그건 이 순서가 실제로 그렇게 서 있기 때문이다 (이슈 #53).
+    /// 틱 수를 손으로 안 센다: 창의 길이는 데이터다.
+    /// </summary>
     private static Fighter Guarding()
     {
         Fighter f = Spawn(_bossX + 100);
         f.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
-        for (int i = 0; i < 120 && f.Action != FighterAction.Guard; i++)
+        for (int i = 0; i < 120 && f.Parrying; i++)
         {
             f.Tick(new InputFrame(0, false, false, false, false, ParryHeld: true), _dt);
         }
 
-        f.Guarding.ShouldBeTrue("가드가 안 섰다 — 아래 테스트들이 전부 다른 갈래를 본다");
+        f.Guarding.ShouldBeTrue("자세가 안 섰다 — 아래 테스트들이 전부 다른 갈래를 본다");
+        f.Parrying.ShouldBeFalse("창이 아직 열려 있다 — 아래 테스트들이 패리 갈래를 본다");
         return f;
     }
 
@@ -276,13 +310,13 @@ public class HitResolverTests
     private static HitBox Unguardable() => new(0, 260, 0, 200, 18, GuardBreak: true);
 
     [Fact]
-    public void 가드_중이면_깎여서_막는다()
+    public void 창_밖에서_막고_있으면_깎여서_막는다()
     {
         HitResolver.Resolve(Guarding(), _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Guarded);
     }
 
     [Fact]
-    public void 패리_불가_패턴도_가드로는_막는다()
+    public void 패리_불가_패턴도_붙들고_있으면_막는다()
     {
         // 가드는 패리가 아니다. 크림슨(parryable:false)은 "받아치지 마라" 이지 "막지 마라" 가 아니라,
         // 가드 갈래는 그 태그를 안 본다 — 못 막게 하는 것은 판정 쪽의 guard_break 하나뿐이다.
@@ -290,7 +324,7 @@ public class HitResolverTests
     }
 
     [Fact]
-    public void 스태미나가_모자라면_가드가_깨진다()
+    public void 스태미나가_모자라면_방어가_깨진다()
     {
         Fighter f = Guarding();
         f.Spend(f.Stamina - 1);   // 1 남는다. Mid() 는 18피해라 32.4 가 든다
@@ -299,11 +333,8 @@ public class HitResolverTests
     }
 
     [Fact]
-    public void 가드_불가는_스태미나가_남아도_깨지고_ParriedLate_가_아니다()
+    public void 가드_불가는_스태미나가_남아도_깨진다()
     {
-        // ⚠ **구멍 뚫기에서 나온 자리다.** 가드는 패리와 같은 키를 붙들어 들어가므로 누름 시각이
-        // 아직 부정확 창(0.5초) 안이다 — 그 갈래가 가드보다 먼저 서 있으면 가드 불가 판정이
-        // ParriedLate 로 먹혀 "가드로는 못 막는다" 가 한 번도 안 일어난다.
         Fighter f = Guarding();
 
         f.Stamina.ShouldBeGreaterThan(f.GuardStaminaCost(Unguardable().Damage),
@@ -312,25 +343,38 @@ public class HitResolverTests
     }
 
     [Fact]
-    public void 가드_불가도_안_막고_있으면_평범한_판정이다()
+    public void 가드_불가는_창_안이면_받아친다()
     {
-        // guard_break 는 **가드에만** 무는 성질이다. 정확 패리는 그대로 받아친다 —
-        // 받아치는 것이 이 판정의 답이고, 그 상(연장 경직)이 설계의 절반이다.
+        // ⚠ **이슈 #47 은 반대 순서를 박아 뒀다** — 가드가 패리보다 먼저였고, 그래야 가드 불가가
+        // 늦은 패리로 먹히지 않았다. 지금은 갈래가 둘뿐이라 순서가 뒤집혔다 (이슈 #53):
+        // 창 안이면 받아치고, 밖이면 깨진다. 그게 빨강이 말하는 "받아쳐라" 다.
+        // 순서를 되돌리면 **3타를 받아치는 일이 한 번도 안 일어난다.**
         Fighter f = Spawn(_bossX + 100);
-        f.Tick(new InputFrame(0, false, false, true, false), _dt);
+        f.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
 
+        f.Guarding.ShouldBeTrue("자세는 서 있는데도 창이 이기는지를 보는 테스트다");
         HitResolver.Resolve(f, _bossX, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+    }
+
+    [Fact]
+    public void 가드_불가도_아무것도_안_하면_평범한_판정이다()
+    {
         HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Unguardable(), Tags(parryable: false))
             .ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
-    public void 가드는_거리와_높이보다_뒤다()
+    public void 방어는_거리와_높이보다_뒤다()
     {
         // 순서를 박아둔다. 안 닿은 판정까지 "막았다" 로 적으면 가드 개수가 실제로 막은 것보다
-        // 부풀고, 그 개수가 곧 계측이다.
-        HitResolver.Resolve(Guarding(), _bossX, new HitBox(0, 10, 0, 200, 18), Tags(parryable: true))
-            .ShouldBe(HitVerdict.MissedTooFar);
+        // 부풀고, 그 개수가 곧 계측이다. **패리도 같다** — 창 안이라고 안 닿은 칼을 받아칠 수는 없다.
+        var box = new HitBox(0, 10, 0, 200, 18);
+        HitResolver.Resolve(Guarding(), _bossX, box, Tags(parryable: true)).ShouldBe(HitVerdict.MissedTooFar);
+
+        Fighter parrying = Spawn(_bossX + 100);
+        parrying.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
+        parrying.Parrying.ShouldBeTrue();
+        HitResolver.Resolve(parrying, _bossX, box, Tags(parryable: true)).ShouldBe(HitVerdict.MissedTooFar);
     }
 
 }

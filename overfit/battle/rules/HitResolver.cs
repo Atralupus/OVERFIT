@@ -31,19 +31,21 @@ public enum HitVerdict
     /// <summary>닿았지만 무적이 먹었다 — <b>대시로</b> 피한 것이다.</summary>
     Dodged,
 
-    /// <summary>닿았지만 <b>정확</b> 패리가 받았다. 피해 0 · 보스 경직.</summary>
+    /// <summary>
+    /// 닿았지만 <b>패리</b>가 받아쳤다 — 누름에서 <c>parry_precise_window</c> 안에 판정이 섰다.
+    /// 피해 0. 보스가 굳는지는 <b>그 판정이 가드 불가였나</b>가 정한다 (이슈 #53):
+    /// 1·2타는 피해 0 이 전부이고, 가드 불가인 마무리만 긴 경직을 준다.
+    /// </summary>
     Parried,
 
     /// <summary>
-    /// 닿았고 <b>부정확</b> 패리가 받았다 — 늦게(또는 너무 일찍) 눌렀다. 피해의 절반을 내상으로
-    /// 받고 지상이면 굳는다. <b>이 값이 있어서 계측이 셋을 가른다</b>: 정확(Parried) ·
-    /// 늦음(ParriedLate) · 무반응(Hit + Verb=None). 전에는 뒤의 둘이 같은 점이었다.
-    /// </summary>
-    ParriedLate,
-
-    /// <summary>
-    /// 닿았고 <b>가드</b>가 받아냈다 (이슈 #47). 피해는 <c>guard_chip_ratio</c> 만 흘러 들어오고
+    /// 닿았고 <b>가드</b>가 받아냈다 (이슈 #47 · #53). 피해는 <c>guard_chip_ratio</c> 만 흘러 들어오고
     /// 값은 <b>스태미나</b>로 낸다 — 그 값이 피해에 비례하므로 무거운 한 방이 가드를 깬다.
+    ///
+    /// <para>
+    /// <b>실패한 패리가 여기로 온다.</b> 누름이 창을 놓쳤어도 붙들고 있으면 막는 것이 이 설계의
+    /// 요점이다 (이슈 #53) — 전에는 <c>ParriedLate</c> 가 그 자리를 절반만 메웠다.
+    /// </para>
     /// </summary>
     Guarded,
 
@@ -107,14 +109,22 @@ public static class HitResolver
             return HitVerdict.Dodged;
         }
 
-        // 가드가 패리보다 **먼저**다 (이슈 #47). 두 갈래가 겹칠 수 있기 때문이다 —
-        // 가드는 패리와 같은 키를 붙들어 들어가므로 가드가 선 뒤에도 그 누름의 부정확 창(0.5초)이
-        // 0.2초쯤 남는데, 패리 갈래가 먼저면 **가드 불가 판정이 ParriedLate 로 먹혀**
-        // "가드로는 못 막는다" 는 성질이 한 번도 안 일어난다.
+        // 패리가 가드보다 **먼저**다 (이슈 #53). 둘은 이제 한 자세라 언제나 겹친다 —
+        // 누르는 그 틱부터 가드가 서 있고, 패리 창은 그 안에서 흐른다. 순서를 뒤집으면
+        // **패리가 한 번도 안 일어난다.**
         //
-        // 값으로는 이미 못 겹친다 — Fighter.EnterGuard 가 그 시계를 끝내기 때문이다. 그래도
-        // 순서를 이렇게 두는 것은 **규칙과 구조가 같은 말을 하게** 하기 위해서다: 나중에 가드로
-        // 들어오는 길이 하나 더 생겨 시계를 안 끝내더라도, 이 자리에서 다시 안 새게 된다.
+        // ⚠ 이슈 #47 은 정확히 반대 순서를 박아 뒀고, 그 이유도 옳았다: 그때는 가드가 패리
+        // 동작이 끝난 뒤에 섰고 누름의 부정확 창이 0.2초쯤 가드 안까지 살아 있어서, 패리 갈래가
+        // 먼저면 **가드 불가 판정이 ParriedLate 로 먹혔다**. 지금은 그 중간 단계가 없다 —
+        // 가드 불가를 창 안에서 받으면 그건 먹힌 것이 아니라 **설계가 시키는 답**이다(받아쳐라).
+        // 창 밖이면 아래에서 GuardBroken 으로 떨어진다.
+        if (tags.Parryable && Within(fighter.SinceParryPress, fighter.PreciseParryWindow, tags.ParryWindow))
+        {
+            return HitVerdict.Parried;
+        }
+
+        // 창을 놓쳤어도 **붙들고 있으면 막는다** (이슈 #53). 실패한 패리가 아무것도 안 막던 것이
+        // 이 이슈가 없앤 것이고, 그래서 이 갈래가 옛 ParriedLate 의 자리를 통째로 물려받는다.
         //
         // parryable 태그는 여기서 **안 본다.** 크림슨은 "받아치지 마라" 이지 "막지 마라" 가 아니다 —
         // 가드를 막는 것은 판정 쪽의 guard_break 하나뿐이다.
@@ -124,24 +134,6 @@ public static class HitResolver
             return box.GuardBreak || fighter.Stamina < fighter.GuardStaminaCost(box.Damage)
                 ? HitVerdict.GuardBroken
                 : HitVerdict.Guarded;
-        }
-
-        if (tags.Parryable)
-        {
-            // 창은 **행동이 아니라 누름**에 붙는다. 부정확 창(0.5초)이 패리 행동(0.26~0.34초)보다
-            // 길어서, 행동이 끝났으면 못 받는다고 하면 그 뒷부분이 통째로 사라진다 —
-            // 거기가 "늦게 눌렀다" 를 "아무것도 안 했다" 와 가르는 자리다.
-            if (Within(fighter.SinceParryPress, fighter.PreciseParryWindow, tags.ParryWindow))
-            {
-                return HitVerdict.Parried;
-            }
-
-            // 부정확 창은 패턴의 창과 안 견준다. 패턴의 parry_window 는 "얼마나 정확해야 하는가"
-            // 이고, 부정확 패리는 그 정확을 이미 놓친 자리이기 때문이다.
-            if (fighter.SinceParryPress < fighter.ImpreciseParryWindow)
-            {
-                return HitVerdict.ParriedLate;
-            }
         }
 
         return HitVerdict.Hit;

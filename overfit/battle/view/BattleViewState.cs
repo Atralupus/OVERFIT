@@ -17,12 +17,17 @@ public enum FighterPose
     /// </summary>
     Charge,
     Dash,
-    Parry,
 
     /// <summary>
-    /// 버티고 있다 (이슈 #47). 팩에 가드 그림이 <b>없어서</b> 패리와 같은 <c>idle</c> 을 빌려 쓰고,
-    /// 갈라 보이게 하는 것은 <b>색과 링</b>이다 — 패리 링은 창이 닫히는 쪽으로 퍼지고 가드 링은
-    /// 크기가 <b>안 변한 채 버틴다</b>. 움직이지 않는 링이 "누르고 있는 동안" 을 말하는 유일한 그림이다.
+    /// <b>방어 자세</b>다 (이슈 #47 · #53). 팩에 가드 그림이 <b>없어서</b> <c>idle</c> 을 빌려 쓰고,
+    /// 갈라 보이게 하는 것은 <b>색과 멈춘 링</b>이다.
+    ///
+    /// <para>
+    /// <b>패리 자세가 따로 없다</b> (이슈 #53). 전에는 <c>Parry</c> 가 있었고 몸 색도 링도 달랐는데,
+    /// 패리와 가드가 한 행동이 된 이상 그림도 하나여야 한다 — 누른 사람은 자기가 창 안에 들었는지를
+    /// 누르는 순간엔 알 수 없고(그건 판정이 서야 정해진다), 화면이 미리 갈라 말하면 거짓말이다.
+    /// 받아쳤다는 것은 <b>그 뒤에</b> 한 번 터지는 작은 고리로만 말한다.
+    /// </para>
     /// </summary>
     Guard,
     Hit,
@@ -56,12 +61,9 @@ public enum BossPhase
 /// <param name="Pose">그릴 자세.</param>
 /// <param name="Invulnerable">대시 <b>무적 창</b> 안인가. 잔상이 이것에 묶인다 —
 /// 대시(0.18초)보다 무적(0.14초)이 짧은 것은 일부러고, 그 차이가 보여야 대시 타이밍이 의미를 갖는다.</param>
-/// <param name="Parrying">패리 창 안인가. 링이 이것에 묶인다.</param>
-/// <param name="ParryProgress">패리 창을 얼마나 지났나(0~1). 링의 반지름이 이것이다 —
-/// 뷰가 자기 시계로 재게 하면 창 길이(캐릭터마다 다르다)를 뷰가 알아야 하고,
-/// 그 사본은 fighters.json 이 움직이는 순간 조용히 어긋난다.</param>
-/// <param name="Locked">부정확 패리에 굳었나(이슈 #27). 0.6초 동안 아무것도 못 한다 —
-/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.</param>
+/// <param name="Locked">가드가 깨져 굳었나. <c>guard_break_lock</c> 동안 아무것도 못 한다 —
+/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.
+/// 부정확 패리의 고정이 없어져(이슈 #53) 이 색은 이제 한 가지 뜻뿐이다.</param>
 /// <param name="ChargeProgress">차지를 얼마나 모았나(0~1). 링의 반지름이 이것이다 —
 /// <c>ParryProgress</c> 와 같은 규약으로, 최대 시간(캐릭터마다 다르다)의 사본을 뷰에 두지 않는다.</param>
 /// <param name="ChargeMaxed">차지가 <b>최대에 닿았나</b> (이슈 #40). 진행도만 넘기고 뷰가
@@ -76,8 +78,6 @@ public readonly record struct FighterFrame(
     int Facing,
     FighterPose Pose,
     bool Invulnerable,
-    bool Parrying,
-    double ParryProgress,
     bool Locked,
     double ChargeProgress,
     bool ChargeMaxed,
@@ -97,18 +97,36 @@ public readonly record struct FighterFrame(
 /// <param name="X">보스 발밑 기준 가로 오프셋(px). <b>이미 보스가 보는 쪽으로 뒤집혀 있다.</b></param>
 /// <param name="Y">바닥에서의 높이(px, 위가 +). <b>이 숫자 하나가 "칼이 땅에 있나" 를 말한다.</b></param>
 /// <param name="Length">모양의 주된 크기(px). 칼이면 날 길이, 고리면 반지름이다.</param>
-/// <param name="GuardBreak">이번 패턴에 <b>가드 불가</b> 판정이 있나 (이슈 #47 · 태그의 <c>has_guard_break</c>).
+/// <param name="Finisher">지금 오는 판정이 이 패턴의 <b>마무리</b>인가 (이슈 #53).
+/// 참이면 예고가 <b>빨강</b>이다.
 ///
 /// <para>
-/// <b>색이 아니라 기호로 말한다.</b> 붉은색은 이미 반대 뜻으로 차 있다 — 크림슨은 "패리 불가 ·
-/// 대시해라" 인데, 가드 불가는 "<b>받아쳐라</b>" 다. 둘 다 빨갛게 하면 플레이어가 정확히 거꾸로
-/// 반응한다. 그래서 링은 평소대로 호박색이고, 그 위에 <c>危</c> 한 글자가 더 뜬다.
+/// <b>빨강이 비어 있던 자리를 여기가 가져갔다.</b> 원래 뜻은 "패리 불가 · 대시해라" 였는데
+/// 그 주인(점프 강타)이 이슈 #48 에서 사라졌다. 이제 빨강은 <b>"이 한 대가 받아칠 값이 있는 대"</b>
+/// 다 — 받아치면 보스가 <c>finisher_parry_stagger</c> 만큼 굳고 거기 최대 차지가 들어간다.
+/// </para>
+///
+/// <para>
+/// ⚠ <b>패턴이 아니라 판정 단위다.</b> 패턴 단위로 칠하면 선딜 내내 참이라 막아도 되는
+/// 앞의 연타까지 빨개진다 — 실제로 그렇게 떴고 스크린샷에서 보고 고쳤다.
+/// </para></param>
+/// <param name="GuardBreak">지금 오는 판정이 <b>가드 불가</b>인가 (이슈 #47 · #53).
+/// 참이면 빨강 위에 <c>危</c> 가 같이 뜬다.
+///
+/// <para>
+/// <b><see cref="Finisher"/> 와 둘로 두는 것이 이 이슈의 결정이다.</b> 색이 "받아칠 값이 있다"
+/// 까지 말하고, 글자가 "게다가 막을 수조차 없다" 를 말한다. 마무리는 아홉 변종 전부에 있고
+/// 가드 불가는 3단계 다섯에만 있으므로, 하나로 묶으면 둘 중 하나는 반드시 거짓말이 된다 —
+/// 묶어서 빨강을 가드 불가에 주면 1단계에 빨강이 영영 안 뜨고, 반대로 하면 막을 수 있는 대에
+/// 危 가 뜬다. 기호를 색과 같이 두는 이유이기도 하다: 소울라이크를 해 본 사람의 기본값은
+/// 붉은 것을 <b>피하는</b> 것이라, 무엇을 하라는 말은 글자가 져야 한다.
 /// </para></param>
 public readonly record struct BossTell(
     string ShapeId,
     double X,
     double Y,
     double Length,
+    bool Finisher,
     bool GuardBreak);
 
 /// <summary>
@@ -122,8 +140,8 @@ public readonly record struct BossTell(
 /// 무엇보다 <b>패턴 중 잠금</b>(<c>Boss.Face</c>)이 뷰에서 풀려 예고가 스윙 도중에 뒤집힌다.</param>
 /// <param name="Phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
 /// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
-/// <param name="Parryable">지금 도는 패턴을 받아칠 수 있나. 못 받아치면 예고가 크림슨이다.
-/// <b>규칙이 아니라 태그를 그대로 그린다</b> — 뷰가 판정을 다시 계산하면 두 곳이 갈린다.</param>
+/// <param name="Staggered">가드 불가를 받아쳐 굳어 있나 (이슈 #53). 이 동안은 예고를 그리지 않고
+/// idle 을 <c>feel.stagger_anim_speed</c> 로 느리게 돌린다 — 팩에 지친 모션이 없어서 고른 방법이다.</param>
 /// <param name="Anim">선딜에 재생할 모션 이름. 패턴마다 다르다(<c>patterns.json</c> 의 <c>tell.anim</c>).
 /// 패턴이 안 돌면 null.</param>
 /// <param name="Tell">이 패턴의 예고 표지. 패턴이 안 돌거나 후딜이면 null.</param>
@@ -132,6 +150,6 @@ public readonly record struct BossFrame(
     int Facing,
     BossPhase Phase,
     double? NextActiveIn,
-    bool Parryable,
+    bool Staggered,
     string? Anim,
     BossTell? Tell);

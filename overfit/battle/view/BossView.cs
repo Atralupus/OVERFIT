@@ -19,6 +19,12 @@ namespace Overfit.Battle.View;
 /// 예고 링이 <b>조여 들고</b>, 판정이 서면 충격파가 <b>퍼진다</b>. 방향이 반대라
 /// 둘을 헷갈릴 수 없다.
 /// </para>
+///
+/// <para>
+/// 색은 <b>둘</b>이다 (이슈 #53). 호박은 앞의 연타(흘려도 되는 대) · 빨강은 <b>마무리</b>
+/// (받아치면 보스가 굳는 대)이고, 그중 가드로도 못 막는 것에만 <c>危</c> 가 얹힌다 —
+/// 색은 "받아칠 값이 있다" 까지 말하고 "막을 수조차 없다" 는 글자가 진다.
+/// </para>
 /// </summary>
 public partial class BossView : Node2D
 {
@@ -26,20 +32,42 @@ public partial class BossView : Node2D
     private static readonly Color _windupTint = new(2.00f, 0.72f, 0.30f);
 
     /// <summary>
-    /// <b>패리 불가</b> 패턴의 선딜 색 — 크림슨. 나인 솔즈의 관례고, 이 게임에는 이미
-    /// <c>parryable: false</c> 태그가 있었는데 화면이 그 말을 안 했다(이슈 #27).
+    /// <b>마무리</b>(3타) 선딜의 몸 색 — 크림슨 (이슈 #53).
     ///
     /// <para>
-    /// 평소 예고를 <b>호박색으로 옮겼다.</b> 전에는 선딜이 (1.00, 0.42, 0.34) 로 이미 붉은 쪽이라
-    /// 크림슨을 얹어도 "조금 더 붉은 붉은색" 이었다 — 못 받아치는 공격을 받아치려다 맞는 것은
-    /// 정보가 없어서지 반사 신경이 모자라서가 아니다. 두 색은 색상환에서 갈라야 한다.
+    /// <b>이 색은 주인이 바뀌었다.</b> 원래는 <c>parryable: false</c> 의 "받아치지 마라 · 대시해라"
+    /// 였고(이슈 #27), 그때는 붉은색을 다른 뜻에 못 썼다 — 두 뜻이 정반대라 같은 색이면
+    /// 플레이어가 거꾸로 반응한다. 그 주인(점프 강타)이 이슈 #48 에서 사라져 빨강이 비었고,
+    /// 이제 <b>빨강 = 마무리 = 받아쳐라</b> 다. 받아치면 보스가 굳고 거기 최대 차지가 들어간다.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>가드 불가에 안 매단 이유</b>는 <c>BossTell.Finisher</c> 에 적어 두었다 — 가드 불가는
+    /// 3단계 다섯 변종에만 있어서, 거기 매달면 1·2단계에 빨강이 영영 안 뜬다. 그 위에 얹는
+    /// <c>危</c> 가 "게다가 막을 수조차 없다" 를 따로 말한다.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ <b>패리 불가 패턴이 돌아오면 이 색을 나눠 쓸 수 없다.</b> 그때는 그쪽에 다른 신호를
+    /// 줘야 한다 — 값은 <c>parryable</c> 태그로 규칙에 그대로 살아 있으니 그림만 정하면 된다.
+    /// 여기 다시 크림슨을 얹는 것만은 안 된다: 한 색이 "피해라" 와 "받아쳐라" 를 동시에 말한다.
     /// </para>
     /// </summary>
-    private static readonly Color _unparryableTint = new(2.40f, 0.10f, 0.22f);
+    private static readonly Color _finisherTint = new(2.40f, 0.10f, 0.22f);
 
     private static readonly Color _recoverTint = new(0.70f, 0.70f, 0.78f);
+
+    /// <summary>
+    /// <b>굳어 있는</b> 동안의 몸 색 (이슈 #53). 후딜(<see cref="_recoverTint"/>)보다 더 식는다 —
+    /// 팩에 지친 모션이 없어서, 느려진 idle 과 이 색 둘이 "숨이 찼다" 를 나눠 진다.
+    /// </summary>
+    private static readonly Color _staggerTint = new(0.52f, 0.50f, 0.60f);
+
     private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
-    private static readonly Color _unparryableRingColor = new(1.00f, 0.06f, 0.20f, 0.95f);
+
+    /// <summary>마무리 예고의 링 색. 몸 색(<see cref="_finisherTint"/>)과 같은 빨강이다 —
+    /// 링과 몸이 갈리면 둘 중 하나는 안 읽힌다.</summary>
+    private static readonly Color _finisherRingColor = new(1.00f, 0.06f, 0.20f, 0.95f);
     private static readonly Color _shockRingColor = new(1.00f, 0.80f, 0.35f, 1.00f);
     private static readonly Color _activeFlash = new(2.60f, 2.30f, 1.60f);
 
@@ -53,6 +81,10 @@ public partial class BossView : Node2D
     private Color _flashColor;
     private double _hitPoseLeft;
     private bool _dead;
+
+    /// <summary>히트스톱으로 그림이 멈춰 있나. 경직의 느린 재생과 <b>한 자리에서</b> 정해야 한다 —
+    /// 둘이 각자 <c>SpeedScale</c> 을 쓰면 나중에 쓰는 쪽이 이겨서 히트스톱 중에도 그림이 돈다.</summary>
+    private bool _frozen;
 
     public override void _Ready()
     {
@@ -114,32 +146,44 @@ public partial class BossView : Node2D
         _sprite.FlipH = frame.Facing < 0;
 
         BossPhase phase = frame.Phase;
-        bool parryable = frame.Parryable;
 
         _flashLeft = System.Math.Max(0, _flashLeft - dt);
         _hitPoseLeft = System.Math.Max(0, _hitPoseLeft - dt);
         HoldLastFrameWhenDead();
 
-        float ripeness = Ripeness(phase, frame.NextActiveIn);
+        // **굳은 동안에는 예고를 안 그린다** (이슈 #53). 경직 중에는 타임라인이 안 밀리므로
+        // NextActiveIn 이 그대로 멈춰 있고, 그러면 링도 표지도 얼어붙은 채 "곧 온다" 를
+        // 2.3초 내내 거짓말한다 — 지금 오는 것은 아무것도 없다.
+        float ripeness = frame.Staggered ? 0 : Ripeness(phase, frame.NextActiveIn);
+
+        // **색은 마무리가 정하고 글자는 가드 불가가 정한다** (이슈 #53). 마무리는 아홉 변종
+        // 전부에 있고 가드 불가는 3단계 다섯에만 있어서, 한 칸으로 칠하면 1단계에 빨강이
+        // 영영 안 뜬다 — 유저가 지금 하고 있는 단계가 거기다.
+        bool finisher = frame.Tell is { Finisher: true };
+        Color tellColor = finisher ? _finisherRingColor : _tellRingColor;
         if (ripeness > 0)
         {
             // 판정이 가까울수록 링이 **조여 든다.** 퍼지는 충격파와 방향이 반대라 둘을 헷갈릴 수 없다.
-            _ring.Charge(
-                Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness),
-                parryable ? _tellRingColor : _unparryableRingColor);
+            _ring.Charge(Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness), tellColor);
         }
 
         // 표지는 선딜 **내내** 보인다. 무르익음에만 묶으면 tell_lead_seconds 밖의 선딜이
         // 통째로 무표지가 되는데, 백장의 올려베기가 정확히 그 구간이 가장 긴 패턴이다 —
         // "크게 예고한다" 가 설계인 패턴이 예고를 제일 늦게 받는 것은 뒤집힌 것이다.
-        if (phase == BossPhase.Windup && frame.Tell is { } mark)
+        if (phase == BossPhase.Windup && !frame.Staggered && frame.Tell is { } mark)
         {
-            Color tint = parryable ? _tellRingColor : _unparryableRingColor;
-            _tell.Show(mark, new Color(tint.R, tint.G, tint.B, 0.45f + (0.55f * ripeness)));
+            _tell.Show(mark, new Color(tellColor.R, tellColor.G, tellColor.B, 0.45f + (0.55f * ripeness)));
         }
 
-        Animate(AnimationFor(phase, frame.Anim));
-        _sprite.Modulate = Tint(phase, ripeness, parryable);
+        Animate(AnimationFor(phase, frame.Anim, frame.Staggered));
+
+        // 재생 속도를 **여기 한 자리에서** 정한다. 히트스톱이 이기고(그건 시간을 세운 것이다),
+        // 아니면 굳은 동안 idle 이 느려진다 — 팩에 지친 모션이 없어서 고른 방법이다.
+        _sprite.SpeedScale = _frozen ? 0.0f
+            : frame.Staggered ? (float)_feel.StaggerAnimSpeed
+            : 1.0f;
+
+        _sprite.Modulate = Tint(phase, ripeness, finisher, frame.Staggered);
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -201,8 +245,16 @@ public partial class BossView : Node2D
         Animate("death");
     }
 
-    /// <summary>히트스톱. 그림만 세운다 — 시뮬레이션의 시계는 <c>Battle</c> 이 따로 멈춘다.</summary>
-    public void Freeze(bool frozen) => _sprite.SpeedScale = frozen ? 0.0f : 1.0f;
+    /// <summary>
+    /// 히트스톱. 그림만 세운다 — 시뮬레이션의 시계는 <c>Battle</c> 이 따로 멈춘다.
+    /// 실제로 <c>SpeedScale</c> 을 정하는 것은 <see cref="Show"/> 한 자리다(경직의 느린 재생과
+    /// 다투지 않게), 다만 히트스톱은 <see cref="Show"/> 를 못 기다린다 — 같은 프레임에 걸려야 한다.
+    /// </summary>
+    public void Freeze(bool frozen)
+    {
+        _frozen = frozen;
+        _sprite.SpeedScale = frozen ? 0.0f : 1.0f;
+    }
 
     /// <summary>판정까지 얼마나 무르익었나(0 = 아직 멀었다 · 1 = 이번 프레임).</summary>
     private float Ripeness(BossPhase phase, double? nextActiveIn)
@@ -215,7 +267,7 @@ public partial class BossView : Node2D
         return Mathf.Clamp(1.0f - (float)(left / _feel.TellLeadSeconds), 0.0f, 1.0f);
     }
 
-    private string AnimationFor(BossPhase phase, string? anim)
+    private string AnimationFor(BossPhase phase, string? anim, bool staggered)
     {
         if (_dead)
         {
@@ -225,6 +277,16 @@ public partial class BossView : Node2D
         if (_hitPoseLeft > 0)
         {
             return "hit_white";
+        }
+
+        // **굳은 동안은 idle 이다** (이슈 #53). Medieval King Pack 2 에는 지친 모션이 없다 —
+        // 시트가 열뿐이고(idle · run · jump · fall · attack1~3 · take-hit · take-hit-white · death)
+        // 그중 어느 것도 "숨이 차 서 있다" 가 아니다. 없는 이름으로 Play 하면 아래 Animate 가
+        // [W] 한 줄 남기고 **아무것도 안 바꾸므로**, 칼을 든 공격 자세가 2.3초 동안 그대로 선다.
+        // 그래서 지어내지 않고 있는 것을 느리게 돌린다(Show 가 SpeedScale 을 깎는다).
+        if (staggered)
+        {
+            return "idle";
         }
 
         // 선딜에만 공격 모션이다. 후딜까지 두면 "아직 온다" 와 "끝났다" 가 같은 그림이 된다.
@@ -241,7 +303,7 @@ public partial class BossView : Node2D
         _flashLeft = seconds;
     }
 
-    private Color Tint(BossPhase phase, float ripeness, bool parryable)
+    private Color Tint(BossPhase phase, float ripeness, bool finisher, bool staggered)
     {
         // 흰 피격 실루엣은 **작가가 그린 픽셀 그대로** 나가야 한다. 선딜 틴트를 그 위에 얹으면
         // 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 되어, 정작 흰색이라는 것이 안 보인다 —
@@ -252,9 +314,16 @@ public partial class BossView : Node2D
             return Colors.White;
         }
 
+        // 굳은 것이 예고를 이긴다. 경직 중에도 CurrentPattern 은 살아 있어 Phase 는 Windup 인데,
+        // 그 색(호박·빨강)은 "곧 온다" 는 뜻이라 굳은 보스에게는 거짓말이다.
+        if (staggered)
+        {
+            return _staggerTint;
+        }
+
         Color baseTint = phase switch
         {
-            BossPhase.Windup => Colors.White.Lerp(parryable ? _windupTint : _unparryableTint, ripeness),
+            BossPhase.Windup => Colors.White.Lerp(finisher ? _finisherTint : _windupTint, ripeness),
             BossPhase.Recover => _recoverTint,
             _ => Colors.White,
         };

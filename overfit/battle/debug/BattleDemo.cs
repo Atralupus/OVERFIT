@@ -74,12 +74,15 @@ public partial class BattleDemo : Node
         }
 
         PlayerAxes axes = PlayerAxes.From(sim.Events);
-        // 수단별 건수를 축 옆에 같이 찍는다. parry_late_n(부정확 패리)은 축이 아니라 개수다 —
-        // 정확 · 부정확 · 무반응 셋이 한 줄에서 갈려 보여야 계측이 갈랐다는 말을 할 수 있다. samples 만 보면 "관측 10건" 이 "대시 3건으로 낸 분산"
+        // 수단별 건수를 축 옆에 같이 찍는다. samples 만 보면 "관측 10건" 이 "대시 3건으로 낸 분산"
         // 까지 보증하는 것처럼 읽힌다. 의존도 축은 한 겹 더 얇다 — 그 수단이 가능했고 **다른
         // 수단도 가능했던** 판정만 분모라, jump_rel_n · parry_rel_n 을 따로 찍는다.
+        //
+        // parry_n · guard_n · (samples - 나머지)가 **셋으로 갈린다** (이슈 #53): 패리 · 가드 ·
+        // 무반응. parry_rate 가 그중 첫째의 성공률이라, 이 줄 하나로 "무엇을 골랐고 얼마나
+        // 정확했나" 가 읽힌다. parry_late_n(부정확 패리)은 그 단계가 없어져 같이 빠졌다.
         Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
-            + $" parry_n={axes.ParrySamples} parry_late_n={axes.ParryLateSamples}"
+            + $" parry_n={axes.ParrySamples}"
             // charge_n 은 "모아 둔 칼을 들고 있다 판정을 맞은" 건수다 (이슈 #40) — greed 비율만으로는
             // 휘두르다 맞은 0.5초와 모으고 선 2.08초가 한 점이라, 욕심의 깊이가 이 칸에만 있다.
             + $" charge_n={axes.ChargedGreedSamples}"

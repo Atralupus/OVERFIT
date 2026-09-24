@@ -54,33 +54,35 @@ public sealed class FighterConfig
     public required double DashCost { get; init; }
 
     /// <summary>
-    /// <b>정확</b> 패리의 창. 적중 이 시간 안에 눌렀으면 피해 0 · 보스 경직 · 기 +1 이다.
-    /// <see cref="ParryDuration"/> 보다 짧다 — 실패가 비싸야 패리 의존도가 축이 된다.
+    /// <b>패리</b>의 창 (이슈 #53). 적중이 누름에서 이 시간 안에 서면 피해 0 이고,
+    /// 그 밖이면 붙들고 있는 한 <b>가드</b>다 — 이 한 숫자가 방어 하나를 둘로 가른다.
+    /// 그래서 이것은 캐릭터 성능이 아니라 <b>조작의 정의</b>다.
     /// </summary>
     public required double ParryPreciseWindow { get; init; }
 
     /// <summary>
-    /// <b>부정확</b> 패리의 창. 정확 창을 놓쳤어도 이 안이면 피해의 <see cref="ParryInternalRatio"/> 만
-    /// 내상으로 받는다. 이 창이 있는 이유는 게임 감각만이 아니다 — "늦게 눌렀다" 와 "아무것도 안 했다" 가
-    /// 지금까지 같은 점(<c>Verb=None · TimingError=0</c>)이었고, 이 중간 단계가 그 둘을 갈라 준다.
-    /// <b>패리 행동(<see cref="ParryDuration"/>)보다 길다</b> — 그래서 창은 행동이 아니라 누름에 붙는다.
+    /// 한 번의 누름이 <b>아직 그 사람의 것</b>인 시간(초) — 이슈 #53. 두 곳이 쓴다:
+    /// 연타 사슬(이 안에서 또 누르면 사슬이 자란다)과 계측의 공 돌리기(<c>BattleSim</c> 이
+    /// 이 안의 누름까지만 그 판정의 시도로 센다).
+    ///
+    /// <para>
+    /// 전에는 <c>parry_imprecise_window</c> 였다 — "늦게 눌렀지만 절반은 받아낸다" 는 중간 단계의 창.
+    /// 그 단계를 가드가 대신하면서 창의 <b>뜻</b>만 남았다. 없는 기능을 가리키는 이름을 남겨 두면
+    /// 다음 사람이 그 기능을 찾으러 간다.
+    /// </para>
     /// </summary>
-    public required double ParryImpreciseWindow { get; init; }
+    public required double ParryMemoryWindow { get; init; }
 
     /// <summary>
-    /// 연타 징벌로 좁아진 정확 창. 앞 누름의 부정확 창 안에서 또 누르면 두 번째 누름이 이 창을 쓰고,
-    /// 세 번째부터는 정확 창이 아예 없다(부정확만 가능).
+    /// 연타 징벌로 좁아진 패리 창. 앞 누름의 기억 창 안에서 또 누르면 두 번째 누름이 이 창을 쓰고,
+    /// 세 번째부터는 패리 창이 아예 없다 — 붙들고 있으면 가드로는 여전히 막는다.
     /// </summary>
     public required double ParrySpamWindow { get; init; }
 
-    /// <summary>부정확 패리로 받아냈을 때 지상에서 굳는 시간(초). 공중에서는 안 굳는다.</summary>
-    public required double ParryLock { get; init; }
-
-    /// <summary>부정확 패리가 내상으로 받는 피해 비율.</summary>
-    public required double ParryInternalRatio { get; init; }
-
-    public required double ParryDuration { get; init; }
-
+    /// <summary>
+    /// 방어 자세를 <b>누를 때</b> 한 번 드는 스태미나. 버티는 값은 시간이 아니라 막아낸 피해에
+    /// 비례해 나간다(<see cref="GuardStaminaPerDamage"/>) — 그래서 이것은 "손을 댄 값" 이다.
+    /// </summary>
     public required double ParryCost { get; init; }
 
     public required double AttackWindup { get; init; }
@@ -123,15 +125,15 @@ public sealed class FighterConfig
     /// </summary>
     public required int AttackAnimBladeFrame { get; init; }
 
-    // ── 가드 (이슈 #47) ─────────────────────────────────────────────────────────
+    // ── 가드 (이슈 #47 · #53) ───────────────────────────────────────────────────
     //
-    // 가드는 **패리와 같은 키**다. 누름은 언제나 패리 시도이고, 패리 동작(parry_duration)이
-    // 끝났는데 아직 누르고 있으면 가드가 선다. 가드의 값은 피해가 아니라 **스태미나**로 내고,
-    // 그래서 세 수치가 전부 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
+    // 가드는 패리와 **같은 행동**이다 (이슈 #53). 누르면 그 틱부터 방어 자세이고, 판정이
+    // parry_precise_window 안에 서면 패리 · 그 밖이면 가드다. 가드의 값은 피해가 아니라
+    // **스태미나**로 내고, 그래서 세 수치가 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
 
     /// <summary>
-    /// 가드가 <b>흘려보내는</b> 피해의 비율. <see cref="ParryInternalRatio"/> 보다 작아야
-    /// 가드를 고를 이유가 있다 — 그 관계를 <c>FighterDataTests</c> 가 지킨다.
+    /// 가드가 <b>흘려보내는</b> 피해의 비율. 1 보다 작아야 막는 것에 뜻이 있고, 0 보다 커야
+    /// 버티는 것이 공짜가 아니다 — 그 관계를 <c>FighterDataTests</c> 가 지킨다.
     /// </summary>
     public required double GuardChipRatio { get; init; }
 
@@ -143,8 +145,9 @@ public sealed class FighterConfig
     public required double GuardStaminaPerDamage { get; init; }
 
     /// <summary>
-    /// 가드가 깨졌을 때 굳는 시간(초). <see cref="ParryLock"/> 보다 길다 —
-    /// 붕괴가 부정확 패리와 같은 값이면 버티는 것에 위험이 없다.
+    /// 가드가 깨졌을 때 굳는 시간(초). <b>이 게임에 남은 유일한 고정</b>이다 (이슈 #53) —
+    /// 부정확 패리가 사라지면서 "굳는다" 는 결과가 붕괴 하나에만 붙는다.
+    /// 그 길이가 "남은 타격을 그대로 맞는" 값이고, 그게 버티기를 고른 값이다.
     /// </summary>
     public required double GuardBreakLock { get; init; }
 

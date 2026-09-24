@@ -18,7 +18,7 @@ public class FighterActionTests
     /// <summary>공격 키를 <b>누르고 있는</b> 틱. 엣지는 이미 지났다.</summary>
     private static readonly InputFrame _attackHold = new(0, false, false, false, false, AttackHeld: true);
 
-    /// <summary>패리 키를 <b>누르는 순간</b>. 엣지와 누름 유지가 같이 참이다 (이슈 #47).</summary>
+    /// <summary>패리 키를 <b>누르는 순간</b>. 엣지와 누름 유지가 같이 참이다 — 사람이 누르면 늘 이 모양이다.</summary>
     private static readonly InputFrame _parryPress = new(0, false, false, true, false, ParryHeld: true);
 
     /// <summary>패리 키를 <b>누르고 있는</b> 틱. 엣지는 이미 지났다.</summary>
@@ -101,23 +101,26 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 패리_창은_지속보다_짧다()
+    public void 자세는_손가락이_끝내고_창은_시간이_끝낸다()
     {
-        // 패리는 늦게 풀리지만 막아주는 것은 앞부분뿐이다 — 실패가 비싸야 의존도가 축이 된다
+        // **이 둘의 차이가 패리와 가드를 가른다** (이슈 #53). 누르면 그 틱부터 자세이고,
+        // 창은 그 안에서 혼자 닫힌다 — 창이 닫힌 뒤에도 자세는 그대로라 거기 오는 판정은
+        // 가드가 받는다. 그것이 "실패한 패리도 막는다" 의 전부다.
         Fighter f = Spawn();
-        f.Tick(_parry, _dt);
+        f.Tick(_parryPress, _dt);
+        f.Guarding.ShouldBeTrue("누르는 그 틱부터 막고 있어야 한다 — 0.30초를 기다리면 안 된다");
         f.Parrying.ShouldBeTrue();
 
         for (int i = 0; i < 8; i++)
         {
-            f.Tick(default, _dt);
+            f.Tick(_parryHold, _dt);
         }
 
-        f.Action.ShouldBe(FighterAction.Parry);
-        f.Parrying.ShouldBeFalse();
+        f.Parrying.ShouldBeFalse("창(0.133초)이 안 닫혔다 — 그러면 패리에 실패가 없다");
+        f.Guarding.ShouldBeTrue("창이 닫히면서 자세까지 풀렸다 — 늦은 패리도 막아야 한다");
     }
 
-    // ── 2단계 패리 (이슈 #27) ────────────────────────────────────────────────
+    // ── 연타 징벌 (이슈 #27) ─────────────────────────────────────────────────
 
     /// <summary><paramref name="ticks"/> 틱 동안 아무것도 안 하고 흘려보낸다.</summary>
     private static void Idle(Fighter f, int ticks)
@@ -129,18 +132,17 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 패리_시계는_행동이_끝나도_계속_돈다()
+    public void 누름_시계는_손을_뗀_뒤에도_계속_돈다()
     {
-        // 부정확 창(0.5초)이 패리 행동(0.30초)보다 길다. 행동과 같은 시계를 쓰면 행동이 끝나는
-        // 순간 시계가 0 으로 돌아가고, 그 뒤에 오는 판정은 "아무것도 안 했다" 와 같은 점이 된다 —
-        // 그 붕괴를 없애려고 만든 것이 부정확 단계라 여기서 못박는다.
+        // 자세가 풀렸다고 시계가 멈추면 연타 사슬이 안 서고, 계측이 "눌렀다 놓쳤다" 를
+        // "아무것도 안 했다" 와 같은 점으로 적는다 — 그 둘을 가르는 것이 이 시계 하나다.
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
-        Idle(f, 24);   // 0.4167초 — 행동(0.30)은 끝났고 부정확 창(0.5)은 아직이다
+        Idle(f, 24);   // 0.4167초 — 자세는 첫 틱에 풀렸고 기억 창(0.5)은 아직이다
 
         f.Action.ShouldBe(FighterAction.Idle);
         f.SinceParryPress.ShouldBe(25 * _dt, 1e-9);
-        f.SinceParryPress.ShouldBeLessThan(f.ImpreciseParryWindow);
+        f.SinceParryPress.ShouldBeLessThan(f.ParryMemoryWindow);
     }
 
     [Fact]
@@ -152,7 +154,7 @@ public class FighterActionTests
         f.Tick(_parry, _dt);
         f.PreciseParryWindow.ShouldBe(0.133, 1e-9, "첫 누름은 온전한 정확 창이다");
 
-        // 행동이 끝나자마자(0.30초) 다시 누른다 — 앞 누름의 부정확 창(0.5초) 안이라 연타다.
+        // 0.30초 뒤에 다시 누른다 — 앞 누름의 기억 창(0.5초) 안이라 연타다.
         Idle(f, 18);
         f.Tick(_parry, _dt);
         f.ParryChain.ShouldBe(2);
@@ -161,7 +163,7 @@ public class FighterActionTests
         Idle(f, 18);
         f.Tick(_parry, _dt);
         f.ParryChain.ShouldBe(3);
-        f.PreciseParryWindow.ShouldBe(0, "세 번째부터는 정확 패리가 아예 없어야 한다");
+        f.PreciseParryWindow.ShouldBe(0, "세 번째부터는 패리 창이 아예 없어야 한다");
     }
 
     [Fact]
@@ -171,7 +173,7 @@ public class FighterActionTests
         // 노리고 누르는 사람은 아무리 여러 번 눌러도 벌을 안 받아야 한다.
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
-        Idle(f, 40);   // 0.667초 — 부정확 창(0.5)이 이미 닫혔다
+        Idle(f, 40);   // 0.667초 — 기억 창(0.5)이 이미 닫혔다
         f.Tick(_parry, _dt);
 
         f.ParryChain.ShouldBe(1);
@@ -194,46 +196,7 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 부정확_패리는_절반을_내상으로_받고_지상에서_굳는다()
-    {
-        Fighter f = Spawn();
-        f.Tick(_parry, _dt);
-        f.ParryImprecise(fullDamage: 21);
-
-        f.Health.ShouldBe(100 - 11, "21 의 절반은 반올림해 11 이다");
-        f.InternalDamage.ShouldBe(11);
-        f.Qi.ShouldBe(1);
-        f.Locked.ShouldBeTrue();
-        f.Action.ShouldBe(FighterAction.Idle, "굳으면 돌던 패리도 끊긴다");
-
-        // 굳은 동안에는 아무것도 못 한다 — 그게 이 단계의 값이다.
-        f.Tick(_dash, _dt);
-        f.Action.ShouldBe(FighterAction.Idle);
-        f.Tick(new InputFrame(1, false, false, false, false), _dt);
-        f.X.ShouldBe(960, 1e-9, "굳었는데 걸었다");
-
-        Idle(f, 36);   // 0.6초
-        f.Locked.ShouldBeFalse();
-        f.Tick(_dash, _dt);
-        f.Action.ShouldBe(FighterAction.Dash, "고정이 안 풀렸다");
-    }
-
-    [Fact]
-    public void 공중에서는_부정확_패리에_안_굳는다()
-    {
-        // 공중에서 굳는 것은 그냥 떨어지는 것과 같아서 벌이 아니라 버그로 읽힌다 (나인 솔즈).
-        Fighter f = Spawn();
-        f.Tick(new InputFrame(0, true, false, false, false), _dt);
-        f.Grounded.ShouldBeFalse();
-
-        f.ParryImprecise(fullDamage: 20);
-
-        f.Locked.ShouldBeFalse();
-        f.Health.ShouldBe(90);
-    }
-
-    [Fact]
-    public void 공중_대시는_한_번뿐이고_정확_패리가_되돌린다()
+    public void 공중_대시는_한_번뿐이고_패리가_되돌린다()
     {
         // 나인 솔즈의 보상 구조다 — 잘 받아내면 다시 움직일 수 있다.
         // 몸 충돌이 없어져(이슈 #27) 공중이 안전지대가 됐으므로, 무제한 공중 대시는
@@ -252,7 +215,7 @@ public class FighterActionTests
 
         f.ParryPrecise();
         f.Tick(_dash, _dt);
-        f.Action.ShouldBe(FighterAction.Dash, "정확 패리가 공중 대시를 안 돌려줬다");
+        f.Action.ShouldBe(FighterAction.Dash, "패리가 공중 대시를 안 돌려줬다");
     }
 
     [Fact]
@@ -590,72 +553,57 @@ public class FighterActionTests
         f.Alive.ShouldBeFalse();
     }
 
-    // ── 가드 (이슈 #47) ──────────────────────────────────────────────────────
+    // ── 방어 자세 (이슈 #47 · #53) ───────────────────────────────────────────
 
-    /// <summary>
-    /// 패리 키를 붙들어 <b>가드가 설 때까지</b> 민 파이터. <b>틱 수를 세지 않는다</b> —
-    /// 가드가 서는 시각은 <c>parry_duration</c> 이고 그건 데이터다.
-    /// </summary>
+    /// <summary>방어 자세로 서 있는 파이터. 누르는 그 틱에 선다 (이슈 #53).</summary>
     private static Fighter Guarding()
     {
         Fighter f = Spawn();
         f.Tick(_parryPress, _dt);
-        for (int i = 0; i < 120 && f.Action != FighterAction.Guard; i++)
-        {
-            f.Tick(_parryHold, _dt);
-        }
-
+        f.Guarding.ShouldBeTrue("자세가 안 섰다 — 아래 테스트들이 전부 다른 갈래를 본다");
         return f;
     }
 
     [Fact]
-    public void 누름은_그대로_패리고_가드는_그_뒤에_붙는다()
+    public void 누르는_그_틱부터_방어다()
     {
-        // **패리를 느리게 만들지 않는 것이 계약이다.** 홀드인지 보고 시작하면 정확 창(0.133초)이
-        // 통째로 밀려 게임의 모든 패리가 나빠진다. 누른 첫 틱의 상태가 탭과 **한 값도** 달라지면
-        // 안 된다 — 가드는 패리 동작이 끝난 **뒤에** 붙는다.
+        // **이 이슈가 없앤 것이 여기 있다** (이슈 #53). 전에는 누름이 0.30초짜리 패리 행동을
+        // 세우고 가드는 그 뒤에 붙었다 — 그 0.30초 동안 늦게 지른 패리는 아무것도 안 막았고,
+        // 유저가 겪은 것은 "방어를 골랐는데 왜 안 막나" 였다.
+        //
+        // 그러면서도 **패리를 느리게 만들지 않는 것은 그대로 계약이다**: 붙들었는지 보고
+        // 시작하면 창(0.133초)이 통째로 밀린다. 그래서 누른 첫 틱의 상태는 탭과 한 값도 다르면 안 된다.
         Fighter held = Spawn();
         held.Tick(_parryPress, _dt);
         Fighter tapped = Spawn();
         tapped.Tick(_parry, _dt);
 
-        held.Action.ShouldBe(FighterAction.Parry);
+        held.Action.ShouldBe(FighterAction.Guard);
         held.Parrying.ShouldBeTrue();
         held.PreciseParryWindow.ShouldBe(tapped.PreciseParryWindow, 1e-9);
         held.SinceParryPress.ShouldBe(tapped.SinceParryPress, 1e-9);
         held.Stamina.ShouldBe(tapped.Stamina, 1e-9, "붙들었다고 값이 더 들면 그건 다른 기술이다");
+        tapped.Guarding.ShouldBeTrue("탭도 그 틱에는 막고 있다 — 갈리는 것은 다음 틱이다");
     }
 
     [Fact]
-    public void 탭은_가드가_안_된다()
+    public void 놓으면_그_틱에_풀린다()
     {
+        // 탭은 **한 틱짜리 자세**다. 그래도 그 누름의 창은 끝까지 흐르므로(위 테스트) 탭 패리는
+        // 여전히 받아친다 — 자세와 창이 서로 다른 시계를 타는 것이 이 설계의 요점이다.
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
-        Idle(f, 30);   // 패리 동작(0.30초)이 끝나고도 남는다
+        f.Guarding.ShouldBeTrue();
+
+        f.Tick(default, _dt);
 
         f.Action.ShouldBe(FighterAction.Idle);
         f.Guarding.ShouldBeFalse();
+        f.Parrying.ShouldBeTrue("놓았다고 창까지 닫혔다 — 창은 자세가 아니라 누름에 붙는다");
     }
 
     [Fact]
-    public void 패리가_끝났는데_아직_누르고_있으면_가드가_선다()
-    {
-        Fighter f = Spawn();
-        f.Tick(_parryPress, _dt);
-        f.Tick(_parryHold, _dt);
-        f.Action.ShouldBe(FighterAction.Parry, "가드가 패리를 잡아먹었다 — 가드는 그 뒤에 붙는다");
-
-        for (int i = 0; i < 120 && f.Action == FighterAction.Parry; i++)
-        {
-            f.Tick(_parryHold, _dt);
-        }
-
-        f.Action.ShouldBe(FighterAction.Guard);
-        f.Guarding.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void 가드는_시간이_아니라_손가락이_끝낸다()
+    public void 자세는_시간이_아니라_손가락이_끝낸다()
     {
         Fighter f = Guarding();
         for (int i = 0; i < 300; i++)
@@ -663,7 +611,7 @@ public class FighterActionTests
             f.Tick(_parryHold, _dt);
         }
 
-        f.Action.ShouldBe(FighterAction.Guard, "5초가 가드를 끝냈다 — 끝내는 것은 손가락이어야 한다");
+        f.Action.ShouldBe(FighterAction.Guard, "5초가 자세를 끝냈다 — 끝내는 것은 손가락이어야 한다");
 
         f.Tick(default, _dt);
         f.Action.ShouldBe(FighterAction.Idle);
@@ -671,24 +619,24 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 가드_중에는_못_움직이고_못_뛴다()
+    public void 방어_중에는_못_움직이고_못_뛴다()
     {
-        // 가드와 간격이 **배타적**이어야 둘 중 하나를 고르는 것이 판단이 된다.
+        // 방어와 간격이 **배타적**이어야 둘 중 하나를 고르는 것이 판단이 된다.
         Fighter f = Guarding();
         double x = f.X;
 
         f.Tick(new InputFrame(1, Jump: true, false, false, false, ParryHeld: true), _dt);
 
-        f.X.ShouldBe(x, 1e-9, "가드 중에 걸었다");
-        f.Grounded.ShouldBeTrue("가드 중에 뛰었다");
+        f.X.ShouldBe(x, 1e-9, "방어 중에 걸었다");
+        f.Grounded.ShouldBeTrue("방어 중에 뛰었다");
         f.Action.ShouldBe(FighterAction.Guard);
     }
 
     [Fact]
-    public void 가드_중에는_스태미나가_안_찬다()
+    public void 방어_중에는_스태미나가_안_찬다()
     {
-        // 회복은 Idle 일 때만 돈다(차지와 같은 규칙). 가드 중에 차면 버티는 것에 값이 없어져
-        // "계속 들고 있기" 가 언제나 최선이 되고, 그러면 가드에 판단이 사라진다.
+        // 회복은 Idle 일 때만 돈다(차지와 같은 규칙). 방어 중에 차면 버티는 것에 값이 없어져
+        // "계속 들고 있기" 가 언제나 최선이 되고, 그러면 방어에 판단이 사라진다.
         Fighter f = Guarding();
         f.Spend(40);
         double low = f.Stamina;
@@ -702,21 +650,31 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 가드에_들어가면_패리_누름_창이_닫힌다()
+    public void 자세_안에서_창이_흐른다()
     {
-        // ⚠ **구멍 뚫기에서 나온 자리다.** 가드는 패리와 **같은 키를 붙들어** 들어가므로 누름
-        // 시각이 아직 가깝다 — 부정확 창(0.5초)이 패리 동작(0.30초)보다 길어 0.2초가 가드 안까지
-        // 살아 있다. 그 창이 살아 있으면 HitResolver 가 가드 불가 판정을 ParriedLate 로 받아,
-        // "가드로는 못 막는다" 는 성질이 **한 번도 안 일어난다.**
-        // 누름은 가드가 서는 순간 소비된 것으로 본다 — 한 번의 누름이 패리와 가드를 겹쳐 사지 않는다.
+        // ⚠ **이슈 #47 은 정확히 반대를 못박아 뒀다** — 가드에 들어가는 순간 누름 시계를
+        // 무한대로 끝냈다. 그때는 그래야 했다: 가드가 패리 **뒤에** 서서 두 창이 겹쳤고,
+        // 겹친 채로 두면 가드 불가 판정이 늦은 패리로 먹혀 "가드로는 못 막는다" 가
+        // 한 번도 안 일어났다.
+        //
+        // 지금은 겹치는 것이 **설계**다 (이슈 #53). 하나의 자세 안에서 창이 흐르고,
+        // 그 창의 안팎이 패리와 가드를 가른다 — 여기서 시계를 끊으면 패리가 통째로 사라진다.
         Fighter f = Guarding();
 
-        f.SinceParryPress.ShouldBe(double.PositiveInfinity);
+        f.SinceParryPress.ShouldBe(_dt, 1e-9);
+        f.Parrying.ShouldBeTrue();
+
+        for (int i = 0; i < 8; i++)
+        {
+            f.Tick(_parryHold, _dt);
+        }
+
+        f.SinceParryPress.ShouldBe(9 * _dt, 1e-9, "자세 안에서 시계가 멈췄다");
         f.Parrying.ShouldBeFalse();
     }
 
     [Fact]
-    public void 가드_비용은_피해에_비례한다()
+    public void 방어_비용은_피해에_비례한다()
     {
         // **무거운 한 방이 가드를 깨는 것이 가드 퍼니쉬의 레버다.** 정액이면 연타든 마무리든
         // 같은 값이라 "무엇을 가드할까" 라는 판단이 통째로 사라진다.
@@ -727,7 +685,7 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 가드는_피해의_일부만_받고_값을_스태미나로_낸다()
+    public void 방어는_피해의_일부만_받고_값을_스태미나로_낸다()
     {
         Fighter f = Guarding();
         double stamina = f.Stamina;
@@ -753,10 +711,42 @@ public class FighterActionTests
         f.Action.ShouldBe(FighterAction.Idle);
         f.Guarding.ShouldBeFalse();
 
-        Idle(f, 53);   // 0.883초 — 붕괴 고정(0.9)이 아직 안 풀렸다
+        // 굳은 동안에는 아무것도 못 한다 — 그게 붕괴의 값이다. (부정확 패리가 지던 이 검사가
+        // 이슈 #53 으로 여기 왔다: 이제 굳는 길은 가드 붕괴 하나뿐이다.)
+        f.Tick(_dash, _dt);
+        f.Action.ShouldBe(FighterAction.Idle, "굳었는데 대시가 나갔다");
+        double x = f.X;
+        f.Tick(new InputFrame(1, false, false, false, false), _dt);
+        f.X.ShouldBe(x, 1e-9, "굳었는데 걸었다");
+
+        Idle(f, 51);   // 합쳐 0.883초 — 붕괴 고정(0.9)이 아직 안 풀렸다
         f.Locked.ShouldBeTrue();
         Idle(f, 2);
         f.Locked.ShouldBeFalse();
+        f.Tick(_dash, _dt);
+        f.Action.ShouldBe(FighterAction.Dash, "고정이 안 풀렸다");
+    }
+
+    [Fact]
+    public void 굳는_동안_붙들고만_있으면_자세가_다시_안_선다()
+    {
+        // 자세를 세우는 것은 **엣지**다 (InputFrame 의 계약). 붕괴로 굳은 동안 계속 누르고
+        // 있었다면 그 엣지는 이미 지났으므로, 고정이 풀려도 자세는 저절로 안 돌아온다 —
+        // 다시 눌러야 한다. 그게 맞다: 무너진 방어가 손을 안 뗐다는 이유로 저절로 서면
+        // guard_break_lock 이 무는 것이 없다.
+        Fighter f = Guarding();
+        f.GuardBreak(fullDamage: 20);
+
+        for (int i = 0; i < 90; i++)
+        {
+            f.Tick(_parryHold, _dt);
+        }
+
+        f.Locked.ShouldBeFalse("고정이 안 풀렸다 — 아래 단언이 다른 것을 본다");
+        f.Guarding.ShouldBeFalse("붙들고만 있었는데 자세가 다시 섰다");
+
+        f.Tick(_parryPress, _dt);
+        f.Guarding.ShouldBeTrue("다시 눌렀는데 자세가 안 섰다");
     }
 
     [Fact]
@@ -767,7 +757,7 @@ public class FighterActionTests
         f.GuardBreak(fullDamage: 20);
 
         f.Tick(_parryPress, _dt);
-        f.Action.ShouldBe(FighterAction.Idle, "굳었는데 패리가 나갔다");
+        f.Action.ShouldBe(FighterAction.Idle, "굳었는데 방어 자세가 섰다");
     }
 
 }
