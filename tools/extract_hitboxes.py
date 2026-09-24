@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """판정 모양을 그림에서 뽑아 overfit/data/hitboxes.json 에 쓴다 (이슈 #59 · 설계 §3).
 
-    python3 tools/extract_hitboxes.py           뽑아서 쓴다
-    python3 tools/extract_hitboxes.py --check   뽑은 것이 파일과 같은지만 본다 (다르면 1)
+    python3 tools/extract_hitboxes.py             뽑아서 쓴다
+    python3 tools/extract_hitboxes.py --check     뽑은 것이 파일과 같은지만 본다 (다르면 1)
+    python3 tools/extract_hitboxes.py --overlay   뽑은 사각형을 그림 위에 그려 out/hitbox_overlay/ 에 둔다
+                                                  (--check 와 같이 쓰면 파일은 안 건드리고 그림만 그린다)
 
 무엇을 뽑나 — hitboxes.json 의 **키가 곧 목록**이다. 키는 `팩/애니메이션/프레임` 이고
 (예: `medieval_king/attack/2`), 새 판정 모양이 필요하면 키를 하나 더하고 이 도구를 돌린다.
@@ -21,6 +23,10 @@ fill_min 이상이면 그 칸을 판정으로 친다. 같은 줄에서 이어진
 파이터인지는 bosses.json · fighters.json 의 sprite 가 말한다.
 
 그림 원본(PNG)은 저장소에 없다 — install_assets.py 를 먼저 돌린다. 이 도구의 출력만 커밋한다.
+
+눈으로 본다 — --overlay 는 키마다 region 을 확대해 그 위에 사각형 테두리를 그린다(하늘색 세로줄이 몸 중심).
+사각형이 궤적 말고 다른 그림(몸 · 옷 · 털)을 덮고 있으면 거기서 보인다. 그리는 사각형은 파일에 쓰는 바로
+그 값을 월드 px 에서 region 픽셀로 **되돌린** 것이라, 좌표 변환이 틀려도 그림에서 어긋나 보인다.
 """
 
 import argparse
@@ -28,7 +34,9 @@ import json
 import math
 import pathlib
 import re
+import struct
 import sys
+import zlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import install_assets  # noqa: E402 — PNG 판독기를 같이 쓴다 (Pillow 를 요구하지 않는다)
@@ -37,6 +45,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "overfit" / "data"
 FRAMES = ROOT / "overfit" / "assets" / "spriteframes"
 OUT = DATA / "hitboxes.json"
+
+# 겹쳐 그린 그림은 out/ 아래로만 떨어진다 (gitignore) — 그림 원본에서 유도한 것이라 커밋하지 않는다.
+OVERLAY_DIR = ROOT / "out" / "hitbox_overlay"
+OVERLAY_ZOOM = 4                  # 원본 1px → 4px. 지금 칸(cell_px 4)이면 한 칸이 16px 이라 눈에 들어온다
+OVERLAY_BACK = (30, 30, 38)       # 투명 자리. 어둡게 깔아야 흰 궤적과 그 위의 테두리가 보인다
+OVERLAY_RECT = (255, 48, 48)      # 사각형 테두리
+OVERLAY_AXIS = (64, 200, 255)     # 몸 중심(가로 0) — 앞뒤를 읽는 기준
 
 EXT_RE = re.compile(r'^\[ext_resource type="Texture2D" path="(?P<path>[^"]+)" id="(?P<id>[^"]+)"\]$')
 SUB_RE = re.compile(r'^\[sub_resource type="AtlasTexture" id="(?P<id>[^"]+)"\]$')
@@ -114,11 +129,10 @@ def rects_of(sheet, region, scale, source):
     return out
 
 
-def extract(existing):
-    """지금 파일의 키마다 다시 뽑는다. 메타 키(_로 시작)는 그대로 둔다."""
-    source = existing["_source"]
+def targets(existing):
+    """지금 파일의 키마다 (.tres 의 칸, 배율). 그림을 읽기 전에 이름과 역할부터 맞춰 본다."""
     table = scales()
-    out = {k: v for k, v in existing.items() if k.startswith("_")}
+    found = {}
     for key in sorted(k for k in existing if not k.startswith("_")):
         pack, anim, frame = key.split("/")
         sub = atlas(pack).get(f"{anim}_{frame}")
@@ -126,11 +140,79 @@ def extract(existing):
             raise SystemExit(f"{key}: {pack}.tres 에 {anim}_{frame} 가 없다 — 애니메이션 이름은 .tres 의 이름이다")
         if pack not in table:
             raise SystemExit(f"{key}: {pack} 는 bosses.json · fighters.json 어느 sprite 도 아니다 — 배율을 모른다")
-        rects = rects_of(sub["sheet"], sub["region"], table[pack], source)
+        found[key] = (sub, table[pack])
+    return found
+
+
+def extract(existing, found):
+    """키마다 다시 뽑는다. 메타 키(_로 시작)는 그대로 둔다."""
+    source = existing["_source"]
+    out = {k: v for k, v in existing.items() if k.startswith("_")}
+    for key, (sub, scale) in found.items():
+        rects = rects_of(sub["sheet"], sub["region"], scale, source)
         if not rects:
             raise SystemExit(f"{key}: 흰 픽셀이 없다 — 판정 프레임이 맞나")
-        out[key] = {"scale": table[pack], "region": list(sub["region"]), "rects": rects}
+        out[key] = {"scale": scale, "region": list(sub["region"]), "rects": rects}
     return out
+
+
+def overlay(key, entry, sheet):
+    """region 을 확대해 깔고 그 위에 사각형 테두리를 그린다 → out/hitbox_overlay/<키의 / 를 _ 로>.png.
+
+    사각형은 월드 px 에서 region 픽셀로 **되돌려** 그린다 — 뽑을 때(rects_of)의 역이다. 뽑은 칸을 그대로
+    칠하면 좌표 변환(몸 중심 · 발바닥 · 배율)이 틀려도 그림에서는 멀쩡해 보인다.
+    """
+    _, _, rows = install_assets.png_rgba(sheet)
+    rx, ry, rw, rh = entry["region"]
+    scale, zoom = entry["scale"], OVERLAY_ZOOM
+    width, height = rw * zoom, rh * zoom
+
+    canvas = []
+    for y in range(rh):
+        line = bytearray()
+        src = rows[ry + y]
+        for x in range(rw):
+            r, g, b, a = src[(rx + x) * 4:(rx + x) * 4 + 4]
+            # 알파를 바닥 위에 섞는다. 지금 두 팩은 알파가 0 · 255 뿐이지만, 섞어 두면 반투명 팩이 와도 안 틀린다
+            line += bytes((c * a + k * (255 - a)) // 255 for c, k in zip((r, g, b), OVERLAY_BACK)) * zoom
+        canvas.extend(bytearray(line) for _ in range(zoom))
+
+    def paint(x, y, color):
+        if 0 <= x < width and 0 <= y < height:
+            canvas[y][x * 3:x * 3 + 3] = bytes(color)
+
+    center = round(rw / 2 * zoom)
+    for y in range(height):
+        paint(center, y, OVERLAY_AXIS)
+
+    for x0, x1, y0, y1 in entry["rects"]:
+        left = round((x0 / scale + rw / 2) * zoom)
+        right = round((x1 / scale + rw / 2) * zoom) - 1
+        top = round((rh - y1 / scale) * zoom)
+        bottom = round((rh - y0 / scale) * zoom) - 1
+        for x in range(left, right + 1):
+            paint(x, top, OVERLAY_RECT)
+            paint(x, bottom, OVERLAY_RECT)
+        for y in range(top, bottom + 1):
+            paint(left, y, OVERLAY_RECT)
+            paint(right, y, OVERLAY_RECT)
+
+    path = OVERLAY_DIR / f"{key.replace('/', '_')}.png"
+    write_png(path, width, height, canvas)
+    return path
+
+
+def write_png(path, width, height, rows):
+    """8bit RGB PNG 를 쓴다. 판독기(install_assets.png_rgba)와 같은 이유로 표준 라이브러리만 쓴다 — Pillow 를 요구하지 않는다."""
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+
+    raw = b"".join(b"\x00" + bytes(row) for row in rows)   # 행마다 필터 0(없음)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n"
+                     + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(raw, 9))
+                     + chunk(b"IEND", b""))
 
 
 def dump(data):
@@ -157,10 +239,20 @@ def dump(data):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="뽑은 것이 파일과 같은지만 본다")
+    parser.add_argument("--overlay", action="store_true",
+                        help="뽑은 사각형을 그림 위에 그려 out/hitbox_overlay/ 에 둔다")
     args = parser.parse_args()
 
-    data = extract(read_json(OUT))
+    existing = read_json(OUT)
+    found = targets(existing)
+    data = extract(existing, found)
     text = dump(data)
+
+    # 검사보다 먼저 그린다 — 파일과 그림이 갈렸을 때가 바로 그림을 봐야 할 때다.
+    if args.overlay:
+        for key, (sub, _) in found.items():
+            print(f"  {overlay(key, data[key], sub['sheet']).relative_to(ROOT)}")
+
     if args.check:
         if OUT.read_text(encoding="utf-8") != text:
             print("hitboxes.json 이 그림과 다르다 — python3 tools/extract_hitboxes.py 를 돌려라")
