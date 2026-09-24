@@ -141,6 +141,40 @@ public class FighterDataTests
     }
 
     /// <summary>
+    /// 실제 캐릭터가 <paramref name="tier"/> 단계까지 모았다가 놓은 칼의 피해. <b>규칙을 돌려서</b> 잰다 —
+    /// 배수 × 기본 피해를 여기서 곱해 적으면 반올림 규약(Fighter.AttackDamage 의 AwayFromZero)이
+    /// 테스트 밖에 남는다.
+    /// </summary>
+    private static int ChargedDamage(FighterConfig c, int tier)
+    {
+        var fighter = new Fighter(c, TestConfigs.Arena(), TestConfigs.Arena().Width / 2);
+        fighter.Tick(new InputFrame(0, false, false, false, Attack: true, AttackHeld: true), BattleSim.Dt);
+        for (int i = 0; i < 60 * 5 && fighter.ChargeTier < tier; i++)
+        {
+            fighter.Tick(new InputFrame(0, false, false, false, false, AttackHeld: true), BattleSim.Dt);
+        }
+
+        fighter.Tick(default, BattleSim.Dt);   // 놓는다 — 모은 단계가 이 칼질에 굳는다
+        fighter.ChargeTier.ShouldBe(tier, "모으다 말았다 — 이 도우미가 아무것도 안 잰다");
+        return fighter.AttackDamage;
+    }
+
+    [Fact]
+    public void 모은_칼은_두_배_반과_다섯_배다()
+    {
+        // **유저가 직접 해 보고 낸 요청이다** (이슈 #54): "차지시 공격력 배수를 더 높여주세요
+        // 차지공격에 메리트가 크도록". 이슈가 그것을 ×1 · ×2.5 · ×5 로 옮겼다 — 최대가 ×3 이던 때는
+        // 2초를 서 있어도 30 이라 설 값이 없었다. 기본 피해 10 으로 25 · 50 이고, 50 은 보스 체력
+        // 200 의 4분의 1 이다. **값은 유저가 손으로 판단한다** — 바꾸면 이 테스트도 같이 고친다
+        // (차지는_2초에_최대다 와 같은 자리다).
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            ChargedDamage(c, 1).ShouldBe(25, $"{id}: 0.8초 모은 칼");
+            ChargedDamage(c, 2).ShouldBe(50, $"{id}: 2초 모은 칼(최대)");
+        }
+    }
+
+    /// <summary>
     /// 한 패턴의 <b>마지막 판정</b>부터 다음 패턴의 <b>첫 판정</b>까지 맞을 일이 없는 시간(초).
     /// 패턴 꼬리(마지막 판정 → 끝) + 패턴 간격 + 다음 패턴의 선딜이다.
     /// <b>패리는 안 센다</b> — 차지는 패리와 상관없는 기술이라, 이 창은 아무것도 안 하고
