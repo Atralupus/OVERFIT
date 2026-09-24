@@ -213,7 +213,13 @@ public partial class FighterView : Node2D
         }
 
         _sprite.SpriteFrames = frames;
-        Animate("idle");
+        // **이름이 같아도 재생하고 바닥을 맞춘다** (이슈 #62). 프레임을 끼우는 순간 엔진이 재생을 멈추고,
+        // 지금 이름(처음엔 "default")이 새 프레임에 없으면 **첫 애니메이션으로 바꿔 둔다** — 이 팩의 첫
+        // 애니메이션이 idle 이다. 그래서 그냥 Animate("idle") 이면 "이미 idle" 로 보고 아무것도 안 해,
+        // 전투가 시작될 때마다 파이터가 바닥을 안 맞춘 채(타일 중심이 발에 놓여 몸 절반이 땅 밑) 첫 장에
+        // 멈춰 서 있었다 — 처음 움직일 때까지. 판정 보기(#59)로 몸통은 바닥 위에, 그림만 아래에 있는 것이 보였다.
+        Animate("idle", force: true);
+        Log.Debug("view", $"fighter_sprite id={spriteId} anim={_sprite.Animation} offset_y={_sprite.Offset.Y:0.#}");
     }
 
     /// <summary>한 프레임의 상태를 반영한다. y 는 위가 +인 규칙 좌표라 화면에서는 뒤집는다.</summary>
@@ -627,10 +633,12 @@ public partial class FighterView : Node2D
     /// <summary>
     /// 이름이 바뀔 때만 재생하고, 그때마다 바닥을 다시 맞춘다.
     /// 매 프레임 <c>Play</c> 하면 안 바뀐 것처럼 보이지만 애니메이션이 1프레임에 붙들린다.
+    /// <paramref name="force"/> 는 이름이 같아도 그렇게 한다 — 엔진이 이름만 바꿔 두고 재생도 맞춤도 안 한
+    /// 자리(<see cref="Load"/>)가 쓴다.
     /// </summary>
-    private void Animate(string name)
+    private void Animate(string name, bool force = false)
     {
-        if (_sprite.SpriteFrames is null || _sprite.Animation == name)
+        if (_sprite.SpriteFrames is null || (!force && _sprite.Animation == name))
         {
             return;
         }

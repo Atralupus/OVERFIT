@@ -129,7 +129,12 @@ public partial class BossView : Node2D
         }
 
         _sprite.SpriteFrames = frames;
-        Animate("idle");
+        // **이름이 같아도 재생하고 바닥을 맞춘다** (이슈 #62). 프레임을 끼우는 순간 엔진이 재생을 멈추고
+        // 첫 애니메이션(이 팩은 idle)으로 이름만 바꿔 두어, 그냥 Animate("idle") 은 아무것도 안 한다.
+        // 파이터는 그래서 전투 시작마다 땅에 반쯤 묻혀 있었고, 보스는 시작하자마자 걸어 들어와(run)
+        // 그 첫 전환이 바닥을 맞춰 줘서 가려져 있었을 뿐 같은 길이다.
+        Animate("idle", force: true);
+        Log.Debug("view", $"boss_sprite id={spriteId} anim={_sprite.Animation} offset_y={_sprite.Offset.Y:0.#}");
     }
 
     /// <summary>
@@ -345,10 +350,13 @@ public partial class BossView : Node2D
         }
     }
 
-    /// <summary>이름이 바뀔 때만 재생하고, 그때마다 바닥을 다시 맞춘다.</summary>
-    private void Animate(string name)
+    /// <summary>
+    /// 이름이 바뀔 때만 재생하고, 그때마다 바닥을 다시 맞춘다. <paramref name="force"/> 는 이름이 같아도
+    /// 그렇게 한다 — 엔진이 이름만 바꿔 두고 재생도 맞춤도 안 한 자리(<see cref="Load"/>)가 쓴다.
+    /// </summary>
+    private void Animate(string name, bool force = false)
     {
-        if (_sprite.SpriteFrames is null || _sprite.Animation == name)
+        if (_sprite.SpriteFrames is null || (!force && _sprite.Animation == name))
         {
             return;
         }
