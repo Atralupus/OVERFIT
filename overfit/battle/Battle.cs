@@ -29,6 +29,13 @@ public partial class Battle : Node2D
     private Node2D _world = null!;
     private Vector2 _worldHome;
 
+    /// <summary>
+    /// 판정 보기 (설계 §6.1). <b><c>--debug-collisions</c> 로 띄웠을 때만</b> 선다 — 아니면 null.
+    /// Godot 의 Visible Collision Shapes 는 실행 중에 못 켠다(SceneTree.debug_collisions_hint 문서)라
+    /// 켜고 띄웠을 때만 노드를 세운다. 안 켰으면 사각형을 옮기는 비용도 없다.
+    /// </summary>
+    private HitboxDebug? _hitboxDebug;
+
     // 최대 체력을 리터럴로 들지 않는다 — 시뮬레이션을 세운 바로 그 설정에서 읽는다.
     // 수치는 데이터(fighters.json · bosses.json)에 있고, 뷰는 그것을 베끼지 않는다.
     private FighterConfig _fighterConfig = null!;
@@ -266,6 +273,13 @@ public partial class Battle : Node2D
         _fighterView.Load(
             _fighterConfig.Sprite, _fighterConfig.AttackAnimStartFrame, _fighterConfig.AttackAnimBladeFrame);
         _bossView.Load(_bossConfig.Sprite);
+
+        if (GetTree().DebugCollisionsHint)
+        {
+            _hitboxDebug = new HitboxDebug();
+            _world.AddChild(_hitboxDebug);
+        }
+
         Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={ids.Count}");
     }
 
@@ -645,6 +659,14 @@ public partial class Battle : Node2D
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
+
+        _hitboxDebug?.Show(
+            _sim.BossTestedRects,
+            _sim.BossNextRects,
+            _sim.FighterTestedRects,
+            _sim.Fighter.Body,
+            _sim.Boss.Body,
+            HitboxDebug.FighterColor(_sim.Fighter.Invulnerable, _sim.Fighter.Parrying, _sim.Fighter.Guarding));
     }
 
     /// <summary>규칙의 행동 → 뷰의 자세. 이 변환을 아는 것은 둘 다 아는 여기뿐이다.</summary>

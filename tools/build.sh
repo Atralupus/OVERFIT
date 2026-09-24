@@ -22,6 +22,8 @@
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
 #   EXTRA="--stage=2" tools/build.sh demo        단계 지정 (캐릭터는 하나라 --fighter= 는 그 하나만 가리킨다)
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
+#   HITBOXES=1 tools/build.sh run|shots  판정 보기 — Godot 의 Visible Collision Shapes 를 켠다(--debug-collisions).
+#                                        규칙이 이 틱에 댄 판정 사각형이 그려진다. shots 는 그 사진을 docs/shots/ 로 안 넘긴다
 #   tools/build.sh clean               빌드 산출물 삭제
 #
 # 헤드리스 판정 — 창 없이 도는 서브커맨드(지금은 smoke 하나)는 판정 함수 하나(judge_headless)를 공유한다.
@@ -51,6 +53,10 @@ GODOT="${GODOT_PATH:-${GODOT:-/Applications/Godot_mono.app/Contents/MacOS/Godot}
 # LOG_LEVEL=trace|debug|info|warn|error 를 게임의 --log-level 유저 인자로 넘긴다. 비어 있으면 게임 기본값(디버그 빌드 debug).
 LOG_ARG=""
 [[ -n "${LOG_LEVEL:-}" ]] && LOG_ARG="--log-level=${LOG_LEVEL}"
+
+# 판정 보기 (이슈 #59 · 설계 §6.1). 실행 중에는 못 켜므로(SceneTree.debug_collisions_hint) 띄울 때 정한다.
+HITBOX_ARG=""
+[[ "${HITBOXES:-}" == "1" ]] && HITBOX_ARG="--debug-collisions"
 
 # 버전은 Godot 이 알려주는 값에서 뽑는다. 하드코딩하면 업그레이드 때 조용히 어긋난다.
 godot_version() { "$GODOT" --version 2>/dev/null | tail -1 | tr -d '\r'; }
@@ -312,8 +318,8 @@ cmd_run() {
   # CLI 실행은 C# 을 자동으로 빌드하지 않는다. 안 하면 옛 어셈블리로 돈다.
   cmd_build
   say "실행"
-  if [[ $# -gt 0 ]]; then "$GODOT" --path "$PROJECT" "$1" -- $LOG_ARG
-  else "$GODOT" --path "$PROJECT" -- $LOG_ARG; fi
+  if [[ $# -gt 0 ]]; then "$GODOT" --path "$PROJECT" $HITBOX_ARG "$1" -- $LOG_ARG
+  else "$GODOT" --path "$PROJECT" $HITBOX_ARG -- $LOG_ARG; fi
 }
 
 cmd_editor() { need_godot; "$GODOT" --path "$PROJECT" --editor; }
@@ -400,13 +406,19 @@ cmd_shots() {
   local out="$OUT/shots" log="$OUT/shots.log" code=0
   rm -rf "$out"
   mkdir -p "$out"
-  "$GODOT" --path "$PROJECT" -- --shots "--shot-dir=$out" $LOG_ARG > "$log" 2>&1 || code=$?
+  "$GODOT" --path "$PROJECT" $HITBOX_ARG -- --shots "--shot-dir=$out" $LOG_ARG > "$log" 2>&1 || code=$?
   grep -E "^\[(shots|shot)\]" "$log" || true
   judge_headless "스크린샷" "$log" "shots=done" "$code"
 
   local n
   n="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"
   [[ "$n" -gt 0 ]] || die "스크린샷이 0장입니다 — 창이 안 떴거나 뷰포트가 비었습니다. 전체 로그: $log"
+
+  # 판정이 그려진 사진은 디버그용이다 — README 가 쓰는 docs/shots/ 로 넘기지 않는다.
+  if [[ -n "$HITBOX_ARG" ]]; then
+    ok "스크린샷 ${n}장 — $out (판정 보기라 docs/shots/ 는 그대로 둔다)"
+    return
+  fi
 
   # 문서용 축소본. 원본은 1920x1080 이라 README 에 그대로 넣으면 무겁다.
   mkdir -p "$ROOT/docs/shots"
