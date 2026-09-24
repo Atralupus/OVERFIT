@@ -59,6 +59,7 @@
     <Compile Include="../../overfit/battle/rules/Fighter.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/HitBox.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/HitShape.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/HitShapeTable.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PatternDef.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PatternRunner.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/StageRoster.cs" LinkBase="linked/battle/rules" />

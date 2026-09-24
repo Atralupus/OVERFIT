@@ -168,8 +168,12 @@ PACKS = (
 # 여기서 필요한 것은 "알파가 있는 행이 어디부터 어디까지인가" 하나뿐이다.
 
 
-def png_alpha_rows(path):
-    """(폭, 높이, 알파가 있는 첫 행, 마지막 행). 전부 투명하면 두 행은 None 이다."""
+def png_rgba(path):
+    """(폭, 높이, 행 목록). 행은 필터를 푼 RGBA 바이트다.
+
+    판독기가 하나인 이유: 이 파일(발 높이를 재 region 을 자른다)과 extract_hitboxes.py(판정 모양을 뽑는다)가
+    같은 픽셀을 봐야 판정이 그려지는 자리와 맞는다. 판독기가 둘이면 한쪽만 고쳐지는 날이 온다.
+    """
     data = path.read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\x0a":
         raise ValueError(f"PNG 가 아닙니다: {path}")
@@ -198,19 +202,28 @@ def png_alpha_rows(path):
     raw = zlib.decompress(bytes(pixels))
     bpp, stride = 4, width * 4
     prev = bytearray(stride)
-    first = last = None
+    rows = []
     at = 0
-    for y in range(height):
+    for _ in range(height):
         kind = raw[at]
         at += 1
         line = bytearray(raw[at:at + stride])
         at += stride
         _unfilter(kind, line, prev, bpp, stride)
+        rows.append(line)
+        prev = line
+
+    return width, height, rows
+
+
+def png_alpha_rows(path):
+    """(폭, 높이, 알파가 있는 첫 행, 마지막 행). 전부 투명하면 두 행은 None 이다."""
+    width, height, rows = png_rgba(path)
+    first = last = None
+    for y, line in enumerate(rows):
         if any(line[3::4]):
             first = y if first is None else first
             last = y
-        prev = line
-
     return width, height, first, last
 
 
