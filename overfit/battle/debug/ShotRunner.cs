@@ -135,7 +135,8 @@ public partial class ShotRunner : Node
         // 이슈 #48 이 유일한 패리 불가 패턴(점프 강타)을 뺐다. 조건이 영영 참이 안 되는 기다림은
         // 16초를 버리고 경고 한 줄을 남긴 뒤 **아무 순간이나** 찍는다 — 그렇게 찍힌 장은
         // 파일 이름이 거짓말을 하므로, 기다림을 지운다. 그 붉은색은 이제 **가드 불가**의 것이고
-        // (이슈 #53) 그 장은 battle-10c 가 찍는다 — 패리 불가가 돌아오면 다른 신호를 줘야 한다.
+        // (이슈 #53) 그 장은 battle-6b(1단계) · battle-10c(3단계)가 찍는다 — 패리 불가가 돌아오면
+        // 다른 신호를 줘야 한다.
 
         // ── 피격: 체력이 줄어든 바로 다음 프레임 ──────────────────────────
         int before = _battle?.FighterHealth ?? 0;
@@ -173,6 +174,7 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-8-result");
 
         await Charging();
+        await FirstStageFinisher();
         await Guarding();
         await Facing();
 
@@ -227,6 +229,37 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
+    /// 1단계의 빨간 마무리 한 장 (이슈 #53). <b>유저가 실제로 하고 있는 단계</b>에서 빨강이 뜨는지를
+    /// 눈으로 본다 — 규칙 테스트는 "다음 판정이 가드 불가다" 까지만 말하고, 그게 화면에서 빨강인지는
+    /// 여기서만 보인다.
+    ///
+    /// <para>
+    /// <b>따로 판을 연다.</b> 위의 판은 2단계라(예고 세 장이 변종 셋을 찍는다) 1단계의 `내려찍기 I` 이
+    /// 안 나오고, 아래 방어 시퀀스는 3단계다. 이 장이 있어야 "빨강은 3단계 전용이 아니다" 가 PNG 로 선다.
+    /// </para>
+    /// </summary>
+    private async Task FirstStageFinisher()
+    {
+        Game.Instance.SetStage(1);
+        Game.Instance.GoTo(Game.Scene.Battle);
+        await Frames(4);
+        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+
+        // 붙는다 — 떨어져 있어도 예고는 뜨지만, 보스가 걸어오는 도중이면 몸과 링이 화면 가장자리에 걸린다.
+        Hold("move_right", true);
+        await Wait(1.1);
+        Hold("move_right", false);
+
+        // 빨강은 **마무리 앞에서만** 뜬다 — 다음 판정이 가드 불가인지를 규칙에게 묻는다.
+        // 그 순간은 2타가 막 선 직후라 2타의 충격파(호박 원 + 살)가 아직 퍼지고 있다(battle-10c 가
+        // 그렇게 찍혔다). 24프레임(0.4초)을 기다리면 충격파가 걷히고 링이 반쯤 조여 있다 —
+        // 3타는 0.90초 뒤라 아직 안 온다.
+        await Until(() => _battle is { BossWindingUp: true, BossGuardBreak: true }, _tellTimeout);
+        await Frames(24);
+        await Screenshot.CaptureAsync(this, "battle-6b-finisher-tell");
+    }
+
+    /// <summary>
     /// 방어 네 장 (이슈 #47 · #53). <b>危 예고(빨강) · 버티는 자세 · 깨지는 순간 · 받아친 순간.</b>
     ///
     /// <para>
@@ -244,10 +277,10 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Guarding()
     {
-        // **3단계로 간다** (이슈 #48). 가드 불가는 3단계 변종의 마무리에만 붙으므로 1·2단계에서는
-        // 危 예고도 붕괴도 영원히 안 온다 — 그 명부에는 가드 불가 판정이 하나도 없다.
-        // 여기만 3단계인 이유는 위의 예고 세 장이 2단계의 변종 셋을 찍기 때문이다(3단계는 다섯이라
-        // 셋만 찍으면 어느 셋인지가 실행마다 달라진다).
+        // **3단계로 간다** (이슈 #48). 가드 불가는 이제 아홉 변종 전부의 마무리에 있어서(이슈 #53)
+        // 붕괴와 받아침은 어느 단계에서나 찍히지만, 이 시퀀스의 마지막 장(헛스윙)은 3단계의
+        // `III-역린` 에만 있다. 그리고 1단계의 빨강은 바로 앞(FirstStageFinisher)이 따로 찍으므로,
+        // 여기 battle-10c 는 **3단계에서도 같은 빨강 + 危** 인지를 보이는 짝이 된다.
         Game.Instance.SetStage(3);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
@@ -257,8 +290,11 @@ public partial class ShotRunner : Node
         // **맨 앞이다.** 아래 두 장은 맞아 가며 찍으므로 체력이 줄고, 뒤로 미루면 결과 화면이 찍힌다
         // (이 파일의 다른 주석들이 이미 밟은 실패다). 평소 예고(battle-6-windup)와 **나란히 놓고**
         // 봐야 이 연출이 일한다 — 한 장만으로는 "글자가 있다" 까지만 알 수 있다.
+        // 24프레임을 기다리는 이유는 battle-6b 와 같다: 6프레임이면 2타의 충격파(호박 원 + 살)가 아직
+        // 퍼지고 있어서 **빨간 예고 위에 호박 원이 겹쳐 찍혔다** — 그 원이 예고 링으로 읽혀 "3단계는
+        // 링이 호박이냐" 를 한 번 되물어야 했다. 충격파가 걷힌 뒤라야 두 단계의 빨강을 나란히 볼 수 있다.
         await Until(() => _battle is { BossWindingUp: true, BossGuardBreak: true }, _tellTimeout);
-        await Frames(6);
+        await Frames(24);
         await Screenshot.CaptureAsync(this, "battle-10c-guard-break-tell");
 
         // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
@@ -310,6 +346,22 @@ public partial class ShotRunner : Node
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10d-parry");
 
+        // ── 헛스윙: 칼은 지나갔는데 아무것도 안 나온 그 순간 (이슈 #48) ───
+        // 3단계에만 있는 III-역린 의 박자다. **판정과 다른 그림이어야** 이 변종이 배울 수 있는
+        // 함정이 된다 — 판정은 섬광 + 스파크 + 흔들림이고 헛스윙은 **빈 고리** 하나다.
+        // 0.34초짜리 사건이라 벽시계로는 못 노린다: 개수가 는 것을 보고 셔터를 누른다.
+        // 못 만나도 경고 한 줄이다 — 변종 다섯 중 하나라 여러 주기가 걸릴 수 있다.
+        //
+        // ⚠ **아래 지친 보스 장보다 먼저여야 한다** (이슈 #53 에서 밟았다). 그 장은 "굳을 때까지
+        // 받아친다" 인데, 시드 51 의 이 판에서 보스를 굳히는 것은 `III-역린` 의 마무리이고 그 바로 앞에
+        // 이 헛스윙이 지나간다 — 순서가 뒤집히면 헛스윙은 그 루프 안에서 이미 지나가 버리고, 여기는
+        // 다음 `III-역린` 을 기다리다 파이터가 먼저 죽는다. 실제로 그렇게 **패배 화면이 이 이름으로**
+        // 한 번 커밋됐다. 헛스윙을 먼저 찍으면 그 뒤에 오는 마무리가 곧 받아칠 대가 된다.
+        int feints = _battle?.BossFeints ?? 0;
+        await Until(() => (_battle?.BossFeints ?? 0) > feints, _tellTimeout);
+        await Frames(3);
+        await Screenshot.CaptureAsync(this, "battle-11-feint");
+
         // ── 지친 보스: 마무리를 받아쳐 굳은 동안 (이슈 #53) ──────────────
         // **Medieval King Pack 2 에는 지친 모션이 없다.** 시트는 열뿐이고(idle · run · jump · fall ·
         // attack1~3 · take-hit · take-hit-white · death) 그중 "숨이 차 서 있다" 인 것이 하나도 없다.
@@ -318,7 +370,8 @@ public partial class ShotRunner : Node
         // 그래서 지어내지 않고 **있는 것을 느리게** 돌린다: idle × stagger_anim_speed + 식은 몸 색.
         // 이 장은 그 둘이 실제로 "지쳤다" 로 읽히는지를 눈으로 확인하는 자리다.
         //
-        // 위 루프가 받아친 것이 마무리가 아니었으면 굳지 않으므로, 굳을 때까지 계속 받아친다.
+        // 받아친 것(battle-10d)이 마무리가 아니었으면 보스는 안 굳으므로, 굳을 때까지 계속 받아친다 —
+        // 바로 앞에서 헛스윙을 찍었으니 다음으로 오는 판정이 곧 그 `III-역린` 의 마무리다.
         for (int i = 0; i < 60 * 14 && _battle is { BossStaggered: false }; i++)
         {
             if (_battle is { BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08)
@@ -336,16 +389,6 @@ public partial class ShotRunner : Node
 
         await Frames(6);
         await Screenshot.CaptureAsync(this, "battle-10e-boss-exhausted");
-
-        // ── 헛스윙: 칼은 지나갔는데 아무것도 안 나온 그 순간 (이슈 #48) ───
-        // 3단계에만 있는 III-역린 의 박자다. **판정과 다른 그림이어야** 이 변종이 배울 수 있는
-        // 함정이 된다 — 판정은 섬광 + 스파크 + 흔들림이고 헛스윙은 **빈 고리** 하나다.
-        // 0.34초짜리 사건이라 벽시계로는 못 노린다: 개수가 는 것을 보고 셔터를 누른다.
-        // 못 만나도 경고 한 줄이다 — 변종 다섯 중 하나라 여러 주기가 걸릴 수 있다.
-        int feints = _battle?.BossFeints ?? 0;
-        await Until(() => (_battle?.BossFeints ?? 0) > feints, _tellTimeout);
-        await Frames(3);
-        await Screenshot.CaptureAsync(this, "battle-11-feint");
     }
 
     /// <summary>

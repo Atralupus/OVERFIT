@@ -156,8 +156,8 @@ public partial class Battle : Node2D
     ///
     /// <para>
     /// <b>패턴 태그가 아니라 다음 판정을 본다</b> (이슈 #53). 태그(<c>has_guard_break</c>)로 기다리면
-    /// 3단계 변종의 선딜 어디서나 참이라 1·2타 앞에서 셔터가 눌리고, 그 장은 "빨간 3타 예고" 라는
-    /// 이름으로 호박색 1타를 찍는다.
+    /// 이제 아홉 변종 전부의 선딜 어디서나 참이라 1·2타 앞에서 셔터가 눌리고, 그 장은 "빨간 3타
+    /// 예고" 라는 이름으로 호박색 1타를 찍는다.
     /// </para>
     /// </summary>
     public bool BossGuardBreak => !_broken && !_over && _sim.NextActiveGuardBreak;
@@ -674,16 +674,15 @@ public partial class Battle : Node2D
             return null;
         }
 
-        // 둘 다 **다음 판정**에서 온다 (이슈 #53). 마무리면 예고가 호박에서 **빨강**이 되고,
-        // 가드 불가면 그 위에 危 가 얹힌다 — 색과 글자가 서로 다른 말을 지므로 칸도 둘이다.
+        // **다음 판정**에서 온다 (이슈 #53). 가드 불가면 예고가 호박에서 **빨강**이 되고 그 위에
+        // 危 가 뜬다 — 둘은 같은 뜻("가드로 못 막는다")을 색과 모양 두 통로로 나른다(BossTell).
         //
         // ⚠ 이슈 #47 은 여기서 패턴 태그(has_guard_break)를 읽었다. 그때는 그 요약이 "무엇이
         // 오는가" 를 말하는 유일한 값이었지만, 계열이 연속타뿐인 지금 그 요약은 **선딜 내내 참**이라
         // 1·2타까지 빨갛게 칠한다 — 막을 수 있는 판정을 "못 막는다" 고 말하는 예고다.
         // 다음 판정 하나만 보면 색이 1·2타에 호박 · 3타에 빨강으로 제때 갈린다.
         return new BossTell(
-            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length,
-            _sim.NextActiveFinisher, _sim.NextActiveGuardBreak);
+            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length, _sim.NextActiveGuardBreak);
     }
 
     /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>

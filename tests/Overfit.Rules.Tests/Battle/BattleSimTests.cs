@@ -1169,45 +1169,22 @@ public class BattleSimTests
     }
 
     [Fact]
-    public void 마무리의_상은_가드_불가인지를_안_따진다()
+    public void 상은_손으로_단_깃발이_아니라_마무리_자리에_걸린다()
     {
-        // **이슈 #53 이 갈라 놓은 두 성질이다.** 유저가 요청한 고리("3타를 받아치면 긴 경직 →
-        // 풀차지")는 1단계부터 있어야 하는데, 가드 불가는 3단계 다섯 변종의 마무리에만 붙는다.
-        // 그 둘을 한 깃발로 묶으면 **유저가 실제로 하고 있는 1단계에 고리가 통째로 없다.**
+        // **규칙이 어느 칸을 읽는가를 못박는다** (이슈 #53). 데이터에서는 마무리가 아홉 변종 전부
+        // 가드 불가라(유저 결정 · 빨강은 한 가지 뜻) 두 칸이 언제나 같은 대다 — PatternDataTests 가
+        // 그 일치를 양쪽에서 본다. 그래도 경직은 깃발(guard_break)이 아니라 **타임라인의 마지막 자리**
+        // (HitBox.Finisher)를 읽는다: 손으로 단 깃발은 판정을 하나 끼워 넣는 날 옛 마무리에 남을 수
+        // 있고, 그러면 상이 엉뚱한 대로 가거나 사라진다. 자리는 그러지 않는다.
         //
-        // 그래서 상은 **마무리인가**에 걸고, 가드 불가는 "그 위에 하나 더"(막을 수조차 없다)로
-        // 남겼다. 묶을 수 없는 이유도 데이터에 있다: 가드 불가를 아홉 변종 전부로 넓히면
-        // `II-쐐기` 와 `III-쐐기` 가 **글자 하나 안 다른 같은 패턴**이 되고, 세 쌍(끌기·쇄도·쐐기)이
-        // 화면에서 구별되던 유일한 표지(危)도 같이 사라진다.
+        // 그래서 여기서는 일부러 **깃발이 없는 마무리**(데이터에서는 금지된 모양)를 세워, 상이 깃발을
+        // 안 따라가는지를 본다. 데이터의 규약이 깨졌을 때 규칙까지 같이 무너지지 않게 하는 두 번째 벽이다.
         BossConfig boss = TestConfigs.Boss();
 
         StaggerLeft(ParryNthOfTwo(2, guardBreak: false))
-            .ShouldBe(boss.FinisherParryStagger, 2 * BattleSim.Dt, "1·2단계 마무리에는 상이 없다 — 1단계에 고리가 안 선다");
+            .ShouldBe(boss.FinisherParryStagger, 2 * BattleSim.Dt, "깃발 없는 마무리에 상이 안 걸렸다 — 규칙이 자리 대신 깃발을 읽는다");
         StaggerLeft(ParryNthOfTwo(2, guardBreak: true))
             .ShouldBe(boss.FinisherParryStagger, 2 * BattleSim.Dt);
-    }
-
-    [Fact]
-    public void 예고는_다음_판정_하나만_보고_마무리를_말한다()
-    {
-        // 빨강은 **마무리**를 말한다 (이슈 #53) — "이 한 대가 받아칠 값이 있는 대" 다.
-        // 패턴 단위로는 이 말을 못 한다: 마무리는 판정 하나라 선딜 내내 참인 태그로 칠하면
-        // 막아도 되는 앞의 두 대까지 빨개진다.
-        BattleSim sim = OnePattern(TwoHits(guardBreak: false));
-
-        var seen = new List<bool>();
-        for (int i = 1; i <= _lastHit + 12 && sim.Events.Count < 2; i++)
-        {
-            sim.Tick(default);
-            if (sim.Boss.CurrentPattern is not null && sim.NextActiveIn is not null)
-            {
-                seen.Add(sim.NextActiveFinisher);
-            }
-        }
-
-        seen.ShouldContain(false, "1타 앞에서도 마무리라고 말한다 — 앞의 연타가 빨개진다");
-        seen.ShouldContain(true, "마무리 앞에서 마무리라고 말하지 않는다 — 빨강이 영영 안 뜬다");
-        seen.IndexOf(true).ShouldBeGreaterThan(seen.LastIndexOf(false));
     }
 
     [Fact]
@@ -1357,9 +1334,9 @@ public class BattleSimTests
         // **유저가 요청한 고리 전체를 한 줄로 못박는다** (이슈 #53): "3타 패리시 경직이 훨씬
         // 길어야합니다. 풀차지를 해서 공격을 할 수 있을만큼."
         //
-        // 이 테스트가 **1단계**인 것이 요점이다. 상을 `guard_break` 에 걸면 이 판에서는 한 번도
-        // 안 걸린다 — 가드 불가는 3단계 다섯 변종의 마무리에만 있기 때문이다. 유저가 실제로
-        // 하고 있는 단계가 여기라, 여기서 안 서면 요청받은 것이 하나도 안 된 것이다.
+        // 이 테스트가 **1단계**인 것이 요점이다 — 유저가 실제로 하고 있는 단계가 여기라, 여기서 안
+        // 서면 요청받은 것이 하나도 안 된 것이다. 1단계의 마무리도 빨간 가드 불가이고(이슈 #53 ·
+        // 유저 결정), 붙들고 버티는 사람은 거기서 깨지고 받아친 사람은 보스를 굳힌다.
         FighterConfig f = TestConfigs.Fighter();
         double lead = f.ChargeTiers[^1].Seconds + f.AttackActive;
 

@@ -248,33 +248,58 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 화면의_예고가_변종마다_다르다()
+    public void 한_판에서_만나는_변종은_예고가_서로_다르다()
     {
         // 선딜 링은 "뭔가 온다" 까지만 말한다 — **무엇이** 오는지는 안 말한다(이슈 #28).
         // 계열이 하나가 되면서(이슈 #48) 이 문제가 더 날카로워졌다: 아홉이 같은 기술이라
         // 화면이 안 가르면 플레이어에게는 한 공격이다.
         //
-        // **화면의 서명은 (모양 + 危) 쌍이다.** 아홉에 모양 아홉을 주지 않는 이유는 2단계와
-        // 3단계의 같은 변종(II-끌기 ↔ III-끌기)이 **정말 같은 그림**이어야 하기 때문이다 —
-        // 둘의 차이는 '마무리를 가드로 못 막는다' 하나뿐이고, 그것을 말하는 것이 危 표지다.
-        // 그래서 모양은 같이 쓰되 그 쌍은 달라야 한다.
-        var seen = new Dictionary<(string Shape, bool GuardBreak), string>();
-        foreach ((string id, PatternDef def) in Load())
+        // **화면이 갈라야 하는 것은 한 판에서 만나는 변종들이다.** 한 판은 한 단계의 명부에서만
+        // 뽑는다(StageRoster) — 2단계 판은 2단계 변종만 굴리므로 `II-끌기` 와 `III-끌기` 를
+        // 나란히 보는 일은 없다. 그래서 유일성을 **단계마다** 요구한다.
+        //
+        // ⚠ **겨눈 자리를 고친 것이지 약하게 만든 것이 아니다** (이슈 #53). 전에는 (모양 + 危) 쌍을
+        // **아홉 전부에 걸쳐** 유일하게 요구했다. 그 요구의 목적은 단계를 넘는 같은 변종
+        // (II-끌기 ↔ III-끌기)을 危 하나로 가르는 것이었는데, 그 둘은 플레이어가 한 화면에서
+        // 견줄 일이 없다 — 틀린 것을 재고 있었다. 정작 중요한 한 판 안의 유일성은 그 요구에
+        // **딸려서** 지켜졌을 뿐이다(한 단계 안에서는 危 가 늘 같았다). 마무리가 아홉 전부 가드
+        // 불가가 되자 危 는 아무것도 못 가르게 됐고, 옛 요구를 그대로 두면 단계를 넘는 같은 변종에게
+        // **다른 그림**을 강요한다 — 같은 기술이라는 것을 그림이 거짓말하게 된다. 그래서 딸려 있던
+        // 요구를 본래 목적으로 세우고 틀린 요구는 뺐다. 한 단계 안에서 두 변종이 같은 모양을 쓰면
+        // **지금도 빨개진다.**
+        //
+        // 단계를 넘는 같은 변종은 **같은 그림이어도 된다** — 오히려 그래야 한다: 같은 기술의
+        // 윗단계라는 것을 그림이 말한다. 둘이 정말 다른 패턴인지는 그림이 아니라 모양이 본다
+        // (셋째_단계_변종은_둘째_단계_짝과_가드_불가_말고도_다르다).
+        Dictionary<string, PatternDef> patterns = Load();
+        foreach ((string id, PatternDef def) in patterns)
         {
             def.Tell.Id.ShouldNotBeNullOrWhiteSpace($"{id}: tell.id 가 비었다");
             def.Tell.Anim.ShouldNotBeNullOrWhiteSpace($"{id}: tell.anim 이 비었다");
             def.Tell.Length.ShouldBeGreaterThan(0, $"{id}: tell.length 가 0 이면 아무것도 안 그려진다");
             def.Tell.Y.ShouldBeGreaterThanOrEqualTo(0, $"{id}: tell.y 가 바닥 아래다");
-
-            (string, bool) signature = (def.Tell.Id, def.Tags.HasGuardBreak);
-            seen.ShouldNotContainKey(signature,
-                $"{id}: 예고 {def.Tell.Id}(危={def.Tags.HasGuardBreak})를 {seen.GetValueOrDefault(signature)} 와"
-                + " 같이 쓴다 — 화면에서 두 변종이 완전히 같아진다");
-            seen[signature] = id;
         }
 
-        // 위 루프는 패턴이 없으면 공허하게 참이다. 이 가드가 실제로 무언가를 봤는지 못박는다.
-        seen.ShouldNotBeEmpty("패턴이 하나도 없다 — 이 가드가 아무것도 안 본다");
+        Dictionary<string, StageDef> stages = JsonData<StageDef>.ParseTable(
+            File.ReadAllText(Path.Combine("data", "stages.json")), "stages.json");
+        int compared = 0;
+        foreach ((string stage, StageDef roster) in stages)
+        {
+            var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (string id in roster.Patterns)
+            {
+                string shape = patterns[id].Tell.Id;
+                seen.ShouldNotContainKey(shape,
+                    $"{stage}단계: {id} 가 예고 {shape} 를 {seen.GetValueOrDefault(shape)} 와 같이 쓴다"
+                    + " — 한 판에서 두 변종이 완전히 같은 그림이다");
+                seen[shape] = id;
+                compared++;
+            }
+        }
+
+        // 위 루프는 명부가 비면 공허하게 참이다. 이 가드가 실제로 무언가를 봤는지 못박는다 —
+        // 아홉 변종이 전부 어느 한 단계에 있으므로 아홉을 봤어야 한다.
+        compared.ShouldBe(patterns.Count, "명부에 없는 변종이 있거나 명부가 비었다 — 이 가드가 다 안 본다");
     }
 
     [Fact]
@@ -353,6 +378,104 @@ public class PatternDataTests
             "가드 불가 판정이 하나도 없다 — 이 가드가 아무것도 안 보고, 가드가 언제나 답인 게임이 된다");
     }
 
+    /// <summary>
+    /// 패턴의 <b>가드 불가 깃발을 뺀</b> 모양 — 태그 전부와 타임라인 전부를 한 줄로.
+    /// 마무리가 아홉 전부 가드 불가가 된 뒤로(이슈 #53) 그 깃발은 변종을 가르는 데 아무 몫이 없어서,
+    /// 두 변종이 "정말 다른가" 는 이것으로 물어야 한다.
+    /// </summary>
+    private static string ShapeWithoutGuardBreak(PatternDef def)
+    {
+        PatternTags t = def.Tags;
+        string tags = FormattableString.Invariant(
+            $"{t.DashWindow}|{t.DashDirection}|{t.Jumpable}|{t.AntiAir}|{t.Parryable}|{t.ParryWindow}|{t.PunishGreed}|{t.Reach}|{t.Feint}|{t.MultiHit}|{t.Tracking}");
+        IEnumerable<string> steps = def.Timeline.Select(s => FormattableString.Invariant(
+            $"{s.T}:{s.Kind}:{string.Join(',', s.Distance ?? Array.Empty<double>())}:{string.Join(',', s.Height ?? Array.Empty<double>())}:{s.Damage}"));
+        return tags + "#" + string.Join(';', steps);
+    }
+
+    [Fact]
+    public void 셋째_단계_변종은_둘째_단계_짝과_가드_불가_말고도_다르다()
+    {
+        // **이 자리가 실제로 무너져 있었다** (이슈 #53). 마무리가 아홉 전부 가드 불가가 되자
+        // `III-쐐기` 는 `II-쐐기` 와 갈리던 유일한 것을 잃었다 — 두 id 가 한 패턴을 가리키고,
+        // "3단계로 올라간다" 는 말이 그 변종에서만 거짓이 됐다. 깃발이 단계를 가르던 동안은 이
+        // 붕괴가 안 보였다. 그래서 짝마다 **깃발을 뺀 모양**이 다른지를 본다.
+        //
+        // 끌기와 쇄도는 원래부터 깃발 말고도 달랐다 — 끌기는 dash_window(0.20 → 0),
+        // 쇄도는 마무리 사거리(900 → 1805). 이 테스트가 그것도 같이 확인한다.
+        Dictionary<string, PatternDef> all = Load();
+        int pairs = 0;
+        foreach ((string id, PatternDef three) in all)
+        {
+            if (!id.Contains(" III-", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string twoId = id.Replace(" III-", " II-", StringComparison.Ordinal);
+            if (!all.TryGetValue(twoId, out PatternDef? two))
+            {
+                continue;
+            }
+
+            ShapeWithoutGuardBreak(three).ShouldNotBe(ShapeWithoutGuardBreak(two),
+                $"{id}: {twoId} 와 가드 불가 말고는 같다 — 3단계가 이 변종에서 아무것도 안 올린다");
+            pairs++;
+        }
+
+        pairs.ShouldBe(3, "2단계에 짝이 있는 3단계 변종은 셋(끌기 · 쇄도 · 쐐기)이다 — 짝을 못 찾으면 이 가드가 비어 돈다");
+    }
+
+    [Fact]
+    public void III_쐐기는_II_쐐기와_피해_숫자만_다르다()
+    {
+        // 3단계 쐐기의 봉인은 **피해라는 지렛대 하나**로만 선다 (이슈 #53). 피해는 맞았거나 가드로
+        // 받았을 때만 판에 들어가므로, 이 지렛대만 당기면 받아치거나 피하는 사람의 판은 그대로다 —
+        // WedgeSealTests 가 그 "그대로" 를 실제 판으로 보인다. 그 증명이 서려면 두 변종이 피해 말고는
+        // **시각 · 사거리 · 높이 · 태그 · 예고**가 전부 같아야 한다. 하나라도 다르면 피하는 사람의
+        // 판도 갈라지고, 그건 봉인이 아니라 그냥 다른 패턴이다.
+        Dictionary<string, PatternDef> all = Load();
+        PatternDef two = all["내려찍기 II-쐐기"];
+        PatternDef three = all["내려찍기 III-쐐기"];
+
+        three.Timeline.Count.ShouldBe(two.Timeline.Count);
+        three.Tell.Id.ShouldBe(two.Tell.Id);
+        three.Tell.Anim.ShouldBe(two.Tell.Anim);
+
+        string Blind(PatternDef def) => System.Text.RegularExpressions.Regex.Replace(
+            ShapeWithoutGuardBreak(def), @":(\d+)(?=;|$)", ":_");
+        Blind(three).ShouldBe(Blind(two), "피해 말고 무언가가 다르다 — 피하는 사람의 판까지 갈라진다");
+
+        three.Timeline.Select(s => s.Damage).ShouldNotBe(two.Timeline.Select(s => s.Damage),
+            "피해까지 같다 — 3단계 쐐기가 2단계와 같은 패턴이다");
+    }
+
+    [Fact]
+    public void 모든_마무리는_가드_불가다()
+    {
+        // **빨강은 한 가지 뜻이다 — 가드로 못 막는다, 받아쳐라** (이슈 #53 · 유저 결정).
+        // 마무리 하나하나가 이 깃발을 달아야 한다. 한 변종이라도 빠지면 그 변종의 빨간 마무리는
+        // "빨간데 막힌다" 가 되고, 빨강이 두 뜻(막힌다 · 안 막힌다)을 갖게 된다 — 빨강이
+        // "패리 불가" 이던 시절에 설계로 없앤 바로 그 색-뜻 충돌이다.
+        //
+        // 아래 테스트(가드 불가는 언제나 마무리)와 **짝**이다. 둘이 같이 서야 가드 불가 ⟺ 마무리이고,
+        // 그래야 뷰가 빨강을 guard_break 로 칠하든 규칙이 상을 마무리에 걸든 같은 한 대를 가리킨다.
+        int finishers = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            PatternStep? last = def.Timeline.LastOrDefault(s => s.Kind == "active");
+            if (last is null)
+            {
+                continue;
+            }
+
+            last.GuardBreak.ShouldBeTrue($"{id}: 마무리가 가드 불가가 아니다 — 빨간데 막히는 대가 생긴다");
+            finishers++;
+        }
+
+        finishers.ShouldBeGreaterThan(0, "마무리가 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
     [Fact]
     public void 가드_불가는_언제나_마무리_한_대다()
     {
@@ -386,9 +509,9 @@ public class PatternDataTests
     [Fact]
     public void 가드_불가는_패리로_받아칠_수_있다()
     {
-        // "가드 불가" 는 **답이 없다**가 아니라 "받아쳐라" 다 — 예고가 붉은 링이 아니라
-        // 호박 링 + 危 인 이유가 그것이다. 패리도 안 되는 가드 불가는 거리로만 피할 수 있는데,
-        // 사거리를 덮는 변종 하나가 그 패턴을 통째로 무답으로 만든다.
+        // "가드 불가" 는 **답이 없다**가 아니라 "받아쳐라" 다 — 빨강의 뜻 전체가 그것이다(이슈 #53).
+        // 패리도 안 되는 가드 불가는 거리로만 피할 수 있는데, 사거리를 덮는 변종 하나가 그 패턴을
+        // 통째로 무답으로 만든다. 마무리가 아홉 전부 가드 불가가 된 뒤로 이 가드는 아홉 전부를 본다.
         foreach ((string id, PatternDef def) in Load())
         {
             if (!def.Tags.HasGuardBreak)

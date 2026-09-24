@@ -21,9 +21,9 @@ namespace Overfit.Battle.View;
 /// </para>
 ///
 /// <para>
-/// 색은 <b>둘</b>이다 (이슈 #53). 호박은 앞의 연타(흘려도 되는 대) · 빨강은 <b>마무리</b>
-/// (받아치면 보스가 굳는 대)이고, 그중 가드로도 못 막는 것에만 <c>危</c> 가 얹힌다 —
-/// 색은 "받아칠 값이 있다" 까지 말하고 "막을 수조차 없다" 는 글자가 진다.
+/// 색은 <b>둘</b>이고 뜻은 하나씩이다 (이슈 #53). 호박은 앞의 연타 — 막아도 된다.
+/// 빨강은 마무리 — <b>가드로 못 막는다 = 받아쳐라</b>. 빨강 위의 <c>危</c> 는 같은 말을 색이 아닌
+/// 모양으로 한 번 더 한다(색각 이상에서는 빨강과 호박이 같은 색이 된다 — <c>BossTell</c>).
 /// </para>
 /// </summary>
 public partial class BossView : Node2D
@@ -32,19 +32,20 @@ public partial class BossView : Node2D
     private static readonly Color _windupTint = new(2.00f, 0.72f, 0.30f);
 
     /// <summary>
-    /// <b>마무리</b>(3타) 선딜의 몸 색 — 크림슨 (이슈 #53).
+    /// <b>가드 불가</b>(마무리) 선딜의 몸 색 — 크림슨 (이슈 #53).
     ///
     /// <para>
     /// <b>이 색은 주인이 바뀌었다.</b> 원래는 <c>parryable: false</c> 의 "받아치지 마라 · 대시해라"
     /// 였고(이슈 #27), 그때는 붉은색을 다른 뜻에 못 썼다 — 두 뜻이 정반대라 같은 색이면
     /// 플레이어가 거꾸로 반응한다. 그 주인(점프 강타)이 이슈 #48 에서 사라져 빨강이 비었고,
-    /// 이제 <b>빨강 = 마무리 = 받아쳐라</b> 다. 받아치면 보스가 굳고 거기 최대 차지가 들어간다.
+    /// 이제 <b>빨강 = 가드로 못 막는다 = 받아쳐라</b> 다. 마무리가 아홉 변종 전부 가드 불가라
+    /// 이 색은 모든 패턴의 마지막 한 대에 뜨고, 받아치면 보스가 굳어 거기 최대 차지가 들어간다.
     /// </para>
     ///
     /// <para>
-    /// <b>가드 불가에 안 매단 이유</b>는 <c>BossTell.Finisher</c> 에 적어 두었다 — 가드 불가는
-    /// 3단계 다섯 변종에만 있어서, 거기 매달면 1·2단계에 빨강이 영영 안 뜬다. 그 위에 얹는
-    /// <c>危</c> 가 "게다가 막을 수조차 없다" 를 따로 말한다.
+    /// <b>한 가지 뜻이어야 한다.</b> 한때 빨강을 "마무리" 에, 危 를 "가드 불가" 에 따로 매단 적이
+    /// 있는데 그러면 빨강이 단계에 따라 "막힌다" 와 "안 막힌다" 를 다 말했다 — 위에 적은 바로 그
+    /// 색-뜻 충돌이다(유저가 짚었다).
     /// </para>
     ///
     /// <para>
@@ -53,7 +54,7 @@ public partial class BossView : Node2D
     /// 여기 다시 크림슨을 얹는 것만은 안 된다: 한 색이 "피해라" 와 "받아쳐라" 를 동시에 말한다.
     /// </para>
     /// </summary>
-    private static readonly Color _finisherTint = new(2.40f, 0.10f, 0.22f);
+    private static readonly Color _guardBreakTint = new(2.40f, 0.10f, 0.22f);
 
     private static readonly Color _recoverTint = new(0.70f, 0.70f, 0.78f);
 
@@ -65,9 +66,9 @@ public partial class BossView : Node2D
 
     private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
 
-    /// <summary>마무리 예고의 링 색. 몸 색(<see cref="_finisherTint"/>)과 같은 빨강이다 —
+    /// <summary>가드 불가 예고의 링 색. 몸 색(<see cref="_guardBreakTint"/>)과 같은 빨강이다 —
     /// 링과 몸이 갈리면 둘 중 하나는 안 읽힌다.</summary>
-    private static readonly Color _finisherRingColor = new(1.00f, 0.06f, 0.20f, 0.95f);
+    private static readonly Color _guardBreakRingColor = new(1.00f, 0.06f, 0.20f, 0.95f);
     private static readonly Color _shockRingColor = new(1.00f, 0.80f, 0.35f, 1.00f);
     private static readonly Color _activeFlash = new(2.60f, 2.30f, 1.60f);
 
@@ -156,11 +157,10 @@ public partial class BossView : Node2D
         // 2.3초 내내 거짓말한다 — 지금 오는 것은 아무것도 없다.
         float ripeness = frame.Staggered ? 0 : Ripeness(phase, frame.NextActiveIn);
 
-        // **색은 마무리가 정하고 글자는 가드 불가가 정한다** (이슈 #53). 마무리는 아홉 변종
-        // 전부에 있고 가드 불가는 3단계 다섯에만 있어서, 한 칸으로 칠하면 1단계에 빨강이
-        // 영영 안 뜬다 — 유저가 지금 하고 있는 단계가 거기다.
-        bool finisher = frame.Tell is { Finisher: true };
-        Color tellColor = finisher ? _finisherRingColor : _tellRingColor;
+        // **빨강은 가드 불가 하나를 말한다** (이슈 #53). 몸 색 · 링 · 표지가 전부 이 한 칸을 읽는다 —
+        // 셋 중 하나라도 다른 칸을 읽으면 같은 순간에 화면이 두 말을 한다.
+        bool guardBreak = frame.Tell is { GuardBreak: true };
+        Color tellColor = guardBreak ? _guardBreakRingColor : _tellRingColor;
         if (ripeness > 0)
         {
             // 판정이 가까울수록 링이 **조여 든다.** 퍼지는 충격파와 방향이 반대라 둘을 헷갈릴 수 없다.
@@ -183,7 +183,7 @@ public partial class BossView : Node2D
             : frame.Staggered ? (float)_feel.StaggerAnimSpeed
             : 1.0f;
 
-        _sprite.Modulate = Tint(phase, ripeness, finisher, frame.Staggered);
+        _sprite.Modulate = Tint(phase, ripeness, guardBreak, frame.Staggered);
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -303,7 +303,7 @@ public partial class BossView : Node2D
         _flashLeft = seconds;
     }
 
-    private Color Tint(BossPhase phase, float ripeness, bool finisher, bool staggered)
+    private Color Tint(BossPhase phase, float ripeness, bool guardBreak, bool staggered)
     {
         // 흰 피격 실루엣은 **작가가 그린 픽셀 그대로** 나가야 한다. 선딜 틴트를 그 위에 얹으면
         // 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 되어, 정작 흰색이라는 것이 안 보인다 —
@@ -323,7 +323,7 @@ public partial class BossView : Node2D
 
         Color baseTint = phase switch
         {
-            BossPhase.Windup => Colors.White.Lerp(finisher ? _finisherTint : _windupTint, ripeness),
+            BossPhase.Windup => Colors.White.Lerp(guardBreak ? _guardBreakTint : _windupTint, ripeness),
             BossPhase.Recover => _recoverTint,
             _ => Colors.White,
         };

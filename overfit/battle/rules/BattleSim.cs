@@ -156,9 +156,9 @@ public sealed class BattleSim
     /// 아직 안 지나간 첫 <c>active</c> 단계 — <b>다음 판정</b>이다. 없거나 패턴이 없으면 null.
     ///
     /// <para>
-    /// 세 조회가 이 한 자리를 본다(<see cref="NextActiveIn"/> · <see cref="NextActiveGuardBreak"/> ·
-    /// <see cref="NextActiveFinisher"/>). 각자 타임라인을 훑게 두면 "다음 판정" 의 뜻이 조용히
-    /// 갈리고, 그러면 링의 크기와 색이 서로 다른 대를 가리킨다.
+    /// 두 조회가 이 한 자리를 본다(<see cref="NextActiveIn"/> · <see cref="NextActiveGuardBreak"/>).
+    /// 각자 타임라인을 훑게 두면 "다음 판정" 의 뜻이 조용히 갈리고, 그러면 링의 크기와 색이
+    /// 서로 다른 대를 가리킨다.
     /// </para>
     /// </summary>
     private PatternStep? NextActive()
@@ -179,18 +179,23 @@ public sealed class BattleSim
         return null;
     }
 
-    /// <summary>이 패턴의 <b>마무리</b> — 마지막 <c>active</c> 단계. 판정이 없으면 null.</summary>
-    private PatternStep? LastActive() => _current?.Timeline.FindLast(s => s.Kind == "active");
-
     /// <summary>
     /// <b>다음</b> active 판정이 가드 불가인가 (이슈 #53). 더 올 판정이 없거나 패턴이 없으면 false.
+    /// 화면의 <b>빨강</b>이 이 값이다 — 빨강은 한 가지 뜻, "가드로 못 막는다 = 받아쳐라" 다.
     ///
     /// <para>
     /// <see cref="NextActiveIn"/> 과 같은 자리이고 같은 이유로 있다 — 화면이 "지금 오는 이 한 대를
     /// 막을 수 있나" 를 말해야 하기 때문이다. <c>PatternTags.HasGuardBreak</c> 로는 그 말을 못 한다:
-    /// 그건 <b>패턴 단위 요약</b>이라 3단계 변종의 선딜 내내 참이고, 그러면 <b>1·2타도 빨갛게</b> 뜬다.
-    /// 실제로 그렇게 떴고, 스크린샷에서 보고 고쳤다 — 막을 수 있는 판정을 "못 막는다" 고 말하는 예고는
-    /// 없는 예고보다 나쁘다.
+    /// 그건 <b>패턴 단위 요약</b>이라 선딜 내내 참이고(이제 아홉 변종 전부 참이다), 그러면
+    /// <b>1·2타도 빨갛게</b> 뜬다. 실제로 그렇게 떴고, 스크린샷에서 보고 고쳤다 — 막을 수 있는
+    /// 판정을 "못 막는다" 고 말하는 예고는 없는 예고보다 나쁘다.
+    /// </para>
+    ///
+    /// <para>
+    /// 빨강을 마무리(<see cref="HitBox.Finisher"/>)가 아니라 이 깃발에 매다는 이유: 색이 말하는 것이
+    /// "가드로 못 막는다" 이기 때문이다. 데이터에서는 둘이 언제나 같은 대이고(PatternDataTests 가
+    /// 양쪽에서 못박는다) 상은 마무리에 걸리므로, 화면과 규칙이 같은 한 대를 가리킨다 — 다만 각자
+    /// **자기 뜻에 맞는 칸**을 읽는다. 둘이 갈라지는 날이 오면 빨강은 여전히 "못 막는다" 를 말한다.
     /// </para>
     ///
     /// <para>
@@ -199,23 +204,6 @@ public sealed class BattleSim
     /// </para>
     /// </summary>
     public bool NextActiveGuardBreak => NextActive() is { GuardBreak: true };
-
-    /// <summary>
-    /// <b>다음</b> active 판정이 이 패턴의 <b>마무리</b>인가 (이슈 #53). 더 올 판정이 없으면 false.
-    ///
-    /// <para>
-    /// 화면의 <b>빨강</b>이 이 값이다 — "이 한 대가 받아칠 값이 있는 대" 다. 위의
-    /// <see cref="NextActiveGuardBreak"/>(危)와 <b>둘로 둔 이유</b>는 <see cref="HitBox.Finisher"/> 에
-    /// 적어 두었다: 마무리는 아홉 변종 전부에 있고 가드 불가는 3단계 다섯에만 있어서,
-    /// 한 깃발로 묶으면 1단계에 빨강이 영영 안 뜬다.
-    /// </para>
-    ///
-    /// <para>
-    /// 규칙 층은 이 값을 <b>안 읽는다</b>. 실제로 상이 걸리는지는 <see cref="HitBox.Finisher"/> 가
-    /// 정하고(<see cref="Land"/>), 여기 있는 것은 그 사실을 <b>미리</b> 말해 주는 예고용 조회다.
-    /// </para>
-    /// </summary>
-    public bool NextActiveFinisher => NextActive() is { } step && ReferenceEquals(step, LastActive());
 
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
@@ -545,8 +533,9 @@ public sealed class BattleSim
                 // 마무리에 거는 것이 안전한 이유이기도 하다: 그 뒤에는 올 판정이 없어서
                 // 타임라인이 서도 미룰 것이 없다. 앞의 연타에 걸면 **남은 대들이 통째로 밀린다.**
                 //
-                // 가드 불가인가는 **안 따진다** — 그 갈래는 3단계 다섯 변종에만 있어서, 묶으면
-                // 유저가 하고 있는 1단계에 이 고리가 통째로 없다 (<see cref="HitBox.Finisher"/>).
+                // 읽는 칸은 guard_break 가 아니라 **마무리**다. 데이터에서는 늘 같은 대이지만
+                // (PatternDataTests), 손으로 단 깃발은 판정을 끼워 넣는 날 옛 자리에 남을 수 있고
+                // 타임라인의 마지막 자리는 그러지 않는다 (<see cref="HitBox.Finisher"/>).
                 // 보스를 굳히는 것이 여기인 이유는 그대로다 — 파이터는 보스를 모른다.
                 if (box.Finisher)
                 {

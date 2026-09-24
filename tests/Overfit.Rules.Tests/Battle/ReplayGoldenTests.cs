@@ -80,7 +80,12 @@ public class ReplayGoldenTests
             // 가능했던 수단도 넣는다. 패턴 id 에서 따라 나오는 값처럼 보이지만, patterns.json 의
             // 태그를 고치면 id 는 그대로인 채 의존도 축의 분모가 통째로 달라진다 —
             // 다이제스트에서 빼면 그 변화가 골든 밖이 된다.
-            text.Append(CultureInfo.InvariantCulture, $"{e.DashAvailable}|{e.JumpAvailable}|{e.ParryAvailable}\n");
+            text.Append(CultureInfo.InvariantCulture, $"{e.DashAvailable}|{e.JumpAvailable}|{e.ParryAvailable}|");
+            // 가드 가능 · 마무리도 넣는다 (이슈 #53). 둘 다 이 이슈가 관측에 더한 칸인데 **더할 때
+            // 여기를 빠뜨렸다** — 그래서 마무리 판정을 통째로 옮기거나 guard_break 를 한 변종에서
+            // 빼도 골든은 초록이었다. 둘은 패턴 id 로 다시 셈할 수 있어 보여도 판정 단위라
+            // (같은 패턴 안에서 대마다 값이 다르다) id 가 대신 못 한다.
+            text.Append(CultureInfo.InvariantCulture, $"{e.GuardAvailable}|{e.Finisher}\n");
         }
 
         ulong hash = 14695981039346656037UL;
