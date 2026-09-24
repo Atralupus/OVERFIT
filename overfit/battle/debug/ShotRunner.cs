@@ -253,7 +253,7 @@ public partial class ShotRunner : Node
         // 빨강은 **마무리 앞에서만** 뜬다 — 다음 판정이 가드 불가인지를 규칙에게 묻는다.
         // 그 순간은 2타가 막 선 직후라 2타의 충격파(호박 원 + 살)가 아직 퍼지고 있다(battle-10c 가
         // 그렇게 찍혔다). 24프레임(0.4초)을 기다리면 충격파가 걷히고 링이 반쯤 조여 있다 —
-        // 3타는 0.90초 뒤라 아직 안 온다.
+        // 3타는 1.10초 뒤라(이슈 #54) 아직 안 온다.
         await Until(() => _battle is { BossWindingUp: true, BossGuardBreak: true }, _tellTimeout);
         await Frames(24);
         await Screenshot.CaptureAsync(this, "battle-6b-finisher-tell");

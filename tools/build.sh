@@ -346,6 +346,12 @@ cmd_smoke() {
   # 단계까지 본다. "battle ready" 만 보면 단계 진행이 통째로 빠져도 초록이다 —
   # 그 값은 Autoload 가 들고 있어서 씬만 떠서는 증명되지 않는다.
   expect_log "$log" info '^\[scene\]\[I\] battle ready stage=[0-9]+ fighter=' "Battle 씬의 스크립트가 안 붙었거나 단계를 못 읽었습니다."
+  # 단계 점프 디버그 키 (이슈 #54). 순회가 전투에서 debug_stage_3 을 한 번 누른다 — 키가 InputMap 에 있는지,
+  # 입력이 Game._UnhandledInput 까지 오는지, 전투가 **정말 3단계로 다시 섰는지**를 본다. 앞의 줄만 보면
+  # 키가 먹었다는 로그만 있고 단계는 그대로인 경우를 못 본다. (릴리즈에서 안 먹는 것은 IsDebugBuild 가드가
+  # 지고, 여기 smoke 는 디버그 빌드라 그 반대쪽은 못 본다 — 익스포트한 빌드로 따로 본다.)
+  expect_log "$log" debug '^\[scene\]\[D\] input action=debug_stage_3 stage_jump from=[0-9]+ to=3$' "단계 점프 키(3)가 안 먹었습니다."
+  expect_log "$log" info '^\[scene\]\[I\] battle ready stage=3 fighter=' "단계 점프 뒤에 3단계 전투가 안 섰습니다."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."

@@ -80,6 +80,23 @@ attack={
 "events": [Object(InputEventKey,"keycode":74,"pressed":true)]
 }
 
+; 디버그 전용 — 전투 중 그 단계로 바로 건너뛴다 (이슈 #54). 숫자 키 1 · 2 · 3 이고 액션 이름의 끝이 곧 단계다.
+; **이름이 debug_ 로 시작하는 액션은 두 곳이 가른다.** 처리하는 Game._UnhandledInput 은 OS.IsDebugBuild() 로
+; 막아 릴리즈 빌드에서는 안 먹고(--tour · --shots 와 같은 선례다), 타이틀의 조작 안내(Title._rows)는
+; 이 접두어를 안 싣는다 — 릴리즈에서 안 먹는 키를 안내에 적으면 안내가 거짓말이 된다.
+debug_stage_1={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":49,"pressed":true)]
+}
+debug_stage_2={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":50,"pressed":true)]
+}
+debug_stage_3={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":51,"pressed":true)]
+}
+
 [rendering]
 
 ; 데스크톱 전용이다 — 모바일은 목표가 아니다. 그래서 데스크톱 기본값인 forward_plus 를 쓴다.

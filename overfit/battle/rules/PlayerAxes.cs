@@ -177,7 +177,7 @@ public sealed class PlayerAxes
     /// <summary>
     /// 그중 <b>깨진</b> 가드의 수 (이슈 #47). <see cref="ChargedGreedSamples"/> 와 같은 자리다 —
     /// 개수 하나가 없으면 "버텨냈다" 와 "버티다 무너졌다" 가 한 점이 되는데, 그 둘은 결과가 정반대다
-    /// (흘린 피해 0.25 · 자세 유지 ↔ 전액 · 0.9초 고정). 무엇이 깼는지(고갈 · 가드 불가)는
+    /// (흘린 피해 0.25 · 자세 유지 ↔ 전액 · guard_break_lock 고정). 무엇이 깼는지(고갈 · 가드 불가)는
     /// 여기서 안 가른다: 고른 것도 겪은 것도 같은 "깨졌다" 이고, 가르려면 축이 아니라 이벤트를 본다.
     /// </summary>
     public int GuardBrokenSamples { get; private init; }

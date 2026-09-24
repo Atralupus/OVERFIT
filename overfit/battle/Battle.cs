@@ -77,6 +77,9 @@ public partial class Battle : Node2D
     /// 규칙 층은 뷰를 모르므로 사건을 값의 차이로 읽는다.</summary>
     private int _lastFeintCount;
     private bool _lastAttackActive;
+
+    /// <summary>지난 틱에 칼질(공격 · 차지) 중이었나. 꺼졌다 켜진 틱이 새 칼질이다 (이슈 #54).</summary>
+    private bool _lastSwinging;
     private bool _walking;
 
     /// <summary>지난 틱의 차지 단계. 늘어난 순간이 "단계가 올랐다" 는 사건이다 — 규칙 층에 콜백을 안 달고 여기서 견준다.</summary>
@@ -258,9 +261,10 @@ public partial class Battle : Node2D
         _lastFighterHealth = _sim.Fighter.Health;
         _lastBossHealth = _sim.Boss.Health;
 
-        // 차지 자세는 attack 시트의 **선딜 마지막 장**이다 — 칼이 나가는 프레임(blade) 바로 앞.
-        // 뷰가 fighters.json 을 직접 읽지 않게 여기서 건네준다.
-        _fighterView.Load(_fighterConfig.Sprite, _fighterConfig.AttackAnimBladeFrame - 1);
+        // 칼질이 시작하는 장과 칼이 나가는 장을 건넨다 (이슈 #54). 차지 자세는 그 사이의 **선딜 마지막 장**
+        // — 칼이 나가는 장 바로 앞이다. 뷰가 fighters.json 을 직접 읽지 않게 여기서 건네준다.
+        _fighterView.Load(
+            _fighterConfig.Sprite, _fighterConfig.AttackAnimStartFrame, _fighterConfig.AttackAnimBladeFrame);
         _bossView.Load(_bossConfig.Sprite);
         Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={ids.Count}");
     }
@@ -400,7 +404,7 @@ public partial class Battle : Node2D
                         break;
 
                     // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
-                    // "막았다" 만 말하고 "무너졌다" 는 안 말하는데, 그 뒤 0.9초는 아무것도 못 한다.
+                    // "막았다" 만 말하고 "무너졌다" 는 안 말하는데, 그 뒤 guard_break_lock 동안은 아무것도 못 한다.
                     case HitVerdict.Guarded:
                         _fighterView.GuardChip();
                         break;
@@ -438,7 +442,19 @@ public partial class Battle : Node2D
             _bossView.Hit();
         }
 
+        // 새 칼질이 시작된 **그 틱** (이슈 #54). 차지 → 공격은 같은 칼질이라 안 센다.
+        // 렌더 프레임이 아니라 여기(물리 틱)서 보는 이유는 FighterView.SwingBegan 의 주석에 적었다 —
+        // 한 칼질이 끝난 틱과 다음 칼질이 시작한 틱이 한 렌더 프레임에 겹칠 수 있다.
+        bool swinging = _sim.Fighter.Action is FighterAction.Attack or FighterAction.Charge;
+        if (swinging && !_lastSwinging)
+        {
+            _fighterView.SwingBegan();
+        }
+
+        _lastSwinging = swinging;
+
         // 판정이 서는 **그 틱**에만 한 번. 계속 참인 동안 매 프레임 섬광을 내면 번쩍임이 아니라 조명이 된다.
+        // 그림이 칼이 나가는 장으로 맞춰 서는 것도 이 틱이다 — 시트의 시계에 맡기지 않는다(이슈 #54).
         if (_sim.Fighter.AttackActive && !_lastAttackActive)
         {
             _fighterView.AttackActive(_sim.Fighter.ChargeTier);
