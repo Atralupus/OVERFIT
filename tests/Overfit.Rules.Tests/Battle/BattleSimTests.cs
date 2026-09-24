@@ -358,7 +358,7 @@ public class BattleSimTests
         // 일을 물려받은 자리다 — 계열이 하나로 줄면서 안쪽 주머니를 가진 판정이 여기만 남았다.
         //
         // ① 마무리의 안쪽 290px 이 비어 있다 — **몸 충돌을 걷은 지금(이슈 #27) distance_bias 와
-        //    MissedTooClose 를 살려 두는 것이 이 주머니 하나다.** 주머니가 닫히면
+        //    MissedByGap 을 살려 두는 것이 이 주머니 하나다.** 주머니가 닫히면
         //    (patterns.json 의 290 이 0 으로 내려가면) 두 축은 조용히 죽는다 — 여기서 빨개진다.
         // ② 바깥끝 620 은 밖으로 한 대시의 착지점(서는 자리 115 + 대시 367 = 482)을 덮는다.
         //    **대시 의존을 봉인하는 것이 이 한 줄**이고, 붙어 있는 사람에게는 아무 일도 안 일어난다.
@@ -378,7 +378,7 @@ public class BattleSimTests
 
         // 안쪽 주머니로 피한 것은 **도망쳐 피한 것과 다른 점**이어야 한다 (이슈 #46).
         // 한 갈래(MissedByRange)였을 때는 이 줄과 위의 landing[0] 이 계측에서 같은 값이었다.
-        hugging[2].Verdict.ShouldBe(HitVerdict.MissedTooClose, "붙었는데 마무리에 맞았다 — 안쪽 주머니가 닫혔다");
+        hugging[2].Verdict.ShouldBe(HitVerdict.MissedByGap, "붙었는데 마무리에 맞았다 — 안쪽 주머니가 닫혔다");
         hugging[2].Distance.ShouldBeLessThan(290);
 
         landing[2].Verdict.ShouldBe(HitVerdict.Hit, "대시 착지점에 서 있는데 마무리가 안 왔다");
@@ -667,6 +667,73 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 대시가_만든_거리인지는_시작_자리의_점이_아니라_몸통으로_잰다()
+    {
+        // 반사실(이슈 #46)은 판정과 **같은 기하**로 재야 한다 (이슈 #59). 판정은 몸통(중심 ± 30)을 모양에
+        // 대는데 반사실만 점(발 중심)으로 재면 경계에서 둘이 다른 말을 한다 — 대시 시작 자리에 그대로
+        // 서 있었으면 **맞았을** 사람을 "거기서도 안 닿았다" 로 읽어, 대시가 만든 거리를 간격의 공으로 돌린다.
+        //
+        // 위 테스트와 같은 판이고 바깥끝만 1000 → 950 이다. 대시 시작 자리는 중심 967 · 몸 안끝 937 이라
+        // **점은 띠 밖이고 몸통은 띠 안이다** — 경계를 그 30px 사이에 놓아야 점과 몸통이 갈린다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 950 },
+            height: new double[] { 0, 300 },
+            parryable: false,
+            at: 6 * BattleSim.Dt));
+
+        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스 반대쪽을 본다 — 다음 틱의 대시가 이 자리에서 선다
+        double start = Math.Abs(sim.Fighter.X - sim.Boss.X);
+        start.ShouldBeGreaterThan(950, "대시 시작 자리의 중심이 띠 안이다 — 이 테스트가 점과 몸통을 못 가른다");
+        (start - sim.Fighter.HalfWidth).ShouldBeLessThanOrEqualTo(950, "대시 시작 자리의 몸통이 띠 밖이다 — 이 테스트가 점과 몸통을 못 가른다");
+
+        for (int i = 2; i <= 14; i++)
+        {
+            sim.Tick(new InputFrame(0, false, Dash: i == 2, false, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedTooFar, "대시가 사거리 밖으로 못 데려갔다 — 이 테스트가 거리 miss 를 안 본다");
+        e.Verb.ShouldBe(DodgeVerb.Dash, "대시 시작 자리의 몸통은 맞았을 자리인데 간격의 공이 됐다 — 반사실이 몸을 점으로 잰다");
+        e.Direction.ShouldBe(-1);
+    }
+
+    [Fact]
+    public void 공중에서_뛴_대시의_반사실은_그_높이의_몸통으로_잰다()
+    {
+        // 반사실의 몸통은 **대시를 시작한 높이**에 있다 (이슈 #59 · BattleSim 의 wasY). 낮게 쓰는 판정(바닥 ~ 70)
+        // 위로 떠서 대시했으면 그 자리에 그대로 있었어도 안 맞았다 — 거리를 만든 것이 대시가 아니므로 간격이다.
+        // 몸통을 바닥에 세우거나 높이를 아예 안 보면 이 판정을 "대시가 빼냈다" 로 읽어, dash_timing_bias 에
+        // 판정과 무관한 대시가 섞인다. 가로로는 대시 시작 자리의 **중심까지** 띠 안(967 < 1000)이라
+        // 이 테스트를 가르는 것은 높이 하나다.
+        var sim = OnePattern(OneHit(
+            distance: new double[] { 0, 1000 },
+            height: new double[] { 0, 70 },
+            parryable: false,
+            at: 6 * BattleSim.Dt));
+
+        // 1틱: 보스 반대쪽을 보며 뛴다. 8틱: 공중 대시(착지 전 한 번은 된다). 판정은 11틱에 선다.
+        for (int i = 1; i <= 7; i++)
+        {
+            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), Jump: i == 1, false, false, false));
+        }
+
+        sim.Fighter.Y.ShouldBeGreaterThan(70, "대시 시작 높이의 몸통이 판정에 걸친다 — 이 테스트가 높이를 못 가른다");
+        Math.Abs(sim.Fighter.X - sim.Boss.X).ShouldBeLessThan(1000, "대시 시작 자리가 가로로 띠 밖이다 — 이 테스트가 높이를 못 가른다");
+
+        for (int i = 8; i <= 20 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(0, false, Dash: i == 8, false, false));
+        }
+
+        sim.Events.Count.ShouldBe(1);
+        DodgeEvent e = sim.Events[0];
+        e.Verdict.ShouldBe(HitVerdict.MissedTooFar, "대시가 사거리 밖으로 못 데려갔다 — 이 테스트가 거리 miss 를 안 본다");
+        e.Airborne.ShouldBeTrue();
+        e.Verb.ShouldBe(DodgeVerb.Spacing, "낮은 판정 위에 떠 있던 자리에서 뛴 대시가 공을 가져갔다 — 반사실이 대시 시작 높이를 버렸다");
+    }
+
+    [Fact]
     public void 안쪽_주머니로_파고든_대시도_대시의_공이다()
     {
         // 밖으로만 고치면 반쪽이다. 안쪽 주머니(II-끌기 의 마무리 290px)로 파고들어
@@ -706,7 +773,7 @@ public class BattleSimTests
 
         sim.Events.Count.ShouldBe(1);
         DodgeEvent e = sim.Events[0];
-        e.Verdict.ShouldBe(HitVerdict.MissedTooClose);
+        e.Verdict.ShouldBe(HitVerdict.MissedByGap);
         e.Distance.ShouldBeLessThan(190, "대시가 주머니 안까지 못 데려갔다 — 이 테스트가 그 자리를 안 본다");
         e.Verb.ShouldBe(DodgeVerb.Dash, "파고든 대시가 간격의 공이 됐다");
         e.Direction.ShouldBe(1, "안으로 뛴 대시인데 방향이 안 실렸다");
@@ -779,7 +846,7 @@ public class BattleSimTests
         // 대시가 아니라 간격을 봉인한다. 정확히 반대 변종이다.
         IReadOnlyList<DodgeEvent> events = StandoffDasher(outward: true);
         int dashMissed = events.Count(e => e.Verb == DodgeVerb.Dash
-            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedTooClose);
+            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedByGap);
         PlayerAxes axes = PlayerAxes.From(events);
 
         axes.DashSamples.ShouldBeGreaterThan(0);
@@ -791,7 +858,7 @@ public class BattleSimTests
         // 사거리 안이라 판정이 거리로 빠지지 않는다. 한쪽만 움직이는 것이 이 고침이 좁다는 증거다.
         IReadOnlyList<DodgeEvent> inward = StandoffDasher(outward: false);
         inward.Count(e => e.Verb == DodgeVerb.Dash
-            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedTooClose)
+            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedByGap)
             .ShouldBe(0, "안으로 뛴 대시가 거리로 빠졌다 — 기하가 움직였다면 위 숫자도 다시 재야 한다");
     }
 

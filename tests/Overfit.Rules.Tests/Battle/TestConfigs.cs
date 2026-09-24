@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using Overfit.Battle.Rules;
 using Overfit.Core;
+using Shouldly;
 
 namespace Overfit.Rules.Tests.Battle;
 
@@ -80,6 +81,101 @@ public static class TestConfigs
         Length = 100,
     };
 
+    /// <summary>시험 패턴 <see cref="Sweep"/> 의 id.</summary>
+    public const string SweepId = "쓸기";
+
+    /// <summary>
+    /// 판정 하나짜리 시험 패턴 — 0.5초에 <paramref name="maxDistance"/> 까지 · 높이 0~5000 을 친다
+    /// (이슈 #59 · 판정 창). 대시 창을 넓게(1초) 두는 것은 무적의 길이를 <b>파이터 쪽</b>(0.14초)이
+    /// 정하게 하기 위해서다. 패리는 안 된다 — 창을 재는 테스트가 패리 갈래로 새지 않게.
+    /// </summary>
+    public static PatternDef Sweep(double maxDistance, double activeSeconds, double endAt = 2.0) => new()
+    {
+        Tell = Tell(),
+        Tags = new PatternTags
+        {
+            DashWindow = 1.0,
+            DashDirection = "either",
+            Jumpable = false,
+            AntiAir = false,
+            Parryable = false,
+            ParryWindow = 0,
+            PunishGreed = false,
+            Reach = "far",
+            Feint = false,
+            MultiHit = 1,
+            Tracking = false,
+            HasGuardBreak = false,
+        },
+        Timeline = new List<PatternStep>
+        {
+            new() { T = 0.0, Kind = "windup" },
+            new()
+            {
+                T = 0.5, Kind = "active", Distance = new[] { 0.0, maxDistance }, Height = new[] { 0.0, 5000.0 },
+                Damage = 7, ActiveSeconds = activeSeconds,
+            },
+            new() { T = endAt, Kind = "end" },
+        },
+    };
+
+    /// <summary>보스가 서서 <see cref="Sweep"/> 만 휘두르는 판. 보스는 안 움직이고 안 죽는다.</summary>
+    public static BattleSim SweepSim(double maxDistance, double activeSeconds, double endAt = 2.0) => new(new BattleSetup
+    {
+        Arena = Arena(),
+        Fighter = Fighter(),
+        Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+        PatternIds = new[] { SweepId },
+        Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
+        Seed = 1,
+        MaxTicks = 60 * 30,
+    });
+
+    /// <summary>패턴이 설 때까지(선딜이 시작될 때까지) 민다 — <c>NextActiveIn</c> 이 null 이 아니게 되는 틱이다.</summary>
+    public static void UntilWindup(BattleSim sim)
+    {
+        for (int i = 0; i < 600 && sim.NextActiveIn is null; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.NextActiveIn.ShouldNotBeNull("600틱 안에 패턴이 안 섰다 — 시험 패턴이 안 돈다");
+    }
+
+    /// <summary>
+    /// 판정이 두 틱 안으로 다가올 때까지 민다 — 판정은 다음 틱이나 그다음 틱에 선다.
+    ///
+    /// <para>
+    /// "바로 전 틱" 을 <c>NextActiveIn</c> 으로 맞히려 하지 않는다. 러너의 시계는 틱마다 1/60 을 더해 가므로
+    /// 30번 더한 값이 0.49999999999999994 라 0.5초 판정은 31번째 틱에 선다 — "남은 시간이 한 틱 이하면 다음
+    /// 틱에 선다" 고 가정하면 한 틱 어긋난다 (이슈 #59 계획을 실행하기 전에 실제로 재 봤다).
+    /// </para>
+    /// </summary>
+    public static void UntilNear(BattleSim sim)
+    {
+        UntilWindup(sim);
+        while (sim.NextActiveIn is { } left && left > 2 * BattleSim.Dt)
+        {
+            sim.Tick(default);
+        }
+    }
+
+    /// <summary>
+    /// 판정이 <b>선 틱</b>까지 민다 — 이 호출이 끝난 순간 판정은 방금 섰다. 러너와 같은 술어로 잰다:
+    /// 판정이 서면 그 단계는 더 이상 "다음 판정" 이 아니므로 <c>NextActiveIn</c> 이 null 이 된다
+    /// (<see cref="Sweep"/> 은 판정이 하나뿐이다).
+    /// </summary>
+    public static void UntilFired(BattleSim sim)
+    {
+        UntilWindup(sim);
+        for (int i = 0; i < 600 && sim.NextActiveIn is not null; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.NextActiveIn.ShouldBeNull("600틱 안에 판정이 안 섰다");
+    }
+
     /// <summary>실제 <c>fighters.json</c>. 캐릭터별 수치를 봐야 하는 가드가 쓴다.</summary>
     public static Dictionary<string, FighterConfig> Fighters() => Table<FighterConfig>("fighters.json");
 
@@ -113,6 +209,7 @@ public static class TestConfigs
             MaxHealth = maxHealth ?? data.MaxHealth,
             MoveSpeed = moveSpeed ?? data.MoveSpeed,
             HalfWidth = data.HalfWidth,
+            Height = data.Height,
             PatternGap = patternGap ?? data.PatternGap,
             FinisherParryStagger = data.FinisherParryStagger,
             Sprite = data.Sprite,

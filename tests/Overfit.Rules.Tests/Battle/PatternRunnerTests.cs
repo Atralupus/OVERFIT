@@ -75,10 +75,7 @@ public class PatternRunnerTests
             }
         }
 
-        box.MinDistance.ShouldBe(0.0);
-        box.MaxDistance.ShouldBe(260.0);
-        box.LowHeight.ShouldBe(0.0);
-        box.HighHeight.ShouldBe(200.0);
+        box.Shape.Local.ShouldBe(new[] { new HitRect(0, 260, 0, 200), new HitRect(-260, 0, 0, 200) });
         box.Damage.ShouldBe(18);
     }
 

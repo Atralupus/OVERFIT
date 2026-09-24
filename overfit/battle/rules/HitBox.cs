@@ -1,14 +1,11 @@
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 판정 하나. 거리는 <b>보스 중심으로부터의 절댓값</b>이고 높이는 바닥 기준이다.
-/// 좌우를 안 가리는 이유는 프로토타입의 패턴이 전부 보스를 중심으로 대칭이기 때문이다 —
-/// 한쪽만 치는 패턴이 필요해지면 부호 있는 구간으로 바꾼다.
+/// 판정 하나 — <b>모양</b>과 피해 (이슈 #59 · 설계 §3). 모양은 공격자 기준이고, 어디에 놓을지(보스의 발 ·
+/// 보는 쪽)는 판정할 때 <see cref="Placement"/> 로 준다. 옛 판정은 "보스 중심에서 거리 몇~몇 · 높이 몇~몇" 인
+/// 좌우 대칭 띠였고, 그 띠는 이제 <see cref="HitShape.Band"/> 두 장으로 같은 통로를 탄다.
 /// </summary>
-/// <param name="MinDistance">보스 중심에서 이 안쪽은 안 닿는다 (안전 주머니).</param>
-/// <param name="MaxDistance">보스 중심에서 이 밖은 안 닿는다.</param>
-/// <param name="LowHeight">판정의 아래끝(바닥 0).</param>
-/// <param name="HighHeight">판정의 위끝.</param>
+/// <param name="Shape">판정 모양 (공격자 기준 사각형들).</param>
 /// <param name="Damage">막지 않았을 때의 피해.</param>
 /// <param name="GuardBreak">가드로는 못 막나 (이슈 #47). <b>판정 단위다</b> — 계열의 마지막 한 대에만
 /// 붙으므로 패턴 단위로 두면 앞의 연타까지 못 막게 된다. 태그의 <c>has_guard_break</c> 는 이것의
@@ -30,11 +27,11 @@ namespace Overfit.Battle.Rules;
 /// <c>finisher: true</c> 를 사람이 달면 판정을 하나 끼워 넣는 날 옛 마무리에 그 표가 남고,
 /// 그 거짓말은 테스트가 아니라 플레이 중에만 보인다.
 /// </para></param>
+/// <param name="ActiveSeconds">이 판정이 살아 있는 초 (이슈 #59). 0 이면 한 틱이다 —
+/// <see cref="PatternStep.ActiveSeconds"/> 를 그대로 싣는다. 틱으로 바꾸는 것은 <c>BattleSim.TicksFor</c> 다.</param>
 public readonly record struct HitBox(
-    double MinDistance,
-    double MaxDistance,
-    double LowHeight,
-    double HighHeight,
+    HitShape Shape,
     int Damage,
     bool GuardBreak = false,
-    bool Finisher = false);
+    bool Finisher = false,
+    double ActiveSeconds = 0);

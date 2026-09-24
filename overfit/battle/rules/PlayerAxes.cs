@@ -104,7 +104,7 @@ public sealed class PlayerAxes
 
     /// <summary>
     /// 평균 교전 거리(px). <b>안쪽 주머니로 파고들어 피한 판정만 부호가 반대다</b> (이슈 #46) —
-    /// <c>MissedTooClose</c> 는 "너무 가까워서 안 맞았다" 라, 그것을 +로 쌓으면 파고들수록
+    /// <c>MissedByGap</c> 은 모양 안쪽 빈 곳에서 빗나간 것이라, 그것을 +로 쌓으면 파고들수록
     /// "멀리서 싸운다" 가 커진다. 축이 뭉개는 것이 아니라 <b>거꾸로 말하는</b> 자리였다.
     ///
     /// <para>
@@ -228,7 +228,7 @@ public sealed class PlayerAxes
         {
             // 안쪽 주머니로 피한 것은 **반대 부호**다 (이슈 #46). 거리 자체는 양수이므로
             // 여기서 뒤집지 않으면 "파고들어 피했다" 가 "멀리 떨어져 있었다" 와 같은 방향으로 쌓인다.
-            distance += e.Verdict == HitVerdict.MissedTooClose ? -e.Distance : e.Distance;
+            distance += e.Verdict == HitVerdict.MissedByGap ? -e.Distance : e.Distance;
             if (e.Airborne)
             {
                 airborne++;

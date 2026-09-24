@@ -220,6 +220,50 @@ public class PatternDataTests
     }
 
     [Fact]
+    public void 판정_창은_음수가_아니다()
+    {
+        // active_seconds 가 음수면 BattleSim.TicksFor 가 조용히 한 틱으로 읽는다 — 데이터가 틀렸다는 말이 어디에도
+        // 안 남고 판정은 멀쩡히 돈다. CLAUDE.md §5 가 음수 값을 규칙 위반으로 치는 바로 그 자리다 (이슈 #59 · 최종 리뷰).
+        int windows = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            foreach (PatternStep step in def.Timeline.Where(s => s.Kind == "active"))
+            {
+                step.ActiveSeconds.ShouldBeGreaterThanOrEqualTo(0,
+                    $"{id}: t={step.T} 의 active_seconds={step.ActiveSeconds} 가 음수다 — 한 틱으로 조용히 읽힌다");
+                windows++;
+            }
+        }
+
+        windows.ShouldBeGreaterThan(0, "active 가 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
+    [Fact]
+    public void 판정_창은_패턴이_끝나기_전에_닫힌다()
+    {
+        // 창이 패턴보다 오래 살면 판정이 **쉬는 보스**의 손에 남는다 (이슈 #59 · 최종 리뷰). 러너가 끝나면
+        // BattleSim 은 쉬는 갈래로 가서 보스를 돌려세우고(Boss.Face) 걸린다(Approach) — 살아 있는 칼이 보스를 따라
+        // 돌고 걸어서, 예고가 말한 자리가 아닌 곳을 친다. 간격이 차면 Begin 이 칼이 아직 살아 있는데 다음 패턴을
+        // 세운다. 끝은 러너가 멈추는 시각(PatternDef.Duration — 마지막 단계인 end 의 t)이다.
+        //
+        // 초로 재도 틱에서 새지 않는다 — t + active_seconds 가 끝과 **같은** 창 110가지(t 11 × 창 10)를 실제로
+        // 돌려 보니 끝난 뒤의 틱에 살아 있는 판정이 하나도 없었고, 0.01초만 넘겨도 그중 8가지가 한 틱씩 샜다.
+        int windows = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            foreach (PatternStep step in def.Timeline.Where(s => s.Kind == "active"))
+            {
+                (step.T + step.ActiveSeconds).ShouldBeLessThanOrEqualTo(def.Duration,
+                    $"{id}: t={step.T} + active_seconds={step.ActiveSeconds} 가 패턴의 끝을 넘는다(end={def.Duration})"
+                    + " — 보스가 쉬는 동안에도 칼이 살아 있다");
+                windows++;
+            }
+        }
+
+        windows.ShouldBeGreaterThan(0, "active 가 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
+    [Fact]
     public void Dash_direction_이_안을_허용하면_안쪽에_안전지대가_있다()
     {
         // "in" 은 "보스 쪽으로 파고들면 판정을 빠져나간다" 는 뜻이고, "either" 는 그 안쪽 길이

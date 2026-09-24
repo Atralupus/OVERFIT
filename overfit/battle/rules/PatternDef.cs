@@ -81,6 +81,17 @@ public sealed class PatternStep
     /// 앞의 연타까지 못 막게 되어 "버티다 마지막에 받아쳐라" 라는 이 기술의 문장이 사라진다.
     /// </summary>
     public bool GuardBreak { get; init; }
+
+    /// <summary>
+    /// active 가 <b>몇 초 동안</b> 살아 있나 (이슈 #59 · 설계 §3.5). 0 이면 한 틱이다 — 옛 패턴은 전부 그렇다.
+    ///
+    /// <para>
+    /// 판정이 한 틱이면 흰 궤적이 눈앞에 떠 있는데 그 뒤 틱에 걸어 들어간 사람이 안 맞는다. 그림의 궤적
+    /// 한 장(8fps = 0.125초) 동안 판정이 살아 있어야 보이는 것이 곧 맞는 것이 된다. 초를 틱으로 바꾸는
+    /// 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
+    /// </para>
+    /// </summary>
+    public double ActiveSeconds { get; init; }
 }
 
 /// <summary>

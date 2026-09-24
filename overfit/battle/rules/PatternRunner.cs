@@ -8,9 +8,9 @@ namespace Overfit.Battle.Rules;
 /// 그게 누구에게 닿는지는 <c>BattleSim</c> 이 정한다.
 ///
 /// <para>
-/// 판정은 구간 내내 켜져 있지 않고 <b>단계에 들어선 틱에 한 번</b> 난다.
-/// 그래야 <c>multi_hit</c> 을 타임라인의 active 개수로 셀 수 있고, 한 번 휘두른 칼에
-/// 여러 번 맞는 일이 없다.
+/// 판정은 <b>단계에 들어선 틱에 한 번</b> 나고, 그 판정이 몇 틱 동안 살아 있을지는 싣기만 한다
+/// (<see cref="HitBox.ActiveSeconds"/>) — 살아 있는 동안 몸에 대 보는 것은 <c>BattleSim</c> 이다.
+/// 그래서 <c>multi_hit</c> 을 타임라인의 active 개수로 셀 수 있고, 한 번 휘두른 칼에 여러 번 맞는 일이 없다.
 /// </para>
 /// </summary>
 public sealed class PatternRunner
@@ -83,10 +83,26 @@ public sealed class PatternRunner
 
             hits ??= new List<HitBox>();
             hits.Add(new HitBox(
-                step.Distance[0], step.Distance[1], step.Height[0], step.Height[1], step.Damage,
-                step.GuardBreak, Finisher: _next - 1 == _finisher));
+                ShapeOf(step), step.Damage, step.GuardBreak, Finisher: _next - 1 == _finisher,
+                ActiveSeconds: step.ActiveSeconds));
         }
 
         return (IReadOnlyList<HitBox>?)hits ?? _none;
+    }
+
+    /// <summary>
+    /// 타임라인 한 단계의 판정 모양. <b>모양을 짓는 곳은 여기 하나다</b> — 러너가 판정을 낼 때와
+    /// 디버그 표시가 "다음 판정" 을 그릴 때가 같은 함수를 불러야 둘이 같은 자리를 가리킨다.
+    /// 지금은 옛 거리 띠 · 높이 띠를 좌우 대칭 두 장으로 옮긴다 (<see cref="HitShape.Band"/>).
+    /// </summary>
+    public static HitShape ShapeOf(PatternStep step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        if (step.Distance is null || step.Height is null)
+        {
+            throw new ArgumentException($"판정이 아닌 단계다 — kind={step.Kind}", nameof(step));
+        }
+
+        return HitShape.Band(step.Distance[0], step.Distance[1], step.Height[0], step.Height[1]);
     }
 }

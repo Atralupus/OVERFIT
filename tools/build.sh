@@ -3,7 +3,7 @@
 # 개발 루프와 빌드를 한 곳에서 돌린다.
 #
 #   tools/build.sh doctor              환경 점검 — 뭐가 없는지 알려준다
-#   tools/build.sh check               포맷 검사 + 빌드 + 규칙 테스트 + .uid 짝. 커밋 전 게이트
+#   tools/build.sh check               포맷 검사 + 빌드 + 규칙 테스트 + .uid 짝 + 판정 모양. 커밋 전 게이트
 #   tools/build.sh fix                 포맷 자동 수정
 #   tools/build.sh build               C# 빌드만
 #   tools/build.sh test [cover] [인자…] 규칙 테스트 (xUnit, tests/Overfit.Rules.Tests). Godot 을 안 띄운다 — 초 단위
@@ -12,6 +12,8 @@
 #                                      cover → 커버리지(cobertura) 까지. 나머지 인자는 dotnet test 로 그대로
 #                                      (예: --filter FullyQualifiedName~Det)
 #   tools/build.sh uids                .cs 마다 .uid 가 짝을 이루는지. check 가 부른다
+#   tools/build.sh hitboxes            hitboxes.json 이 그림과 같은지 (extract_hitboxes.py --check). check 가 부른다
+#                                      그림(PNG)이 안 깔린 체크아웃이면 경고하고 건너뛴다 — 실패가 아니다
 #   tools/build.sh run [씬]            C# 빌드 후 게임 실행
 #   tools/build.sh editor              에디터 실행
 #   tools/build.sh import              에셋 임포트만 (헤드리스). 클론 직후 반드시 한 번
@@ -22,6 +24,8 @@
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
 #   EXTRA="--stage=2" tools/build.sh demo        단계 지정 (캐릭터는 하나라 --fighter= 는 그 하나만 가리킨다)
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
+#   HITBOXES=1 tools/build.sh run|shots  판정 보기 — Godot 의 Visible Collision Shapes 를 켠다(--debug-collisions).
+#                                        규칙이 이 틱에 댄 판정 사각형이 그려진다. shots 는 그 사진을 docs/shots/ 로 안 넘긴다
 #   tools/build.sh clean               빌드 산출물 삭제
 #
 # 헤드리스 판정 — 창 없이 도는 서브커맨드(지금은 smoke 하나)는 판정 함수 하나(judge_headless)를 공유한다.
@@ -51,6 +55,10 @@ GODOT="${GODOT_PATH:-${GODOT:-/Applications/Godot_mono.app/Contents/MacOS/Godot}
 # LOG_LEVEL=trace|debug|info|warn|error 를 게임의 --log-level 유저 인자로 넘긴다. 비어 있으면 게임 기본값(디버그 빌드 debug).
 LOG_ARG=""
 [[ -n "${LOG_LEVEL:-}" ]] && LOG_ARG="--log-level=${LOG_LEVEL}"
+
+# 판정 보기 (이슈 #59 · 설계 §6.1). 실행 중에는 못 켜므로(SceneTree.debug_collisions_hint) 띄울 때 정한다.
+HITBOX_ARG=""
+[[ "${HITBOXES:-}" == "1" ]] && HITBOX_ARG="--debug-collisions"
 
 # 버전은 Godot 이 알려주는 값에서 뽑는다. 하드코딩하면 업그레이드 때 조용히 어긋난다.
 godot_version() { "$GODOT" --version 2>/dev/null | tail -1 | tr -d '\r'; }
@@ -285,6 +293,25 @@ cmd_uids() {
   ok ".uid 짝 — 전부 있음"
 }
 
+# hitboxes.json 이 그림과 같은지 (이슈 #59). 판정 모양은 도구가 그림에서 뽑아 쓰는 값이라, 그림이나 뽑는 기준
+# (_source)이 바뀌었는데 도구를 안 돌리면 판정과 그림이 **조용히** 갈린다 — 아무 테스트도 PNG 를 못 보기 때문이다.
+# CLAUDE.md §3 의 자리다: 데이터의 불변식은 cmd_check 에 한 줄로 붙인다.
+#
+# 그림은 저장소에 없다. 방금 클론한 체크아웃은 **볼 그림이 없을 뿐** 무엇을 어긴 것이 아니므로 경고로 건너뛴다 —
+# 도구가 그 경우만 77 로 따로 알린다. 그 밖의 실패(그림과 다르다 · 도구가 멈췄다)는 그대로 막는다.
+cmd_hitboxes() {
+  command -v python3 >/dev/null || { warn "python3 없음 — 판정 모양 검사를 건너뜁니다"; return 0; }
+  local out code=0
+  out="$(python3 "$ROOT/tools/extract_hitboxes.py" --check 2>&1)" || code=$?
+  case "$code" in
+    0)  ok "$out" ;;
+    77) warn "판정 모양 — 그림(PNG)이 없는 체크아웃이라 건너뜁니다"
+        sed 's/^/      /' <<< "$out" ;;
+    *)  sed 's/^/      /' <<< "$out"
+        die "판정 모양이 그림과 다르거나 도구가 멈췄습니다 (위 출력). 다르면 python3 tools/extract_hitboxes.py --overlay 로 다시 뽑고 겹친 그림을 보세요." ;;
+  esac
+}
+
 cmd_check() {
   say "포맷 검사"
   if ! dotnet format "$SLN" --verify-no-changes --no-restore; then
@@ -305,6 +332,9 @@ cmd_check() {
 
   say ".uid 짝"
   cmd_uids
+
+  say "판정 모양 (hitboxes.json ↔ 그림)"
+  cmd_hitboxes
 }
 
 cmd_run() {
@@ -312,8 +342,8 @@ cmd_run() {
   # CLI 실행은 C# 을 자동으로 빌드하지 않는다. 안 하면 옛 어셈블리로 돈다.
   cmd_build
   say "실행"
-  if [[ $# -gt 0 ]]; then "$GODOT" --path "$PROJECT" "$1" -- $LOG_ARG
-  else "$GODOT" --path "$PROJECT" -- $LOG_ARG; fi
+  if [[ $# -gt 0 ]]; then "$GODOT" --path "$PROJECT" $HITBOX_ARG "$1" -- $LOG_ARG
+  else "$GODOT" --path "$PROJECT" $HITBOX_ARG -- $LOG_ARG; fi
 }
 
 cmd_editor() { need_godot; "$GODOT" --path "$PROJECT" --editor; }
@@ -400,13 +430,19 @@ cmd_shots() {
   local out="$OUT/shots" log="$OUT/shots.log" code=0
   rm -rf "$out"
   mkdir -p "$out"
-  "$GODOT" --path "$PROJECT" -- --shots "--shot-dir=$out" $LOG_ARG > "$log" 2>&1 || code=$?
+  "$GODOT" --path "$PROJECT" $HITBOX_ARG -- --shots "--shot-dir=$out" $LOG_ARG > "$log" 2>&1 || code=$?
   grep -E "^\[(shots|shot)\]" "$log" || true
   judge_headless "스크린샷" "$log" "shots=done" "$code"
 
   local n
   n="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"
   [[ "$n" -gt 0 ]] || die "스크린샷이 0장입니다 — 창이 안 떴거나 뷰포트가 비었습니다. 전체 로그: $log"
+
+  # 판정이 그려진 사진은 디버그용이다 — README 가 쓰는 docs/shots/ 로 넘기지 않는다.
+  if [[ -n "$HITBOX_ARG" ]]; then
+    ok "스크린샷 ${n}장 — $out (판정 보기라 docs/shots/ 는 그대로 둔다)"
+    return
+  fi
 
   # 문서용 축소본. 원본은 1920x1080 이라 README 에 그대로 넣으면 무겁다.
   mkdir -p "$ROOT/docs/shots"
@@ -485,6 +521,7 @@ case "${1:-}" in
   build)     shift; cmd_build "$@" ;;
   test)      shift; cmd_test "$@" ;;
   uids)      shift; cmd_uids "$@" ;;
+  hitboxes)  shift; cmd_hitboxes "$@" ;;
   run)       shift; cmd_run "$@" ;;
   editor)    shift; cmd_editor "$@" ;;
   import)    shift; cmd_import "$@" ;;

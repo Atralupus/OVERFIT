@@ -46,12 +46,35 @@ public sealed class BattleSim
     public const double Dt = 1.0 / 60.0;
 
     private readonly BattleSetup _setup;
+
+    /// <summary>
+    /// 파이터 칼의 판정 모양 (이슈 #59). 지금은 옛 사거리를 그대로 옮긴 것이다(<see cref="HitShape.Reach"/>) —
+    /// 옛 판정 <c>|dx| − 보스 반폭 ≤ 사거리</c> 와 가로가 정확히 같다. 그림의 모양으로 가는 것은 설계 §10 의 2번이다.
+    /// </summary>
+    private readonly HitShape _attackShape;
+
     private PatternRunner? _runner;
     private PatternDef? _current;
     private double _gapLeft;
     private int _picks;
 
     private readonly List<DodgeEvent> _events = new();
+
+    /// <summary>
+    /// 살아 있는 보스 판정들 (이슈 #59 · 설계 §3.5). 보통 0~1개다. 러너가 판정을 내는 틱에 들어오고,
+    /// 몸에 닿거나 창이 닫히면 나간다.
+    /// </summary>
+    private readonly List<LiveSwing> _live = new();
+
+    /// <summary>
+    /// 이 틱에 파이터에게 대 본 보스 판정 — (모양, 놓은 자리). <b>기록만 한다</b> (이슈 #59 · 설계 §6.1).
+    /// 사각형으로 펴는 것은 디버그 표시가 물을 때(<see cref="BossTestedRects"/>)다: 봇이 수백만 판을 돌리는
+    /// 동안 이 목록은 용량을 다시 쓸 뿐 새로 할당하지 않는다.
+    /// </summary>
+    private readonly List<(HitShape Shape, Placement At)> _tested = new();
+
+    /// <summary>이 틱에 보스에게 대 본 파이터 칼의 자리. 안 댔으면 null.</summary>
+    private Placement? _attackTested;
 
     // 회피 수단마다 **따로** 시작 시각을 들고 있는다(초, NaN = 지금 그 수단이 없다).
     // 슬롯이 하나였을 때는 "가장 최근에 시작한 행동" 이 판정을 다 가져갔다 —
@@ -78,17 +101,20 @@ public sealed class BattleSim
     private int _dashDirection;
 
     /// <summary>
-    /// 대시를 <b>시작하기 직전</b>의 교전 거리(px, NaN = 대시 중이 아니다).
-    /// "이 거리를 만든 것이 대시인가" 를 판정마다 물어보는 반사실(counterfactual)이다 —
-    /// 그 자리에서 판정이 닿았을 것이면 대시가 빼낸 것이고, 거기서도 안 닿았으면 간격이다.
+    /// 대시를 <b>시작하기 직전</b>의 몸통과 그때의 보스 자리 (null = 대시 중이 아니다).
+    /// "그 자리에 서 있었으면 이 판정에 맞았나" 를 판정마다 물어보는 반사실(counterfactual)이다 —
+    /// 맞았을 것이면 대시가 빼낸 것이고, 거기서도 안 맞았으면 간격이다 (이슈 #46).
     ///
     /// <para>
     /// 대시 중이라는 것만으로는 부족하다. 사거리 100 짜리 판정 앞에서 960px 떨어져 대시하면
     /// 대시는 돌지만 그 거리는 대시가 만든 것이 아니다 — 그것까지 대시의 공으로 돌리면
     /// <c>dash_timing_bias</c> 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
+    /// 옛 반사실은 거리 하나(보스 중심에서)를 띠와 견줬고, 이제는 몸통을 모양에 댄다 (이슈 #59).
     /// </para>
     /// </summary>
-    private double _dashStartDistance = double.NaN;
+    private HitRect? _dashStartBody;
+
+    private double _dashStartBossX;
 
     public BattleSim(BattleSetup setup)
     {
@@ -103,6 +129,7 @@ public sealed class BattleSim
         }
 
         _setup = setup;
+        _attackShape = HitShape.Reach(setup.Fighter.AttackReach);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
 
@@ -205,6 +232,37 @@ public sealed class BattleSim
     /// </summary>
     public bool NextActiveGuardBreak => NextActive() is { GuardBreak: true };
 
+    /// <summary>
+    /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드) — 디버그 표시용 (이슈 #59 · 설계 §6.1).
+    /// 표시가 이것을 받아 그리기만 하므로, 판정이 틀린 자리에 서면 화면도 그 틀린 자리를 보여 준다.
+    /// </summary>
+    public IReadOnlyList<HitRect> BossTestedRects
+    {
+        get
+        {
+            var rects = new List<HitRect>();
+            foreach ((HitShape shape, Placement at) in _tested)
+            {
+                rects.AddRange(shape.Place(at));
+            }
+
+            return rects;
+        }
+    }
+
+    /// <summary>
+    /// 선딜 중이면 <b>다음</b> 판정이 칠 자리 (월드) — 어디로 올지 미리 보인다. 러너가 그 판정을 낼 때와
+    /// 같은 함수(<see cref="PatternRunner.ShapeOf"/>)로 짓는다. 더 올 판정이 없으면 빈 목록.
+    /// </summary>
+    public IReadOnlyList<HitRect> BossNextRects =>
+        NextActive() is { } step
+            ? PatternRunner.ShapeOf(step).Place(new Placement(Boss.X, Boss.Y, Boss.Facing))
+            : Array.Empty<HitRect>();
+
+    /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
+    public IReadOnlyList<HitRect> FighterTestedRects =>
+        _attackTested is { } at ? _attackShape.Place(at) : Array.Empty<HitRect>();
+
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
     {
@@ -215,9 +273,11 @@ public sealed class BattleSim
         // 틱 시작의 자리도 같이 잡아둔다. 대시가 시작된 틱에는 Fighter.Tick 이 이미 한 틱만큼
         // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
         double wasX = Fighter.X;
+        double wasY = Fighter.Y;
         Fighter.Tick(input, Dt);
-        RememberDodgeStart(input, wasGrounded, wasX);
+        RememberDodgeStart(input, wasGrounded, wasX, wasY);
         AdvanceBoss();
+        ResolveLive();
         Strike();
 
         if (!Boss.Alive)
@@ -291,7 +351,10 @@ public sealed class BattleSim
         int feintsBefore = _runner.Feints;
         foreach (HitBox box in _runner.Tick(Dt))
         {
-            Land(box);
+            // 판정은 여기서 대지 않고 **살려 둔다** (이슈 #59). 창이 몇 틱이든 대는 곳은 ResolveLive 하나다.
+            // 태그와 패턴 id 를 지금 잡아 두는 것은 러너가 이 틱 끝에 끝나면 _current 와 CurrentPattern 이
+            // 지워지기 때문이다 — 마지막 판정이 end 와 같은 틱에 서면 그 관측이 "?" 패턴으로 남는다.
+            _live.Add(new LiveSwing(box, _current!.Tags, Boss.CurrentPattern ?? "?", TicksFor(box.ActiveSeconds)));
         }
 
         if (_runner.Feints > feintsBefore)
@@ -347,7 +410,8 @@ public sealed class BattleSim
     /// "이미 공중인데 또 눌렀다"를 구별할 수 없다.</param>
     /// <param name="wasX">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 파이터의 자리.
     /// 대시가 시작된 틱에는 이미 한 틱을 이동한 뒤라, 대시 <b>전</b>의 거리는 이것으로만 잡힌다.</param>
-    private void RememberDodgeStart(InputFrame input, bool wasGrounded, double wasX)
+    /// <param name="wasY">이번 틱이 시작될 때의 발바닥 높이. 공중 대시의 반사실이 이것을 쓴다.</param>
+    private void RememberDodgeStart(InputFrame input, bool wasGrounded, double wasX, double wasY)
     {
         double now = Ticks * Dt;
 
@@ -360,13 +424,15 @@ public sealed class BattleSim
             // 보스 쪽으로 갔으면 안(+1), 반대면 밖(-1)
             _dashDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
             // 보스는 아직 이번 틱을 안 밀었으므로(AdvanceBoss 는 뒤에 온다) 둘 다 틱 시작의 자리다.
-            _dashStartDistance = Math.Abs(wasX - Boss.X);
+            _dashStartBody = new HitRect(
+                wasX - Fighter.HalfWidth, wasX + Fighter.HalfWidth, wasY, wasY + Fighter.BodyHeight);
+            _dashStartBossX = Boss.X;
         }
         else if (Fighter.Action != FighterAction.Dash)
         {
             _dashStartedAt = double.NaN;
             _dashDirection = 0;
-            _dashStartDistance = double.NaN;
+            _dashStartBody = null;
         }
 
         // 패리 칸은 **자세가 아니라 누름**을 따라 산다. 누르자마자 놓아도 그 누름은 시도였고,
@@ -411,6 +477,14 @@ public sealed class BattleSim
     /// 이 판정을 <b>무엇이</b> 그렇게 만들었나. 결과가 이미 답을 들고 있다 —
     /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다.
     /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
+    ///
+    /// <para>
+    /// <b>Dodged 는 무적이 먹은 그 틱에만 크레딧을 문다</b> (이슈 #59 · 리뷰 라운드 1). 창이 몇 틱 더
+    /// 사는 동안 미뤘다 나중에 물으면 그새 대시가 끝나 <c>_dashStartedAt</c> 이 NaN 으로 돌아가 있을 수
+    /// 있고, 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 크레딧이 나간다 — 그래서 <see cref="Step"/> 은
+    /// Dodged 를 처음 본 틱에 곧장 <see cref="BuildEvent"/> 를 불러 관측을 지어 두고, 창이 닫힐 때
+    /// 그 스냅샷을 그대로 내보낸다(다시 묻지 않는다).
+    /// </para>
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict, HitBox box) => verdict switch
     {
@@ -433,7 +507,7 @@ public sealed class BattleSim
 
         // 거리로 빗나갔다 — 안이든 밖이든. 서 있던 자리가 피하게 했으면 간격이지만,
         // **그 자리를 대시가 만들었으면 대시다** (이슈 #46).
-        HitVerdict.MissedTooFar or HitVerdict.MissedTooClose => CreditDistance(box),
+        HitVerdict.MissedTooFar or HitVerdict.MissedByGap => CreditDistance(box),
 
         // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
         _ => MostRecentAction(),
@@ -475,8 +549,8 @@ public sealed class BattleSim
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box) =>
         !double.IsNaN(_dashStartedAt)
-        && _dashStartDistance >= box.MinDistance
-        && _dashStartDistance <= box.MaxDistance
+        && _dashStartBody is { } before
+        && ShapeHit.Test(box.Shape, new Placement(_dashStartBossX, Boss.Y, Boss.Facing), before) == ShapeContact.Overlap
             ? (DodgeVerb.Dash, _dashStartedAt)
             : (DodgeVerb.Spacing, double.NaN);
 
@@ -512,10 +586,91 @@ public sealed class BattleSim
         return (verb, at);
     }
 
-    /// <summary>보스의 판정 하나를 파이터에게 대고, 맞았으면 깎는다.</summary>
-    private void Land(HitBox box)
+    /// <summary>
+    /// 판정 창 길이(초)를 틱으로. <b>반올림은 여기 한 곳이다</b> (설계 §3.5) — 8fps 한 장은 0.125초 =
+    /// 7.5틱이라, 뷰와 규칙이 각자 반올림하면 반 틱씩 어긋난다. 0 이하는 한 틱 — 옛 패턴은 전부 그렇다.
+    /// </summary>
+    public static int TicksFor(double seconds) =>
+        seconds <= 0 ? 1 : Math.Max(1, (int)Math.Round(seconds / Dt, MidpointRounding.AwayFromZero));
+
+    /// <summary>살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다.</summary>
+    private void ResolveLive()
     {
-        HitVerdict verdict = HitResolver.Resolve(Fighter, Boss.X, box, _current!.Tags);
+        _tested.Clear();
+        var at = new Placement(Boss.X, Boss.Y, Boss.Facing);
+
+        int kept = 0;
+        for (int i = 0; i < _live.Count; i++)
+        {
+            LiveSwing swing = _live[i];
+            _tested.Add((swing.Box.Shape, at));
+            if (!Step(swing, at))
+            {
+                _live[kept++] = swing;
+            }
+        }
+
+        _live.RemoveRange(kept, _live.Count - kept);
+    }
+
+    /// <summary>
+    /// 살아 있는 판정 하나를 이 틱에 대 본다. 끝났으면 true.
+    ///
+    /// <para>
+    /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
+    /// 무적이 먹은 틱은 넘어가고 창은 계속 산다: 무적이 창보다 먼저 풀리면 그 뒤 틱에 맞는다(다크소울과 같다).
+    /// 창이 닫힐 때까지 안 닿았으면 관측을 <b>하나</b> 남긴다 — 무적이 먹었으면 <b>그 틱에 지어 둔</b>
+    /// 관측(<see cref="LiveSwing.DodgeSnapshot"/>), 아니면 마지막 틱의 빗나간 이유다.
+    /// </para>
+    /// </summary>
+    private bool Step(LiveSwing swing, Placement at)
+    {
+        HitVerdict verdict = HitResolver.Resolve(Fighter, at, swing.Box, swing.Tags);
+        swing.TicksLeft--;
+
+        switch (verdict)
+        {
+            case HitVerdict.Hit or HitVerdict.Parried or HitVerdict.Guarded or HitVerdict.GuardBroken:
+                Land(swing, verdict);
+                return true;
+
+            case HitVerdict.Dodged:
+                // 처음 무적이 먹은 틱에서만 짓는다 (이슈 #59 · 리뷰 라운드 1) — 그 틱의 크레딧(대시
+                // 시작 시각·방향)이 아직 살아 있다. 창이 몇 틱 더 사는 동안 다시 Dodged 여도 안 다시
+                // 짓는다: 미뤘다 나중에 지으면 그새 대시가 끝나 _dashStartedAt 이 NaN 이 됐을 수 있고,
+                // 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 관측이 나간다.
+                swing.DodgeSnapshot ??= BuildEvent(swing, swing.Box, verdict);
+                break;
+
+            default:
+                swing.LastMiss = verdict;
+                break;
+        }
+
+        if (swing.TicksLeft > 0)
+        {
+            return false;
+        }
+
+        if (swing.DodgeSnapshot is { } snapshot)
+        {
+            Commit(snapshot);
+        }
+        else
+        {
+            Land(swing, swing.LastMiss);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴의 부작용. 회피(Dodged)와 빗나감은
+    /// 아무것도 안 한다(<c>default</c> 갈래). <see cref="Land"/> 와 <see cref="Step"/> 의 무적 스냅샷
+    /// 양쪽에서 같은 부작용을 내야 하므로 <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔다.
+    /// </summary>
+    private void ApplyVerdict(HitBox box, HitVerdict verdict)
+    {
         switch (verdict)
         {
             case HitVerdict.Hit:
@@ -555,14 +710,22 @@ public sealed class BattleSim
             default:
                 break;
         }
+    }
 
+    /// <summary>
+    /// 이 판정의 관측을 짓는다 — <b>부른 그 틱</b>의 크레딧 · 방향 · 공중 · 거리 · 욕심을 그대로 담는다.
+    /// 아직 스트림에 남기지는 않는다(<see cref="Commit"/> 이 한다) — Dodged 는 무적이 먹은 틱에 지어
+    /// 두었다가 창이 닫힐 때 그대로 내보내야 하기 때문이다(<see cref="Step"/>).
+    /// </summary>
+    private DodgeEvent BuildEvent(LiveSwing swing, HitBox box, HitVerdict verdict)
+    {
         double now = Ticks * Dt;
         (DodgeVerb verb, double startedAt) = Credit(verdict, box);
         double error = double.IsNaN(startedAt) ? 0 : startedAt - now;
         int direction = verb == DodgeVerb.Dash ? _dashDirection : 0;
 
-        _events.Add(new DodgeEvent(
-            PatternId: Boss.CurrentPattern ?? "?",
+        return new DodgeEvent(
+            PatternId: swing.PatternId,
             Verb: verb,
             Verdict: verdict,
             TimingError: error,
@@ -576,15 +739,21 @@ public sealed class BattleSim
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
             // 이 셋이 없으면 만들어지지 않는다.
-            DashAvailable: _current.Tags.DashWindow > 0,
-            JumpAvailable: _current.Tags.Jumpable,
-            ParryAvailable: _current.Tags.Parryable,
+            DashAvailable: swing.Tags.DashWindow > 0,
+            JumpAvailable: swing.Tags.Jumpable,
+            ParryAvailable: swing.Tags.Parryable,
 
             // 뒤의 둘만 **태그가 아니라 판정**에서 온다 (이슈 #53). guard_break 도 마무리도
             // 판정 단위라 같은 패턴 안에서 대마다 값이 다르다 — 태그(has_guard_break)를 읽으면
             // 1·2타까지 "못 막는 판정" 으로 실려 계측이 거짓말을 한다.
             GuardAvailable: !box.GuardBreak,
-            Finisher: box.Finisher));
+            Finisher: box.Finisher);
+    }
+
+    /// <summary>관측을 확정한다 — 스트림에 남기고 로그 한 줄을 찍는다. <see cref="_events"/> 에 붙는 곳은 여기뿐이다.</summary>
+    private void Commit(DodgeEvent evt)
+    {
+        _events.Add(evt);
 
         // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
@@ -592,18 +761,31 @@ public sealed class BattleSim
         // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
         // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
-        Log.Info("dodge", () => $"pattern={Boss.CurrentPattern} verb={verb} verdict={verdict}"
-            + $" err={error:0.000} dir={direction} air={!Fighter.Grounded}"
-            + $" dist={Math.Abs(Fighter.X - Boss.X):0} hp={Fighter.Health} qi={Fighter.Qi}"
+        //
+        // air · dist · charge 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
+        // 먹은 틱에 지어 두고 창이 닫히는 틱에 여기로 오므로, 그때의 라이브 값을 읽으면 한 줄에 두 틱이 섞인다 —
+        // 땅에서 사거리 안에서 피한 관측이 "공중 · 사거리 밖" 으로 찍혔다. hp · qi · stam 은 관측에 없는 값이라
+        // 지금 값이다: 판정의 결과가 몸에 실린 뒤의 잔량이다.
+        Log.Info("dodge", () => $"pattern={evt.PatternId} verb={evt.Verb} verdict={evt.Verdict}"
+            + $" err={evt.TimingError:0.000} dir={evt.Direction} air={evt.Airborne}"
+            + $" dist={evt.Distance:0} hp={Fighter.Health} qi={Fighter.Qi}"
             // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
             // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
             + $" stam={Fighter.Stamina:0}"
-            + $" charge={Fighter.ChargeTier}");
+            + $" charge={evt.ChargeTier}");
+    }
+
+    /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
+    private void Land(LiveSwing swing, HitVerdict verdict)
+    {
+        ApplyVerdict(swing.Box, verdict);
+        Commit(BuildEvent(swing, swing.Box, verdict));
     }
 
     /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
     private void Strike()
     {
+        _attackTested = null;
         if (!Fighter.AttackActive || _struckThisSwing)
         {
             if (!Fighter.AttackActive)
@@ -614,19 +796,65 @@ public sealed class BattleSim
             return;
         }
 
-        double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-        if (gap <= Fighter.AttackReach)
+        var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
+        _attackTested = at;
+        if (ShapeHit.Test(_attackShape, at, Boss.Body)
+            == ShapeContact.Overlap)
         {
             // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
             // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
             int damage = Fighter.AttackDamage;
             Boss.TakeDamage(damage);
-            Log.Debug("strike", () =>
-                $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
+
+            // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
+            // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
+            // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
+            // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
+            // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
+            if (Log.IsEnabled(LogLevel.Debug))
+            {
+                double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
+                Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
+            }
         }
 
         _struckThisSwing = true;
     }
 
     private bool _struckThisSwing;
+
+    /// <summary>
+    /// 살아 있는 판정 하나 (이슈 #59). 러너가 판정을 내는 순간의 태그와 패턴 id 를 <b>들고 다닌다</b> —
+    /// 창이 러너보다 오래 살 수 있고, 러너가 끝나면 <see cref="_current"/> 가 지워진다.
+    /// </summary>
+    private sealed class LiveSwing
+    {
+        public LiveSwing(HitBox box, PatternTags tags, string patternId, int ticks)
+        {
+            Box = box;
+            Tags = tags;
+            PatternId = patternId;
+            TicksLeft = ticks;
+        }
+
+        public HitBox Box { get; }
+
+        public PatternTags Tags { get; }
+
+        public string PatternId { get; }
+
+        /// <summary>남은 틱. 대 볼 때마다 하나씩 준다.</summary>
+        public int TicksLeft { get; set; }
+
+        /// <summary>
+        /// 무적이 <b>처음</b> 먹은 틱에 지어 둔 관측 (이슈 #59 · 리뷰 라운드 1). 창이 안 닿고 닫히면
+        /// 이것이 그대로 나간다 — <b>그 틱의</b> 크레딧(대시 시작 시각 · 방향) · 공중 · 거리로 지었으므로,
+        /// 창이 그 뒤로 몇 틱을 더 살아 무적이 풀려도(라이브 <c>_dashStartedAt</c> 이 NaN 이 돼도)
+        /// 이 기록은 안 바뀐다. null 이면 아직 한 번도 안 먹었다.
+        /// </summary>
+        public DodgeEvent? DodgeSnapshot { get; set; }
+
+        /// <summary>마지막으로 빗나간 이유 — 창이 닫힐 때 무적이 한 번도 안 먹었으면 이것이 답이다.</summary>
+        public HitVerdict LastMiss { get; set; } = HitVerdict.MissedTooFar;
+    }
 }

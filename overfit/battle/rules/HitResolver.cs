@@ -6,21 +6,21 @@ namespace Overfit.Battle.Rules;
 public enum HitVerdict
 {
     /// <summary>
-    /// <b>사거리 밖</b>이라 안 닿았다 — 도망쳐 피한 것이다(그 거리를 대시가 만들었을 수도 있다).
+    /// 몸이 판정 모양의 <b>가로 범위 밖</b>이라 안 닿았다 — 멀어서 피한 것이다(그 거리를 대시가 만들었을 수도 있다).
     ///
     /// <para>
-    /// 안쪽(<see cref="MissedTooClose"/>)과 <b>따로</b> 둔다 (이슈 #46). 한 갈래였을 때는
+    /// 모양 <b>안쪽의 빈 곳</b>(<see cref="MissedByGap"/>)과 <b>따로</b> 둔다 (이슈 #46 · #59). 한 갈래였을 때는
     /// 파고들어 피한 것과 도망쳐 피한 것이 계측에서 같은 한 점이었다 — 그 둘은 성향이 정반대고
-    /// 봉인할 것도 정반대라, 뭉개면 2단계가 정반대 변종을 뽑는다.
+    /// 봉인할 것도 정반대라, 뭉개면 정반대 변종이 뽑힌다.
     /// </para>
     /// </summary>
     MissedTooFar,
 
     /// <summary>
-    /// <b>안쪽 주머니</b>라 안 닿았다 — 파고들어 피한 것이다.
-    /// 값으로 도달하려면 패턴의 <c>distance[0] &gt; 0</c> 이어야 한다 (지금은 점프 강타의 착지 충격 하나).
+    /// 판정 모양의 외곽 상자 <b>안인데 빈 칸</b>이라 안 닿았다 — 초승달 안쪽 같은 곳 (이슈 #59 · 설계 §7.1).
+    /// 옛 "안쪽 주머니"(<c>MissedTooClose</c>, 이슈 #46)가 이것의 한 경우다: 좌우 대칭 띠 두 장 사이의 빈 곳이다.
     /// </summary>
-    MissedTooClose,
+    MissedByGap,
 
     /// <summary>높이가 어긋났다 — 점프로 넘었거나 대공 아래 서 있었다.</summary>
     MissedByHeight,
@@ -71,31 +71,23 @@ public enum HitVerdict
 /// </summary>
 public static class HitResolver
 {
-    public static HitVerdict Resolve(Fighter fighter, double bossX, HitBox box, PatternTags tags)
+    public static HitVerdict Resolve(Fighter fighter, Placement at, HitBox box, PatternTags tags)
     {
         ArgumentNullException.ThrowIfNull(fighter);
         ArgumentNullException.ThrowIfNull(tags);
 
-        // 안과 밖을 **갈라서** 말한다. 둘 다 "거리 때문에 안 맞았다" 지만 플레이어가 한 일은
-        // 정반대다 — 뭉치면 DistanceBias 가 파고든 사람을 "멀리서 싸운다" 로 읽는다 (이슈 #46).
-        double distance = Math.Abs(fighter.X - bossX);
-        if (distance > box.MaxDistance)
+        // 몸통을 모양에 댄다 (이슈 #59 · 설계 §3.5). 안 닿으면 왜 안 닿았는지를 그대로 싣는다 —
+        // 멀어서 · 넘어서 · 틈에 서서는 플레이어가 한 일이 서로 다르고, 그 셋을 가르는 것이 계측이다.
+        switch (ShapeHit.Test(box.Shape, at, fighter.Body))
         {
-            return HitVerdict.MissedTooFar;
-        }
-
-        if (distance < box.MinDistance)
-        {
-            return HitVerdict.MissedTooClose;
-        }
-
-        // 몸통은 발밑(Y)에서 키만큼 위까지다. 판정 구간과 겹쳐야 닿는다 —
-        // 낮은 판정은 점프로 넘고, 대공은 지상이 안전하다.
-        double bodyLow = fighter.Y;
-        double bodyHigh = fighter.Y + fighter.BodyHeight;
-        if (bodyHigh < box.LowHeight || bodyLow > box.HighHeight)
-        {
-            return HitVerdict.MissedByHeight;
+            case ShapeContact.TooFar:
+                return HitVerdict.MissedTooFar;
+            case ShapeContact.ByHeight:
+                return HitVerdict.MissedByHeight;
+            case ShapeContact.ByGap:
+                return HitVerdict.MissedByGap;
+            default:
+                break;
         }
 
         // 유효 창은 **패턴과 캐릭터 중 좁은 쪽**이다.

@@ -48,21 +48,24 @@ public class HitResolverTests
         return f;
     }
 
+    /// <summary>보스 발밑에서 오른쪽을 본다 — 파이터는 보스 오른쪽에 선다(Spawn(_bossX + …)).</summary>
+    private static readonly Placement _at = new(_bossX, 0, 1);
+
     /// <summary>바닥에서 200 까지, 보스로부터 260 안쪽.</summary>
-    private static HitBox Mid() => new(0, 260, 0, 200, 18);
+    private static HitBox Mid() => new(HitShape.Band(0, 260, 0, 200), 18);
 
     /// <summary>바닥에서 70 까지 — 점프로 넘는다.</summary>
-    private static HitBox Low() => new(0, 520, 0, 70, 14);
+    private static HitBox Low() => new(HitShape.Band(0, 520, 0, 70), 14);
 
     /// <summary>바닥에서 140 위 — 선 키(120)를 넘으므로 지상이 안전한 대공.</summary>
-    private static HitBox High() => new(0, 300, 140, 420, 20);
+    private static HitBox High() => new(HitShape.Band(0, 300, 140, 420), 20);
 
     /// <summary>
     /// 안쪽 190px 이 비어 있는 판정 (II-끌기 의 마무리와 같은 모양 — 그쪽은 290px 이다).
     /// <b>이 박스가 있어야 "너무 가까워서 안 맞았다" 를 물어볼 수 있다</b> — 안쪽이 0 이면
     /// 그 갈래는 값으로 도달할 수 없는 자리라 테스트가 못 선다.
     /// </summary>
-    private static HitBox Pocket() => new(190, 760, 0, 330, 14);
+    private static HitBox Pocket() => new(HitShape.Band(190, 760, 0, 330), 14);
 
     private static Fighter Airborne(double x)
     {
@@ -79,20 +82,20 @@ public class HitResolverTests
     [Fact]
     public void 거리_밖이면_안_맞는다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
+        HitResolver.Resolve(Spawn(_bossX + 400), _at, Mid(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
     }
 
     [Fact]
     public void 거리_안이면_맞는다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, Mid(), Tags(false)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
     public void 좌우_어느_쪽이든_같은_거리면_같다()
     {
-        HitResolver.Resolve(Spawn(_bossX - 100), _bossX, Mid(), Tags(false))
-            .ShouldBe(HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Mid(), Tags(false)));
+        HitResolver.Resolve(Spawn(_bossX - 100), _at, Mid(), Tags(false))
+            .ShouldBe(HitResolver.Resolve(Spawn(_bossX + 100), _at, Mid(), Tags(false)));
     }
 
     [Fact]
@@ -102,7 +105,7 @@ public class HitResolverTests
         f.Tick(new InputFrame(0, false, true, false, false), _dt);
         f.Invulnerable.ShouldBeTrue();
 
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(false)).ShouldBe(HitVerdict.Dodged);
+        HitResolver.Resolve(f, _at, Mid(), Tags(false)).ShouldBe(HitVerdict.Dodged);
     }
 
     [Fact]
@@ -112,7 +115,7 @@ public class HitResolverTests
         f.Tick(new InputFrame(0, false, false, true, false), _dt);
         f.Parrying.ShouldBeTrue();
 
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
     }
 
     [Fact]
@@ -124,7 +127,7 @@ public class HitResolverTests
         Fighter f = Acting(new InputFrame(0, false, false, true, false), 5);
 
         f.Guarding.ShouldBeFalse("손을 뗐는데 자세가 남아 있다 — 이 테스트가 다른 갈래를 본다");
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
     }
 
     [Fact]
@@ -135,7 +138,7 @@ public class HitResolverTests
         Fighter f = Acting(new InputFrame(0, false, false, true, false), 5);
 
         f.Parrying.ShouldBeTrue("창은 아직 열려 있어야 이 테스트가 parryable 갈래를 본다");
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -144,14 +147,14 @@ public class HitResolverTests
         Fighter f = Airborne(_bossX + 100);
 
         f.Y.ShouldBeGreaterThan(70);
-        HitResolver.Resolve(f, _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
+        HitResolver.Resolve(f, _at, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
     }
 
     [Fact]
     public void 대공은_지상이_안전하고_공중이_위험하다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, High(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
-        HitResolver.Resolve(Airborne(_bossX + 100), _bossX, High(), Tags(false)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, High(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
+        HitResolver.Resolve(Airborne(_bossX + 100), _at, High(), Tags(false)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -159,8 +162,8 @@ public class HitResolverTests
     {
         // 여기서 이유를 버리면 BattleSim 은 "그 순간 무슨 행동 중이었나" 로 추측할 수밖에 없다.
         // 그 추측이 실제로 틀렸다 — 점프로 넘긴 판정이 같이 눌러둔 패리의 공으로 기록됐다.
-        HitResolver.Resolve(Spawn(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
-        HitResolver.Resolve(Airborne(_bossX + 100), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
+        HitResolver.Resolve(Spawn(_bossX + 600), _at, Low(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
+        HitResolver.Resolve(Airborne(_bossX + 100), _at, Low(), Tags(false)).ShouldBe(HitVerdict.MissedByHeight);
     }
 
     [Fact]
@@ -169,13 +172,13 @@ public class HitResolverTests
         // 한 갈래(MissedByRange)였을 때는 **파고들어 피한 것과 도망쳐 피한 것이 같은 한 점**이었다.
         // 그 둘은 봉인할 것이 정반대라(안쪽 주머니를 덮는 변종 · 도주로를 덮는 변종),
         // 계측이 못 가르면 2단계가 정반대 변종을 뽑는다.
-        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Pocket(), Tags(false))
-            .ShouldBe(HitVerdict.MissedTooClose);
-        HitResolver.Resolve(Spawn(_bossX + 900), _bossX, Pocket(), Tags(false))
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, Pocket(), Tags(false))
+            .ShouldBe(HitVerdict.MissedByGap);
+        HitResolver.Resolve(Spawn(_bossX + 900), _at, Pocket(), Tags(false))
             .ShouldBe(HitVerdict.MissedTooFar);
 
         // 주머니와 사거리 사이는 그냥 맞는다 — 위 둘이 "거리면 무조건 빗나간다" 가 아니라는 증거다.
-        HitResolver.Resolve(Spawn(_bossX + 400), _bossX, Pocket(), Tags(false)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(Spawn(_bossX + 400), _at, Pocket(), Tags(false)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -183,7 +186,7 @@ public class HitResolverTests
     {
         // 둘 다 어긋났을 때 무엇이라 말하는가. 거리를 먼저 보므로 거리로 답한다 —
         // 순서를 박아두지 않으면 같은 상황이 판마다 다른 라벨을 내 학습 데이터가 흔들린다.
-        HitResolver.Resolve(Airborne(_bossX + 600), _bossX, Low(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
+        HitResolver.Resolve(Airborne(_bossX + 600), _at, Low(), Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
     }
 
     [Fact]
@@ -194,7 +197,7 @@ public class HitResolverTests
         Fighter f = Spawn(_bossX + 100);
         f.Tick(new InputFrame(0, false, true, false, false), _dt);
 
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Dodged);
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Dodged);
     }
 
     // ── 패턴의 창이 실제로 문다 (이슈 #16) ─────────────────────────────────────
@@ -209,7 +212,7 @@ public class HitResolverTests
         InputFrame parry = new(0, false, false, true, false);
 
         // 패턴 0.05 < 파이터 0.12. 3틱(0.05)이면 패턴 창은 이미 닫혔고 파이터 창은 열려 있다.
-        HitResolver.Resolve(Acting(parry, 1), _bossX, Mid(), Tags(true, parryWindow: 0.05))
+        HitResolver.Resolve(Acting(parry, 1), _at, Mid(), Tags(true, parryWindow: 0.05))
             .ShouldBe(HitVerdict.Parried);
 
         Fighter late = Acting(parry, 4);
@@ -217,7 +220,7 @@ public class HitResolverTests
 
         // 패턴이 요구하는 정밀도를 못 맞췄다. **놓은 뒤라** 막을 것도 없으니 그냥 맞는다 —
         // 중간 단계(ParriedLate)가 있던 자리이고, 이슈 #53 이 그것을 가드로 바꿨다.
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(late, _at, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -233,7 +236,7 @@ public class HitResolverTests
         }
 
         f.Guarding.ShouldBeTrue();
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Guarded);
+        HitResolver.Resolve(f, _at, Mid(), Tags(true, parryWindow: 0.05)).ShouldBe(HitVerdict.Guarded);
     }
 
     [Fact]
@@ -245,7 +248,7 @@ public class HitResolverTests
         Fighter late = Acting(parry, 9);   // 0.15 > 기준 파이터의 창 0.133
 
         late.Parrying.ShouldBeFalse();
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(late, _at, Mid(), Tags(true, parryWindow: 0.30)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -253,12 +256,12 @@ public class HitResolverTests
     {
         InputFrame dash = new(0, false, true, false, false);
 
-        HitResolver.Resolve(Acting(dash, 1), _bossX, Mid(), Tags(false, dashWindow: 0.05))
+        HitResolver.Resolve(Acting(dash, 1), _at, Mid(), Tags(false, dashWindow: 0.05))
             .ShouldBe(HitVerdict.Dodged);
 
         Fighter late = Acting(dash, 4);
         late.Invulnerable.ShouldBeTrue("파이터 무적은 아직 돌아야 이 테스트가 좁은 쪽을 본다");
-        HitResolver.Resolve(late, _bossX, Mid(), Tags(false, dashWindow: 0.05)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(late, _at, Mid(), Tags(false, dashWindow: 0.05)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -270,7 +273,7 @@ public class HitResolverTests
         Fighter f = Acting(new InputFrame(0, false, true, false, false), 1);
 
         f.Invulnerable.ShouldBeTrue();
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(false, dashWindow: 0)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(f, _at, Mid(), Tags(false, dashWindow: 0)).ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -279,8 +282,8 @@ public class HitResolverTests
         Fighter f = Spawn(_bossX + 100);
         int before = f.Health;
 
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(false));
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(false));
+        HitResolver.Resolve(f, _at, Mid(), Tags(false));
+        HitResolver.Resolve(f, _at, Mid(), Tags(false));
 
         f.Health.ShouldBe(before);
     }
@@ -307,12 +310,12 @@ public class HitResolverTests
     }
 
     /// <summary><c>guard_break</c> 가 붙은 판정. 마무리 한 대만 이것을 단다 (판정 단위다).</summary>
-    private static HitBox Unguardable() => new(0, 260, 0, 200, 18, GuardBreak: true);
+    private static HitBox Unguardable() => new(HitShape.Band(0, 260, 0, 200), 18, GuardBreak: true);
 
     [Fact]
     public void 창_밖에서_막고_있으면_깎여서_막는다()
     {
-        HitResolver.Resolve(Guarding(), _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Guarded);
+        HitResolver.Resolve(Guarding(), _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Guarded);
     }
 
     [Fact]
@@ -320,7 +323,7 @@ public class HitResolverTests
     {
         // 가드는 패리가 아니다. 크림슨(parryable:false)은 "받아치지 마라" 이지 "막지 마라" 가 아니라,
         // 가드 갈래는 그 태그를 안 본다 — 못 막게 하는 것은 판정 쪽의 guard_break 하나뿐이다.
-        HitResolver.Resolve(Guarding(), _bossX, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Guarded);
+        HitResolver.Resolve(Guarding(), _at, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Guarded);
     }
 
     [Fact]
@@ -329,7 +332,7 @@ public class HitResolverTests
         Fighter f = Guarding();
         f.Spend(f.Stamina - 1);   // 1 남는다. Mid() 는 18피해라 32.4 가 든다
 
-        HitResolver.Resolve(f, _bossX, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
     }
 
     [Fact]
@@ -339,7 +342,7 @@ public class HitResolverTests
 
         f.Stamina.ShouldBeGreaterThan(f.GuardStaminaCost(Unguardable().Damage),
             "스태미나가 모자라 이 테스트가 고갈 갈래를 본다");
-        HitResolver.Resolve(f, _bossX, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
+        HitResolver.Resolve(f, _at, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
     }
 
     [Fact]
@@ -353,13 +356,13 @@ public class HitResolverTests
         f.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
 
         f.Guarding.ShouldBeTrue("자세는 서 있는데도 창이 이기는지를 보는 테스트다");
-        HitResolver.Resolve(f, _bossX, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+        HitResolver.Resolve(f, _at, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
     }
 
     [Fact]
     public void 가드_불가도_아무것도_안_하면_평범한_판정이다()
     {
-        HitResolver.Resolve(Spawn(_bossX + 100), _bossX, Unguardable(), Tags(parryable: false))
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, Unguardable(), Tags(parryable: false))
             .ShouldBe(HitVerdict.Hit);
     }
 
@@ -368,13 +371,32 @@ public class HitResolverTests
     {
         // 순서를 박아둔다. 안 닿은 판정까지 "막았다" 로 적으면 가드 개수가 실제로 막은 것보다
         // 부풀고, 그 개수가 곧 계측이다. **패리도 같다** — 창 안이라고 안 닿은 칼을 받아칠 수는 없다.
-        var box = new HitBox(0, 10, 0, 200, 18);
-        HitResolver.Resolve(Guarding(), _bossX, box, Tags(parryable: true)).ShouldBe(HitVerdict.MissedTooFar);
+        var box = new HitBox(HitShape.Band(0, 10, 0, 200), 18);
+        HitResolver.Resolve(Guarding(), _at, box, Tags(parryable: true)).ShouldBe(HitVerdict.MissedTooFar);
 
         Fighter parrying = Spawn(_bossX + 100);
         parrying.Tick(new InputFrame(0, false, false, true, false, ParryHeld: true), _dt);
         parrying.Parrying.ShouldBeTrue();
-        HitResolver.Resolve(parrying, _bossX, box, Tags(parryable: true)).ShouldBe(HitVerdict.MissedTooFar);
+        HitResolver.Resolve(parrying, _at, box, Tags(parryable: true)).ShouldBe(HitVerdict.MissedTooFar);
+    }
+
+    [Fact]
+    public void 왼쪽을_보는_보스의_모양은_왼쪽을_친다()
+    {
+        // 앞으로만 치는 모양. 옛 띠는 좌우 대칭이라 "보는 쪽" 이 판정에 실리는지를 한 번도 드러낸 적이 없다.
+        var box = new HitBox(new HitShape(new[] { new HitRect(50, 300, 0, 200) }), 18);
+        var facingLeft = new Placement(_bossX, 0, -1);
+
+        HitResolver.Resolve(Spawn(_bossX - 150), facingLeft, box, Tags(false)).ShouldBe(HitVerdict.Hit);
+        HitResolver.Resolve(Spawn(_bossX + 150), facingLeft, box, Tags(false))
+            .ShouldBe(HitVerdict.MissedTooFar, "등 뒤를 쳤다 — 보는 쪽이 판정에 안 실렸다");
+    }
+
+    [Fact]
+    public void 몸통이_닿으면_중심이_밖이어도_맞는다()
+    {
+        // 띠 [0, 260] · 파이터 중심 280 — 옛 판정(몸을 점으로 봤다)은 빗나감이었다. 몸 왼끝이 250 이라 닿는다.
+        HitResolver.Resolve(Spawn(_bossX + 280), _at, Mid(), Tags(false)).ShouldBe(HitVerdict.Hit);
     }
 
 }
