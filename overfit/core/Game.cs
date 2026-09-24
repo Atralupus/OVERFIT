@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using Godot;
 
@@ -33,6 +35,15 @@ public partial class Game : Node
 
     /// <summary>순회 한 걸음마다 주는 시간. 씬이 <c>_Ready</c> 를 끝내고 첫 프레임을 그릴 만큼이면 된다.</summary>
     private const double _tourStepSeconds = 0.3;
+
+    /// <summary>
+    /// 단계 점프 디버그 액션의 접두어 (이슈 #54). <c>project.godot</c> 의 <c>debug_stage_1..3</c> 이고
+    /// 끝의 숫자가 곧 단계다. 타이틀의 조작 안내는 <c>debug_</c> 로 시작하는 액션을 안 싣는다(Title).
+    /// </summary>
+    private const string _stageJumpPrefix = "debug_stage_";
+
+    /// <summary>순회가 전투에서 눌러 보는 단계 점프 — 가장 먼 단계라 1 에서 옮겨 간 것이 로그에서 갈린다.</summary>
+    private const string _tourStageJump = "debug_stage_3";
 
     public static Game Instance { get; private set; } = null!;
 
@@ -125,7 +136,45 @@ public partial class Game : Node
             Log.Debug("scene", "input key=F9 action=cycle");
             GoTo(Next(Current));
             GetViewport().SetInputAsHandled();
+            return;
         }
+
+        // 전투 중 1 · 2 · 3 → 그 단계를 바로 시작한다 (이슈 #54). 유저가 3단계를 보려고 두 판을
+        // 이기고 올라가지 않게 하는 디버그 키다. **위의 IsDebugBuild 가드가 릴리즈 빌드를 이미 걸렀다** —
+        // 그 한 줄이 이 키를 릴리즈에서 죽이는 전부라, 이 갈래를 그 가드 위로 올리지 않는다.
+        if (Current == Scene.Battle && StageJump(e) is (string action, int stage))
+        {
+            Log.Debug("scene", $"input action={action} stage_jump from={Stage} to={stage}");
+            SetStage(stage);
+            GoTo(Scene.Battle);
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    /// <summary>
+    /// 눌린 것이 단계 점프 키(<c>debug_stage_N</c>)면 그 액션과 단계 번호. 아니면 null.
+    ///
+    /// <para>
+    /// 단계 번호를 여기 표로 적지 않고 <b>액션 이름에서 읽는다</b> — 키와 단계의 짝이 <c>project.godot</c>
+    /// 한 곳에만 있어야 한다. 몇 단계까지 있는지는 여기서 안 자른다: <c>data/stages.json</c> 이 알고,
+    /// 없는 단계는 전투 씬이 가장 가까운 단계로 잘라 [W] 를 남긴다(<c>StageRoster.For</c>).
+    /// </para>
+    /// </summary>
+    private static (string Action, int Stage)? StageJump(InputEvent e)
+    {
+        foreach (StringName name in InputMap.GetActions())
+        {
+            string action = name.ToString();
+            if (action.StartsWith(_stageJumpPrefix, StringComparison.Ordinal)
+                && int.TryParse(action.AsSpan(_stageJumpPrefix.Length), NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out int stage)
+                && e.IsActionPressed(action))
+            {
+                return (action, stage);
+            }
+        }
+
+        return null;
     }
 
     private static Scene Next(Scene scene) => scene switch
@@ -153,6 +202,16 @@ public partial class Game : Node
             Log.Trace("scene", $"tour step={scene} frame={Engine.GetProcessFrames()}");
             GoTo(scene);
             await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
+
+            // 전투에서는 단계 점프 키를 한 번 눌러 본다 (이슈 #54). 키가 InputMap 에 있는지 · 입력이
+            // _UnhandledInput 까지 오는지 · 단계가 정말 바뀌어 전투가 다시 서는지를 창 없이 본다 —
+            // tools/build.sh smoke 가 그 로그 두 줄을 찾는다. 엔진의 입력 큐로 넣으므로 사람이 누른 것과 같은 길이다.
+            if (scene == Scene.Battle)
+            {
+                Input.ParseInputEvent(new InputEventAction { Action = _tourStageJump, Pressed = true });
+                Input.ParseInputEvent(new InputEventAction { Action = _tourStageJump, Pressed = false });
+                await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
+            }
         }
 
         Log.Marker("tour", "tour=done");

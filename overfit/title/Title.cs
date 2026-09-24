@@ -13,6 +13,12 @@ public partial class Title : Control
     /// <b>키 글자를 여기 적지 않는다.</b> <see cref="InputMap"/> 에서 뽑는다 —
     /// 손으로 적은 안내는 바인딩이 바뀌는 순간 거짓말이 되고, 그 거짓은 아무 테스트도 빨갛게 하지 않는다.
     /// </para>
+    ///
+    /// <para>
+    /// <b>InputMap 을 통째로 훑지 않고 이 목록만 싣는다</b> — 그것이 디버그 키를 안내에서 가르는 자리다
+    /// (이슈 #54). <c>debug_stage_1..3</c> 은 릴리즈 빌드에서 안 먹으므로(Game._UnhandledInput) 안내에 적히면
+    /// 안내가 거짓말이 된다. 누가 이 목록에 <c>debug_</c> 액션을 적어도 <see cref="Keys"/> 가 건너뛰고 [W] 를 남긴다.
+    /// </para>
     /// </summary>
     private static readonly (string Label, string[] Actions)[] _rows =
     {
@@ -22,6 +28,9 @@ public partial class Title : Control
         ("패리", new[] { "parry" }),
         ("공격", new[] { "attack" }),
     };
+
+    /// <summary>디버그 전용 액션의 접두어. 조작 안내에 안 싣는다 — <see cref="_rows"/> 의 주석.</summary>
+    private const string _debugPrefix = "debug_";
 
     public override void _Ready()
     {
@@ -61,6 +70,14 @@ public partial class Title : Control
         var parts = new System.Collections.Generic.List<string>();
         foreach (string action in actions)
         {
+            // 디버그 키는 안내에 안 싣는다 (이슈 #54 · project.godot 의 주석). 목록이 이미 가르지만,
+            // 한 줄 잘못 적는 것으로 릴리즈 안내에 안 먹는 키가 뜨지 않게 여기서도 막는다.
+            if (action.StartsWith(_debugPrefix, System.StringComparison.Ordinal))
+            {
+                Log.Warn("scene", $"title debug_action_listed name={action}");
+                continue;
+            }
+
             if (!InputMap.HasAction(action))
             {
                 // 규칙 위반은 아니지만 안내가 비는 것은 알아야 한다 — 액션 이름이 오타면 여기서 드러난다.
