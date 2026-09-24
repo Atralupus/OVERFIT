@@ -493,7 +493,8 @@ public partial class FighterView : Node2D
     /// <para>
     /// 지금 데이터(이슈 #54)에서는 시작하는 장과 멈추는 장이 같은 3번이라 누르자마자 그 자세로 선다.
     /// 둘이 갈라지는 시트(시작 0 · 선딜 네 장)면 뒤로 빼는 동작을 실제로 감고 나서 멈춘다 — 선딜이 곧
-    /// 그 장수라(FighterDataTests) 탭은 멈추기 전에 칼이 나가고, 차지는 거기서 선다.
+    /// 그 장수라(FighterDataTests) 탭은 멈춘 장을 제 길이만큼 보이고 판정 틱에 칼 장으로 넘어가며
+    /// (흘려보냈을 때와 같은 그림이다), 차지는 거기서 계속 선다.
     /// </para>
     /// </summary>
     private void HoldWindup()
