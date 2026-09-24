@@ -38,12 +38,13 @@ public static class TestConfigs
         AttackWindup = 0.08,
         AttackActive = 0.06,
         AttackRecover = 0.14,
-        // 기준 파이터에는 그림이 없지만 셋의 관계는 진짜여야 한다 — 50fps · 14프레임이면
-        // 재생 0.28초로 위 셋의 합과 같고, 4번 프레임(0.08초)이 선딜의 끝이다.
+        // 기준 파이터에는 그림이 없지만 넷의 관계는 진짜여야 한다 — 50fps · 14프레임이면
+        // 재생 0.28초로 위 셋의 합과 같고, 0번에서 시작해 4번 프레임(0.08초)이 선딜의 끝이다.
         // 거짓 값을 넣으면 이 픽스처가 "애니메이션에서 거꾸로 정한다"는 규칙의 반례가 된다.
         AttackAnimFps = 50,
         AttackAnimFrames = 14,
         AttackAnimBladeFrame = 4,
+        AttackAnimStartFrame = 0,
         AttackReach = 90,
         AttackDamage = 8,
         AttackCost = 12,

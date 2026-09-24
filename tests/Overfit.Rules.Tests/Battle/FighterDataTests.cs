@@ -253,12 +253,18 @@ public class FighterDataTests
         // 칼이 나가는 5번째 프레임까지 간 적이 한 번도 없었다 — **칼 휘두르는 그림이 안 보였다.**
         //
         // 그래서 순서를 뒤집는다: 애니메이션이 먼저고 액션 길이가 거기 맞춘다.
+        //
+        // "한 번" 은 **시트 전체가 아니라 탭이 도는 구간**이다 (이슈 #54). 선딜을 0.3333 → 0.0833 으로
+        // 줄이면서 탭은 0번이 아니라 attack_anim_start_frame 에서 시작한다 — 칼을 뒤로 빼는 네 장을
+        // 0.0833초에 다 돌릴 수는 없어서다. 그래서 재는 길이도 거기서 끝까지다. 요구는 그대로다:
+        // 액션이 끝나는 순간과 그림이 끝나는 순간이 같아야 한다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            double anim = c.AttackAnimFrames / c.AttackAnimFps;
+            double anim = (c.AttackAnimFrames - c.AttackAnimStartFrame) / c.AttackAnimFps;
             double cycle = c.AttackWindup + c.AttackActive + c.AttackRecover;
             cycle.ShouldBe(anim, _halfTick,
-                $"{id}: 공격 액션 {cycle:0.0000}초가 애니메이션 {anim:0.0000}초와 다르다 — 그림이 잘리거나 남는다");
+                $"{id}: 공격 액션 {cycle:0.0000}초가 애니메이션({c.AttackAnimStartFrame}번부터) {anim:0.0000}초와 다르다"
+                + " — 그림이 잘리거나 남는다");
         }
     }
 
@@ -268,6 +274,10 @@ public class FighterDataTests
         // 판정이 서는 구간과 **화면에서 칼이 지나가는 구간**이 같은 자리여야 한다.
         // 어긋나면 "닿았는데 칼은 아직 등 뒤" 또는 그 반대가 되고, 플레이어는 사거리를 못 배운다.
         // blade_frame 은 시트를 실제로 열어서 정한 값이다 — 프레임 번호로 짐작한 것이 아니다.
+        //
+        // 선딜은 **탭이 시작하는 장에서 칼이 나가는 장까지**다 (이슈 #54). 시작하는 장은 칼이 나가는
+        // 장보다 **앞이어야** 한다 — 같거나 뒤면 선딜 동안 화면에 칼이 이미 나가 있어, 판정이 서기도
+        // 전에 그림이 "벴다" 고 말한다(이슈 #38 의 반대쪽 거짓말이다).
         foreach ((string id, FighterConfig c) in Load())
         {
             double frame = 1 / c.AttackAnimFps;
@@ -275,15 +285,46 @@ public class FighterDataTests
             c.AttackAnimBladeFrame.ShouldBeInRange(0, c.AttackAnimFrames - 1,
                 $"{id}: blade_frame={c.AttackAnimBladeFrame} 이 {c.AttackAnimFrames}프레임 밖이다");
 
-            c.AttackWindup.ShouldBe(c.AttackAnimBladeFrame * frame, _halfTick,
-                $"{id}: 선딜이 끝나는 자리가 칼이 나가는 {c.AttackAnimBladeFrame}번 프레임의 시작과 다르다");
+            c.AttackAnimStartFrame.ShouldBeInRange(0, c.AttackAnimBladeFrame - 1,
+                $"{id}: start_frame={c.AttackAnimStartFrame} 이 칼이 나가는 {c.AttackAnimBladeFrame}번 앞이 아니다"
+                + " — 선딜 동안 칼이 이미 나가 있다");
+
+            c.AttackWindup.ShouldBe((c.AttackAnimBladeFrame - c.AttackAnimStartFrame) * frame, _halfTick,
+                $"{id}: 선딜이 끝나는 자리가 칼이 나가는 {c.AttackAnimBladeFrame}번 프레임의 시작과 다르다"
+                + $" ({c.AttackAnimStartFrame}번부터 셌다)");
 
             c.AttackActive.ShouldBeGreaterThanOrEqualTo(frame - _halfTick,
                 $"{id}: 판정이 한 프레임보다 짧다 — 칼이 지나가는 그림 위에 판정이 못 선다");
 
             (c.AttackWindup + c.AttackActive).ShouldBeLessThanOrEqualTo(
-                (c.AttackAnimFrames / c.AttackAnimFps) + _halfTick,
+                ((c.AttackAnimFrames - c.AttackAnimStartFrame) / c.AttackAnimFps) + _halfTick,
                 $"{id}: 판정이 애니메이션 밖으로 넘친다");
+        }
+    }
+
+    [Fact]
+    public void 탭은_거의_즉발이다()
+    {
+        // **유저가 직접 해 보고 낸 요청이다** (이슈 #54): "공격하면 거의 바로 공격이 되게".
+        // 선딜 0.3333(20틱)은 그림에서 거꾸로 정한 값이었는데(칼을 뒤로 빼는 네 장) 손에는 굼떴다.
+        // 이슈가 제안한 것은 0.08초 — 60Hz 로 **5틱**이다. 그 틱 수를 못박는다.
+        //
+        // 산수로 재지 않고 **규칙을 돌려서** 센다. 경계는 틱 누산의 부동소수에 걸리므로
+        // (Fighter.TierFor 의 주석) 숫자만 보고 "0.0833 이니 5틱" 이라 적으면 실제로는 6틱일 수 있다.
+        // 누른 틱이 1틱째다 — Begin 이 Advance 보다 먼저라 누른 틱도 선딜에 들어간다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            var fighter = new Fighter(c, TestConfigs.Arena(), TestConfigs.Arena().Width / 2);
+            fighter.Tick(new InputFrame(0, false, false, false, Attack: true), BattleSim.Dt);
+            int ticks = 1;
+            while (!fighter.AttackActive && ticks < 60)
+            {
+                fighter.Tick(default, BattleSim.Dt);
+                ticks++;
+            }
+
+            fighter.AttackActive.ShouldBeTrue($"{id}: 탭한 칼이 1초 안에 한 번도 안 섰다");
+            ticks.ShouldBeLessThanOrEqualTo(5, $"{id}: 탭한 칼이 {ticks}틱 만에 선다 — 즉발이 아니다");
         }
     }
 
