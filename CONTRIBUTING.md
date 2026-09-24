@@ -44,7 +44,7 @@ tools/build.sh run                # 게임 실행
 | 명령 | 무엇 | 걸리는 시간 |
 |---|---|---|
 | `tools/build.sh test` | 규칙 테스트. Godot 을 안 띄운다 | 초 |
-| `tools/build.sh check` | 포맷 · 빌드 · 규칙 테스트 · uid. **커밋 게이트** | 초 |
+| `tools/build.sh check` | 포맷 · 빌드 · 규칙 테스트 · uid · 판정 모양(그림이 깔려 있을 때). **커밋 게이트** | 초 |
 | `tools/build.sh fix` | 포맷 자동 수정 | 초 |
 | `tools/build.sh smoke` | 헤드리스 부팅 + 씬 순회. 엔진이 있어야만 보이는 것 | 십수 초 |
 | `tools/build.sh run` | 창을 띄워 실행 | |

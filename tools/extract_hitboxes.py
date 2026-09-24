@@ -6,6 +6,9 @@
     python3 tools/extract_hitboxes.py --overlay   뽑은 사각형을 그림 위에 그려 out/hitbox_overlay/ 에 둔다
                                                   (--check 와 같이 쓰면 파일은 안 건드리고 그림만 그린다)
 
+그림(PNG)이 안 깔린 체크아웃에서는 아무것도 안 하고 77 로 끝난다 — 실패(1)와 가른다. 게이트
+(tools/build.sh check)가 77 만 경고로 넘긴다: 방금 클론한 사람은 볼 그림이 없을 뿐이지 무엇을 어긴 것이 아니다.
+
 무엇을 뽑나 — hitboxes.json 의 **키가 곧 목록**이다. 키는 `팩/애니메이션/프레임` 이고
 (예: `medieval_king/attack/2`), 새 판정 모양이 필요하면 키를 하나 더하고 이 도구를 돌린다.
 애니메이션 이름은 **.tres 의 이름**이다 — 시트 파일 이름(attack1.png)이 아니라 뷰가 부르는 이름(attack).
@@ -56,6 +59,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "overfit" / "data"
 FRAMES = ROOT / "overfit" / "assets" / "spriteframes"
 OUT = DATA / "hitboxes.json"
+
+# 그림이 없어 볼 수 없다 — automake 테스트 관례의 '건너뜀' 번호다. 1(그림과 다르다 · 도구가 멈췄다)과 섞이면
+# 게이트가 둘 중 하나를 잘못 다룬다: 없는 그림을 실패로 막거나, 진짜 어긋남을 경고로 넘긴다.
+NO_ART = 77
 
 # 겹쳐 그린 그림은 out/ 아래로만 떨어진다 (gitignore) — 그림 원본에서 유도한 것이라 커밋하지 않는다.
 OVERLAY_DIR = ROOT / "out" / "hitbox_overlay"
@@ -256,6 +263,13 @@ def main():
 
     existing = read_json(OUT)
     found = targets(existing)
+    missing = sorted({sub["sheet"] for sub, _ in found.values() if not sub["sheet"].is_file()})
+    if missing:
+        print("그림(PNG)이 없어 판정 모양을 볼 수 없다 — python3 tools/install_assets.py 를 먼저 돌려라")
+        for sheet in missing:
+            print(f"  없음: {sheet.relative_to(ROOT)}")
+        return NO_ART
+
     data = extract(existing, found)
     text = dump(data)
 
