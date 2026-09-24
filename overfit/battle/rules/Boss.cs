@@ -15,6 +15,12 @@ public sealed class BossConfig
     /// <summary>몸 절반 폭. 캐릭터의 4배라 근접에서는 거의 항상 닿는다.</summary>
     public required double HalfWidth { get; init; }
 
+    /// <summary>
+    /// 몸 키(px). 반폭과 같이 <b>그려지는 몸</b>에서 잰다 — bosses.json 의 <c>_note_height</c> 에 어떻게 쟀는지 있다.
+    /// 파이터의 칼이 이것에 대 본다 (이슈 #59).
+    /// </summary>
+    public required double Height { get; init; }
+
     /// <summary>패턴과 패턴 사이의 쉬는 시간(초). 이 동안 플레이어가 때릴 틈이 난다.</summary>
     public required double PatternGap { get; init; }
 
@@ -71,13 +77,23 @@ public sealed class Boss
     public double X { get; private set; }
 
     /// <summary>
+    /// 발바닥 높이 (바닥 0). <b>지금은 늘 0 이다</b> — 뛰어오르는 패턴(설계 §4.2)이 들어올 때 움직인다.
+    /// 판정은 이것을 모양을 놓는 자리로 쓴다(<see cref="Placement"/>).
+    /// </summary>
+    public double Y { get; }
+
+    /// <summary>몸통 — 중심 ± 반폭, 발바닥에서 키만큼 (월드). 파이터의 칼이 이것에 대 본다 (이슈 #59).</summary>
+    public HitRect Body => new(X - _config.HalfWidth, X + _config.HalfWidth, Y, Y + _config.Height);
+
+    /// <summary>
     /// -1 왼쪽 · +1 오른쪽. 목표를 모르는 채 태어나므로 <see cref="BattleSim"/> 이 세우자마자
     /// <see cref="Face"/> 로 맞춘다 — 여기 기본값이 있는 것은 이 값이 <b>0 이 되는 순간이 없게</b>
     /// 하기 위해서다(0 이면 뷰가 어느 쪽도 못 그린다).
     ///
     /// <para>
-    /// <b>판정은 이것을 안 본다</b> — <see cref="HitResolver"/> 는 거리를 <c>Math.Abs</c> 로 재서
-    /// 좌우가 대칭이다. 그래도 뷰가 아니라 규칙이 정하는 이유는, 뷰가 스스로 좌표를 보고 정하면
+    /// <b>판정이 이것으로 모양을 놓는다</b> (이슈 #59 · <see cref="Placement"/>). 지금 패턴은 전부 좌우 대칭 띠라
+    /// (<see cref="HitShape.Band"/>) 어느 쪽을 보든 결과가 같지만, 앞으로만 치는 모양이 들어오면 이 값이 판정을
+    /// 가른다. 뷰가 아니라 규칙이 정하는 이유는, 뷰가 스스로 좌표를 보고 정하면
     /// "같은 시드면 같은 결과" 가 그림까지 덮지 못하기 때문이다(이슈 #36).
     /// </para>
     /// </summary>

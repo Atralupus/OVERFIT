@@ -358,7 +358,7 @@ public class BattleSimTests
         // 일을 물려받은 자리다 — 계열이 하나로 줄면서 안쪽 주머니를 가진 판정이 여기만 남았다.
         //
         // ① 마무리의 안쪽 290px 이 비어 있다 — **몸 충돌을 걷은 지금(이슈 #27) distance_bias 와
-        //    MissedTooClose 를 살려 두는 것이 이 주머니 하나다.** 주머니가 닫히면
+        //    MissedByGap 을 살려 두는 것이 이 주머니 하나다.** 주머니가 닫히면
         //    (patterns.json 의 290 이 0 으로 내려가면) 두 축은 조용히 죽는다 — 여기서 빨개진다.
         // ② 바깥끝 620 은 밖으로 한 대시의 착지점(서는 자리 115 + 대시 367 = 482)을 덮는다.
         //    **대시 의존을 봉인하는 것이 이 한 줄**이고, 붙어 있는 사람에게는 아무 일도 안 일어난다.
@@ -378,7 +378,7 @@ public class BattleSimTests
 
         // 안쪽 주머니로 피한 것은 **도망쳐 피한 것과 다른 점**이어야 한다 (이슈 #46).
         // 한 갈래(MissedByRange)였을 때는 이 줄과 위의 landing[0] 이 계측에서 같은 값이었다.
-        hugging[2].Verdict.ShouldBe(HitVerdict.MissedTooClose, "붙었는데 마무리에 맞았다 — 안쪽 주머니가 닫혔다");
+        hugging[2].Verdict.ShouldBe(HitVerdict.MissedByGap, "붙었는데 마무리에 맞았다 — 안쪽 주머니가 닫혔다");
         hugging[2].Distance.ShouldBeLessThan(290);
 
         landing[2].Verdict.ShouldBe(HitVerdict.Hit, "대시 착지점에 서 있는데 마무리가 안 왔다");
@@ -706,7 +706,7 @@ public class BattleSimTests
 
         sim.Events.Count.ShouldBe(1);
         DodgeEvent e = sim.Events[0];
-        e.Verdict.ShouldBe(HitVerdict.MissedTooClose);
+        e.Verdict.ShouldBe(HitVerdict.MissedByGap);
         e.Distance.ShouldBeLessThan(190, "대시가 주머니 안까지 못 데려갔다 — 이 테스트가 그 자리를 안 본다");
         e.Verb.ShouldBe(DodgeVerb.Dash, "파고든 대시가 간격의 공이 됐다");
         e.Direction.ShouldBe(1, "안으로 뛴 대시인데 방향이 안 실렸다");
@@ -779,7 +779,7 @@ public class BattleSimTests
         // 대시가 아니라 간격을 봉인한다. 정확히 반대 변종이다.
         IReadOnlyList<DodgeEvent> events = StandoffDasher(outward: true);
         int dashMissed = events.Count(e => e.Verb == DodgeVerb.Dash
-            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedTooClose);
+            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedByGap);
         PlayerAxes axes = PlayerAxes.From(events);
 
         axes.DashSamples.ShouldBeGreaterThan(0);
@@ -791,7 +791,7 @@ public class BattleSimTests
         // 사거리 안이라 판정이 거리로 빠지지 않는다. 한쪽만 움직이는 것이 이 고침이 좁다는 증거다.
         IReadOnlyList<DodgeEvent> inward = StandoffDasher(outward: false);
         inward.Count(e => e.Verb == DodgeVerb.Dash
-            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedTooClose)
+            && e.Verdict is HitVerdict.MissedTooFar or HitVerdict.MissedByGap)
             .ShouldBe(0, "안으로 뛴 대시가 거리로 빠졌다 — 기하가 움직였다면 위 숫자도 다시 재야 한다");
     }
 

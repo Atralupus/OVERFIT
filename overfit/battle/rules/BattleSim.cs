@@ -46,6 +46,13 @@ public sealed class BattleSim
     public const double Dt = 1.0 / 60.0;
 
     private readonly BattleSetup _setup;
+
+    /// <summary>
+    /// 파이터 칼의 판정 모양 (이슈 #59). 지금은 옛 사거리를 그대로 옮긴 것이다(<see cref="HitShape.Reach"/>) —
+    /// 옛 판정 <c>|dx| − 보스 반폭 ≤ 사거리</c> 와 가로가 정확히 같다. 그림의 모양으로 가는 것은 설계 §10 의 2번이다.
+    /// </summary>
+    private readonly HitShape _attackShape;
+
     private PatternRunner? _runner;
     private PatternDef? _current;
     private double _gapLeft;
@@ -84,17 +91,20 @@ public sealed class BattleSim
     private int _dashDirection;
 
     /// <summary>
-    /// 대시를 <b>시작하기 직전</b>의 교전 거리(px, NaN = 대시 중이 아니다).
-    /// "이 거리를 만든 것이 대시인가" 를 판정마다 물어보는 반사실(counterfactual)이다 —
-    /// 그 자리에서 판정이 닿았을 것이면 대시가 빼낸 것이고, 거기서도 안 닿았으면 간격이다.
+    /// 대시를 <b>시작하기 직전</b>의 몸통과 그때의 보스 자리 (null = 대시 중이 아니다).
+    /// "그 자리에 서 있었으면 이 판정에 맞았나" 를 판정마다 물어보는 반사실(counterfactual)이다 —
+    /// 맞았을 것이면 대시가 빼낸 것이고, 거기서도 안 맞았으면 간격이다 (이슈 #46).
     ///
     /// <para>
     /// 대시 중이라는 것만으로는 부족하다. 사거리 100 짜리 판정 앞에서 960px 떨어져 대시하면
     /// 대시는 돌지만 그 거리는 대시가 만든 것이 아니다 — 그것까지 대시의 공으로 돌리면
     /// <c>dash_timing_bias</c> 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
+    /// 옛 반사실은 거리 하나(보스 중심에서)를 띠와 견줬고, 이제는 몸통을 모양에 댄다 (이슈 #59).
     /// </para>
     /// </summary>
-    private double _dashStartDistance = double.NaN;
+    private HitRect? _dashStartBody;
+
+    private double _dashStartBossX;
 
     public BattleSim(BattleSetup setup)
     {
@@ -109,6 +119,7 @@ public sealed class BattleSim
         }
 
         _setup = setup;
+        _attackShape = HitShape.Reach(setup.Fighter.AttackReach);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
 
@@ -221,8 +232,9 @@ public sealed class BattleSim
         // 틱 시작의 자리도 같이 잡아둔다. 대시가 시작된 틱에는 Fighter.Tick 이 이미 한 틱만큼
         // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
         double wasX = Fighter.X;
+        double wasY = Fighter.Y;
         Fighter.Tick(input, Dt);
-        RememberDodgeStart(input, wasGrounded, wasX);
+        RememberDodgeStart(input, wasGrounded, wasX, wasY);
         AdvanceBoss();
         ResolveLive();
         Strike();
@@ -357,7 +369,8 @@ public sealed class BattleSim
     /// "이미 공중인데 또 눌렀다"를 구별할 수 없다.</param>
     /// <param name="wasX">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 파이터의 자리.
     /// 대시가 시작된 틱에는 이미 한 틱을 이동한 뒤라, 대시 <b>전</b>의 거리는 이것으로만 잡힌다.</param>
-    private void RememberDodgeStart(InputFrame input, bool wasGrounded, double wasX)
+    /// <param name="wasY">이번 틱이 시작될 때의 발바닥 높이. 공중 대시의 반사실이 이것을 쓴다.</param>
+    private void RememberDodgeStart(InputFrame input, bool wasGrounded, double wasX, double wasY)
     {
         double now = Ticks * Dt;
 
@@ -370,13 +383,15 @@ public sealed class BattleSim
             // 보스 쪽으로 갔으면 안(+1), 반대면 밖(-1)
             _dashDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
             // 보스는 아직 이번 틱을 안 밀었으므로(AdvanceBoss 는 뒤에 온다) 둘 다 틱 시작의 자리다.
-            _dashStartDistance = Math.Abs(wasX - Boss.X);
+            _dashStartBody = new HitRect(
+                wasX - Fighter.HalfWidth, wasX + Fighter.HalfWidth, wasY, wasY + Fighter.BodyHeight);
+            _dashStartBossX = Boss.X;
         }
         else if (Fighter.Action != FighterAction.Dash)
         {
             _dashStartedAt = double.NaN;
             _dashDirection = 0;
-            _dashStartDistance = double.NaN;
+            _dashStartBody = null;
         }
 
         // 패리 칸은 **자세가 아니라 누름**을 따라 산다. 누르자마자 놓아도 그 누름은 시도였고,
@@ -451,7 +466,7 @@ public sealed class BattleSim
 
         // 거리로 빗나갔다 — 안이든 밖이든. 서 있던 자리가 피하게 했으면 간격이지만,
         // **그 자리를 대시가 만들었으면 대시다** (이슈 #46).
-        HitVerdict.MissedTooFar or HitVerdict.MissedTooClose => CreditDistance(box),
+        HitVerdict.MissedTooFar or HitVerdict.MissedByGap => CreditDistance(box),
 
         // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
         _ => MostRecentAction(),
@@ -493,8 +508,8 @@ public sealed class BattleSim
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box) =>
         !double.IsNaN(_dashStartedAt)
-        && _dashStartDistance >= box.MinDistance
-        && _dashStartDistance <= box.MaxDistance
+        && _dashStartBody is { } before
+        && ShapeHit.Test(box.Shape, new Placement(_dashStartBossX, Boss.Y, Boss.Facing), before) == ShapeContact.Overlap
             ? (DodgeVerb.Dash, _dashStartedAt)
             : (DodgeVerb.Spacing, double.NaN);
 
@@ -565,7 +580,7 @@ public sealed class BattleSim
     /// </summary>
     private bool Step(LiveSwing swing)
     {
-        HitVerdict verdict = HitResolver.Resolve(Fighter, Boss.X, swing.Box, swing.Tags);
+        HitVerdict verdict = HitResolver.Resolve(Fighter, new Placement(Boss.X, Boss.Y, Boss.Facing), swing.Box, swing.Tags);
         swing.TicksLeft--;
 
         switch (verdict)
@@ -731,7 +746,8 @@ public sealed class BattleSim
         }
 
         double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-        if (gap <= Fighter.AttackReach)
+        if (ShapeHit.Test(_attackShape, new Placement(Fighter.X, Fighter.Y, Fighter.Facing), Boss.Body)
+            == ShapeContact.Overlap)
         {
             // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
             // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.

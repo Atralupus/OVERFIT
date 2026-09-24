@@ -114,6 +114,12 @@ public sealed class Fighter
     /// <summary>몸 절반 폭. 보스가 두고 서는 간격을 <c>BattleSim</c> 이 이것으로 잰다 — 손으로 안 적는다.</summary>
     public double HalfWidth => _config.HalfWidth;
 
+    /// <summary>
+    /// 몸통 — 발 중심에서 좌우 반폭, 발바닥에서 키만큼 (월드). <b>판정은 이것과 모양을 겹쳐 본다</b>
+    /// (이슈 #59 · 설계 §3.4). 옛 판정은 몸을 점(발 중심)으로 봤다.
+    /// </summary>
+    public HitRect Body => new(X - _config.HalfWidth, X + _config.HalfWidth, Y, Y + _config.Height);
+
     public FighterAction Action { get; private set; } = FighterAction.Idle;
 
     /// <summary>현재 행동이 시작된 뒤 흐른 시간. Idle 이면 0.</summary>

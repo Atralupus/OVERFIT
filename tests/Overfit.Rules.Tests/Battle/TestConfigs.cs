@@ -209,6 +209,7 @@ public static class TestConfigs
             MaxHealth = maxHealth ?? data.MaxHealth,
             MoveSpeed = moveSpeed ?? data.MoveSpeed,
             HalfWidth = data.HalfWidth,
+            Height = data.Height,
             PatternGap = patternGap ?? data.PatternGap,
             FinisherParryStagger = data.FinisherParryStagger,
             Sprite = data.Sprite,

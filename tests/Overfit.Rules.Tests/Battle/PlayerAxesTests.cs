@@ -240,7 +240,7 @@ public class PlayerAxesTests
         });
         PlayerAxes inward = PlayerAxes.From(new List<DodgeEvent>
         {
-            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooClose, distance: 400),
+            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedByGap, distance: 400),
         });
 
         outward.DistanceBias.ShouldBe(400, 0.001);
@@ -250,7 +250,7 @@ public class PlayerAxesTests
         PlayerAxes both = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooFar, distance: 400),
-            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedTooClose, distance: 400),
+            Event(verb: DodgeVerb.Spacing, verdict: HitVerdict.MissedByGap, distance: 400),
         });
 
         both.DistanceBias.ShouldBe(0, 0.001);
