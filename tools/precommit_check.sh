@@ -366,8 +366,10 @@ command -v dotnet >/dev/null || pass   # 툴체인이 없으면 검사할 방법
 
 # 스테이징된 것 중 검사 대상이 없으면 돌릴 이유가 없다.
 # C# 뿐 아니라 overfit/data/*.json 도 대상이다 — 수치는 코드가 아니라 그 파일에만 있다.
+# tools/build.sh 와 tools/extract_hitboxes.py 도 대상이다 — 앞의 것은 check 가 무엇을 도는지이고, 뒤의 것은
+# 판정 모양 단계 그 자체다. 이 둘만 고친 커밋이 check 를 안 돌면 검사를 깨뜨리는 변경이 게이트를 그냥 지난다(#69).
 if [[ -n "$staged" ]] \
-  && ! grep -qE '\.(cs|csproj|sln)$|(^|/)\.(editorconfig|runsettings)$|^overfit/data/.*\.json$|^overfit/.*\.(tscn|tres|godot)$' <<< "$staged"; then
+  && ! grep -qE '\.(cs|csproj|sln)$|(^|/)\.(editorconfig|runsettings)$|^overfit/data/.*\.json$|^overfit/.*\.(tscn|tres|godot)$|^tools/(build\.sh|extract_hitboxes\.py)$' <<< "$staged"; then
   pass
 fi
 
