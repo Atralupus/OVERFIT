@@ -15,8 +15,8 @@ public enum FighterAction
     Attack,
 
     /// <summary>
-    /// 패리 — 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 커밋 동안 아무것도 못 한다.
-    /// 창 밖에서 맞으면 <b>그냥 맞는다</b> — 가드가 아니다.
+    /// 패리 — 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 커밋 동안 가드 · 패리 · 대시 · 이동이 안 된다 —
+    /// <b>받아쳤으면</b> 그 뒤의 J 만은 곧장 1타가 된다(되받아치기). 창 밖에서 맞으면 <b>그냥 맞는다</b> — 가드가 아니다.
     /// </summary>
     Parry,
 
@@ -28,8 +28,8 @@ public enum FighterAction
 }
 
 /// <summary>
-/// 플레이어 상태 기계. <b>보스를 모른다</b> — 둘을 아는 것은 <c>BattleSim</c>(아직 없음, Task 5) 하나다.
-/// 그래야 이 테스트가 보스 없이 돈다.
+/// 플레이어 상태 기계. <b>보스를 모른다</b> — 둘을 아는 것은 <see cref="BattleSim"/> 하나다.
+/// 그래야 FighterActionTests 가 보스 없이 돈다.
 /// </summary>
 public sealed class Fighter
 {
@@ -52,6 +52,13 @@ public sealed class Fighter
     /// 커밋이고, 이어지는 것은 1타가 끝나는 그 틱이다.
     /// </summary>
     private bool _comboQueued;
+
+    /// <summary>
+    /// 지금 도는 패리가 받아쳤나 (<see cref="ParryPrecise"/>). 참이면 그 커밋 안의 J 가 곧장 1타다(<see cref="Begin"/> —
+    /// 되받아치기). <b>새 행동이 시작될 때 지운다</b> — 안 지우면 한 번 받아친 뒤로는 헛친 패리도 J 를 받는다.
+    /// 패리가 아닐 때의 값은 아무도 안 읽는다.
+    /// </summary>
+    private bool _parryLanded;
 
     public Fighter(FighterConfig config, Arena arena, double x)
     {
@@ -208,6 +215,8 @@ public sealed class Fighter
     {
         Health = Math.Max(0, Health - fullDamage);
         _lockLeft = _config.GuardBreakLock;
+        // 칼질 칸 · 눌러 둔 칼 · 받아친 표시를 여기서 안 지워도 된다: 붕괴는 가드 중에만 오고(HitResolver 의 GuardBroken 은
+        // Guarding 을 본다), 가드에 들어선 그 틱에 Start 가 셋을 이미 지웠다. 가드가 아닌 곳에서 부르게 되면 여기서 지워야 한다.
         Action = FighterAction.Idle;
         ActionElapsed = 0;
     }
@@ -216,11 +225,18 @@ public sealed class Fighter
     /// 패리가 받아쳤다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> — "잘 받아내면 다시 움직일 수
     /// 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈). 보스를 굳히는 것은 여기가 아니다 — 판정과 보스를 둘 다
     /// 아는 곳은 <see cref="BattleSim"/> 하나다.
+    ///
+    /// <para>
+    /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
+    /// 이 뒤의 틱에 누른 J 는 곧장 1타가 된다(<see cref="Begin"/> — 되받아치기). <see cref="BattleSim"/> 은 이것을
+    /// 파이터의 틱 <b>뒤</b> 판정에서 부르므로, 받아친 그 틱의 J 는 이미 지나갔고 되받아치기는 다음 틱부터다.
+    /// </para>
     /// </summary>
     public void ParryPrecise()
     {
         Qi++;
         _airDashUsed = false;
+        _parryLanded = true;
     }
 
     public void Tick(InputFrame input, double dt)
@@ -312,8 +328,9 @@ public sealed class Fighter
     };
 
     /// <summary>
-    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리) 중이거나 굳었으면 입력을 버린다 — 칼질 중의 공격만은
-    /// 다음 칼로 기억한다. 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
+    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리) 중이거나 굳었으면 입력을 버린다 — 공격 둘만 예외다: 칼질 중의
+    /// 공격은 다음 칼로 기억하고, <b>받아친</b> 패리의 커밋 중의 공격은 곧장 1타를 세운다(되받아치기). 가드는 커밋이
+    /// 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
     /// </summary>
     private void Begin(InputFrame input)
     {
@@ -324,6 +341,22 @@ public sealed class Fighter
             if (input.Attack && _step + 1 < _config.Combo.Count)
             {
                 _comboQueued = true;
+            }
+
+            return;
+        }
+
+        // 받아친 패리의 커밋 안에서는 J 하나만 받는다 — 되받아치기 (판정 13 · 설계 §4.3). 커밋이 막는 목록(설계 §1 ·
+        // §5.1: 가드 · 패리 · 대시 · 이동)에 공격은 없고, §4.3 의 타임라인(받아치고 ~0.2초 반응 → 1타)은 이 J 를 커밋
+        // 안에 떨어뜨린다: 받아치는 것이 창(0.133) 안이라 남은 커밋이 0.2초 넘게 있다. 2번 PR 의 계획은 이 J 까지 버렸다 —
+        // 누른 J 가 아무 표시 없이 사라졌고, 데모(시드 51)의 봇은 마무리를 받아친 다음 틱부터 누른 J 를 커밋이 끝날 때까지
+        // 14틱 내내 버렸다(최종 리뷰 I1). 받는 J 는 Idle 에서 누른 J 와 같다(Start · CanStart). 못 받아친 패리는 J 까지
+        // 버린다 — 헛친 난사의 값은 커밋 전체다.
+        if (Action == FighterAction.Parry)
+        {
+            if (_parryLanded && input.Attack && CanStart(FighterAction.Attack))
+            {
+                Start(FighterAction.Attack);
             }
 
             return;
@@ -350,13 +383,23 @@ public sealed class Fighter
             return;
         }
 
-        Spend(Cost(wanted));
-        Action = wanted;
+        Start(wanted);
+    }
+
+    /// <summary>
+    /// 행동을 세운다 — 값을 내고 시계를 0 에서 돌린다. 새 행동을 세우는 곳은 여기 하나다: 되받아치기도 이것을 타서
+    /// Idle 에서 누른 J 와 한 글자도 안 다르다. 지난 행동의 칼질 칸 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다.
+    /// </summary>
+    private void Start(FighterAction action)
+    {
+        Spend(Cost(action));
+        Action = action;
         ActionElapsed = 0;
         _step = 0;
         _comboQueued = false;
+        _parryLanded = false;
 
-        if (wanted == FighterAction.Dash && !Grounded)
+        if (action == FighterAction.Dash && !Grounded)
         {
             _airDashUsed = true;
         }

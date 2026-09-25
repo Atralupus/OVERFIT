@@ -85,8 +85,9 @@ public sealed class FighterConfig
     public required double ParryCost { get; init; }
 
     /// <summary>
-    /// 패리의 커밋(초) — 누르면 이 동안 아무것도 못 한다 (설계 §5.3). 앞쪽 <see cref="ParryPreciseWindow"/> 만
-    /// 받아치므로 나머지는 무방비다: 그것이 난사의 벌이라 연타 징벌이 따로 없다.
+    /// 패리의 커밋(초) — 누르면 이 동안 가드 · 패리 · 대시 · 이동을 못 한다 (설계 §5.3). 앞쪽 <see cref="ParryPreciseWindow"/> 만
+    /// 받아치므로 나머지는 무방비다: 그것이 난사의 벌이라 연타 징벌이 따로 없다. 받아쳤으면 J 만은 커밋 안에서도 곧장
+    /// 1타다(<c>Fighter</c> 의 되받아치기).
     /// </summary>
     public required double ParryDuration { get; init; }
 

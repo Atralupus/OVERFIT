@@ -1452,12 +1452,12 @@ public class BattleSimTests
         // 이 테스트가 **1단계**인 것이 요점이다 — 유저가 실제로 하고 있는 단계가 여기라, 여기서 안
         // 서면 요청받은 것이 하나도 안 된 것이다. 1단계의 마무리도 빨간 가드 불가이고(이슈 #53 ·
         // 유저 결정), 붙들고 버티는 사람은 거기서 깨지고 받아친 사람은 보스를 굳힌다.
-        // 2연격은 받아친 패리의 커밋이 끝나야 시작한다 — 그 나머지까지 담아야 한다(TestConfigs.FinisherPunishLead).
+        // 2연격은 받아친 다음 틱의 J 로 곧장 시작한다 — 패리 커밋이 끝나기를 안 기다린다(되받아치기 · TestConfigs.FinisherPunishLead).
         FighterConfig f = TestConfigs.Fighter();
         double lead = TestConfigs.FinisherPunishLead(f);
 
         RealFinisherStagger().ShouldBeGreaterThanOrEqualTo(lead,
-            $"1단계 마무리를 받아쳤는데 경직이 패리 커밋 + 2연격({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
+            $"1단계 마무리를 받아쳤는데 경직이 되받아치기 2연격({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
     }
 
     /// <summary>

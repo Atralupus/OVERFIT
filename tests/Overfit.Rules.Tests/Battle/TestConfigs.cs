@@ -105,11 +105,13 @@ public static class TestConfigs
     }
 
     /// <summary>
-    /// 마무리를 받아친 틱부터 2연격의 마지막 칼이 닿기까지(초) — <b>최악의 경우</b>다. 받아쳐도 패리의 커밋은
-    /// 끝까지 가고(<c>Fighter.ParryPrecise</c> 는 커밋을 안 푼다) 그동안 누른 J 는 버려지므로, 2연격은 커밋이
-    /// 끝나야 시작한다(설계 §5.3). 창의 첫 틱에 받아치면 커밋이 거의 통째로 남으니 커밋 길이를 통째로 더한다.
+    /// 마무리를 받아친 틱부터 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
+    /// (<c>Fighter.Begin</c> 의 되받아치기 · 판정 13) — 커밋이 끝나기를 안 기다린다. 가장 이른 J 는 받아친
+    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 경직)을 파이터의 틱
+    /// 뒤에 내므로 받아친 그 틱의 J 는 이미 지나갔다. <see cref="ComboLead"/> 만 쓰면 받아친 그 틱에 누른 J 를 세는
+    /// 셈이고, 그 J 는 규칙이 못 받는다. 사람의 반응은 여기 안 넣는다 — 그 여유는 BossDataTests 가 따로 잰다.
     /// </summary>
-    public static double FinisherPunishLead(FighterConfig c) => c.ParryDuration + ComboLead(c);
+    public static double FinisherPunishLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
 
     /// <summary>
     /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,

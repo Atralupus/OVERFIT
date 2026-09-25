@@ -34,6 +34,13 @@ public sealed class BotPolicy
     /// </summary>
     private const int _guardOdds = 3;
 
+    /// <summary>
+    /// 몇 칼질에 한 번 2타를 이을까. <see cref="_guardOdds"/> 와 같은 자리 · 같은 이유다 — 봇의 성향이지 캐릭터의 수치가
+    /// 아니고, 봇 함대는 이것을 파라미터로 받는다. 둘에 하나(반반)인 이유: 한쪽만 나오면 그 칸(2타를 이은 칼질 · 1타로
+    /// 끝낸 칼질)이 데이터에 없는 것과 같다.
+    /// </summary>
+    private const int _chainOdds = 2;
+
     private readonly ulong _seed;
     private int _decisions;
 
@@ -134,9 +141,9 @@ public sealed class BotPolicy
             return new InputFrame(move, false, false, false, false);
         }
 
-        // 2타를 이을지는 **1타를 누를 때** 좌표 조회로 정한다. 반반이다 — 한쪽만 나오면 그 칸이 데이터에 없는 것과 같다.
+        // 2타를 이을지는 **1타를 누를 때** 좌표 조회로 정한다 (_chainOdds).
         _swings++;
-        _chainThis = Det.RollInt(_seed, Det.Domain.BotCombo, 2, k1: _swings) == 0;
+        _chainThis = Det.RollInt(_seed, Det.Domain.BotCombo, _chainOdds, k1: _swings) == 0;
         return new InputFrame(0, false, false, false, Attack: true);
     }
 

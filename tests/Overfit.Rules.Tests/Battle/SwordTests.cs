@@ -119,6 +119,64 @@ public class SwordTests
     }
 
     [Fact]
+    public void 연격_2타는_제_칼의_모양으로_벤다()
+    {
+        // 칼은 칼질마다 다르다 — 1타와 2타는 다른 장의 궤적이다(설계 §5.1). 기준 파이터는 두 칸이 같은 칼을 들어서, 규칙이
+        // 어느 칸의 칼을 대든 초록이었다(최종 리뷰 m1 · 변이 M3: 언제나 1타의 칼). 여기서는 2타에만 긴 칼(앞 400)을
+        // 들려, 1타의 칼(앞 90)로는 못 닿는 자리에서 2타가 제 칼로 닿는지 본다 — 판정도 그림(판정 보기)도.
+        const string longId = "test/sword-long";
+        var longSword = new HitShape(new[] { new HitRect(-90, 400, 0, 300) });
+        Dictionary<string, HitShape> shapes = TestConfigs.HitShapes();
+        shapes[longId] = longSword;
+
+        FighterConfig fighter = TestConfigs.Fighter();
+        ComboStepDef second = fighter.Combo[1];
+        fighter.Combo[1] = new ComboStepDef
+        {
+            Anim = second.Anim,
+            Fps = second.Fps,
+            Frames = second.Frames,
+            StartFrame = second.StartFrame,
+            BladeFrame = second.BladeFrame,
+            Windup = second.Windup,
+            Active = second.Active,
+            Recover = second.Recover,
+            Damage = second.Damage,
+            Hitbox = longId,
+        };
+
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = fighter,
+            HitShapes = shapes,
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 999),
+            PatternIds = new[] { TestConfigs.SweepId },
+            Patterns = new Dictionary<string, PatternDef> { [TestConfigs.SweepId] = TestConfigs.Sweep(100, 0) },
+            Seed = 1,
+            MaxTicks = 60 * 60,
+        });
+
+        // 칼끝에서 보스 몸통 앞끝까지 193~200 — 1타의 칼(90)은 모자라고 긴 칼(400)은 넉넉하다.
+        WalkUpTo(sim, sim.Boss.HalfWidth + 200);
+        int before = sim.Boss.Health;
+        sim.Tick(new InputFrame(0, false, false, false, Attack: true));
+        sim.Tick(new InputFrame(0, false, false, false, Attack: true));   // 1타 도중 — 2타를 눌러 둔다
+        for (int i = 0; i < 120 && !(sim.Fighter.ComboStep == 1 && sim.Fighter.AttackActive); i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Fighter.ComboStep.ShouldBe(1, "2타가 안 섰다 — 이 테스트가 2타의 칼을 안 본다");
+        sim.Fighter.AttackActive.ShouldBeTrue("2타의 판정 창에 못 닿았다");
+        sim.FighterTestedRects.ShouldBe(
+            longSword.Place(new Placement(sim.Fighter.X, sim.Fighter.Y, sim.Fighter.Facing)),
+            "2타가 제 칼(2타 칸의 hitbox)이 아닌 모양을 댔다");
+        (before - sim.Boss.Health).ShouldBe(second.Damage,
+            "1타의 칼로는 못 닿는 자리에서 2타가 안 닿았다(또는 1타가 닿았다)");
+    }
+
+    [Fact]
     public void 한_번_휘두르면_보스는_한_번만_맞는다()
     {
         // 보스가 창 내내 칼 안에 있어도 한 번이다 — 보스의 휘두름과 같은 규칙(한 번 휘두르면 한 번만 맞는다).

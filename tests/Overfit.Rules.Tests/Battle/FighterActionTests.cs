@@ -73,11 +73,19 @@ public class FighterActionTests
     [Fact]
     public void 행동_중에는_다른_행동을_못_시작한다()
     {
+        // 대시는 커밋이다 — 가드도 대시를 못 끊는다(이 계획이 정한 것 2: 가드는 커밋된 행동이 없는 틱에만 선다).
+        // ↓ 는 엣지가 아니라 레벨이라 따로 본다: 끊을 수 있으면 무적이 풀린 대시의 끝자락을 가드로 덮어 대시에 값이 없다.
+        // 이 단언이 없을 때는 ↓ 가 대시를 끊게 바꿔도 스위트 전체가 초록이었다(최종 리뷰 I2 · 변이 M2).
         Fighter f = Spawn();
         f.Tick(_dash, _dt);
         f.Tick(_parry, _dt);
 
         f.Action.ShouldBe(FighterAction.Dash);
+
+        f.Tick(_guard, _dt);
+
+        f.Action.ShouldBe(FighterAction.Dash, "대시 중에 ↓ 가 가드를 세웠다 — 대시는 커밋이다");
+        f.Guarding.ShouldBeFalse();
     }
 
     [Fact]
@@ -332,13 +340,17 @@ public class FighterActionTests
     public void 칼질_중에는_다른_것을_못_한다()
     {
         // 끝까지 커밋 (설계 §5.1). 2타는 1초짜리라 그 사이 무엇도 못 하는 것이 2타의 값이다.
+        // ↓ 도 같이 누른다 — "공격 중 가드 전환 불가" 는 유저가 말한 것이다(설계 §1). 칼질의 갈래는 다른 행동이 쓰는 공통 검사
+        // 앞에서 따로 돌아가므로 그 검사가 막아 주지 않는다: ↓ 를 빼 두었을 때는 칼질 중에 가드로 바꿔도 초록이었다
+        // (최종 리뷰 I2 · 변이 M1). 되면 1초짜리 2타를 가드로 끊어 2타의 값이 없어진다.
         Fighter f = Spawn();
         f.Tick(_attack, _dt);
         double x = f.X, stamina = f.Stamina;
 
-        f.Tick(new InputFrame(1, Jump: true, Dash: true, Parry: true, Attack: false), _dt);
+        f.Tick(new InputFrame(1, Jump: true, Dash: true, Parry: true, Attack: false, GuardHeld: true), _dt);
 
         f.Action.ShouldBe(FighterAction.Attack);
+        f.Guarding.ShouldBeFalse("칼질 중에 가드로 바뀌었다");
         f.X.ShouldBe(x, 1e-9, "칼질 중에 걸었다");
         f.Grounded.ShouldBeTrue("칼질 중에 뛰었다");
         f.Stamina.ShouldBe(stamina, 1e-9, "버린 입력이 값을 냈다");
@@ -461,20 +473,103 @@ public class FighterActionTests
         f.Action.ShouldBe(FighterAction.Parry, "공중에서 누른 패리가 안 섰다");
     }
 
-    [Fact]
-    public void 패리_커밋_중에는_아무것도_못_한다()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void 패리_커밋_내내_가드_패리_대시_이동을_못_하고_못_받아쳤으면_J_도_버린다(bool landed)
     {
-        // 끝까지 커밋이다 (설계 §5.3: "그동안 커밋"). 걷지도 뛰지도 막지도 못하고, 다시 누른 K · J · Shift 는 버린다.
+        // 커밋이 막는 것은 가드 · 패리 · 대시 · 이동이다 (설계 §1 · §5.1 의 목록 · §5.3: "그동안 커밋") — 받아쳤든
+        // 못 받아쳤든 커밋 **내내**다. 공격은 그 목록에 없다: 받아친 패리의 J 만은 곧장 1타가 된다(아래 되받아치기).
+        // 못 받아친 패리(헛쳤거나 아직 기다리는)는 J 까지 버린다 — 난사의 값은 커밋 전체다.
+        //
+        // 옛 테스트는 누른 다음 한 틱만 봤다 — 그 뒤 틱에 커밋이 풀려도 몰랐다. 커밋의 마지막 틱(19틱 —
+        // 패리는_누르면_커밋하고_앞쪽만_창이다)까지 매 틱 전부 누른다.
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
+        if (landed)
+        {
+            f.ParryPrecise();   // 누른 틱에 받아쳤다 — BattleSim 이 판정 뒤에 부르는 자리다
+        }
+
         double x = f.X, stamina = f.Stamina;
 
-        f.Tick(new InputFrame(1, Jump: true, Dash: true, Parry: true, Attack: true, GuardHeld: true), _dt);
+        // 받아친 패리에는 J 를 안 섞는다 — 그건 되받아치기다.
+        var everything = new InputFrame(1, Jump: true, Dash: true, Parry: true, Attack: !landed, GuardHeld: true);
+        for (int tick = 2; tick <= 19; tick++)
+        {
+            f.Tick(everything, _dt);
 
-        f.Action.ShouldBe(FighterAction.Parry);
-        f.X.ShouldBe(x, 1e-9, "패리 커밋 중에 걸었다");
-        f.Grounded.ShouldBeTrue("패리 커밋 중에 뛰었다");
-        f.Stamina.ShouldBe(stamina, 1e-9, "버린 입력이 값을 냈다");
+            f.Action.ShouldBe(FighterAction.Parry, $"{tick}틱: 패리 커밋 중에 {f.Action} 이(가) 섰다");
+            f.X.ShouldBe(x, 1e-9, $"{tick}틱: 패리 커밋 중에 걸었다");
+            f.Grounded.ShouldBeTrue($"{tick}틱: 패리 커밋 중에 뛰었다");
+            f.Stamina.ShouldBe(stamina, 1e-9, $"{tick}틱: 버린 입력이 값을 냈다");
+        }
+    }
+
+    // ── 되받아치기 — 받아친 패리의 커밋 안의 J (판정 13 · 설계 §4.3) ─────────
+
+    [Fact]
+    public void 받아친_패리의_커밋_중에_누른_J_는_곧장_1타다()
+    {
+        // 설계 §4.3 의 타임라인은 받아치고 ~0.2초 반응해 누른 J 가 1타로 닿는다. 받아치는 것은 창(0.133) 안이라 그 J 는
+        // 언제나 커밋(0.333) 안에 떨어진다 — 버리면 그 타임라인이 설 자리가 없고, 누른 J 는 아무 표시 없이 사라진다.
+        // 받는 J 는 Idle 에서 누른 J 와 **같다**: 1타(0칸)부터 · 1타 값을 내고 · 시계는 0 에서.
+        FighterConfig c = TestConfigs.Fighter();
+        Fighter f = Spawn();
+        f.Tick(_parry, _dt);
+        Idle(f, 2);
+        f.ParryPrecise();   // 3틱 — 창 안에서 받아쳤다
+        Idle(f, 12);        // 반응 0.2초 — 15틱 = 0.25초, 커밋(0.333) 안이다
+        f.Action.ShouldBe(FighterAction.Parry, "커밋이 벌써 끝났다 — 이 테스트가 커밋 안의 J 를 안 본다");
+        double stamina = f.Stamina;
+
+        f.Tick(_attack, _dt);
+
+        f.Action.ShouldBe(FighterAction.Attack, "받아친 패리의 커밋 안에서 누른 J 가 버려졌다");
+        f.ComboStep.ShouldBe(0, "되받아치기가 1타가 아닌 칸에서 시작했다");
+        f.ActionElapsed.ShouldBe(_dt, 1e-9, "패리의 시계를 이어받았다 — 1타의 선딜이 잘린다");
+        f.Stamina.ShouldBe(stamina - c.AttackCost, 1e-9, "되받아치기가 1타 값을 안 냈다");
+    }
+
+    [Fact]
+    public void 받아친_패리라도_1타_값이_모자라면_J_를_버리고_커밋을_끝까지_간다()
+    {
+        // 못 하는 행동은 안 누른 것과 같다(CanStart) — 되받아치기도 같은 규칙이다. 값이 모자라 못 나간 J 가
+        // 커밋을 풀거나 음수 값으로 1타를 세우면 받아친 사람이 공짜로 칼을 얻는다.
+        FighterConfig c = TestConfigs.Fighter();
+        Fighter f = Spawn();
+        f.Tick(_parry, _dt);
+        f.ParryPrecise();
+        f.Spend(f.Stamina - (c.AttackCost - 1));   // 1타 값에 1 모자라게 남긴다
+        double stamina = f.Stamina;
+
+        for (int tick = 2; tick <= 19; tick++)
+        {
+            f.Tick(_attack, _dt);
+
+            f.Action.ShouldBe(FighterAction.Parry, $"{tick}틱: 값이 모자란 되받아치기가 섰다");
+            f.Stamina.ShouldBe(stamina, 1e-9, $"{tick}틱: 버린 J 가 값을 냈다");
+        }
+
+        f.Tick(_attack, _dt);   // 20틱 — 커밋이 끝나는 틱이다
+        f.Action.ShouldBe(FighterAction.Idle, "버린 J 가 커밋의 길이를 바꿨다");
+    }
+
+    [Fact]
+    public void 받아친_것은_그_패리의_것이라_다음_패리로_안_넘어간다()
+    {
+        // 되받아치기의 조건은 **이번** 패리가 받아쳤나다. 새 행동이 시작될 때 그 표시를 안 지우면, 한 번 받아친 뒤로는
+        // 헛친 패리도 J 를 받는다 — 난사가 커밋의 값을 안 낸다.
+        Fighter f = Spawn();
+        f.Tick(_parry, _dt);
+        f.ParryPrecise();
+        Idle(f, 19);   // 받아친 채 J 없이 커밋이 끝난다
+        f.Action.ShouldBe(FighterAction.Idle, "커밋이 안 끝났다 — 이 테스트가 다음 패리를 못 누른다");
+
+        f.Tick(_parry, _dt);   // 새 패리 — 이번에는 아무것도 안 받아친다
+        f.Tick(_attack, _dt);
+
+        f.Action.ShouldBe(FighterAction.Parry, "앞 패리의 받아침이 이번 패리로 넘어와 J 를 받았다");
     }
 
     [Fact]
@@ -706,16 +801,27 @@ public class FighterActionTests
     [Fact]
     public void 행동이_끝나도_누르고_있으면_다시_가드다()
     {
-        // Review Focus 1 — 사람은 ↓ 를 뗀 적이 없다. 패리 커밋이 끝나면 곧장 다시 막고 있어야 한다.
-        Fighter f = Guarding();
-        f.Tick(new InputFrame(0, false, false, Parry: true, false, GuardHeld: true), _dt);
-        for (int i = 0; i < 60 && f.Action == FighterAction.Parry; i++)
+        // Review Focus 1 — 사람은 ↓ 를 뗀 적이 없다. 패리 · 칼질 · 대시 중 어느 커밋이 끝나도 곧장 다시 막고 있어야 한다
+        // (이 계획이 정한 것 2). 셋이 같은 길(다음 틱의 Begin)을 타지만, 패리 하나만 보던 때는 칼질이나 대시가 끝난 뒤
+        // ↓ 를 다시 눌러야 서게 바꿔도 초록이었다(최종 리뷰 m3).
+        foreach ((InputFrame press, FighterAction action) in new[]
         {
-            f.Tick(_guard, _dt);
-        }
+            (new InputFrame(0, false, false, Parry: true, false, GuardHeld: true), FighterAction.Parry),
+            (new InputFrame(0, false, false, false, Attack: true, GuardHeld: true), FighterAction.Attack),
+            (new InputFrame(0, false, Dash: true, false, false, GuardHeld: true), FighterAction.Dash),
+        })
+        {
+            Fighter f = Guarding();
+            f.Tick(press, _dt);
+            f.Action.ShouldBe(action, $"가드에서 {action} 이(가) 안 섰다 — 이 테스트가 그 끝을 안 본다");
+            for (int i = 0; i < 120 && f.Action == action; i++)
+            {
+                f.Tick(_guard, _dt);
+            }
 
-        f.Tick(_guard, _dt);
-        f.Guarding.ShouldBeTrue("패리가 끝났는데 누르고 있던 가드가 안 돌아왔다");
+            f.Tick(_guard, _dt);
+            f.Guarding.ShouldBeTrue($"{action} 이(가) 끝났는데 누르고 있던 가드가 안 돌아왔다");
+        }
     }
 
     [Fact]
