@@ -89,16 +89,13 @@ public partial class ShotRunner : Node
 
         await Wait(0.5);
 
-        // ── 방어 자세: 누른 직후 (이슈 #53) ───────────────────────────────
-        // **Tap 이 아니라 Hold 다.** 자세는 누르는 그 틱에 서고 놓는 그 틱에 풀리므로,
-        // 탭으로는 한 틱짜리 자세가 되어 셔터가 거의 언제나 빈 화면을 찍는다.
-        // 여기서 증명할 것은 "패리와 가드가 **같은 그림**인가" 다 — 창 안인지 밖인지는
-        // 판정이 서야 정해지고, 그 전에 화면이 갈라 말하면 거짓말이다.
-        Hold("parry", true);
-        await Until(() => _battle?.FighterGuarding == true, _pollTimeout);
-        await Frames(3);
+        // ── 패리: 칼을 사선으로 세우는 0.33초 커밋의 한가운데 (설계 §5.3) ─────────
+        // 패리는 이제 누르는 것 한 번이다 — Tap. 가드(↓)와 그림이 갈리는지가 이 장의 증명이다: 패리는 칼을 세우며
+        // 움직이고 가드는 서 있다(battle-10-guard 와 나란히 본다). 20틱 커밋의 10틱째가 한가운데다.
+        Tap("parry");
+        await Until(() => _battle?.FighterParrying == true, _pollTimeout);
+        await Frames(10);
         await Screenshot.CaptureAsync(this, "battle-4-parry");
-        Hold("parry", false);
 
         await Wait(0.5);
 
@@ -201,6 +198,14 @@ public partial class ShotRunner : Node
         await Wait(0.8);
         Hold("move_left", false);
 
+        // 보스 쪽으로 **돌아선다.** 왼쪽을 본 채 휘두르면 칼이 몸 앞(왼쪽)으로 나가 2타의 긴 칼이 화면 왼쪽 끝 밖으로
+        // 잘린다. 한 틱만 오른쪽을 눌러 방향만 바꾼다 — 7px 움직일 뿐이라 보스에게서는 여전히 멀다.
+        // ⚠ **두 프레임이다.** physics_frame 신호는 그 틱의 _PhysicsProcess **앞에** 오므로, 한 프레임만 기다리고
+        // 놓으면 Battle 이 읽기 전에 손을 뗀다 — 처음에 Frames(1) 로 찍었더니 칼이 여전히 왼쪽 밖으로 나갔다.
+        Hold("move_right", true);
+        await Frames(2);
+        Hold("move_right", false);
+
         // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다.
         Tap("attack");
         await Frames(2);
@@ -255,13 +260,12 @@ public partial class ShotRunner : Node
     /// 증명할 것이 둘이다. ① <b>빨강이 호박과 확실히 갈리는가</b> — 1·2타는 막을 수 있고 3타는
     /// 못 막으므로, 그 차이가 선딜에서 안 읽히면 "버티면 된다" 를 그대로 믿다 무너진다.
     /// ② <b>받아친 연출이 정말 약한가</b> — 요청이 "가드와 같은 그림 + 약한 흔들림 + 작은 표시" 였고,
-    /// 그게 지켜졌는지는 battle-10(자세) · battle-10d(받아침)를 나란히 놓아야만 보인다.
+    /// 그게 지켜졌는지는 battle-10(가드) · battle-10d(받아침)를 나란히 놓아야만 보인다.
     /// </para>
     ///
     /// <para>
     /// <b>붙어서 찍는다.</b> 방어는 판정이 닿아야 일이 일어나고, 그 판정은 보스 사거리 안에서만 선다.
-    /// 그리고 <b>누르고만 있는다</b> — 자세는 유지로 사는 유일한 기술이라 <c>Tap</c> 으로는
-    /// 한 틱 만에 풀린다.
+    /// 그리고 <b>↓ 를 누르고만 있는다</b> — 가드는 누르고 있는 동안이다(설계 §5.2).
     /// </para>
     /// </summary>
     private async Task Guarding()
@@ -292,9 +296,9 @@ public partial class ShotRunner : Node
         Hold("move_right", false);
 
         // ── 버티는 자세 ───────────────────────────────────────────────────
-        // **프레임을 세지 않는다.** 자세가 서는 것은 이제 누른 그 틱이지만(이슈 #53) 규칙에게
-        // 물어보는 규약은 그대로다 — 세어 두면 입력이 한 틱 밀리는 날 조용히 어긋난다.
-        Hold("parry", true);
+        // **프레임을 세지 않는다.** 가드가 서는 것은 누른 그 틱이지만 규칙에게 물어보는 규약은
+        // 그대로다 — 세어 두면 입력이 한 틱 밀리는 날 조용히 어긋난다.
+        Hold("guard", true);
         await Until(() => _battle?.FighterGuarding == true, _pollTimeout);
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-10-guard");
@@ -308,14 +312,13 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
 
         // ── 받아친 순간 (이슈 #53) ────────────────────────────────────────
-        // **붙들고만 있어서는 못 받아친다.** 창은 누름에서 0.133초라, 오래 붙들면 그 누름은
-        // 이미 낡아 전부 가드다 — 받아치려면 판정 <b>직전에</b> 다시 눌러야 한다.
+        // **↓ 로는 못 받아친다.** 받아치는 것은 K 다 — 판정 <b>직전에</b> 눌러야 창(0.133초) 안에 선다.
         // 프레임을 세지 않고 남은 시간을 보고 누른다(봇이 쓰는 것과 같은 규칙이다):
         // 세어 두면 parry_precise_window 를 고치는 순간 이 장이 조용히 가드 사진이 된다.
         //
         // 붕괴(크게 터진다) 바로 다음 장인 것이 요점이다 — 두 장이 붙어 있어야
         // "받아친 연출이 약하다" 가 비교로 읽힌다.
-        Hold("parry", false);
+        Hold("guard", false);
         int parried = _battle?.FighterParries ?? 0;
         for (int i = 0; i < 60 * 12 && (_battle?.FighterParries ?? 0) == parried; i++)
         {

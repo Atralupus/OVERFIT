@@ -90,9 +90,8 @@ public sealed class PlayerAxes
     /// 패리 <b>성공</b>률 — 패리를 고른 판정 중 실제로 받아친 비율이다.
     ///
     /// <para>
-    /// 분모(<see cref="ParrySamples"/>)는 "눌렀는데 창을 놓치고 <b>붙들지도 않아</b> 그냥 맞은"
-    /// 판정까지 센다 (이슈 #53). 붙들고 있었으면 그건 가드라 <see cref="GuardSamples"/> 로 간다 —
-    /// 그래서 이 값은 <b>누름의 정확도</b>를 재고, 셋(패리 · 가드 · 무반응)이 관측에서 갈린다.
+    /// 분모(<see cref="ParrySamples"/>)는 창을 놓치고 커밋 안에서 그냥 맞은 판정까지 센다 (설계 §5.3) — 그래서
+    /// 이 값은 누름의 정확도를 잰다. 가드는 ↓ 라 따로 센다(<see cref="GuardSamples"/>).
     /// </para>
     /// </summary>
     public double ParryRate { get; private init; }

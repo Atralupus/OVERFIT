@@ -78,37 +78,26 @@ public sealed class FighterConfig
 
     public required double DashCost { get; init; }
 
-    /// <summary>
-    /// <b>패리</b>의 창 (이슈 #53). 적중이 누름에서 이 시간 안에 서면 피해 0 이고,
-    /// 그 밖이면 붙들고 있는 한 <b>가드</b>다 — 이 한 숫자가 방어 하나를 둘로 가른다.
-    /// 그래서 이것은 캐릭터 성능이 아니라 <b>조작의 정의</b>다.
-    /// </summary>
+    /// <summary>패리의 창 (설계 §5.3) — 누른 순간부터 이 안에 선 판정을 받아친다. 그 밖이면 그냥 맞는다. 조작의 정의라 캐릭터 성능이 아니다.</summary>
     public required double ParryPreciseWindow { get; init; }
 
-    /// <summary>
-    /// 한 번의 누름이 <b>아직 그 사람의 것</b>인 시간(초) — 이슈 #53. 두 곳이 쓴다:
-    /// 연타 사슬(이 안에서 또 누르면 사슬이 자란다)과 계측의 공 돌리기(<c>BattleSim</c> 이
-    /// 이 안의 누름까지만 그 판정의 시도로 센다).
-    ///
-    /// <para>
-    /// 전에는 <c>parry_imprecise_window</c> 였다 — "늦게 눌렀지만 절반은 받아낸다" 는 중간 단계의 창.
-    /// 그 단계를 가드가 대신하면서 창의 <b>뜻</b>만 남았다. 없는 기능을 가리키는 이름을 남겨 두면
-    /// 다음 사람이 그 기능을 찾으러 간다.
-    /// </para>
-    /// </summary>
-    public required double ParryMemoryWindow { get; init; }
-
-    /// <summary>
-    /// 연타 징벌로 좁아진 패리 창. 앞 누름의 기억 창 안에서 또 누르면 두 번째 누름이 이 창을 쓰고,
-    /// 세 번째부터는 패리 창이 아예 없다 — 붙들고 있으면 가드로는 여전히 막는다.
-    /// </summary>
-    public required double ParrySpamWindow { get; init; }
-
-    /// <summary>
-    /// 방어 자세를 <b>누를 때</b> 한 번 드는 스태미나. 버티는 값은 시간이 아니라 막아낸 피해에
-    /// 비례해 나간다(<see cref="GuardStaminaPerDamage"/>) — 그래서 이것은 "손을 댄 값" 이다.
-    /// </summary>
+    /// <summary>패리를 누를 때 드는 스태미나 (설계 §5.3: 15). 가드를 드는 값은 없다 — _note_guard.</summary>
     public required double ParryCost { get; init; }
+
+    /// <summary>
+    /// 패리의 커밋(초) — 누르면 이 동안 아무것도 못 한다 (설계 §5.3). 앞쪽 <see cref="ParryPreciseWindow"/> 만
+    /// 받아치므로 나머지는 무방비다: 그것이 난사의 벌이라 연타 징벌이 따로 없다.
+    /// </summary>
+    public required double ParryDuration { get; init; }
+
+    /// <summary>패리가 도는 시트(<c>.tres</c> 의 이름). <b>규칙은 안 읽는다</b> — 뷰가 그리고 테스트가 커밋과 맞대어 본다.</summary>
+    public required string ParryAnim { get; init; }
+
+    /// <summary>패리 시트의 재생 속도(fps).</summary>
+    public required double ParryAnimFps { get; init; }
+
+    /// <summary>패리가 도는 장 수 — 0번부터(설계 §5.3: f0~f3 이면 4).</summary>
+    public required int ParryAnimFrames { get; init; }
 
     /// <summary>
     /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 1타 · 2타. 첫 칸이 J 를 눌렀을 때 나가는
@@ -119,11 +108,10 @@ public sealed class FighterConfig
     /// <summary>칼질마다 드는 스태미나 — 1타는 누를 때, 2타는 이을 때(설계 §5.1: 타마다 14).</summary>
     public required double AttackCost { get; init; }
 
-    // ── 가드 (이슈 #47 · #53) ───────────────────────────────────────────────────
+    // ── 가드 (이슈 #47 · 설계 §5.2) ─────────────────────────────────────────────
     //
-    // 가드는 패리와 **같은 행동**이다 (이슈 #53). 누르면 그 틱부터 방어 자세이고, 판정이
-    // parry_precise_window 안에 서면 패리 · 그 밖이면 가드다. 가드의 값은 피해가 아니라
-    // **스태미나**로 내고, 그래서 세 수치가 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
+    // 가드는 ↓ (또는 S) 를 **누르고 있는 동안**이다. 드는 값은 없고, 값은 막아낸 피해에 비례하는
+    // **스태미나**로 낸다 — 그래서 세 수치가 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
 
     /// <summary>
     /// 가드가 <b>흘려보내는</b> 피해의 비율. 1 보다 작아야 막는 것에 뜻이 있고, 0 보다 커야

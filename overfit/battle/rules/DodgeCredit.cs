@@ -28,13 +28,11 @@ public sealed class DodgeCredit
     private double _jumpStartedAt = double.NaN;
 
     /// <summary>
-    /// 방어 자세가 선 시각(초, NaN = 지금 자세가 아니다) — 이슈 #47 · #53.
+    /// 가드가 선 시각(초, NaN = 지금 가드가 아니다) — 이슈 #47 · 설계 §5.2.
     ///
     /// <para>
-    /// 패리 칸과 <b>따로</b> 둔다. 둘은 이제 같은 누름에서 같은 틱에 시작하지만(이슈 #53)
-    /// 수명이 다르다: 누름 기억은 손을 뗀 뒤에도 <c>parry_memory_window</c> 동안 살아 있고,
-    /// 자세는 놓는 그 틱에 사라진다. 한 칸으로 합치면 "놓고 나서 맞았다" 와 "붙든 채 맞았다" 가
-    /// 같은 시각을 싣게 되고, 그 둘은 계측이 갈라야 하는 바로 그 둘이다.
+    /// 패리 칸과 <b>따로</b> 둔다 — 둘은 다른 키 · 다른 행동이다(설계 §5.2 · §5.3). 가드 칸은 ↓ 를 누르고 서 있는
+    /// 내내 살아 있고(연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
     /// </para>
     /// </summary>
     private double _guardStartedAt = double.NaN;
@@ -105,21 +103,20 @@ public sealed class DodgeCredit
             _dashStartBody = null;
         }
 
-        // 패리 칸은 **자세가 아니라 누름**을 따라 산다. 누르자마자 놓아도 그 누름은 시도였고,
-        // 그 뒤 창 안에 선 판정은 그 시도의 결과다 — 자세가 풀릴 때 지우면 "늦어서 못 받았다" 가
-        // TimingError 0 이 되어 "아무것도 안 했다" 와 같은 점이 된다.
-        // 지우는 경계는 **누름의 기억 창**이다: 그보다 오래된 누름을 이 판정의 시도로 세면
-        // 사람이 한 적 없는 -0.6초짜리 표본이 축에 섞인다.
-        if (fighter.SinceParryPress <= BattleSim.Dt)
+        // 패리 칸은 **패리 행동이 도는 동안** 산다 (이슈 #59 · 설계 §5.3). 패리는 이제 0.333초 커밋이라 그 동안이
+        // "이 누름이 겨냥한 판정" 이 성립하는 구간이다 — 대시의 공이 대시 행동이 도는 동안인 것과 같은 경계다.
+        // 옛 경계는 누름의 기억 창(0.5초)이었고 스펙이 그 창을 지웠다. 창을 놓치고 커밋 안에서 맞은 판정은
+        // 그대로 이 누름의 시도로 남는다 — "늦어서 못 받았다" 가 "아무것도 안 했다" 와 같은 점이 되지 않게.
+        if (fighter.Action == FighterAction.Parry && fighter.ActionElapsed <= BattleSim.Dt)
         {
             _parryStartedAt = now;
         }
-        else if (fighter.SinceParryPress > fighter.ParryMemoryWindow)
+        else if (fighter.Action != FighterAction.Parry)
         {
             _parryStartedAt = double.NaN;
         }
 
-        // 자세는 **누름이 아니라 서 있는 동안**을 잡는다. 서 있는 내내 살아 있고
+        // 가드 칸은 **누름이 아니라 서 있는 동안**을 잡는다. 서 있는 내내 살아 있고
         // (연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
         if (fighter.Guarding)
         {
@@ -169,8 +166,8 @@ public sealed class DodgeCredit
             HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
 
             // 막아냈든 깨졌든 **고른 것은 가드**다 (이슈 #47) — 둘의 차이는 verb 가 아니라
-            // Verdict 가 나른다. 시각은 자세가 **선** 순간이다: 그래야 "얼마나 오래 버티고
-            // 있었나" 가 오차로 실리고, 누름 시각을 쓰면 패리와 같은 값이 되어 둘이 뭉친다.
+            // Verdict 가 나른다. 시각은 가드가 **선** 순간이다: 그래야 "얼마나 오래 버티고
+            // 있었나" 가 오차로 실린다.
             HitVerdict.Guarded or HitVerdict.GuardBroken => (DodgeVerb.Guard, _guardStartedAt),
 
             // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에

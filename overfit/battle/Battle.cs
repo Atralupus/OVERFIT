@@ -90,6 +90,9 @@ public partial class Battle : Node2D
 
     /// <summary>지난 틱의 칼질 번호. 1타가 끝나는 틱에 이어진 2타는 행동이 Attack 그대로라, 이 번호가 바뀐 것으로 본다.</summary>
     private int _lastComboStep;
+
+    /// <summary>지난 틱에 패리 중이었나. 꺼졌다 켜진 틱이 새 패리다 — 칼질과 같은 규약이다.</summary>
+    private bool _lastParrying;
     private bool _walking;
 
     /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
@@ -129,11 +132,16 @@ public partial class Battle : Node2D
     public int FighterComboStep => _broken || _over ? 0 : _sim.Fighter.ComboStep;
 
     /// <summary>
-    /// 지금 <b>방어 자세</b>인가. 위와 같이 디버그 전용 읽기다 — 자세는 누르는 그 틱에 서지만
-    /// (이슈 #53) 규칙에게 물어보는 규약은 그대로 둔다: 프레임을 세면 입력이 한 틱 밀리는 날
-    /// 조용히 어긋난다.
+    /// 지금 <b>가드</b>인가(↓ 를 누르고 있다 · 설계 §5.2). 위와 같이 디버그 전용 읽기다 — 규칙에게 물어보는
+    /// 규약은 그대로 둔다: 프레임을 세면 입력이 한 틱 밀리는 날 조용히 어긋난다.
     /// </summary>
     public bool FighterGuarding => !_broken && !_over && _sim.Fighter.Guarding;
+
+    /// <summary>
+    /// 지금 패리 커밋 중인가. 디버그 전용 읽기다 — 패리는 이제 누르는 것 한 번이라(설계 §5.3) 스크린샷이
+    /// 그 0.33초를 노리려면 규칙에게 물어야 한다.
+    /// </summary>
+    public bool FighterParrying => !_broken && !_over && _sim.Fighter.Action == FighterAction.Parry;
 
     /// <summary>
     /// 지금까지 가드가 깨진 횟수. 위와 같이 디버그 전용 읽기다 — 붕괴는 <b>사건</b>이라 상태로는
@@ -260,7 +268,10 @@ public partial class Battle : Node2D
         _lastBossHealth = _sim.Boss.Health;
 
         // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59).
-        _fighterView.Load(_fighterConfig.Sprite, Swings(_fighterConfig));
+        _fighterView.Load(
+            _fighterConfig.Sprite,
+            Swings(_fighterConfig),
+            new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0));
         _bossView.Load(_bossConfig.Sprite);
 
         if (GetTree().DebugCollisionsHint)
@@ -346,7 +357,7 @@ public partial class Battle : Node2D
     /// <summary>키보드를 규칙의 입력으로. <b>봇과 같은 구조체를 만든다.</b></summary>
     private static InputFrame Read()
     {
-        // 이동만 레벨이다 — 누르고 있으면 계속 가야 한다.
+        // 이동과 가드만 레벨이다 — 누르고 있으면 계속 가야 한다.
         // 원시 키코드가 아니라 액션으로 읽는 이유는 타이틀의 조작 안내가 InputMap 에서 글자를 뽑기 때문이다.
         // 여기서 키를 직접 보면 안내와 실제 조작이 따로 놀 수 있다.
         sbyte move = 0;
@@ -363,19 +374,14 @@ public partial class Battle : Node2D
         // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
         // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
         //
-        // 패리는 엣지와 레벨을 **둘 다** 싣는다 (이슈 #47) — 엣지가 시작하고 레벨이 붙든다.
-        // 엣지를 레벨로 바꿔 한 칸으로 줄이지 않는 이유는 InputFrame 의 주석에 적어 뒀다.
-        //
-        // ⚠ 패리는 **여전히 엣지에서 즉시 시작한다.** 레벨을 보고 "탭인가 홀드인가" 를 기다렸다
-        // 시작하면 정확 창(0.133초)이 통째로 밀려 게임의 모든 패리가 나빠진다 — 레벨은
-        // 패리 동작이 끝나는 순간에만 읽히고, 그때 아직 눌려 있으면 가드로 이어진다.
+        // 가드만 레벨이다(↓ 를 누르고 있는 동안 · 설계 §5.2). 패리는 누르는 것 한 번이다(0.333초 커밋 · 설계 §5.3).
         return new InputFrame(
             move,
             Input.IsActionJustPressed("jump"),
             Input.IsActionJustPressed("dash"),
             Input.IsActionJustPressed("parry"),
             Input.IsActionJustPressed("attack"),
-            ParryHeld: Input.IsActionPressed("parry"));
+            GuardHeld: Input.IsActionPressed("guard"));
     }
 
     /// <summary>
@@ -455,6 +461,14 @@ public partial class Battle : Node2D
 
         _lastSwinging = swinging;
         _lastComboStep = step;
+
+        bool parrying = _sim.Fighter.Action == FighterAction.Parry;
+        if (parrying && !_lastParrying)
+        {
+            _fighterView.ParryBegan();
+        }
+
+        _lastParrying = parrying;
 
         // 판정이 서는 **그 틱**에만 한 번. 계속 참인 동안 매 프레임 섬광을 내면 번쩍임이 아니라 조명이 된다.
         // 그림이 칼이 나가는 장으로 맞춰 서는 것도 이 틱이다 — 시트의 시계에 맡기지 않는다(이슈 #54).
@@ -658,6 +672,7 @@ public partial class Battle : Node2D
         {
             FighterAction.Dash => FighterPose.Dash,
             FighterAction.Attack => FighterPose.Attack,
+            FighterAction.Parry => FighterPose.Parry,
             FighterAction.Guard => FighterPose.Guard,
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };

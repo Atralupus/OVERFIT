@@ -41,17 +41,28 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 패리_창_셋이_연타_패리_기억_순으로_선다()
+    public void 패리_창은_커밋_안의_앞쪽이다()
     {
-        // 세 창의 **순서가 곧 규칙**이다 (이슈 #27 · #53).
-        // 연타 창이 패리 창보다 넓으면 난사가 벌이 아니라 상이 되고,
-        // 기억 창이 패리 창보다 좁으면 "늦게 눌렀다" 가 다시 "아무것도 안 했다" 와 같은 점이 된다 —
-        // 그 창이 계측의 공을 그 누름에 붙들어 두는 것이라 판정보다 오래 살아야 한다.
+        // 패리는 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 창이 커밋보다 길면 커밋이 끝난 뒤에도
+        // 받아치는 유령 창이 되고, 커밋이 창과 같으면 "누를 때마다 60% 는 무방비" 라는 연타의 벌이 사라진다 —
+        // 스펙이 연타 징벌(parry_spam_window)을 지운 근거가 그 벌이다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.ParrySpamWindow.ShouldBeLessThan(c.ParryPreciseWindow, $"{id}: 연타 징벌이 창을 안 좁힌다");
-            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryMemoryWindow, $"{id}: 패리 창이 기억 창보다 넓다");
-            c.ParryCost.ShouldBeGreaterThan(0, $"{id}: 방어 자세가 공짜다 — 난사에 값이 없다");
+            c.ParryPreciseWindow.ShouldBeGreaterThan(0, $"{id}: 패리 창이 없다");
+            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryDuration, $"{id}: 패리 창이 커밋보다 길다 — 난사에 벌이 없다");
+            c.ParryCost.ShouldBeGreaterThan(0, $"{id}: 패리가 공짜다 — 난사에 값이 없다");
+        }
+    }
+
+    [Fact]
+    public void 패리_커밋이_그림_네_장과_같은_길이다()
+    {
+        // 패리는 attack2 의 f0~f3(칼을 사선으로 세운 자세)을 12fps 로 돈다 (설계 §5.3). 커밋이 그림보다 짧으면 칼을
+        // 세우다 말고 idle 로 돌아가고, 길면 마지막 장에 멈춰 선다 — 이슈 #38 과 같은 종류의 어긋남이다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.ParryDuration.ShouldBe(c.ParryAnimFrames / c.ParryAnimFps, _halfTick,
+                $"{id}: 패리 커밋 {c.ParryDuration:0.0000}초가 {c.ParryAnim} {c.ParryAnimFrames}장({c.ParryAnimFrames / c.ParryAnimFps:0.0000}초)과 다르다");
         }
     }
 

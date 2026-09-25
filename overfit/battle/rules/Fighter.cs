@@ -15,16 +15,14 @@ public enum FighterAction
     Attack,
 
     /// <summary>
-    /// 패리 키를 누른 채 <b>방어 자세</b>로 서 있다 (이슈 #53). <b>시간이 안 끝낸다</b> —
-    /// 손가락을 떼는 것이 끝이다.
-    ///
-    /// <para>
-    /// <b>패리와 가드가 한 행동이다.</b> 이슈 #47 은 탭 = 패리 · 홀드 = 가드로 갈랐고, 가드는
-    /// 패리 동작(0.30초)이 끝난 <b>뒤에야</b> 섰다 — 그래서 늦게 지른 패리는 아무것도 안 막았고,
-    /// 그 0.30초가 "방어를 골랐는데 왜 안 막나" 를 만들었다. 이제 누르는 그 틱부터 자세이고,
-    /// 갈리는 것은 <b>판정이 언제 서느냐</b> 하나다: 누름에서 <c>parry_precise_window</c> 안이면
-    /// 패리, 그 밖이면 가드다. <b>실패한 패리도 막는다.</b>
-    /// </para>
+    /// 패리 — 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 커밋 동안 아무것도 못 한다.
+    /// 창 밖에서 맞으면 <b>그냥 맞는다</b> — 가드가 아니다.
+    /// </summary>
+    Parry,
+
+    /// <summary>
+    /// ↓ (또는 S) 를 누르고 있는 동안의 <b>가드</b> (설계 §5.2). 시간이 끝내지 않고 손가락이 끝낸다 — 놓는 틱에
+    /// 풀린다. 땅에서만 서고, 커밋이 아니라 자세라 그 위에서 바로 공격 · 패리 · 대시로 넘어간다.
     /// </summary>
     Guard,
 }
@@ -37,21 +35,6 @@ public sealed class Fighter
 {
     private readonly FighterConfig _config;
     private readonly Arena _arena;
-
-    /// <summary>
-    /// 마지막 패리 <b>누름</b>에서 흐른 시간(초). 무한대면 아직 한 번도 안 눌렀다.
-    ///
-    /// <para>
-    /// 자세(<see cref="FighterAction.Guard"/>)의 시계와 <b>따로 둔다.</b> 창은 자세가 아니라
-    /// <b>누름</b>에 붙기 때문이다 — 눌렀다 곧장 놓아도 그 누름의 정확 창은 끝까지 흐르고,
-    /// 붙들고 있어도 창이 닫히면 그때부터는 가드다. 그래서 "언제 눌렀나" 와 "지금 서 있나" 는
-    /// 서로 다른 두 질문이고, 답도 두 칸이어야 한다.
-    /// </para>
-    /// </summary>
-    private double _sinceParryPress = double.PositiveInfinity;
-
-    /// <summary>연타 사슬의 길이. 앞 누름의 기억 창 안에서 또 누르면 자란다.</summary>
-    private int _parryChain;
 
     private double _lockLeft;
 
@@ -122,57 +105,28 @@ public sealed class Fighter
     public bool Invulnerable => Action == FighterAction.Dash && ActionElapsed < DashIFrames;
 
     /// <summary>
-    /// 패리가 막아주는 창 안인가. 위와 같이 <b>캐릭터 쪽의 창</b>이다 — 패리 불가 패턴이나
-    /// 더 좁은 <c>parry_window</c> 를 가진 패턴 앞에서는 이것이 참이어도 못 받아친다(그래도
-    /// 붙들고 있으면 <b>가드로는 막는다</b>).
+    /// 패리가 받아치는 창 안인가. <b>캐릭터 쪽의 창</b>이다 — 패리 불가 패턴이나 더 좁은 <c>parry_window</c> 를
+    /// 가진 패턴 앞에서는 이것이 참이어도 못 받아친다(<see cref="HitResolver"/> 가 좁은 쪽을 쓴다).
     /// </summary>
-    public bool Parrying => _sinceParryPress < PreciseParryWindow;
+    public bool Parrying => SinceParryPress < PreciseParryWindow;
 
     /// <summary>
-    /// <b>방어 자세</b>인가 (이슈 #53). 누르는 그 틱부터 참이고 놓으면 거짓이다.
-    /// 자세 중에는 못 걷고 못 뛰고 스태미나도 안 찬다 — <b>방어와 간격이 배타적이어야</b>
-    /// 둘 중 하나를 고르는 것이 판단이 된다.
-    ///
-    /// <para>
-    /// <b>이 값만으로는 패리인지 가드인지 안 갈린다.</b> 그것을 가르는 것은 판정이 서는 시각이고
-    /// (<see cref="Parrying"/>), 판단하는 곳은 <see cref="HitResolver"/> 하나다.
-    /// </para>
+    /// 가드인가 (설계 §5.2). ↓ 를 누르고 있는 동안 참이고, 놓는 틱에 거짓이다. 패리와 <b>다른 행동</b>이라 둘이
+    /// 같은 틱에 참일 수 없다.
     /// </summary>
     public bool Guarding => Action == FighterAction.Guard;
 
     /// <summary>이 캐릭터의 대시 무적 폭(초). <see cref="HitResolver"/> 가 패턴의 창과 견준다.</summary>
     public double DashIFrames => _config.DashIFrames;
 
-    /// <summary>
-    /// <b>지금</b> 유효한 패리 창(초). 데이터의 값 그대로가 아니라 <b>연타 징벌이 깎은 뒤</b>다 —
-    /// 두 번째 연타는 좁은 창, 세 번째부터는 0(패리 불가 · 붙들고 있으면 가드만)이다.
-    /// <see cref="HitResolver"/> 가 패턴의 창과 견줘 좁은 쪽을 쓴다.
-    /// </summary>
-    public double PreciseParryWindow => _parryChain switch
-    {
-        <= 1 => _config.ParryPreciseWindow,
-        2 => _config.ParrySpamWindow,
-        _ => 0,
-    };
+    /// <summary>패리의 창(초) — 데이터 그대로다. 연타 징벌이 깎던 때가 있었고 스펙이 그 징벌을 지웠다 (설계 §5.3).</summary>
+    public double PreciseParryWindow => _config.ParryPreciseWindow;
 
     /// <summary>
-    /// 한 번의 누름이 <b>아직 그 사람의 것</b>인 시간(초) — 이슈 #53. 두 곳이 이 값을 쓴다:
-    /// 연타 사슬(이 안에서 또 누르면 사슬이 자란다)과 계측의 공 돌리기(<c>BattleSim</c> 이
-    /// 이 안의 누름까지만 그 판정의 시도로 센다). 연타 징벌이 <b>안</b> 깎는다.
-    ///
-    /// <para>
-    /// 전에는 이것이 <c>parry_imprecise_window</c> 였다 — "늦게 눌렀지만 절반은 받아낸다" 는
-    /// 중간 단계의 창. 그 단계를 가드가 대신하면서(이슈 #53) 창의 <b>뜻</b>만 남았다:
-    /// 사람이 "방금 눌렀다" 고 여기는 길이다. 이름을 안 바꾸면 없는 기능을 가리키는 키가 남는다.
-    /// </para>
+    /// 지금 패리의 누름에서 흐른 시간(초). 패리 중이 아니면 무한대 — 패리는 커밋이라 창은 행동의 시계 그대로다.
+    /// <see cref="HitResolver"/> 가 패턴의 창과 견준다.
     /// </summary>
-    public double ParryMemoryWindow => _config.ParryMemoryWindow;
-
-    /// <summary>마지막 패리 누름에서 흐른 시간(초). 아직 안 눌렀으면 무한대.</summary>
-    public double SinceParryPress => _sinceParryPress;
-
-    /// <summary>지금 이어지고 있는 연타의 길이. 1 이면 깨끗한 한 번이다.</summary>
-    public int ParryChain => _parryChain;
+    public double SinceParryPress => Action == FighterAction.Parry ? ActionElapsed : double.PositiveInfinity;
 
     /// <summary>가드가 깨져 굳어 있나. 움직이지도 뛰지도 새 행동을 시작하지도 못한다.</summary>
     public bool Locked => _lockLeft > 0;
@@ -259,23 +213,13 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// 패리가 받아냈다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> —
-    /// "잘 받아내면 다시 움직일 수 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈).
-    ///
-    /// <para>
-    /// <b>자세는 안 풀린다.</b> 놓을 때까지 서 있는 것이 이 기술이고, 그건 받아낸 뒤에도 같다 —
-    /// 연속타의 1타를 받아친 손이 2타 앞에서 저절로 내려가면 그건 방어가 아니다.
-    /// </para>
-    ///
-    /// <para>
-    /// 보스를 굳히는 것은 여기가 아니다. 굳히는가 아닌가는 <b>그 판정이 가드 불가였나</b>로
-    /// 갈리고(이슈 #53), 판정과 보스를 둘 다 아는 곳은 <see cref="BattleSim"/> 하나다.
-    /// </para>
+    /// 패리가 받아쳤다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> — "잘 받아내면 다시 움직일 수
+    /// 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈). 보스를 굳히는 것은 여기가 아니다 — 판정과 보스를 둘 다
+    /// 아는 곳은 <see cref="BattleSim"/> 하나다.
     /// </summary>
     public void ParryPrecise()
     {
         Qi++;
-        _parryChain = 0;
         _airDashUsed = false;
     }
 
@@ -293,10 +237,7 @@ public sealed class Fighter
     /// <summary>진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다 — 칼질이면 눌러 둔 다음 칼로 잇는다.</summary>
     private void Advance(double dt)
     {
-        // 행동과 무관한 시계 둘은 **Idle 이어도 돈다.** 누름 시계는 손을 뗀 뒤에도 흘러야
-        // 연타 사슬과 계측의 공 돌리기가 성립하고, 가드 붕괴의 고정은 아예 Idle 상태에서 흐른다 —
-        // 여기서 같이 멈추면 둘 다 영영 안 풀린다.
-        _sinceParryPress += dt;
+        // 붕괴의 고정은 **Idle 이어도 돈다** — 고정은 아예 Idle 상태에서 흐르므로 여기서 같이 멈추면 영영 안 풀린다.
         _lockLeft = Math.Max(0, _lockLeft - dt);
 
         if (Action == FighterAction.Idle)
@@ -306,7 +247,7 @@ public sealed class Fighter
 
         ActionElapsed += dt;
 
-        // 방어 자세는 시간이 안 끝낸다 — 손가락이 끝낸다(Begin 이 본다). 그래서 Duration 표에 자리가 없다.
+        // 가드는 시간이 안 끝낸다 — 손가락이 끝낸다(Begin 이 본다). 그래서 Duration 표에 자리가 없다.
         if (Action == FighterAction.Guard)
         {
             return;
@@ -352,25 +293,28 @@ public sealed class Fighter
         return true;
     }
 
-    /// <summary>행동이 저절로 끝나는 시각(초). 방어 자세는 여기 없다 — 끝내는 것은 손가락이다.</summary>
+    /// <summary>행동이 저절로 끝나는 시각(초). 가드는 여기 없다 — 끝내는 것은 손가락이다.</summary>
     private double Duration(FighterAction action) => action switch
     {
         FighterAction.Dash => _config.DashDuration,
         FighterAction.Attack => Step.Windup + Step.Active + Step.Recover,
+        FighterAction.Parry => _config.ParryDuration,
         _ => 0,
     };
 
     private double Cost(FighterAction action) => action switch
     {
         FighterAction.Dash => _config.DashCost,
-        // 방어 자세는 **누를 때 한 번**만 낸다 (이슈 #53). 버티는 값은 시간이 아니라
-        // 막아낸 피해에 비례해 나가므로(<see cref="GuardChip"/>) 여기서 또 받으면 두 번 낸다.
-        FighterAction.Guard => _config.ParryCost,
+        // 가드를 드는 값은 없다 (이 계획 · _note_guard) — 값은 막아낸 피해에 비례해 나간다(GuardChip).
+        FighterAction.Parry => _config.ParryCost,
         FighterAction.Attack => _config.AttackCost,
         _ => 0,
     };
 
-    /// <summary>새 행동을 시작한다. 행동 중이거나 굳었거나 스태미나가 모자라면 입력을 버린다.</summary>
+    /// <summary>
+    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리) 중이거나 굳었으면 입력을 버린다 — 칼질 중의 공격만은
+    /// 다음 칼로 기억한다. 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
+    /// </summary>
     private void Begin(InputFrame input)
     {
         // 칼질 중에 또 누르면 다음 칼을 **기억만** 한다 (설계 §5.1). 1타는 끝까지 커밋이고, 이어지는 것은 1타가
@@ -385,47 +329,28 @@ public sealed class Fighter
             return;
         }
 
-        // 방어 자세에서 할 일은 하나뿐이다 — 놓았는지 본다 (이슈 #53).
-        // 누르고 있는 동안에는 새 행동도 못 고른다: 손가락 하나가 두 기술을 살 수 없다.
-        if (Action == FighterAction.Guard)
-        {
-            if (!input.ParryHeld)
-            {
-                Action = FighterAction.Idle;
-                ActionElapsed = 0;
-            }
-
-            return;
-        }
-
-        if (Action != FighterAction.Idle || Locked)
+        if (Action is not (FighterAction.Idle or FighterAction.Guard) || Locked)
         {
             return;
         }
 
-        // 패리 누름은 곧장 **방어 자세**다 (이슈 #53). 전에는 여기서 0.30초짜리 패리 행동을
-        // 세우고 그것이 끝난 뒤에 가드를 붙였는데, 그 0.30초가 "방어를 골랐는데 왜 안 막나" 였다.
-        // 자세는 즉시 서고, 패리인지 가드인지는 **판정이 언제 서느냐**가 정한다.
-        FighterAction wanted = input.Dash ? FighterAction.Dash
-            : input.Parry ? FighterAction.Guard
+        FighterAction pressed = input.Dash ? FighterAction.Dash
+            : input.Parry ? FighterAction.Parry
             : input.Attack ? FighterAction.Attack
             : FighterAction.Idle;
 
-        // 공중 대시는 착지하거나 정확 패리를 성공할 때까지 한 번뿐이다 (나인 솔즈).
-        // 몸 충돌이 없어져 공중이 안전지대가 됐으므로, 무제한 공중 대시는 "공중에 떠서
-        // 계속 무적" 이라는 답 하나로 모든 패턴을 지운다.
-        if (wanted == FighterAction.Dash && !Grounded && _airDashUsed)
-        {
-            return;
-        }
+        // 못 하는 행동은 안 누른 것과 같다(스태미나 · 공중 대시 한 번). 누른 것이 없으면 남는 것은 ↓ 하나다 —
+        // 누르고 있고 땅이면 가드, 아니면 선다 (설계 §5.2: 누르고 있는 동안 · 땅에서만).
+        FighterAction wanted = pressed != FighterAction.Idle && CanStart(pressed) ? pressed
+            : input.GuardHeld && Grounded ? FighterAction.Guard
+            : FighterAction.Idle;
 
-        if (wanted == FighterAction.Idle || Stamina < Cost(wanted))
+        if (wanted == Action)
         {
             return;
         }
 
         Spend(Cost(wanted));
-
         Action = wanted;
         ActionElapsed = 0;
         _step = 0;
@@ -435,35 +360,15 @@ public sealed class Fighter
         {
             _airDashUsed = true;
         }
-
-        if (wanted == FighterAction.Guard)
-        {
-            PressParry();
-        }
     }
 
     /// <summary>
-    /// 패리를 눌렀다. <b>연타 사슬을 여기서 센다</b> — 앞 누름의 기억 창이 아직 살아 있는데
-    /// 또 눌렀으면 사슬이 자라고, 자란 만큼 패리 창이 좁아지다 사라진다.
-    ///
-    /// <para>
-    /// "공격이 안 오는데 눌렀나" 를 보스에게 묻지 않는다 — 파이터는 보스를 모른다. 대신
-    /// <b>받아친 것이 있으면 사슬이 0 으로 풀린다</b>(<see cref="ParryPrecise"/>). 그래서 실제로
-    /// 받아친 누름은 연타로 안 세어지고, 허공에 연달아 누른 것만 벌을 받는다 —
-    /// 보스를 아는 코드가 없어도 같은 규칙이 선다.
-    /// </para>
-    ///
-    /// <para>
-    /// ⚠ <b>가드로 막아낸 것은 사슬을 안 푼다</b> (이슈 #53). 푸는 것은 <b>받아친</b> 것뿐이다 —
-    /// 붙들고만 있어도 사슬이 풀리면 "일단 눌러 두는" 습관에 벌이 없어지고,
-    /// <c>III-역린</c> 이 재려던 것이 통째로 사라진다.
-    /// </para>
+    /// 이 행동을 지금 시작할 수 있나 — 스태미나가 되고, 대시면 공중 대시가 남아 있나.
+    /// 공중 대시는 착지하거나 패리를 성공할 때까지 한 번뿐이다 (나인 솔즈) — 몸 충돌이 없어져 공중이 안전지대가 됐으므로,
+    /// 무제한 공중 대시는 "공중에 떠서 계속 무적" 이라는 답 하나로 모든 패턴을 지운다.
     /// </summary>
-    private void PressParry()
-    {
-        _parryChain = _sinceParryPress <= _config.ParryMemoryWindow ? _parryChain + 1 : 1;
-        _sinceParryPress = 0;
-    }
+    private bool CanStart(FighterAction action) =>
+        Stamina >= Cost(action) && !(action == FighterAction.Dash && !Grounded && _airDashUsed);
 
     /// <summary>행동 중에는 회복하지 않는다 — 그래야 연속 행동에 값이 붙는다.</summary>
     private void Regen(double dt)

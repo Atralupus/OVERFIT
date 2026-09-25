@@ -54,9 +54,10 @@ RES_PREFIX = "res://assets"
 class Anim:
     """SpriteFrames 의 애니메이션 하나. 이름은 **뷰가 부르는 이름**이다.
 
-    `FighterView` · `BossView` 가 `idle · run · attack · hit · death` 를 재생한다.
+    `FighterView` · `BossView` 가 `idle · run · attack · attack2 · hit · death` 를 재생한다
+    (attack2 는 파이터의 2타와 패리 — 이슈 #59 · 설계 §5.1 · §5.3).
     없는 이름으로 `Play` 하면 엔진이 `ERROR:` 를 찍고 헤드리스 판정이 실패하므로,
-    그 다섯은 반드시 여기 있어야 한다 (`REQUIRED_ANIMS` 가 확인한다).
+    그 여섯은 반드시 여기 있어야 한다 (`REQUIRED_ANIMS` 가 확인한다).
     """
 
     name: str
@@ -79,8 +80,8 @@ class Pack:
     sprite_id: str = ""
 
 
-# 뷰가 실제로 `Play` 하는 이름. 캐릭터 팩에는 이 다섯이 반드시 있어야 한다.
-REQUIRED_ANIMS = ("idle", "run", "attack", "hit", "death")
+# 뷰가 실제로 `Play` 하는 이름. 캐릭터 팩에는 이 여섯이 반드시 있어야 한다.
+REQUIRED_ANIMS = ("idle", "run", "attack", "attack2", "hit", "death")
 
 SPRITES = "Sprites/"
 

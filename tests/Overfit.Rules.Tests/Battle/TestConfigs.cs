@@ -32,10 +32,13 @@ public static class TestConfigs
         DashDuration = 0.18,
         DashIFrames = 0.14,
         DashCost = 25,
+        // 패리는 **실제 값 그대로**다 (설계 §5.3) — 가드 셋과 같이 캐릭터 성능이 아니라 조작의 정의다.
         ParryPreciseWindow = 0.133,
-        ParryMemoryWindow = 0.5,
-        ParrySpamWindow = 0.1,
+        ParryDuration = 0.3333,
         ParryCost = 15,
+        ParryAnim = "attack2",
+        ParryAnimFps = 12,
+        ParryAnimFrames = 4,
         // 기준 파이터에는 그림이 없지만 칼질 한 칸의 관계는 진짜여야 한다 — 50fps · 14장이면 재생 0.28초로
         // 셋의 합과 같고, 0번에서 시작해 4번 장(0.08초)이 선딜의 끝이다. 거짓 값을 넣으면 이 픽스처가
         // "그림에서 거꾸로 정한다" 는 규칙의 반례가 된다.

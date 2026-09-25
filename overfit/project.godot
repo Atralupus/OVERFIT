@@ -50,7 +50,7 @@ project/assembly_name="Overfit"
 
 [input]
 
-; 이동만 **레벨**이다 (IsActionPressed) — 누르고 있으면 계속 가야 한다.
+; 이동은 **레벨**이다 (IsActionPressed) — 누르고 있으면 계속 가야 한다. 레벨은 이동과 가드(아래) 둘뿐이다.
 ; 원시 키코드로 직접 읽지 않고 액션으로 둔 이유는 타이틀의 조작 안내가 이 표에서 글자를 뽑기 때문이다.
 ; 손으로 적은 안내는 바인딩이 바뀌는 순간 거짓말이 된다.
 move_left={
@@ -78,6 +78,12 @@ parry={
 attack={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"keycode":74,"pressed":true)]
+}
+
+; 가드만 **레벨**로 읽는다 (IsActionPressed) — 누르고 있는 동안이 곧 가드다 (설계 §5.2). ↓ 와 S.
+guard={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":4194322,"pressed":true), Object(InputEventKey,"keycode":83,"pressed":true)]
 }
 
 ; 디버그 전용 — 전투 중 그 단계로 바로 건너뛴다 (이슈 #54). 숫자 키 1 · 2 · 3 이고 액션 이름의 끝이 곧 단계다.

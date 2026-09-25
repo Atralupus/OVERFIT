@@ -23,7 +23,7 @@ namespace Overfit.Rules.Tests.Battle;
 ///
 /// <para>
 /// 파이터는 <b>실제 캐릭터</b>(<c>fighters.json</c>)로 돈다. 이 봉인은 그 캐릭터의 스태미나 산수
-/// (최대 100 · 누름 15 · 피해당 1.8) 위에 서 있어서, 기준값(<c>TestConfigs.Fighter</c>)으로 재면
+/// (최대 100 · 피해당 1.8 — 가드를 드는 값은 없다) 위에 서 있어서, 기준값(<c>TestConfigs.Fighter</c>)으로 재면
 /// 캐릭터를 고친 날 봉인이 조용히 풀려도 초록이다.
 /// </para>
 /// </summary>
@@ -34,8 +34,7 @@ public class WedgeSealTests
 
     /// <summary>
     /// 받아치거나 피하는 스크립트가 누르는 시각 — 판정까지 이만큼 남았을 때(초).
-    /// 봇의 반응 창(0.10)보다 좁게 잡는다: 사거리 밖에서 헛누른 뒤의 연타 사슬이 패리 창을
-    /// 0.1 로 깎아도 그 안에 들어가게 — 여기서 재려는 것은 봉인이지 누르는 솜씨가 아니다.
+    /// 봇의 반응 창(0.10)보다 좁게 잡는다 — 여기서 재려는 것은 봉인이지 누르는 솜씨가 아니다.
     /// </summary>
     private const double _press = 0.05;
 
@@ -50,7 +49,7 @@ public class WedgeSealTests
         /// <summary>판정마다 무적 창 안에서 한 번 대시한다.</summary>
         Dash,
 
-        /// <summary>붙은 뒤 새 패턴이 서면 누르고, 그 패턴 내내 놓지 않는다 — 가드 의존의 모양이다.</summary>
+        /// <summary>붙은 뒤 새 패턴이 서면 ↓ 를 붙들고, 그 패턴 내내 놓지 않는다 — 가드 의존의 모양이다.</summary>
         Hold,
     }
 
@@ -84,13 +83,13 @@ public class WedgeSealTests
             InputFrame input;
             if (answer == Answer.Hold)
             {
-                // 붙은 뒤 **새로 선** 패턴의 첫 틱에 누르고 그 패턴 내내 놓지 않는다.
-                // 붙기 전에 누르면 걷지 못하고(자세 중에는 못 움직인다), 패턴 도중에 누르면
+                // 붙은 뒤 **새로 선** 패턴의 첫 틱부터 ↓ 를 붙들고 그 패턴 내내 놓지 않는다.
+                // 붙기 전에 누르면 걷지 못하고(가드 중에는 못 움직인다), 패턴 도중에 누르면
                 // 앞의 대를 놓친다 — 둘 다 "가드에 기댄다" 가 아니다.
                 holding |= fresh && gap <= _close;
                 holding &= sim.Boss.CurrentPattern is not null;
                 input = holding
-                    ? new InputFrame(0, false, false, Parry: sim.Fighter.Action == FighterAction.Idle, false, ParryHeld: true)
+                    ? new InputFrame(0, false, false, false, false, GuardHeld: true)
                     : new InputFrame(gap > _close ? toward : (sbyte)0, false, false, false, false);
             }
             else if (!actedForThisHit && sim.NextActiveIn is double left && left <= _press)
@@ -132,7 +131,7 @@ public class WedgeSealTests
     public void II_쐐기는_붙든_가드가_빨간_마무리까지_버틴다()
     {
         // 2단계의 쐐기는 **무게**로 봉인한다: 가드 불가인 마무리가 26 이라 다른 변종(14)의 두 배 가까이다.
-        // 앞의 셋은 붙들고 버틸 수 있다 — 누름 15 + 8 × 1.8 × 3 = 58.2 로 100 안이다.
+        // 앞의 셋은 붙들고 버틸 수 있다 — 8 × 1.8 × 3 = 43.2 로 100 안이다.
         foreach ((string id, FighterConfig fighter) in TestConfigs.Fighters())
         {
             List<DodgeEvent> round = HeldRound(fighter, _two);
@@ -152,12 +151,14 @@ public class WedgeSealTests
     [Fact]
     public void III_쐐기는_붙든_가드를_빨간_마무리_전에_깬다()
     {
-        // **3단계의 쐐기는 종류가 다른 봉인이다.** 셋째 대가 무거워(32) 붙든 가드의 스태미나가
+        // **3단계의 쐐기는 종류가 다른 봉인이다.** 셋째 대가 무거워(42) 붙든 가드의 스태미나가
         // **빨간 마무리가 오기 전에** 바닥난다:
         //
-        //   누름 15 → 85 · 첫째 8 × 1.8 = 14.4 → 70.6 · 둘째 14.4 → 56.2 · 셋째 32 × 1.8 = 57.6 > 56.2 → 깨짐
+        //   첫째 8 × 1.8 = 14.4 → 85.6 · 둘째 14.4 → 71.2 · 셋째 42 × 1.8 = 75.6 > 71.2 → 깨짐
         //
-        // 깨지면 전액을 맞고 guard_break_lock(1.1초) 동안 굳고, 자세는 **새로 눌러야** 선다.
+        // (2번 PR 전에는 셋째가 32 였고 가드를 드는 값 15 가 앞에 있었다 — 그 값이 없어지며 셋째를 42 로 올렸다.)
+        //
+        // 깨지면 전액을 맞고 guard_break_lock(1.1초) 동안 굳고, ↓ 를 붙든 채라 고정이 풀리는 틱에 다시 선다.
         // 그래서 붙들고만 있던 사람은 빨간 마무리를 **이미 무너진 채로** 맞는다 — 받아칠 기회조차
         // 없다. 2단계의 교훈이 "빨간 것은 받아쳐라" 였다면 3단계의 교훈은 "애초에 붙들지 마라" 다.
         //
@@ -166,7 +167,7 @@ public class WedgeSealTests
         // 누른 가드에 빨강이 떨어졌다(Hit 가 아니라 GuardBroken — 아래 마지막 단언이 빨갛게 섰다).
         // 8틱 안에 눌렀다면 **받아쳐** 경직까지 얻었을 자리다. 고정도 간격을 따라 1.1 이 됐다 —
         // 산수는 VariantRhythmTests.쐐기가_깬_가드는_빨간_마무리가_올_때까지_굳어_있다 에 있다.
-        // 앞 절반(스태미나)은 간격과 무관하다: 붙든 가드는 Idle 이 아니라 안 차서 여유는 그대로 1.4 다.
+        // 앞 절반(스태미나)은 간격과 무관하다: 붙든 가드는 Idle 이 아니라 안 차서 여유는 그대로 4.4(75.6 − 71.2)다.
         foreach ((string id, FighterConfig fighter) in TestConfigs.Fighters())
         {
             List<DodgeEvent> round = HeldRound(fighter, _three);
@@ -190,7 +191,7 @@ public class WedgeSealTests
     public void 붙든_가드에게는_셋째_단계가_둘째_단계보다_아프다()
     {
         // 봉인의 **값**을 못박는다. 무게로 봉인하는 2단계: 칩 2 × 3 + 마무리 전액 26 = 32.
-        // 먼저 깨는 3단계: 칩 2 × 2 + 셋째 전액 32 + 마무리 전액 14 = 50.
+        // 먼저 깨는 3단계: 칩 2 × 2 + 셋째 전액 42 + 마무리 전액 14 = 60.
         // 둘이 같거나 뒤집히면 3단계의 쐐기는 이름만 봉인이다.
         foreach ((string id, FighterConfig fighter) in TestConfigs.Fighters())
         {

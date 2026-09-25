@@ -32,13 +32,10 @@ public class ReplayGoldenTests
     /// 골든을 만든 입력 시퀀스. <b>이 함수를 바꾸면 골든도 바꿔야 한다.</b>
     ///
     /// <para>
-    /// 누름 유지 칸(<c>ParryHeld</c>)을 <b>안 적는다</b> — 기본값 false 라 가드(이슈 #47)가 이 스트림에 안 실린다.
+    /// <c>GuardHeld</c> 를 <b>안 적는다</b> — 기본값 false 라 가드(설계 §5.2)가 이 스트림에 안 실린다.
     /// 공격은 17틱마다 누르는데 1타(기준 17틱)가 끝난 다음 틱이라 2타를 한 번도 안 잇는다.
-    /// <c>ParryHeld</c> 를 실어 보고 안 실은 이유는 <c>tools/replay_golden.txt</c> 에 적어 뒀다:
-    /// 이 스크립트는 17틱마다 공격하고 23틱마다 대시하는 멍청이라 29틱마다 오는 패리 누름이
-    /// 거의 언제나 <b>행동 중</b>에 떨어지고, 그래서 붙들어도 가드가 판정을 받는 일이 없다.
-    /// 판만 달라지고 덮이는 것은 없다. 가드의 회귀는 <c>FighterActionTests</c> ·
-    /// <c>HitResolverTests</c> · <c>BattleSimTests</c> · <c>BotPolicyTests</c> 가 본다.
+    /// 가드의 회귀는 <c>FighterActionTests</c> · <c>HitResolverTests</c> · <c>BattleSimTests</c> ·
+    /// <c>BotPolicyTests</c> 가 본다. 29틱마다의 K 는 이제 0.333초 커밋의 패리다(설계 §5.3).
     /// </para>
     /// </summary>
     private static InputFrame[] Script()

@@ -22,9 +22,7 @@ public sealed class BotPolicy
 {
     /// <summary>
     /// 대시·패리를 걸 창(초). 무적창(0.14) · 패리창(0.133)보다 좁게 잡아 판정이 서는 순간까지
-    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 <b>가드</b>가 된다 (이슈 #53).
-    /// 연타 징벌(이슈 #27)도 여기에 걸려 있다: 이 창 안에서만 누르므로 누름은 거의 항상
-    /// 받아치고, 받아친 누름은 사슬을 푼다.
+    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 커밋 안에서 맞는다 (설계 §5.3).
     /// </summary>
     private const double _lateReact = 0.10;
 
@@ -67,10 +65,7 @@ public sealed class BotPolicy
         double gap = Math.Abs(sim.Fighter.X - sim.Boss.X) - sim.Boss.HalfWidth;
         sbyte move = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
 
-        // 가드는 **패턴이 시작할 때** 정한다. 자세는 이제 누르는 그 틱에 서지만(이슈 #53)
-        // 아래의 반응 창(_lateReact 0.10초) 안에서 누르면 그건 가드가 아니라 **패리**다 —
-        // 창 안에 판정이 서기 때문이다. 가드를 실제로 내려면 일찍 눌러 창을 흘려보내야 하고,
-        // 그 판단은 패턴마다 한 번이어야 한다: 틱마다 마음이 바뀌면 버티는 일이 없다.
+        // 가드는 **패턴이 시작할 때** 정한다 — 틱마다 마음이 바뀌면 버티는 일이 없다.
         DecideGuard(sim);
 
         // 칼질 중이면 할 일은 하나다 — 이을 작정이면 한 번 더 누른다 (설계 §5.1 · §5.4: 2연격도 엣지 두 번이다).
@@ -101,23 +96,14 @@ public sealed class BotPolicy
         //    그 빈 시간을 문 앞에서 버린다.
         if (sim.Boss.CurrentPattern is not null && !sim.Boss.Staggered && sim.NextActiveIn is not null)
         {
-            // **행동 갈래보다 먼저 본다.** 아래에 맡기면 패리 동작이 도는 동안 default(누름 없음)가
-            // 나가 레벨이 꺼지고, 가드는 서기도 전에 풀린다 — 차지가 같은 자리에서 같은 이유로 깨졌다.
+            // **행동 갈래보다 먼저 본다.** 아래에 맡기면 가드(Idle 이 아니다) 동안 default(누름 없음)가
+            // 나가 레벨이 꺼지고, 가드는 서자마자 풀린다 — 차지가 같은 자리에서 같은 이유로 깨졌다.
+            //
+            // 가드로 받기로 한 패턴이면 ↓ 를 **붙든다** — 가드는 누르고 있는 동안이다 (설계 §5.2). 서 있기만 하면 되므로
+            // 판정 직전을 노릴 필요가 없고, 그래서 봇의 반응 창(_lateReact)과 무관하게 패턴 내내 든다.
             if (_guardThis)
             {
-                // 누름은 서 있을 때 한 번, 그 뒤로는 **유지**다. 엣지가 시작하고 레벨이 붙든다.
-                bool press = sim.Fighter.Action == FighterAction.Idle;
-                return new InputFrame(0, false, false, Parry: press, false, ParryHeld: true);
-            }
-
-            // 패리로 선 자세는 **판정이 지나갈 때까지만** 붙든다 (이슈 #53). 놓으면 그 자리에서
-            // 무방비이고, 다시 누르면 연타 사슬이 패리 창을 깎는다 — 전에는 0.30초짜리 패리
-            // 행동이 그 사이를 막아 줬는데 그 행동이 없어졌다.
-            // **계속** 붙들지는 않는다: 그러면 남은 연타를 전부 가드가 받아 대시·점프 표본이 마른다.
-            if (sim.Fighter.Guarding)
-            {
-                bool keep = sim.NextActiveIn is double left && left <= _lateReact;
-                return new InputFrame(0, false, false, false, false, ParryHeld: keep);
+                return new InputFrame(0, false, false, false, false, GuardHeld: true);
             }
 
             if (sim.Fighter.Action != FighterAction.Idle)
@@ -137,8 +123,8 @@ public sealed class BotPolicy
             {
                 0 => new InputFrame(0, false, Dash: true, false, false),
                 1 => new InputFrame(0, Jump: true, false, false, false),
-                // 누르는 그 틱부터 붙든다 — 자세가 곧 방어라 엣지만 보내면 다음 틱에 풀린다.
-                _ => new InputFrame(0, false, false, Parry: true, false, ParryHeld: true),
+                // 패리는 누르는 것 한 번이다 — 0.333초 커밋 동안 앞 0.133초가 창이라 붙들 것이 없다 (설계 §5.3).
+                _ => new InputFrame(0, false, false, Parry: true, false),
             };
         }
 

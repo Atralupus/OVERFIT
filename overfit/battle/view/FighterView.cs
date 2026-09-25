@@ -10,8 +10,8 @@ namespace Overfit.Battle.View;
 ///
 /// <para>
 /// 평생 <c>idle</c> 만 재생하던 것이 이 화면의 가장 큰 문제였다. 뷰가 부르는 것은
-/// <c>idle · run · attack · attack2 · hit · death</c> 여섯이고 대시·방어 전용 그림은 없다 —
-/// 그 둘은 <b>이펙트로 만든다</b>(잔상 · 링 · 섬광). 2D 액션에서 대시와 방어의 피드백은
+/// <c>idle · run · attack · attack2 · hit · death</c> 여섯이고 대시·가드 전용 그림은 없다 —
+/// 그 둘은 <b>이펙트로 만든다</b>(잔상 · 링 · 섬광). 2D 액션에서 대시와 가드의 피드백은
 /// 원래 애니메이션이 아니라 이펙트가 결정하므로 대체품이 아니라 제 모양이다.
 /// </para>
 /// </summary>
@@ -41,7 +41,7 @@ public partial class FighterView : Node2D
 
     /// <summary>
     /// 받아친 순간의 고리 색 — 따뜻하고 밝다. 가드가 받아낸 고리(<see cref="_guardChipColor"/>)와
-    /// <b>모양이 같고 색만 다르다</b> (이슈 #53): 둘은 같은 자세에서 나온 같은 방어라
+    /// <b>모양이 같고 색만 다르다</b> (이슈 #53): 받아친 것과 막은 것은 같은 '방어의 결과' 라
     /// 그림이 갈라지면 안 되고, 갈려야 하는 것은 "받아쳤다" 한 마디뿐이다.
     /// </summary>
     private static readonly Color _parryBurstColor = new(1.00f, 0.97f, 0.65f, 1.00f);
@@ -69,19 +69,18 @@ public partial class FighterView : Node2D
     private static readonly Color _hitFlash = new(2.40f, 0.45f, 0.45f);
 
     /// <summary>
-    /// <b>방어 자세</b>의 몸 색 (이슈 #47 · #53). 차갑고 단단한 쪽이다.
+    /// <b>가드</b>의 몸 색 (이슈 #47 · 설계 §5.2). 차갑고 단단한 쪽이다.
     ///
     /// <para>
-    /// 전에는 패리(따뜻한 노랑)와 갈라 두는 것이 요점이었다. 지금은 반대다 — 둘이 한 자세라
-    /// <b>이 색 하나뿐</b>이고, 누른 사람이 창 안에 들었는지는 판정이 서기 전에는 아무도 모른다.
-    /// 미리 갈라 칠하면 화면이 모르는 것을 아는 척하게 된다.
+    /// 패리와 가드가 다시 다른 행동이 됐지만(설계 §5.3) 패리는 색이 아니라 움직임(attack2 f0~f3)으로 갈린다 —
+    /// 색은 가드 하나다.
     /// </para>
     /// </summary>
     private static readonly Color _guardTint = new(0.80f, 0.78f, 1.32f);
 
     /// <summary>
-    /// 방어 자세 링의 색 — <b>보라 쪽</b>이다. 몸 색과 같은 계열이라 "지금 막고 있다" 가
-    /// 한 덩어리로 읽힌다. 자세가 하나가 된 뒤로(이슈 #53) 이 링은 자세 내내 하나다 —
+    /// 가드 링의 색 — <b>보라 쪽</b>이다. 몸 색과 같은 계열이라 "지금 막고 있다" 가
+    /// 한 덩어리로 읽힌다. 이 링은 가드 내내 하나다 —
     /// 크기가 <b>안 변한 채 버티는</b> 것이 "누르고 있는 동안" 을 말하는 유일한 그림이다.
     /// </summary>
     private static readonly Color _guardRingColor = new(0.68f, 0.58f, 1.00f, 0.95f);
@@ -125,6 +124,9 @@ public partial class FighterView : Node2D
     /// </summary>
     private SwingSheet[] _swings = System.Array.Empty<SwingSheet>();
 
+    /// <summary>패리가 도는 시트 — <c>attack2</c> 의 f0~f3 (설계 §5.3). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
+    private SwingSheet _parry;
+
     /// <summary>지금 그리는 칼질이 몇 번째인가 (<see cref="SwingBegan"/> 이 정한다).</summary>
     private int _swing;
 
@@ -167,9 +169,11 @@ public partial class FighterView : Node2D
     /// 스프라이트를 갈아끼운다. id 는 data/fighters.json 의 sprite 값이다.
     /// <paramref name="swings"/> 는 칼질마다의 시트 — 부르는 쪽(<c>Battle</c>)이 데이터에서 옮겨 준다.
     /// 뷰가 fighters.json 을 직접 읽으면 규칙과 뷰가 같은 파일을 두 번 읽는다.
+    /// <paramref name="parry"/> 는 패리가 도는 시트다 — 칼이 나가는 장은 없다(<c>BladeFrame</c> 은 안 쓴다).
     /// </summary>
-    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings)
+    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry)
     {
+        _parry = parry;
         _swings = new SwingSheet[swings.Count];
         for (int i = 0; i < _swings.Length; i++)
         {
@@ -241,6 +245,23 @@ public partial class FighterView : Node2D
         _swing = step;
         _bladeOut = false;
         _windupFresh = true;
+    }
+
+    /// <summary>
+    /// 패리가 시작된 <b>그 틱</b> — 시트를 처음부터 다시 돌린다. <c>Battle</c> 이 물리 틱마다 견줘 부른다.
+    /// 이름만 보는 <see cref="Animate"/> 에 맡기면, 2타(같은 attack2 시트)가 끝나자마자 누른 패리가 2타의 잔상 장을
+    /// 이어받는다.
+    /// </summary>
+    public void ParryBegan()
+    {
+        if (!HasSheet(_parry))
+        {
+            return;
+        }
+
+        _sprite.Play(_parry.Anim, SpeedFor(_parry));
+        _sprite.SetFrameAndProgress(_parry.StartFrame, 0.0f);
+        AlignToGround(_parry.Anim);
     }
 
     /// <summary>
@@ -407,19 +428,19 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 자세가 서 있는 동안의 링 — 방어 자세의 링이다. 차지 링이 이 노드를 같이 쓰던 자리였는데,
+    /// 자세가 서 있는 동안의 링 — 가드의 링이다. 차지 링이 이 노드를 같이 쓰던 자리였는데,
     /// 차지는 2연격이 되며 없어졌다(이슈 #59).
     /// </summary>
     private void Ring(FighterFrame frame)
     {
-        // 방어 링은 **안 움직인다** (이슈 #47) — 버티는 동안 아무것도 안 변하는 것이 이 기술이고,
+        // 가드 링은 **안 움직인다** (이슈 #47) — 버티는 동안 아무것도 안 변하는 것이 이 기술이고,
         // 그 정지가 곧 그림이다.
         // 대신 남은 스태미나가 **밝기**로 빠진다: 바닥에 가까울수록 링이 꺼져 가, 깨지기 직전을
         // 숫자가 아니라 색으로 읽는다(HUD 의 스태미나 바를 볼 겨를이 없는 순간이다).
         //
         // **패리 창을 따로 안 그린다** (이슈 #53). 전에는 창이 닫히는 쪽으로 퍼지는 링이 따로
         // 있었는데, 창 안인지는 판정이 서야 정해지므로 그 링은 "지금 누르면 받아친다" 가 아니라
-        // "방금 눌렀다" 만 말하고 있었다 — 자세가 하나가 된 지금 그 말은 이 링이 이미 한다.
+        // "방금 눌렀다" 만 말하고 있었다 — 지금 그 말은 패리의 그림(attack2 f0~f3 · 설계 §5.3)이 한다.
         if (frame.Pose == FighterPose.Guard)
         {
             float left = Mathf.Clamp((float)frame.GuardStamina, 0.0f, 1.0f);
@@ -523,7 +544,7 @@ public partial class FighterView : Node2D
         Color baseTint = frame.Locked ? _lockedTint
             : frame.Invulnerable ? _invulnerableTint
             : frame.Pose == FighterPose.Dash ? _dashTailTint
-            // 방어 자세는 색 하나다 (이슈 #53) — 패리와 가드가 한 행동이라 갈라 칠할 것이 없다.
+            // 가드는 색 하나다. 패리는 칠하지 않는다 — 칼을 세우는 움직임이 그 그림이다(설계 §5.3).
             : frame.Pose == FighterPose.Guard ? _guardTint
             : Colors.White;
 
@@ -537,15 +558,14 @@ public partial class FighterView : Node2D
 
     /// <summary>
     /// 자세 → 애니메이션 이름. 대시는 <c>run</c> 을 빌려 쓰고 나머지는 이펙트가 말한다 —
-    /// 팩에 대시·방어 그림이 없다.
+    /// 팩에 대시·가드 그림이 없다. 패리는 <c>attack2</c> 의 앞 네 장이다(설계 §5.3).
     ///
     /// <para>
-    /// <b>방어 자세는 <c>idle</c> 이다</b> (이슈 #47). 팩(Martial Hero)에 있는 것은
+    /// <b>가드는 <c>idle</c> 이다</b> (이슈 #47 · 설계 §5.2 — attack2 f1 자세는 4번 PR 이다). 팩(Martial Hero)에 있는 것은
     /// <c>idle · run · jump · fall · attack · attack2 · hit · hit_white · death</c> 뿐이고
     /// 막는 자세는 없다. 후보가 <c>fall</c>(웅크린 자세)과 <c>idle</c> 이었는데 <c>fall</c> 은
-    /// 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽히고, <c>attack2</c> 는 칼이 나가는 그림이라
-    /// 거짓말이다. 그래서 <c>idle</c> 을 빌리고 갈라 보이게 하는 일은 <b>색과 멈춘 링</b>이 맡는다 —
-    /// 대시·패리에서 이미 쓰는 규약이다.
+    /// 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽힌다. 그래서 <c>idle</c> 을 빌리고 갈라 보이게 하는 일은
+    /// <b>색과 멈춘 링</b>이 맡는다 — 대시에서 이미 쓰는 규약이다.
     /// </para>
     /// </summary>
     private string AnimationFor(FighterPose pose)
@@ -565,7 +585,8 @@ public partial class FighterView : Node2D
             FighterPose.Run or FighterPose.Dash => "run",
             // 칼질이 맞은 자세에 끊겼다 돌아오면 이 갈래로 떨어진다 — 지금 칼질의 시트다.
             FighterPose.Attack => Sheet.Anim ?? "attack",
-            // 방어 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 방어를 가른다.
+            FighterPose.Parry => _parry.Anim,
+            // 가드 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 가드를 가른다.
             FighterPose.Guard => "idle",
             FighterPose.Hit => "hit",
             FighterPose.Death => "death",
@@ -589,9 +610,8 @@ public partial class FighterView : Node2D
         if (!_sprite.SpriteFrames.HasAnimation(name))
         {
             // 없는 이름으로 Play 하면 엔진이 ERROR: 를 찍고, 그건 헤드리스 판정(judge_headless)을
-            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 다섯을 확인한다 — 2타의
-            // attack2 는 그 목록 밖이다)
-            // 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
+            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 여섯을 확인한다 — 2타와
+            // 패리의 attack2 까지) 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
             Log.Warn("view", $"anim_missing name={name}");
             return;
         }
