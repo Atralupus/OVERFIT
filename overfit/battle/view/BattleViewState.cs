@@ -10,12 +10,6 @@ public enum FighterPose
     Idle,
     Run,
     Attack,
-
-    /// <summary>
-    /// 모으고 있다 (이슈 #40). <c>attack</c> 시트의 <b>선딜 마지막 프레임</b>에 몸을 세운 자세다 —
-    /// 칼을 끝까지 뒤로 뺀 그 그림이 곧 "모으는 중" 이라, 없는 애니메이션을 만들지 않는다.
-    /// </summary>
-    Charge,
     Dash,
 
     /// <summary>
@@ -64,14 +58,9 @@ public enum BossPhase
 /// <param name="Locked">가드가 깨져 굳었나. <c>guard_break_lock</c> 동안 아무것도 못 한다 —
 /// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.
 /// 부정확 패리의 고정이 없어져(이슈 #53) 이 색은 이제 한 가지 뜻뿐이다.</param>
-/// <param name="ChargeProgress">차지를 얼마나 모았나(0~1). 링의 반지름이 이것이다 —
-/// <c>ParryProgress</c> 와 같은 규약으로, 최대 시간(캐릭터마다 다르다)의 사본을 뷰에 두지 않는다.</param>
-/// <param name="ChargeMaxed">차지가 <b>최대에 닿았나</b> (이슈 #40). 진행도만 넘기고 뷰가
-/// <c>progress &gt;= 1</c> 로 판단하게 두지 않는다 — 단계는 구간이고 그 경계를 아는 곳은 규칙 하나다.
-/// <b>최대인지 모르면 2초를 셀 수가 없다</b>, 그래서 이 한 칸이 색과 섬광을 가른다.</param>
 /// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.
 /// 가드 링의 굵기가 아니라 <b>밝기</b>가 이것이라, 바닥에 가까울수록 링이 꺼져 간다.
-/// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다 — <c>ChargeProgress</c> 와 같은 규약이다.</param>
+/// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다.</param>
 public readonly record struct FighterFrame(
     double X,
     double Y,
@@ -79,9 +68,18 @@ public readonly record struct FighterFrame(
     FighterPose Pose,
     bool Invulnerable,
     bool Locked,
-    double ChargeProgress,
-    bool ChargeMaxed,
     double GuardStamina);
+
+/// <summary>
+/// 칼질 한 칸을 <b>그리는 데</b> 필요한 것 — 어느 시트를 몇 fps 로, 몇 번 장부터 돌리고 몇 번 장에서 칼이 나가나.
+/// 규칙의 <c>ComboStepDef</c> 를 그대로 안 넘긴다: 뷰가 규칙 DTO 에 묶이면 그 타입을 고치는 날 그림까지 끌려온다
+/// (<see cref="FighterFrame"/> 과 같은 이유다). <c>Battle</c> 이 데이터에서 옮겨 준다.
+/// </summary>
+/// <param name="Anim"><c>.tres</c> 의 애니메이션 이름.</param>
+/// <param name="Fps">이 칼질의 재생 속도. 시트의 속도와 다르면 그 비율로 돌린다(2타는 반속).</param>
+/// <param name="StartFrame">칼질이 시작하는 장.</param>
+/// <param name="BladeFrame">칼이 지나가는 장 — 판정이 서는 틱에 여기로 맞춰 세운다.</param>
+public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame, int BladeFrame);
 
 /// <summary>
 /// 한 프레임에 보스의 <b>예고 표지</b>를 그리는 데 필요한 전부.

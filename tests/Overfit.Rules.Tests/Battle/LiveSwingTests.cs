@@ -162,6 +162,5 @@ public class LiveSwingTests
         string line = log.Lines.Single(l => l.StartsWith("[dodge]", StringComparison.Ordinal));
         line.ShouldContain($" air={seen.Airborne} ", Case.Sensitive, "공중이 관측이 아니라 창이 닫힌 틱의 값이다");
         line.ShouldContain($" dist={seen.Distance:0} ", Case.Sensitive, "거리가 관측이 아니라 창이 닫힌 틱의 값이다");
-        line.ShouldContain($" charge={seen.ChargeTier}", Case.Sensitive);
     }
 }

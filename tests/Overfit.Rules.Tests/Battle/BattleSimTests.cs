@@ -1239,7 +1239,7 @@ public class BattleSimTests
     [Fact]
     public void 마무리를_받아쳤을_때만_보스가_굳는다()
     {
-        // 상은 **최대 차지 한 번 들어갈 길이**이고, 그 길이를 bosses.json 이 정한다 —
+        // 상은 **2연격 한 번 들어갈 길이**이고, 그 길이를 bosses.json 이 정한다 —
         // BossDataTests 가 그 산수를 본다. "받아쳤다 → 제일 센 걸 꽂는다" 가 한 동작으로
         // 이어지는 것이 이 숫자의 전부다.
         //
@@ -1421,19 +1421,20 @@ public class BattleSimTests
     private const double _lateReact = 0.10;
 
     [Fact]
-    public void 실제_1단계에서_마무리를_받아치면_풀차지가_들어간다()
+    public void 실제_1단계에서_마무리를_받아치면_2연격이_들어간다()
     {
         // **유저가 요청한 고리 전체를 한 줄로 못박는다** (이슈 #53): "3타 패리시 경직이 훨씬
         // 길어야합니다. 풀차지를 해서 공격을 할 수 있을만큼."
+        // 차지는 2번 PR(#59)에서 2연격으로 바뀌었다 — 상의 뜻(제일 센 것을 꽂는다)은 그대로다.
         //
         // 이 테스트가 **1단계**인 것이 요점이다 — 유저가 실제로 하고 있는 단계가 여기라, 여기서 안
         // 서면 요청받은 것이 하나도 안 된 것이다. 1단계의 마무리도 빨간 가드 불가이고(이슈 #53 ·
         // 유저 결정), 붙들고 버티는 사람은 거기서 깨지고 받아친 사람은 보스를 굳힌다.
         FighterConfig f = TestConfigs.Fighter();
-        double lead = f.ChargeTiers[^1].Seconds + f.Combo[0].Active;
+        double lead = TestConfigs.ComboLead(f);
 
         RealFinisherStagger().ShouldBeGreaterThanOrEqualTo(lead,
-            $"1단계 마무리를 받아쳤는데 경직이 최대 차지({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
+            $"1단계 마무리를 받아쳤는데 경직이 2연격({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
     }
 
     /// <summary>

@@ -85,12 +85,12 @@ public partial class Battle : Node2D
     private int _lastFeintCount;
     private bool _lastAttackActive;
 
-    /// <summary>지난 틱에 칼질(공격 · 차지) 중이었나. 꺼졌다 켜진 틱이 새 칼질이다 (이슈 #54).</summary>
+    /// <summary>지난 틱에 칼질 중이었나. 꺼졌다 켜진 틱이 새 칼질이다 (이슈 #54).</summary>
     private bool _lastSwinging;
-    private bool _walking;
 
-    /// <summary>지난 틱의 차지 단계. 늘어난 순간이 "단계가 올랐다" 는 사건이다 — 규칙 층에 콜백을 안 달고 여기서 견준다.</summary>
-    private int _lastChargeTier;
+    /// <summary>지난 틱의 칼질 번호. 1타가 끝나는 틱에 이어진 2타는 행동이 Attack 그대로라, 이 번호가 바뀐 것으로 본다.</summary>
+    private int _lastComboStep;
+    private bool _walking;
 
     /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
     private int _guardBreaks;
@@ -123,23 +123,10 @@ public partial class Battle : Node2D
     public bool FighterAttackActive => !_broken && !_over && _sim.Fighter.AttackActive;
 
     /// <summary>
-    /// 지금 차지를 모으고 있나. 위와 같이 <b>디버그 전용 읽기</b>다 — 스크린샷이 "모으는 것이
-    /// 보이는가" 를 증명하려면 규칙에게 물어보고 셔터를 눌러야 한다. 프레임 수를 세면
-    /// 차지 시간을 데이터에서 고치는 순간 조용히 어긋난다(이슈 #38 에서 밟은 그 실패다).
+    /// 지금 칼질이 몇 번째인가 (0 = 1타). 디버그 전용 읽기다 — 스크린샷이 2타를 노리려면 규칙에게 물어야 한다.
+    /// 프레임을 세면 2타의 선딜을 데이터에서 고치는 날 조용히 다른 순간이 찍힌다.
     /// </summary>
-    public bool FighterCharging => !_broken && !_over && _sim.Fighter.Charging;
-
-    /// <summary>
-    /// 차지를 얼마나 모았나(0~1). 위와 같이 디버그 전용 읽기다 — <b>중간 차지</b>를 찍으려면
-    /// "모으는 중" 만으로는 모자라고 어디쯤인지를 알아야 한다. 프레임을 세는 대신 이것을 본다.
-    /// </summary>
-    public double FighterChargeProgress => _broken || _over ? 0 : _sim.Fighter.ChargeProgress;
-
-    /// <summary>
-    /// 차지가 <b>최대</b>에 닿았나. 위와 같이 디버그 전용 읽기다 — "모으는 중" 과 "다 모았다" 가
-    /// 화면에서 갈리는지는 두 장을 나란히 놓아야만 증명된다.
-    /// </summary>
-    public bool FighterChargeMaxed => !_broken && !_over && _sim.Fighter.ChargeMaxed;
+    public int FighterComboStep => _broken || _over ? 0 : _sim.Fighter.ComboStep;
 
     /// <summary>
     /// 지금 <b>방어 자세</b>인가. 위와 같이 디버그 전용 읽기다 — 자세는 누르는 그 틱에 서지만
@@ -272,10 +259,8 @@ public partial class Battle : Node2D
         _lastFighterHealth = _sim.Fighter.Health;
         _lastBossHealth = _sim.Boss.Health;
 
-        // 칼질이 시작하는 장과 칼이 나가는 장을 건넨다 (이슈 #54). 차지 자세는 그 사이의 **선딜 마지막 장**
-        // — 칼이 나가는 장 바로 앞이다. 뷰가 fighters.json 을 직접 읽지 않게 여기서 건네준다.
-        _fighterView.Load(
-            _fighterConfig.Sprite, _fighterConfig.Combo[0].StartFrame, _fighterConfig.Combo[0].BladeFrame);
+        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59).
+        _fighterView.Load(_fighterConfig.Sprite, Swings(_fighterConfig));
         _bossView.Load(_bossConfig.Sprite);
 
         if (GetTree().DebugCollisionsHint)
@@ -378,8 +363,7 @@ public partial class Battle : Node2D
         // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
         // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
         //
-        // 공격과 패리는 **둘 다** 싣는다 (이슈 #40 · #47). 엣지가 시작하고 레벨이 붙든다 —
-        // 누른 그 틱에는 둘이 같이 참이라 차지/패리가 곧장 서고, 손을 떼면 레벨이 꺼진다.
+        // 패리는 엣지와 레벨을 **둘 다** 싣는다 (이슈 #47) — 엣지가 시작하고 레벨이 붙든다.
         // 엣지를 레벨로 바꿔 한 칸으로 줄이지 않는 이유는 InputFrame 의 주석에 적어 뒀다.
         //
         // ⚠ 패리는 **여전히 엣지에서 즉시 시작한다.** 레벨을 보고 "탭인가 홀드인가" 를 기다렸다
@@ -391,7 +375,6 @@ public partial class Battle : Node2D
             Input.IsActionJustPressed("dash"),
             Input.IsActionJustPressed("parry"),
             Input.IsActionJustPressed("attack"),
-            AttackHeld: Input.IsActionPressed("attack"),
             ParryHeld: Input.IsActionPressed("parry"));
     }
 
@@ -460,33 +443,25 @@ public partial class Battle : Node2D
             _bossView.Hit();
         }
 
-        // 새 칼질이 시작된 **그 틱** (이슈 #54). 차지 → 공격은 같은 칼질이라 안 센다.
-        // 렌더 프레임이 아니라 여기(물리 틱)서 보는 이유는 FighterView.SwingBegan 의 주석에 적었다 —
-        // 한 칼질이 끝난 틱과 다음 칼질이 시작한 틱이 한 렌더 프레임에 겹칠 수 있다.
-        bool swinging = _sim.Fighter.Action is FighterAction.Attack or FighterAction.Charge;
-        if (swinging && !_lastSwinging)
+        // 새 칼질이 시작된 **그 틱** (이슈 #54) — 1타든, 1타가 끝나는 틱에 이어진 2타든(설계 §5.1). 2타는 행동이
+        // Attack 그대로라 "행동이 바뀌었나" 로는 못 본다: 몇 번째 칼질인지가 바뀐 것을 본다. 렌더 프레임이 아니라
+        // 여기(물리 틱)서 보는 이유는 FighterView.SwingBegan 의 주석에 적었다.
+        bool swinging = _sim.Fighter.Action == FighterAction.Attack;
+        int step = _sim.Fighter.ComboStep;
+        if (swinging && (!_lastSwinging || step != _lastComboStep))
         {
-            _fighterView.SwingBegan();
+            _fighterView.SwingBegan(step);
         }
 
         _lastSwinging = swinging;
+        _lastComboStep = step;
 
         // 판정이 서는 **그 틱**에만 한 번. 계속 참인 동안 매 프레임 섬광을 내면 번쩍임이 아니라 조명이 된다.
         // 그림이 칼이 나가는 장으로 맞춰 서는 것도 이 틱이다 — 시트의 시계에 맡기지 않는다(이슈 #54).
         if (_sim.Fighter.AttackActive && !_lastAttackActive)
         {
-            _fighterView.AttackActive(_sim.Fighter.ChargeTier);
+            _fighterView.AttackActive();
         }
-
-        // 차지 단계가 오른 **그 틱**. 모으는 중이 아니면 0 으로 되돌려 다음 차지의 첫 단계도 사건이 되게 한다.
-        int tier = _sim.Fighter.Charging ? _sim.Fighter.ChargeTier : 0;
-        if (tier > _lastChargeTier)
-        {
-            _fighterView.ChargeTierUp(_sim.Fighter.ChargeMaxed);
-            Log.Debug("charge", () => $"tier={tier} max={_sim.Fighter.ChargeMaxed} tick={_sim.Ticks}");
-        }
-
-        _lastChargeTier = tier;
 
         _lastFighterHealth = _sim.Fighter.Health;
         _lastBossHealth = _sim.Boss.Health;
@@ -646,10 +621,8 @@ public partial class Battle : Node2D
             Pose(),
             _sim.Fighter.Invulnerable,
             _sim.Fighter.Locked,
-            _sim.Fighter.ChargeProgress,
-            _sim.Fighter.ChargeMaxed,
             // 남은 스태미나를 **비율로** 넘긴다 (이슈 #47) — 최대값의 사본을 뷰에 두면
-            // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다(차지 링과 같은 규약이다).
+            // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다.
             _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina));
 
         _bossView.Show(new BossFrame(
@@ -685,7 +658,6 @@ public partial class Battle : Node2D
         {
             FighterAction.Dash => FighterPose.Dash,
             FighterAction.Attack => FighterPose.Attack,
-            FighterAction.Charge => FighterPose.Charge,
             FighterAction.Guard => FighterPose.Guard,
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
@@ -756,5 +728,18 @@ public partial class Battle : Node2D
     {
         using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
         return HitShapeTable.Parse(file.GetAsText(), path);
+    }
+
+    /// <summary>규칙의 칼질 칸 → 뷰의 시트. 뷰가 fighters.json 을 직접 안 읽게 여기서 옮겨 준다.</summary>
+    private static SwingSheet[] Swings(FighterConfig fighter)
+    {
+        var sheets = new SwingSheet[fighter.Combo.Count];
+        for (int i = 0; i < sheets.Length; i++)
+        {
+            ComboStepDef s = fighter.Combo[i];
+            sheets[i] = new SwingSheet(s.Anim, s.Fps, s.StartFrame, s.BladeFrame);
+        }
+
+        return sheets;
     }
 }

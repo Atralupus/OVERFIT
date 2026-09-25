@@ -50,28 +50,6 @@ public sealed class ComboStepDef
 }
 
 /// <summary>
-/// 차지 한 단계. <c>data/fighters.json</c> 의 <c>charge_tiers</c> 한 칸이고,
-/// <b>목록의 순서가 곧 단계 번호</b>다 (0 = 안 모은 것).
-///
-/// <para>
-/// 왜 구간인가 — 연속 배수가 더 단순한데도 구간을 고른 이유는 <b>최대에 닿았는지를 화면이
-/// 말해야 하기 때문</b>이다 (이슈 #40). 2초를 세라고 하면서 "거의 최대" 와 "최대" 를 같은
-/// 그림으로 두면 아무도 못 센다. 게다가 피해는 정수라 연속 배수는 반올림에서 이웃한 값들이
-/// 같은 수로 뭉개진다 — 눈에도 안 보이고 숫자로도 안 갈리는 차이는 없는 차이다.
-/// 구간이면 단계 번호 하나가 계측에 그대로 실려(<see cref="DodgeEvent.ChargeTier"/>) 학습
-/// 데이터에도 남는다.
-/// </para>
-/// </summary>
-public sealed class ChargeTierDef
-{
-    /// <summary>이 단계에 들어가는 <b>하한</b> 시간(초). 첫 칸은 0 이어야 한다 — 그냥 누른 것이 0단계다.</summary>
-    public required double Seconds { get; init; }
-
-    /// <summary><see cref="ComboStepDef.Damage"/> 에 곱할 배수.</summary>
-    public required double DamageMultiplier { get; init; }
-}
-
-/// <summary>
 /// 캐릭터 한 종의 수치. <c>data/fighters.json</c> 의 모양이고 키는 snake_case 로 변환된다.
 /// <b>여기 없는 수치를 C# 에 상수로 두지 않는다.</b>
 /// </summary>
@@ -133,21 +111,13 @@ public sealed class FighterConfig
     public required double ParryCost { get; init; }
 
     /// <summary>
-    /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 지금은 1타 하나.
-    /// 첫 칸이 J 를 눌렀을 때 나가는 칼이다.
+    /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 1타 · 2타. 첫 칸이 J 를 눌렀을 때 나가는
+    /// 칼이고, 칼질 도중 J 를 또 누르면 그 칼질이 끝나는 틱에 다음 칸이 이어진다.
     /// </summary>
     public required List<ComboStepDef> Combo { get; init; }
 
-    /// <summary>칼질마다 드는 스태미나 — 누를 때(1타) 한 번씩.</summary>
+    /// <summary>칼질마다 드는 스태미나 — 1타는 누를 때, 2타는 이을 때(설계 §5.1: 타마다 14).</summary>
     public required double AttackCost { get; init; }
-
-    /// <summary>
-    /// 차지 단계표. <b>시간 오름차순</b>이고 첫 칸은 0초 · 배수 1 이다(그냥 누른 것).
-    /// <b>마지막 칸의 <see cref="ChargeTierDef.Seconds"/> 가 곧 최대 차지 시간</b>이라
-    /// 따로 키를 두지 않는다 — 두 곳에 적으면 갈린다.
-    /// 순서와 첫 칸의 규약은 <c>FighterDataTests</c> 가 지킨다.
-    /// </summary>
-    public required List<ChargeTierDef> ChargeTiers { get; init; }
 
     // ── 가드 (이슈 #47 · #53) ───────────────────────────────────────────────────
     //

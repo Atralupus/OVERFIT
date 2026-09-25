@@ -22,6 +22,7 @@ public class SwordTests
 
     [Theory]
     [InlineData("martial_hero/attack/4")]
+    [InlineData("martial_hero/attack2/4")]
     public void 칼끝이_보스_몸통에_닿으면_맞고_반_px_밖이면_안_맞는다(string id)
     {
         // 경계는 그림이 정한다 — 칼의 앞끝은 모양 외곽 상자의 앞끝(X1)이고, 보스 몸통의 앞끝이 거기 닿으면 맞는다

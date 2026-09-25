@@ -55,7 +55,7 @@ public sealed class BattleSim
 
     /// <summary>
     /// 칼질 단계마다의 칼 — <c>hitboxes.json</c> 에서 그림의 흰 궤적으로 뽑은 모양 (이슈 #59 · 설계 §5.1).
-    /// 판을 세울 때 한 번 찾는다(<see cref="Swords"/>).
+    /// 판을 세울 때 한 번 찾는다(<see cref="Swords"/>). 칼질마다 모양이 다르다 — 1타와 2타는 다른 장의 궤적이다.
     /// </summary>
     private readonly HitShape[] _swords;
 
@@ -552,10 +552,8 @@ public sealed class BattleSim
             Direction: direction,
             Airborne: !Fighter.Grounded,
             Distance: Math.Abs(Fighter.X - Boss.X),
-            // 모으고 선 것도 욕심이다 (이슈 #40). 차지는 휘두르는 0.5초가 아니라 최대 2.08초를
-            // 무방비로 서 있는 것이라, 여기서 빼면 축이 가장 크게 건 순간에만 눈을 감는다.
-            GreedWindow: Fighter.Action is FighterAction.Attack or FighterAction.Charge,
-            ChargeTier: Fighter.ChargeTier,
+            // 칼질 중이면 욕심이다 — 1타든 2타든 (설계 §7.2). 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다.
+            GreedWindow: Fighter.Action == FighterAction.Attack,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
             // 이 셋이 없으면 만들어지지 않는다.
@@ -582,7 +580,7 @@ public sealed class BattleSim
         // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
         //
-        // air · dist · charge 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
+        // air · dist 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
         // 먹은 틱에 지어 두고 창이 닫히는 틱에 여기로 오므로, 그때의 라이브 값을 읽으면 한 줄에 두 틱이 섞인다 —
         // 땅에서 사거리 안에서 피한 관측이 "공중 · 사거리 밖" 으로 찍혔다. hp · qi · stam 은 관측에 없는 값이라
         // 지금 값이다: 판정의 결과가 몸에 실린 뒤의 잔량이다.
@@ -591,8 +589,7 @@ public sealed class BattleSim
             + $" dist={evt.Distance:0} hp={Fighter.Health} qi={Fighter.Qi}"
             // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
             // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
-            + $" stam={Fighter.Stamina:0}"
-            + $" charge={evt.ChargeTier}");
+            + $" stam={Fighter.Stamina:0}");
     }
 
     /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
@@ -622,7 +619,7 @@ public sealed class BattleSim
             return;
         }
 
-        HitShape sword = _swords[0];
+        HitShape sword = _swords[Fighter.ComboStep];
         var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
         _attackTested = (sword, at);
         if (ShapeHit.Test(sword, at, Boss.Body) != ShapeContact.Overlap)
@@ -630,8 +627,6 @@ public sealed class BattleSim
             return;
         }
 
-        // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
-        // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
         int damage = Fighter.AttackDamage;
         Boss.TakeDamage(damage);
         _struckThisSwing = true;
@@ -644,7 +639,7 @@ public sealed class BattleSim
         if (Log.IsEnabled(LogLevel.Debug))
         {
             double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-            Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
+            Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} step={Fighter.ComboStep} gap={gap:0} tick={Ticks}");
         }
     }
 

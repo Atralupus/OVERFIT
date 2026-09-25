@@ -56,9 +56,10 @@ public class BossDataTests
     }
 
     [Fact]
-    public void 경직_하나만으로_최대_차지가_들어간다()
+    public void 경직_하나만으로_2연격이_들어간다()
     {
-        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다 (이슈 #47). 상은 **최대 차지 한 번**이다.
+        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다 (이슈 #47). 상은 **2연격 한 번**이다 (이슈 #59 · 설계 §5.1)
+        // — 전에는 최대 차지였고, 차지가 없어지며 그 자리를 2타(1타의 세 배)가 받았다.
         //
         // ⚠ **패턴 간격을 더해서 재지 않는다** (이슈 #53). 전에는 경직 1.6 + 간격 0.8 = 2.4 로 쟀는데
         // 그 셈은 둘을 다 밟는다: 간격은 경직이 **풀린 뒤**의 시간이라 한 동작으로 안 이어지고,
@@ -71,12 +72,11 @@ public class BossDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                // 칼이 닿기까지 = 최대 차지 시간 + 판정. **붙든 시간이 곧 선딜**이라 선딜이 안 더해진다.
-                // 지금 파이터는 칼질 한 칸뿐이다 — 그 칸(Combo[0])의 판정 시간을 쓴다.
-                double lead = c.ChargeTiers[^1].Seconds + c.Combo[0].Active;
+                // 칼이 닿기까지 = 1타 전체 + 2타의 선딜 + 판정 (TestConfigs.ComboLead).
+                double lead = TestConfigs.ComboLead(c);
                 boss.FinisherParryStagger.ShouldBeGreaterThanOrEqualTo(lead,
                     $"{id}: 경직 {boss.FinisherParryStagger} 초에"
-                    + $" {who} 의 최대 차지({lead:0.000}초)가 안 들어간다");
+                    + $" {who} 의 2연격({lead:0.000}초)가 안 들어간다");
             }
         }
     }
@@ -93,9 +93,9 @@ public class BossDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                double lead = c.ChargeTiers[^1].Seconds + c.Combo[0].Active;
+                double lead = TestConfigs.ComboLead(c);
                 (boss.FinisherParryStagger - lead).ShouldBeGreaterThanOrEqualTo(0.15,
-                    $"{id}: {who} 의 최대 차지({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
+                    $"{id}: {who} 의 2연격({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
             }
         }
     }

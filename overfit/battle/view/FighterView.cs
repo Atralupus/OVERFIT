@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Godot;
 using Overfit.Core;
 
@@ -9,7 +10,7 @@ namespace Overfit.Battle.View;
 ///
 /// <para>
 /// 평생 <c>idle</c> 만 재생하던 것이 이 화면의 가장 큰 문제였다. 뷰가 부르는 것은
-/// <c>idle · run · attack · hit · death</c> 다섯이고 대시·방어 전용 그림은 없다 —
+/// <c>idle · run · attack · attack2 · hit · death</c> 여섯이고 대시·방어 전용 그림은 없다 —
 /// 그 둘은 <b>이펙트로 만든다</b>(잔상 · 링 · 섬광). 2D 액션에서 대시와 방어의 피드백은
 /// 원래 애니메이션이 아니라 이펙트가 결정하므로 대체품이 아니라 제 모양이다.
 /// </para>
@@ -55,27 +56,17 @@ public partial class FighterView : Node2D
     /// 유일하게 보여줘야 할 그림을 섬광이 덮고 있었다(이슈 #38).
     ///
     /// <para>
-    /// 다른 섬광들(최대 차지 2.60 · 피격 2.40)이 센 것은 그 자리에 <b>그림이 없기 때문</b>이다:
+    /// 다른 섬광(피격 2.40)이 센 것은 그 자리에 <b>그림이 없기 때문</b>이다:
     /// 팩에 그 모션이 없어 섬광이 곧 피드백이다. 공격은 반대다 — 작가가 흰 궤적을
     /// 이미 그려 뒀으므로, 여기서 할 일은 말을 더 하는 것이 아니라 그 그림을 안 가리는 것이다.
     /// </para>
     /// </summary>
     private static readonly Color _attackFlash = new(1.25f, 1.20f, 1.00f);
     private static readonly Color _slashColor = new(1.00f, 0.92f, 0.72f, 0.95f);
+
+    /// <summary>2타의 칼 섬광 — 1타의 세 배가 실린 칼이라 희게 탄다(옛 최대 차지의 색). 닿는 곳은 모양이 말한다.</summary>
+    private static readonly Color _heavySlashColor = new(1.00f, 0.97f, 0.72f, 1.00f);
     private static readonly Color _hitFlash = new(2.40f, 0.45f, 0.45f);
-
-    /// <summary>
-    /// 모으는 동안의 몸 색. <b>덥혀지듯 붉게 간다</b> — 최대(<see cref="_chargeMaxTint"/>)와
-    /// 같은 흰색으로 두면 "모으는 중" 과 "다 모았다" 가 한 그림이 되어, 2초를 셀 방법이 사라진다.
-    /// </summary>
-    private static readonly Color _chargeTint = new(1.35f, 1.00f, 0.70f);
-
-    /// <summary>
-    /// <b>최대</b> 차지의 몸 색. 희게 탄다 — 무적 창(<see cref="_invulnerableTint"/>)과 비슷한 밝기인데,
-    /// 그 둘은 같은 순간에 절대 안 나온다(대시 중에는 못 모은다). 색보다 중요한 것은 <b>한 번 터지는
-    /// 섬광과 멈춘 링</b>이고(<see cref="ChargeTierUp"/>), 이 색은 그 뒤로 계속 남아 "아직 최대다" 를 말한다.
-    /// </summary>
-    private static readonly Color _chargeMaxTint = new(2.10f, 2.10f, 1.90f);
 
     /// <summary>
     /// <b>방어 자세</b>의 몸 색 (이슈 #47 · #53). 차갑고 단단한 쪽이다.
@@ -115,20 +106,11 @@ public partial class FighterView : Node2D
 
     private static readonly Color _guardBreakFlash = new(2.30f, 1.70f, 2.70f);
 
-    /// <summary>
-    /// <b>최대 차지</b>에 닿은 순간의 섬광. 이 게임에서 가장 센 섬광 중 하나인 것이 일부러다 —
-    /// 최대에 닿은 것을 못 알아채면 2초를 셀 방법이 없다. (패리가 같은 세기를 쓰던 때가 있었는데,
-    /// 그건 이슈 #53 이 뺐다: 판정마다 터지는 "지금이다" 는 아무 말도 아니다.)
-    /// </summary>
-    private static readonly Color _chargeMaxFlash = new(2.60f, 2.60f, 2.10f);
-
-    private static readonly Color _chargeRingColor = new(1.00f, 0.72f, 0.30f, 0.85f);
-    private static readonly Color _chargeMaxRingColor = new(1.00f, 0.97f, 0.72f, 1.00f);
     private AnimatedSprite2D _sprite = null!;
     private RingBurst _ring = null!;
 
     /// <summary>
-    /// 공격 섬광. 방어·차지 링과 <b>자리가 달라</b> 노드를 따로 둔다 — 그쪽은 몸을 감싸고
+    /// 공격 섬광. 방어 링과 <b>자리가 달라</b> 노드를 따로 둔다 — 그쪽은 몸을 감싸고
     /// 공격은 칼이 닿는 앞쪽에 선다. 한 노드를 옮겨 쓰면 이전 섬광이 날아가는 중에
     /// 자리가 바뀌어 화면을 가로질러 미끄러진다.
     /// </summary>
@@ -138,20 +120,13 @@ public partial class FighterView : Node2D
     private int _facing = 1;
 
     /// <summary>
-    /// 칼질이 시작하는 장 (<c>fighters.json</c> 의 <c>combo</c> 한 칸의 <c>start_frame</c>). 탭도 차지도 여기서
-    /// 시작한다 — 이슈 #54 에서 선딜이 0.0833 이 되면서 시트의 앞 장(칼을 뒤로 빼는 동작)을 건너뛴다.
+    /// 칼질마다 그릴 시트 — 1타 · 2타 (<c>fighters.json</c> 의 <c>combo</c>, <c>Battle</c> 이 옮겨 준다).
     /// 여기 숫자를 박으면 시트를 갈아끼울 때 조용히 엉뚱한 장에서 시작한다.
     /// </summary>
-    private int _startFrame;
+    private SwingSheet[] _swings = System.Array.Empty<SwingSheet>();
 
-    /// <summary>
-    /// 선딜 동안 멈춰 설 장 — 칼이 나가는 장 <b>바로 앞</b>, 칼을 끝까지 뒤로 뺀 그림이다.
-    /// 차지 자세가 이 장이고, 탭의 선딜도 이 장에서 칼이 나가기를 기다린다.
-    /// </summary>
-    private int _holdFrame;
-
-    /// <summary>칼이 실제로 지나가는 장 (<c>combo</c> 한 칸의 <c>blade_frame</c>). 판정이 서는 틱에 여기로 맞춰 세운다.</summary>
-    private int _bladeFrame;
+    /// <summary>지금 그리는 칼질이 몇 번째인가 (<see cref="SwingBegan"/> 이 정한다).</summary>
+    private int _swing;
 
     /// <summary>
     /// 이번 칼질에서 칼이 이미 나갔나. <b>규칙이 알려 준다</b>(<see cref="AttackActive"/>) —
@@ -190,15 +165,16 @@ public partial class FighterView : Node2D
 
     /// <summary>
     /// 스프라이트를 갈아끼운다. id 는 data/fighters.json 의 sprite 값이다.
-    /// <paramref name="startFrame"/> · <paramref name="bladeFrame"/> 은 칼질이 시작하는 장과 칼이 나가는 장 —
-    /// 부르는 쪽(<c>Battle</c>)이 데이터에서 읽어 준다. 뷰가 fighters.json 을 직접 읽으면 규칙과 뷰가
-    /// 같은 파일을 두 번 읽는다. 멈춰 설 장(칼이 나가기 바로 앞)은 둘에서 나온다.
+    /// <paramref name="swings"/> 는 칼질마다의 시트 — 부르는 쪽(<c>Battle</c>)이 데이터에서 옮겨 준다.
+    /// 뷰가 fighters.json 을 직접 읽으면 규칙과 뷰가 같은 파일을 두 번 읽는다.
     /// </summary>
-    public void Load(string spriteId, int startFrame, int bladeFrame)
+    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings)
     {
-        _bladeFrame = System.Math.Max(0, bladeFrame);
-        _startFrame = System.Math.Clamp(startFrame, 0, _bladeFrame);
-        _holdFrame = System.Math.Max(_startFrame, _bladeFrame - 1);
+        _swings = new SwingSheet[swings.Count];
+        for (int i = 0; i < _swings.Length; i++)
+        {
+            _swings[i] = swings[i];
+        }
 
         var frames = GD.Load<SpriteFrames>($"res://assets/spriteframes/{spriteId}.tres");
         if (frames is null)
@@ -234,10 +210,10 @@ public partial class FighterView : Node2D
         Trail(frame, dt);
         Ring(frame);
 
-        // 칼질(탭 · 차지)은 이름이 아니라 **장**으로 말한다 — 같은 attack 시트에서 어느 장에 서 있느냐가
+        // 칼질(1타 · 2타)은 이름이 아니라 **장**으로 말한다 — 같은 시트에서 어느 장에 서 있느냐가
         // 선딜인지 칼이 나간 뒤인지를 가르는데, 이름만 보는 Animate 는 그 둘을 구별하지 못한다.
-        // 맞았거나 죽었으면 그 그림이 이긴다: 모으던 것은 이미 규칙에서 끊겼다.
-        bool swinging = (frame.Pose is FighterPose.Attack or FighterPose.Charge) && !_dead && _hitPoseLeft <= 0;
+        // 맞았거나 죽었으면 그 그림이 이긴다: 칼질은 규칙에서 안 끊겼지만 그림은 맞은 자세가 이긴다.
+        bool swinging = frame.Pose == FighterPose.Attack && !_dead && _hitPoseLeft <= 0;
         if (swinging && !_bladeOut)
         {
             HoldWindup();
@@ -255,12 +231,14 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 새 칼질이 시작됐다 — 쉬던 몸이 공격이나 차지로 들어선 <b>그 틱</b>이다. <c>Battle</c> 이 물리 틱마다
+    /// 새 칼질이 시작됐다 — 1타든, 1타가 끝나는 틱에 이어진 2타든 <b>그 틱</b>이다. <c>Battle</c> 이 물리 틱마다
     /// 견줘 부른다. 렌더 프레임이 자세만 보고 알아내게 두면, 한 칼질이 끝난 틱과 다음 칼질이 시작한 틱이
-    /// 한 렌더 프레임에 겹칠 때(60fps 아래) 새 칼질의 선딜이 지난 칼질의 잔상 장을 이어받는다.
+    /// 한 렌더 프레임에 겹칠 때(60fps 아래 · 그리고 2타는 늘 그렇다) 새 칼질의 선딜이 지난 칼질의 잔상 장을 이어받는다.
     /// </summary>
-    public void SwingBegan()
+    /// <param name="step">몇 번째 칼질인가 (0 = 1타).</param>
+    public void SwingBegan(int step)
     {
+        _swing = step;
         _bladeOut = false;
         _windupFresh = true;
     }
@@ -273,72 +251,53 @@ public partial class FighterView : Node2D
     /// 여기서 하는 일은 셋이다. <b>그림을 칼이 나가는 장으로 맞춰 세우고</b>(이슈 #54), 몸을 <b>살짝</b>
     /// 밝히고(<see cref="_attackFlash"/>), 칼이 닿는 앞쪽에 섬광을 하나 세운다. 몸 섬광만으로는 130px 짜리
     /// 캐릭터에서 안 읽혀서 앞쪽 섬광을 더했었는데, 그 뒤 몸 섬광을 세게 올려 놓는 바람에 <b>정작 칼 그림을
-    /// 덮고 있었다</b>(이슈 #38). 앞쪽 섬광이 세기를 맡으므로 몸은 약해도 된다.
+    /// 덮고 있었다</b>(이슈 #38). 앞쪽 섬광이 세기를 맡으므로 몸은 약해도 된다. 2타의 섬광은 희게 타고 스파크가
+    /// 튄다 — 닿는 곳은 모양이 말하고, 실린 것(1타의 세 배)은 색이 말한다.
     /// </para>
     ///
     /// <para>
     /// <b>맞춰 세우는 것이 이 메서드의 첫 일이다.</b> 전에는 시트가 자기 시계로 흘러 칼이 나가는 장에
     /// "마침" 닿기를 기다렸는데, 붙들다 놓은 칼은 남은 선딜 없이 놓은 틱에 판정이 서므로 멈춰 있던
     /// 선딜 장을 한 장 더 돌고서야 칼이 나갔다 — 판정은 이미 끝나고 후딜에 칼이 보였다(이슈 #54 전의
-    /// battle-5e-charged-swing 이 칼을 뒤로 뺀 자세로 찍혀 있었다). 선딜이 5틱이 된 지금은 사람의 탭도
-    /// 대개 그 길로 온다(50ms 넘게 눌리면 차지로 들어갔다 나온다) — 흘려보내면 거의 모든 칼질이 늦는다.
+    /// battle-5e-charged-swing 이 칼을 뒤로 뺀 자세로 찍혀 있었다). 지금은 선딜 그림이 칼 앞 장에 멈춰 선다
+    /// (<see cref="HoldWindup"/>) — 여기서 안 넘기면 1타든 2타든 칼이 아예 안 나간다.
     /// </para>
     /// </summary>
-    /// <param name="tier">모아서 휘두른 단계 (0 = 그냥 한 대). <b>반지름은 안 건드린다</b> —
-    /// ⚠ 칼이 그림의 모양이 되면서(이슈 #59) 이 링은 더 이상 사거리를 말하지 않는다 — 링은 4번 PR(연출)이 걷는다.
-    /// 모은 값은 <b>스파크와 색</b>이 말한다: 닿는 곳은 같고 실린 것이 다르다.</param>
-    public void AttackActive(int tier)
+    public void AttackActive()
     {
         _bladeOut = true;
-        ShowBlade(_bladeFrame);
+        ShowBlade(Sheet.BladeFrame);
 
         Flash(_attackFlash, _feel.FlashSeconds);
         _slash.Position = new Vector2(
             _facing * (float)_feel.AttackRingX,
             (float)-_feel.RingOffsetY);
+        bool heavy = _swing > 0;
         _slash.Burst(
             (float)_feel.AttackRingFrom,
             (float)_feel.AttackRingTo,
             _feel.FlashSeconds * 2.2,
-            tier > 0 ? _chargeMaxRingColor : _slashColor,
-            sparks: tier > 0 ? _feel.SparkCount : 0,
+            heavy ? _heavySlashColor : _slashColor,
+            sparks: heavy ? _feel.SparkCount : 0,
             sparkLength: (float)(_feel.SparkLength * 0.5));
     }
 
-    /// <summary>
-    /// 차지 단계가 올랐다 (이슈 #40). <b>순간이라 상태가 아니다</b> — <c>Battle</c> 이 틱 전후를
-    /// 견줘 부른다.
-    ///
-    /// <para>
-    /// 최대와 중간을 <b>일부러 크게 다르게</b> 준다. 중간은 조용한 고리 하나지만 최대는
-    /// 섬광 + 스파크 + 흰 몸이다 — 최대에 닿은 것을 못 알아채면 플레이어는 2초를 셀 수가 없고,
-    /// 그러면 이 기술은 "언제 놓을지 모르는 기술" 이 된다.
-    /// </para>
-    /// </summary>
-    /// <param name="maxed">이번에 오른 단계가 최대인가.</param>
-    public void ChargeTierUp(bool maxed)
-    {
-        if (maxed)
-        {
-            Flash(_chargeMaxFlash, _feel.FlashSeconds);
-            _ring.Burst(
-                (float)_feel.ChargeRingTo,
-                (float)_feel.ParryRingTo,
-                _feel.BurstSeconds,
-                _chargeMaxRingColor,
-                _feel.SparkCount,
-                (float)_feel.SparkLength);
-            return;
-        }
+    /// <summary>지금 칼질의 시트. 목록이 비었으면(스프라이트가 없는 판) 빈 이름이라 아래 갈래가 전부 시트 없음으로 빠진다.</summary>
+    private SwingSheet Sheet => _swings.Length == 0 ? default : _swings[System.Math.Clamp(_swing, 0, _swings.Length - 1)];
 
-        _ring.Burst(
-            (float)_feel.ChargeRingTo,
-            (float)((_feel.ChargeRingTo + _feel.ChargeRingFrom) / 2),
-            _feel.BurstSeconds * 0.5,
-            _chargeRingColor,
-            sparks: 0,
-            sparkLength: 0);
+    /// <summary>
+    /// 이 칼질을 시트의 속도의 몇 배로 돌리나 — 2타는 같은 attack2 시트를 반속(6fps)으로 돈다(설계 §5.1).
+    /// 시트의 속도는 <c>.tres</c> 가 알고, 칼질의 속도는 데이터(<c>combo[].fps</c>)가 안다.
+    /// </summary>
+    private float SpeedFor(SwingSheet sheet)
+    {
+        double native = _sprite.SpriteFrames?.GetAnimationSpeed(sheet.Anim) ?? 0;
+        return native <= 0 ? 1.0f : (float)(sheet.Fps / native);
     }
+
+    /// <summary>시트가 있는가 — 없는 이름으로 Play 하면 엔진이 ERROR 를 찍는다(<see cref="Animate"/> 의 주석).</summary>
+    private bool HasSheet(SwingSheet sheet) =>
+        _sprite.SpriteFrames is { } frames && !string.IsNullOrEmpty(sheet.Anim) && frames.HasAnimation(sheet.Anim);
 
     /// <summary>맞았다. 붉은 플래시 + <c>hit</c> 자세. 화면 흔들림은 <c>Battle</c> 이 건다.</summary>
     public void Hit()
@@ -448,28 +407,13 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 자세가 서 있는 동안의 링. 방어와 차지가 <b>같은 노드를 쓴다</b> — 둘은 같은 순간에
-    /// 절대 안 나오고(모으는 중에는 방어를 못 누른다), 노드를 나누면 안 쓰는 링이 프레임마다
-    /// 자기 자리를 지키느라 코드만 두 벌이 된다.
-    ///
-    /// <para>
-    /// 차지 링은 몸으로 <b>조여 들고</b>, 방어 링은 <b>안 움직인다</b>. 최대에 닿으면 진행도가
-    /// 1 에서 멈추므로 차지 링도 멈추고, 그 <b>멈춤</b>이 "더 모을 것이 없다" 는 말이 된다.
-    /// </para>
+    /// 자세가 서 있는 동안의 링 — 방어 자세의 링이다. 차지 링이 이 노드를 같이 쓰던 자리였는데,
+    /// 차지는 2연격이 되며 없어졌다(이슈 #59).
     /// </summary>
     private void Ring(FighterFrame frame)
     {
-        if (frame.Pose == FighterPose.Charge)
-        {
-            float t = Mathf.Clamp((float)frame.ChargeProgress, 0.0f, 1.0f);
-            _ring.Charge(
-                Mathf.Lerp((float)_feel.ChargeRingFrom, (float)_feel.ChargeRingTo, t),
-                frame.ChargeMaxed ? _chargeMaxRingColor : _chargeRingColor);
-            return;
-        }
-
-        // 방어 링은 **안 움직인다** (이슈 #47). 차지는 조여 드는데 이것은 그대로 선다 —
-        // 버티는 동안 아무것도 안 변하는 것이 이 기술이고, 그 정지가 곧 그림이다.
+        // 방어 링은 **안 움직인다** (이슈 #47) — 버티는 동안 아무것도 안 변하는 것이 이 기술이고,
+        // 그 정지가 곧 그림이다.
         // 대신 남은 스태미나가 **밝기**로 빠진다: 바닥에 가까울수록 링이 꺼져 가, 깨지기 직전을
         // 숫자가 아니라 색으로 읽는다(HUD 의 스태미나 바를 볼 겨를이 없는 순간이다).
         //
@@ -487,38 +431,39 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 선딜 — 탭이든 차지든 같은 그림이다. <b>시작하는 장부터 돌리다가 칼이 나가기 바로 앞 장에서
-    /// 세운다.</b> 규칙이 "붙드는 것이 곧 선딜" 이라고 말하는 것과 그림이 같은 말을 한다: 탭은 길이 0 인
-    /// 차지이고, 둘 다 칼을 끝까지 뒤로 뺀 장에서 칼이 나가기를 기다린다.
+    /// 선딜 — 1타든 2타든 같은 규칙이다. <b>시작하는 장부터 돌리다가 칼이 나가기 바로 앞 장에서
+    /// 세운다.</b> 둘 다 칼을 끝까지 뒤로 뺀 장에서 칼이 나가기를 기다린다.
     ///
     /// <para>
-    /// 세우는 것이 핵심이다. <c>Play</c> 만 하고 두면 시트가 그대로 돌아 <b>모으는 중에 칼이 나간다.</b>
+    /// 세우는 것이 핵심이다. <c>Play</c> 만 하고 두면 시트가 그대로 돌아 <b>선딜 중에 칼이 나간다.</b>
     /// 칼이 나가는 순간은 이 메서드가 아니라 규칙이 정한다(<see cref="AttackActive"/>) — 여기서는 기다릴 뿐이다.
     /// </para>
     ///
     /// <para>
-    /// 지금 데이터(이슈 #54)에서는 시작하는 장과 멈추는 장이 같은 3번이라 누르자마자 그 자세로 선다.
-    /// 둘이 갈라지는 시트(시작 0 · 선딜 네 장)면 뒤로 빼는 동작을 실제로 감고 나서 멈춘다 — 선딜이 곧
-    /// 그 장수라(FighterDataTests) 탭은 멈춘 장을 제 길이만큼 보이고 판정 틱에 칼 장으로 넘어가며
-    /// (흘려보냈을 때와 같은 그림이다), 차지는 거기서 계속 선다.
+    /// 지금 데이터에서 1타는 시작하는 장과 멈추는 장이 같은 3번이라 누르자마자 그 자세로 선다(이슈 #54).
+    /// 2타는 둘이 갈라진다(시작 0 · 선딜 네 장) — 뒤로 빼는 동작을 반속으로 실제로 감고 나서 멈춘다. 선딜이 곧
+    /// 그 장수라(FighterDataTests) 멈춘 장을 제 길이만큼 보이고 판정 틱에 칼 장으로 넘어간다
+    /// (흘려보냈을 때와 같은 그림이다).
     /// </para>
     /// </summary>
     private void HoldWindup()
     {
-        if (_sprite.SpriteFrames is null || !_sprite.SpriteFrames.HasAnimation("attack"))
+        SwingSheet sheet = Sheet;
+        if (!HasSheet(sheet))
         {
             return;
         }
 
-        if (_windupFresh || _sprite.Animation != "attack")
+        if (_windupFresh || _sprite.Animation != sheet.Anim)
         {
             _windupFresh = false;
-            _sprite.Play("attack");
-            _sprite.SetFrameAndProgress(_startFrame, 0.0f);
-            AlignToGround("attack");
+            _sprite.Play(sheet.Anim, SpeedFor(sheet));
+            _sprite.SetFrameAndProgress(sheet.StartFrame, 0.0f);
+            AlignToGround(sheet.Anim);
         }
 
-        int hold = System.Math.Min(_holdFrame, _sprite.SpriteFrames.GetFrameCount("attack") - 1);
+        int last = _sprite.SpriteFrames!.GetFrameCount(sheet.Anim) - 1;
+        int hold = System.Math.Min(System.Math.Max(sheet.StartFrame, sheet.BladeFrame - 1), last);
         if (_sprite.Frame >= hold)
         {
             _sprite.Frame = hold;
@@ -537,9 +482,9 @@ public partial class FighterView : Node2D
     /// </summary>
     private void FollowBlade()
     {
-        if (_sprite.Animation != "attack")
+        if (_sprite.Animation != Sheet.Anim)
         {
-            ShowBlade(_bladeFrame + 1);
+            ShowBlade(Sheet.BladeFrame + 1);
         }
     }
 
@@ -549,17 +494,19 @@ public partial class FighterView : Node2D
     /// </summary>
     private void ShowBlade(int frame)
     {
-        if (_sprite.SpriteFrames is null || !_sprite.SpriteFrames.HasAnimation("attack"))
+        SwingSheet sheet = Sheet;
+        if (!HasSheet(sheet))
         {
             return;
         }
 
-        bool fresh = _sprite.Animation != "attack";
-        _sprite.Play("attack");
-        _sprite.SetFrameAndProgress(System.Math.Min(frame, _sprite.SpriteFrames.GetFrameCount("attack") - 1), 0.0f);
+        bool fresh = _sprite.Animation != sheet.Anim;
+        _sprite.Play(sheet.Anim, SpeedFor(sheet));
+        _sprite.SetFrameAndProgress(
+            System.Math.Min(frame, _sprite.SpriteFrames!.GetFrameCount(sheet.Anim) - 1), 0.0f);
         if (fresh)
         {
-            AlignToGround("attack");
+            AlignToGround(sheet.Anim);
         }
     }
 
@@ -576,9 +523,6 @@ public partial class FighterView : Node2D
         Color baseTint = frame.Locked ? _lockedTint
             : frame.Invulnerable ? _invulnerableTint
             : frame.Pose == FighterPose.Dash ? _dashTailTint
-            // 모으는 중 · 다 모았다는 **서로 다른 색**이어야 한다. 하나로 두면 최대에 닿은 순간이
-            // 섬광 한 번뿐이라, 그 0.34초를 놓치면 지금이 최대인지 알 방법이 없다.
-            : frame.Pose == FighterPose.Charge ? (frame.ChargeMaxed ? _chargeMaxTint : _chargeTint)
             // 방어 자세는 색 하나다 (이슈 #53) — 패리와 가드가 한 행동이라 갈라 칠할 것이 없다.
             : frame.Pose == FighterPose.Guard ? _guardTint
             : Colors.White;
@@ -619,9 +563,8 @@ public partial class FighterView : Node2D
         return pose switch
         {
             FighterPose.Run or FighterPose.Dash => "run",
-            // 차지도 attack 이다 — 다만 한 장에 멈춰 선다(HoldWindup). 여기 있는 이유는
-            // 맞거나 죽어서 차지가 끊긴 프레임에 이 갈래로 떨어지기 때문이다.
-            FighterPose.Attack or FighterPose.Charge => "attack",
+            // 칼질이 맞은 자세에 끊겼다 돌아오면 이 갈래로 떨어진다 — 지금 칼질의 시트다.
+            FighterPose.Attack => Sheet.Anim ?? "attack",
             // 방어 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 방어를 가른다.
             FighterPose.Guard => "idle",
             FighterPose.Hit => "hit",
@@ -646,7 +589,8 @@ public partial class FighterView : Node2D
         if (!_sprite.SpriteFrames.HasAnimation(name))
         {
             // 없는 이름으로 Play 하면 엔진이 ERROR: 를 찍고, 그건 헤드리스 판정(judge_headless)을
-            // 실패시킨다. 지금 팩에는 다섯이 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 확인한다)
+            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 다섯을 확인한다 — 2타의
+            // attack2 는 그 목록 밖이다)
             // 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
             Log.Warn("view", $"anim_missing name={name}");
             return;

@@ -173,7 +173,7 @@ public partial class ShotRunner : Node
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-8-result");
 
-        await Charging();
+        await Combo();
         await FirstStageFinisher();
         await Guarding();
         await Facing();
@@ -183,49 +183,38 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 차지 세 장 (이슈 #40). <b>모으는 중 · 최대 · 최대로 휘두른 칼.</b>
+    /// 2연격 두 장 (설계 §5.1). <b>2타의 선딜 · 2타의 칼.</b> 2타는 같은 attack2 시트를 반속으로 돌아 칼을 크게
+    /// 세운다 — 그것이 보여야 "크게 한 방" 이 읽힌다. 선딜 한가운데와 칼이 나가는 장을 나란히 둔다.
     ///
     /// <para>
-    /// 증명할 것은 <b>최대인지 아닌지가 화면에서 갈리는가</b> 하나다. 갈리지 않으면 플레이어는
-    /// 2초를 셀 방법이 없고, 그러면 이 기술은 "언제 놓을지 모르는 기술" 이 된다.
-    /// 그래서 두 장이 나란히 있어야 한다 — 한 장만으로는 "빛난다" 까지만 말한다.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>새 판에서, 보스에게서 물러나 찍는다.</b> 최대 차지는 백장의 빈 시간 아홉 짝 중 여섯에
-    /// 들어가지만(fighters.json 의 _note_charge_windup) 나머지 셋에서는 끊긴다 — 스크린샷이
-    /// 그 주사위를 같이 굴릴 이유가 없다. <b>설계가 성립하는지는 테스트가 증명하고, 화면에
-    /// 보이는지는 여기가 증명한다.</b> 사거리 밖으로 나가면 둘을 섞지 않고 그림만 볼 수 있다.
+    /// <b>새 판에서, 보스에게서 물러나 찍는다</b> — 판정과 섞지 않고 그림만 보려고. 맞으면 피격 자세가 이긴다.
     /// </para>
     /// </summary>
-    private async Task Charging()
+    private async Task Combo()
     {
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
 
-        // 보스에게서 멀어진다. **벽까지 가지 않는다** — 벽에 붙으면 몸이 화면 왼쪽 끝에서 잘려
-        // 링도 몸 색도 반만 보인다(실제로 그렇게 찍혔다). 0.8초면 336px 물러나 거리가 1296px 이고,
-        // 보스는 160px/s 로 따라오므로 세 장을 다 찍는 동안 가장 먼 판정(760px)이 닿지 않는다.
+        // 보스에게서 멀어진다. **벽까지 가지 않는다** — 벽에 붙으면 몸이 화면 왼쪽 끝에서 잘린다(실제로 그렇게 찍혔다).
         Hold("move_left", true);
         await Wait(0.8);
         Hold("move_left", false);
 
-        Hold("attack", true);
-
-        // **프레임을 세지 않는다.** 차지 시간은 데이터고(charge_tiers), 세어 두면 그 값을 고치는
-        // 순간 "중간" 이 최대이거나 0 인 그림이 된다 — 이슈 #38 에서 공격 선딜로 밟은 실패다.
-        await Until(() => _battle is { FighterCharging: true } && _battle.FighterChargeProgress >= 0.5, _pollTimeout);
-        await Screenshot.CaptureAsync(this, "battle-5c-charge");
-
-        await Until(() => _battle?.FighterChargeMaxed == true, _pollTimeout);
+        // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다.
+        Tap("attack");
         await Frames(2);
-        await Screenshot.CaptureAsync(this, "battle-5d-charge-max");
+        Tap("attack");
 
-        // 놓는다 — 칼이 지나가는 그 프레임에 셔터를 누른다 (battle-5-attack 과 같은 규약).
-        Hold("attack", false);
-        await Until(() => _battle?.FighterAttackActive == true, _pollTimeout);
-        await Screenshot.CaptureAsync(this, "battle-5e-charged-swing");
+        // 2타가 선 것은 규칙에게 묻는다. 선딜의 한가운데는 **20틱 뒤**다 — 2타 선딜(0.6667초 = 40틱)의 절반을 옮겨 적은
+        // 숫자라, 선딜을 20틱 밑으로 줄이면 이 장이 칼 장을 찍어 아래 장과 같아진다(나란히 두면 바로 보인다).
+        await Until(() => _battle?.FighterComboStep == 1, _pollTimeout);
+        await Frames(20);
+        await Screenshot.CaptureAsync(this, "battle-5c-combo-windup");
+
+        // 칼이 지나가는 그 프레임 (battle-5-attack 과 같은 규약).
+        await Until(() => _battle is { FighterAttackActive: true, FighterComboStep: 1 }, _pollTimeout);
+        await Screenshot.CaptureAsync(this, "battle-5d-combo-blade");
     }
 
     /// <summary>

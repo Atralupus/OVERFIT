@@ -46,6 +46,14 @@ public static class TestConfigs
                 Anim = "attack", Fps = 50, Frames = 14, StartFrame = 0, BladeFrame = 4,
                 Windup = 0.08, Active = 0.06, Recover = 0.14, Damage = 8, Hitbox = TestSwordId,
             },
+            // 2타 — 기준값이라 짧다(실제는 1.0초). 여기서 진짜여야 하는 것은 **모양**이다: 1타보다 선딜이 길고 더 아프다.
+            // 20fps · 12장이면 재생 0.6초로 셋의 합과 같고, 0번에서 시작해 6번 장(0.3초)이 선딜의 끝이다.
+            // 칼은 1타와 같은 기준 사각형이다 — 기준 파이터는 그림이 없다.
+            new()
+            {
+                Anim = "attack2", Fps = 20, Frames = 12, StartFrame = 0, BladeFrame = 6,
+                Windup = 0.3, Active = 0.1, Recover = 0.2, Damage = 24, Hitbox = TestSwordId,
+            },
         },
         AttackCost = 12,
         // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
@@ -53,16 +61,6 @@ public static class TestConfigs
         GuardChipRatio = 0.25,
         GuardStaminaPerDamage = 1.8,
         GuardBreakLock = 1.1,
-        // 기준값이라 **짧다.** 실제 캐릭터는 0 / 0.8 / 2.0 초인데(fighters.json) 그 값을 베끼면
-        // 차지 한 번을 재는 테스트가 120틱을 돌고, 무엇보다 캐릭터의 차지 시간을 고칠 때마다
-        // 무관한 테스트가 같이 빨개진다. 여기서 진짜여야 하는 것은 수치가 아니라 **모양**이다:
-        // 시간 오름차순 · 첫 칸은 0초 ×1.
-        ChargeTiers = new List<ChargeTierDef>
-        {
-            new() { Seconds = 0.0, DamageMultiplier = 1.0 },
-            new() { Seconds = 0.5, DamageMultiplier = 2.0 },
-            new() { Seconds = 1.0, DamageMultiplier = 3.0 },
-        },
         StaminaRegen = 40,
         Sprite = "test_unit",
     };
@@ -86,6 +84,21 @@ public static class TestConfigs
             File.ReadAllText(Path.Combine("data", "hitboxes.json")), "hitboxes.json");
         shapes[TestSwordId] = TestSword();
         return shapes;
+    }
+
+    /// <summary>
+    /// 2연격의 마지막 칼이 닿기까지(초) — 앞 칼질 전부 + 마지막 칼질의 선딜 + 판정. 2타는 1타가 끝나는 틱에
+    /// 이어진다(설계 §5.1). 마무리를 받아친 경직이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
+    /// </summary>
+    public static double ComboLead(FighterConfig c)
+    {
+        double lead = 0;
+        for (int i = 0; i < c.Combo.Count - 1; i++)
+        {
+            lead += c.Combo[i].Windup + c.Combo[i].Active + c.Combo[i].Recover;
+        }
+
+        return lead + c.Combo[^1].Windup + c.Combo[^1].Active;
     }
 
     /// <summary>

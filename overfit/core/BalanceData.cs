@@ -174,19 +174,6 @@ public sealed class FeelBalance
     public required double AttackRingTo { get; init; }
 
     /// <summary>
-    /// 차지 링의 <b>시작</b> 반지름(px). 패리 링과 반대로 여기서 <see cref="ChargeRingTo"/> 쪽으로
-    /// <b>조여 든다</b> — 모이는 것은 퍼지는 것이 아니고, 보스 선딜 예고가 판정을 향해 줄어드는 것과
-    /// 같은 문법이다 (이슈 #40).
-    /// </summary>
-    public required double ChargeRingFrom { get; init; }
-
-    /// <summary>
-    /// 차지 링이 <b>최대에 닿았을 때</b>의 반지름(px). 몸보다 작게 잡아 링이 몸에 붙어 멈춘다 —
-    /// 멈춘 링이 "더 모을 것이 없다" 는 말이고, 그 말이 없으면 2초를 셀 방법이 없다.
-    /// </summary>
-    public required double ChargeRingTo { get; init; }
-
-    /// <summary>
     /// 예고 링이 나타나는 시점 — 판정까지 <b>이만큼 남았을 때</b>부터 보인다(초).
     /// 선딜 길이는 패턴마다 다르므로(0.40~0.80) 뷰가 그 값을 알 필요가 없게 고정 리드로 잡는다.
     /// </summary>

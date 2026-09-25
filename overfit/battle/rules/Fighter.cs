@@ -7,17 +7,16 @@ public enum FighterAction
 {
     Idle,
     Dash,
+
+    /// <summary>
+    /// 칼질 중이다 — 2연격의 몇 번째 칼인지는 <see cref="Fighter.ComboStep"/> 이 말한다 (설계 §5.1).
+    /// <b>끝까지 커밋한다</b>: 도는 동안 가드 · 패리 · 대시 · 이동이 안 된다. 맞아도 안 끊긴다.
+    /// </summary>
     Attack,
 
     /// <summary>
-    /// 공격 키를 누른 채 모으고 있다 (이슈 #40). <b>다른 행동과 달리 시간이 안 끝낸다</b> —
-    /// 손가락을 떼는 것이 끝이고, 그 순간 <see cref="Attack"/> 으로 넘어간다.
-    /// </summary>
-    Charge,
-
-    /// <summary>
-    /// 패리 키를 누른 채 <b>방어 자세</b>로 서 있다 (이슈 #53). <see cref="Charge"/> 와 같이
-    /// <b>시간이 안 끝낸다</b> — 손가락을 떼는 것이 끝이다.
+    /// 패리 키를 누른 채 <b>방어 자세</b>로 서 있다 (이슈 #53). <b>시간이 안 끝낸다</b> —
+    /// 손가락을 떼는 것이 끝이다.
     ///
     /// <para>
     /// <b>패리와 가드가 한 행동이다.</b> 이슈 #47 은 탭 = 패리 · 홀드 = 가드로 갈랐고, 가드는
@@ -60,26 +59,16 @@ public sealed class Fighter
     private bool _airDashUsed;
 
     /// <summary>
-    /// 모으고 있는 차지 / 돌고 있는 스윙의 단계. <b>둘을 한 칸에 둔다</b> — 재는 것이 같은 것
-    /// ("이 칼질을 얼마나 모았나")이고, 나누면 판정이 서는 순간 계측이 어느 칸을 봐야 하는지가
-    /// 상태에 따라 갈린다. 모으는 동안은 매 틱 다시 계산되고, 놓는 순간 그 값으로 굳는다.
+    /// 지금 도는 칼질이 2연격의 몇 번째인가 (0 = 1타). <b>칼질이 끝나면 0 으로 돌아온다</b> — 안 지우면 다음에
+    /// 누른 한 대가 2타로 시작한다.
     /// </summary>
-    private int _tier;
+    private int _step;
 
     /// <summary>
-    /// <b>이번</b> 칼질의 남은 선딜(초). 그냥 누르면 데이터의 선딜 그대로이고, 붙들고 있었으면
-    /// 그만큼 깎여 0 이 된다 — <b>붙드는 것이 곧 선딜이기 때문이다</b> (이슈 #40).
-    ///
-    /// <para>
-    /// 설정값(칼질 칸의 <c>windup</c>)을 그대로 안 읽고 칼질마다 들고 있는 이유가 여기다. 그림이 먼저
-    /// 그렇게 말하고 있었다: 차지 자세는 attack 시트의 <b>선딜 마지막 장</b>(칼을 끝까지 뒤로 뺀 그림)이라,
-    /// 놓은 뒤에 선딜을 처음부터 또 기다리면 같은 동작을 두 번 감는 셈이다. 규칙으로도 그 편이 옳다 —
-    /// 그래야 2초 차지가 칼 닿기까지 2.0 + 선딜 + 판정이 아니라 <b>2.0833초</b>가 되어 내려찍기 계열의
-    /// 빈 시간(2.25초)에 실제로 들어간다. 선딜이 0.3333 이던 때(이슈 #54 전)는 그 차이가 2.4166 으로
-    /// 어느 빈 시간에도 안 들어갔고, 0.0833 인 지금도 원리는 같다 — 붙든 만큼은 이미 선딜이다.
-    /// </para>
+    /// 1타 도중 공격을 또 눌렀나 (설계 §5.1). 누른 순간 2타를 세우지 않고 <b>기억만</b> 한다 — 1타는 끝까지
+    /// 커밋이고, 이어지는 것은 1타가 끝나는 그 틱이다.
     /// </summary>
-    private double _windup;
+    private bool _comboQueued;
 
     public Fighter(FighterConfig config, Arena arena, double x)
     {
@@ -194,74 +183,25 @@ public sealed class Fighter
     /// <summary>패리로 모은 기. 지금은 쓰는 곳이 없다 — 쓰임(스펙 7)이 생기면 그 비용이 데이터로 온다.</summary>
     public int Qi { get; private set; }
 
-    /// <summary>
-    /// 지금 칼질의 한 칸 (<c>fighters.json</c> 의 <c>combo</c>). 지금 파이터는 첫 칸 하나만 휘두른다.
-    /// 시간과 피해는 여기서 읽는다 — 파이터 설정의 옛 키(attack_windup …)는 칼질 목록으로 들어갔다.
-    /// </summary>
-    private ComboStepDef Step => _config.Combo[0];
-
-    /// <summary>공격 판정이 서 있는가. 선딜을 지나고 후딜 전.</summary>
+    /// <summary>공격 판정이 서 있는가. 선딜을 지나고 후딜 전 — 시간은 지금 칼질 칸의 것이다.</summary>
     public bool AttackActive => Action == FighterAction.Attack
-        && ActionElapsed >= _windup
-        && ActionElapsed < _windup + Step.Active;
+        && ActionElapsed >= Step.Windup
+        && ActionElapsed < Step.Windup + Step.Active;
+
+    /// <summary>지금(또는 다음에 누르면) 휘두르는 칼질의 피해. 칸마다 데이터가 정한다 — 2타가 1타의 세 배다.</summary>
+    public int AttackDamage => Step.Damage;
 
     /// <summary>
-    /// 이 칼질의 피해. <b>차지 단계의 배수가 이미 곱해져 있다</b> — 곱셈을 부르는 쪽에 두면
-    /// 때리는 자리마다 사본이 생기고, 그중 하나를 고치면 조용히 갈린다.
-    ///
-    /// <para>
-    /// 반올림을 <see cref="MidpointRounding.AwayFromZero"/> 로 고정한다. 기본 반올림(짝수로)은
-    /// 같은 비율이 홀짝에 따라 다른 규칙을 내서 리플레이가 재현되지 않는다 —
-    /// <see cref="GuardChip"/> 의 칩 피해와 같은 이유다.
-    /// </para>
+    /// 지금 도는 칼질이 몇 번째인가 (0 = 1타). 뷰가 어느 시트를 그릴지 · <see cref="BattleSim"/> 이 어느 칼 모양을
+    /// 댈지를 이것으로 안다.
     /// </summary>
-    public int AttackDamage =>
-        (int)Math.Round(Step.Damage * _config.ChargeTiers[_tier].DamageMultiplier, MidpointRounding.AwayFromZero);
+    public int ComboStep => _step;
 
-    /// <summary>지금 모으고 있나.</summary>
-    public bool Charging => Action == FighterAction.Charge;
+    /// <summary>1타 도중 다음 칼을 눌러 두었나. 봇이 "이미 눌렀다" 를 안 되풀이하려고 본다.</summary>
+    public bool ComboQueued => _comboQueued;
 
-    /// <summary>모은 시간(초). 모으는 중이 아니면 0.</summary>
-    public double ChargeSeconds => Charging ? ActionElapsed : 0;
-
-    /// <summary>
-    /// 모으고 있는 차지 / 돌고 있는 스윙의 단계 (0 = 안 모았다). 배수는 이 번호가 정한다.
-    /// 계측(<see cref="DodgeEvent.ChargeTier"/>)과 뷰가 같은 값을 본다.
-    /// </summary>
-    public int ChargeTier => _tier;
-
-    /// <summary>차지 단계의 수. 봇이 단계를 고를 때 쓴다 — 수치를 봇 쪽에 베끼지 않는다.</summary>
-    public int ChargeTierCount => _config.ChargeTiers.Count;
-
-    /// <summary>그 단계에 닿는 데 걸리는 시간(초). 범위를 벗어난 번호는 양 끝으로 접는다.</summary>
-    public double ChargeTierSeconds(int tier) =>
-        _config.ChargeTiers[Math.Clamp(tier, 0, _config.ChargeTiers.Count - 1)].Seconds;
-
-    /// <summary>
-    /// <b>지금</b> 휘두르면 칼이 닿기까지 걸리는 시간(초) — 남은 선딜 + 판정이다.
-    /// 모으고 있으면 붙든 만큼 선딜이 이미 지났으므로 <b>짧아진다</b>.
-    /// 봇이 "지금 놓아도 판정 전에 닿나" 를 이것으로 잰다 — 설정값을 그대로 돌려주면
-    /// 봇은 실제보다 최대 선딜 한 번만큼(지금 0.0833초 · 이슈 #54 전에는 0.33초) 일찍 손을 놓아,
-    /// 닿을 수 있는 차지를 스스로 버린다.
-    /// </summary>
-    public double AttackLead =>
-        Math.Max(0, Step.Windup - ChargeSeconds) + Step.Active;
-
-    /// <summary>최대 차지 시간(초). <b>마지막 단계의 시간이 곧 그것</b>이라 데이터에 따로 없다.</summary>
-    public double ChargeMaxSeconds => _config.ChargeTiers[^1].Seconds;
-
-    /// <summary>
-    /// 모은 진행도 0~1. <b>뷰가 자기 시계로 재게 하지 않는다</b> — 그러면 최대 시간(캐릭터마다 다르다)의
-    /// 사본이 뷰에 생기고, fighters.json 이 움직이는 순간 링이 거짓말을 한다. 패리 링과 같은 규약이다.
-    /// </summary>
-    public double ChargeProgress =>
-        !Charging || ChargeMaxSeconds <= 0 ? 0 : Math.Min(1.0, ActionElapsed / ChargeMaxSeconds);
-
-    /// <summary>
-    /// 모으고 있는 차지가 <b>최대에 닿았나</b>. 화면이 이것을 말하지 않으면 2초를 셀 방법이 없다 —
-    /// 그래서 "단계가 올랐다" 가 아니라 "최대인가" 를 따로 낸다.
-    /// </summary>
-    public bool ChargeMaxed => Charging && _tier >= ChargeTierCount - 1;
+    /// <summary>지금 칼질의 한 칸 (<c>fighters.json</c> 의 <c>combo</c>).</summary>
+    private ComboStepDef Step => _config.Combo[_step];
 
     public bool Alive => Health > 0;
 
@@ -269,26 +209,9 @@ public sealed class Fighter
     public void Spend(double amount) => Stamina = Math.Max(0, Stamina - amount);
 
     /// <summary>
-    /// 맞았다. <b>모으던 차지는 여기서 끊긴다</b> (이슈 #40).
-    ///
-    /// <para>
-    /// 유지를 고르면 "보스의 패턴 위에 겹쳐 모으는 것" 이 가장 좋은 수가 된다 — 몇 대 맞고
-    /// 최대 차지를 내는 쪽이 늘 이득이라, 언제 모을지에 판단이 없어지고 <c>greed</c> 축이
-    /// 재려던 것도 같이 사라진다. 끊기더라도 <b>값은 안 돌려준다</b>: 스태미나는 누를 때
-    /// 이미 나갔고, 그게 욕심의 값이다.
-    /// </para>
+    /// 맞았다. <b>칼질은 안 끊긴다</b> — 끝까지 커밋이다(설계 §5.1). 맞으면 끊기던 것은 차지였고, 차지는 없어졌다.
     /// </summary>
-    public void TakeDamage(int amount)
-    {
-        Health = Math.Max(0, Health - amount);
-
-        if (Action == FighterAction.Charge)
-        {
-            Action = FighterAction.Idle;
-            ActionElapsed = 0;
-            _tier = 0;
-        }
-    }
+    public void TakeDamage(int amount) => Health = Math.Max(0, Health - amount);
 
     /// <summary>
     /// 이만한 피해를 가드로 받아내는 데 드는 스태미나. <b>피해에 비례한다</b> —
@@ -303,8 +226,7 @@ public sealed class Fighter
     ///
     /// <para>
     /// 반올림을 <see cref="MidpointRounding.AwayFromZero"/> 로 고정한다. 기본 반올림(짝수로)은
-    /// 같은 비율이 홀짝에 따라 다른 규칙을 내서 리플레이가 재현되지 않는다 —
-    /// <see cref="AttackDamage"/> 의 차지 배수와 같은 이유다.
+    /// 같은 비율이 홀짝에 따라 다른 규칙을 내서 리플레이가 재현되지 않는다.
     /// </para>
     /// </summary>
     /// <param name="fullDamage">막지 않았다면 받았을 피해.</param>
@@ -368,7 +290,7 @@ public sealed class Fighter
         Regen(dt);
     }
 
-    /// <summary>진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다.</summary>
+    /// <summary>진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다 — 칼질이면 눌러 둔 다음 칼로 잇는다.</summary>
     private void Advance(double dt)
     {
         // 행동과 무관한 시계 둘은 **Idle 이어도 돈다.** 누름 시계는 손을 뗀 뒤에도 흘러야
@@ -384,64 +306,57 @@ public sealed class Fighter
 
         ActionElapsed += dt;
 
-        // 차지는 **시간이 안 끝낸다** — 손가락이 끝낸다(Begin 이 본다). 최대에 닿아도 저절로
-        // 안 나가는 것은 일부러다: 저절로 나가면 "언제 놓을까" 라는 판단이 통째로 사라진다.
-        if (Action == FighterAction.Charge)
-        {
-            _tier = TierFor(ActionElapsed);
-            return;
-        }
-
-        // 방어 자세도 시간이 안 끝낸다 — 손가락이 끝낸다(Begin 이 본다). 차지와 같은 규약이라
-        // Duration 표에도 자리가 없다.
+        // 방어 자세는 시간이 안 끝낸다 — 손가락이 끝낸다(Begin 이 본다). 그래서 Duration 표에 자리가 없다.
         if (Action == FighterAction.Guard)
         {
             return;
         }
 
-        if (ActionElapsed >= Duration(Action))
+        if (ActionElapsed < Duration(Action))
         {
-            Action = FighterAction.Idle;
-            ActionElapsed = 0;
-
-            // 단계는 스윙과 같이 끝난다. 안 지우면 다음에 그냥 누른 한 대가 지난 차지의 배수를 물려받는다.
-            _tier = 0;
+            return;
         }
+
+        if (Action == FighterAction.Attack && Chain())
+        {
+            return;
+        }
+
+        Action = FighterAction.Idle;
+        ActionElapsed = 0;
     }
 
     /// <summary>
-    /// 이만큼 모았으면 몇 단계인가. 표는 시간 오름차순이고 <b>닿은 마지막 칸</b>이 답이다
-    /// (<c>FighterDataTests</c> 가 그 순서를 지킨다).
+    /// 칼질이 끝나는 틱 — 눌러 둔 다음 칼이 있으면 <b>그 틱에</b> 잇는다 (설계 §5.1: "1타가 끝나는 틱에 2타가
+    /// 이어진다"). 값(<c>attack_cost</c>)은 이을 때 낸다: 누를 때 내면 1타가 끝나기 전에 스태미나가 바닥나도 2타가
+    /// 선다. 모자라면 잇지 않고 선다. 이었으면 true 다.
     ///
     /// <para>
-    /// 여유(epsilon)를 안 준다. 틱 누산의 부동소수 오차로 경계가 한 틱 밀릴 수는 있지만,
-    /// 그 밀림은 <b>언제나 같은 방향으로 같은 만큼</b>이라 리플레이는 재현된다 — 반면 여유를
-    /// 주면 "봇이 보는 경계" 와 "규칙이 쓰는 경계" 가 반 틱 어긋나 그 차이가 데이터에 섞인다.
+    /// 잇는 칼의 시계는 0 에서 시작한다. 이 틱은 앞 칼질의 마지막 틱이라 새 칼의 첫 틱은 다음 틱이다 —
+    /// <see cref="Begin"/> 이 새 행동을 세운 틱을 경과 시간에 넣는 것과 한 틱 다르지만, 그 차이는 언제나 같아 박자가 고정이다.
     /// </para>
     /// </summary>
-    private int TierFor(double seconds)
+    private bool Chain()
     {
-        int tier = 0;
-        for (int i = 1; i < _config.ChargeTiers.Count; i++)
+        bool chain = _comboQueued && _step + 1 < _config.Combo.Count && Stamina >= _config.AttackCost;
+        _comboQueued = false;
+        if (!chain)
         {
-            if (seconds >= _config.ChargeTiers[i].Seconds)
-            {
-                tier = i;
-            }
+            _step = 0;
+            return false;
         }
 
-        return tier;
+        Spend(_config.AttackCost);
+        _step++;
+        ActionElapsed = 0;
+        return true;
     }
 
-    /// <summary>
-    /// 행동이 저절로 끝나는 시각(초). <see cref="FighterAction.Charge"/> 는 <b>여기 없다</b> —
-    /// 차지를 끝내는 것은 시간이 아니라 손가락이라, <see cref="Advance"/> 가 그 갈래를 먼저 빠져나간다.
-    /// </summary>
+    /// <summary>행동이 저절로 끝나는 시각(초). 방어 자세는 여기 없다 — 끝내는 것은 손가락이다.</summary>
     private double Duration(FighterAction action) => action switch
     {
         FighterAction.Dash => _config.DashDuration,
-        // 선딜은 설정값이 아니라 **이번 칼질의 남은 선딜**이다. 붙들고 있었으면 그만큼 짧다.
-        FighterAction.Attack => _windup + Step.Active + Step.Recover,
+        FighterAction.Attack => Step.Windup + Step.Active + Step.Recover,
         _ => 0,
     };
 
@@ -458,19 +373,19 @@ public sealed class Fighter
     /// <summary>새 행동을 시작한다. 행동 중이거나 굳었거나 스태미나가 모자라면 입력을 버린다.</summary>
     private void Begin(InputFrame input)
     {
-        // 모으는 중이면 할 일은 하나뿐이다 — 놓았는지 본다. <b>Advance 앞</b>이라 스윙의 첫 틱도
-        // 경과 시간에 들어간다: 새 행동을 시작하는 것과 정확히 같은 규칙이다.
-        if (Action == FighterAction.Charge)
+        // 칼질 중에 또 누르면 다음 칼을 **기억만** 한다 (설계 §5.1). 1타는 끝까지 커밋이고, 이어지는 것은 1타가
+        // 끝나는 틱이다(Chain). 다른 입력은 버린다 — 끝까지 커밋이다.
+        if (Action == FighterAction.Attack)
         {
-            if (!input.AttackHeld)
+            if (input.Attack && _step + 1 < _config.Combo.Count)
             {
-                Swing();
+                _comboQueued = true;
             }
 
             return;
         }
 
-        // 방어 자세에서도 할 일은 하나뿐이다 — 놓았는지 본다 (이슈 #53). 차지와 같은 모양이다.
+        // 방어 자세에서 할 일은 하나뿐이다 — 놓았는지 본다 (이슈 #53).
         // 누르고 있는 동안에는 새 행동도 못 고른다: 손가락 하나가 두 기술을 살 수 없다.
         if (Action == FighterAction.Guard)
         {
@@ -511,14 +426,10 @@ public sealed class Fighter
 
         Spend(Cost(wanted));
 
-        // 공격을 **누른 채로** 시작하면 차지다. 그냥 누른(같은 틱에 뗀) 것은 예전 그대로
-        // 곧장 스윙이라, 옛 입력 시퀀스가 한 틱도 안 밀린다.
-        Action = wanted == FighterAction.Attack && input.AttackHeld ? FighterAction.Charge : wanted;
+        Action = wanted;
         ActionElapsed = 0;
-        _tier = 0;
-
-        // 그냥 누른 칼질은 선딜을 통째로 기다린다 — 붙든 시간이 0 이니 깎일 것이 없다.
-        _windup = Step.Windup;
+        _step = 0;
+        _comboQueued = false;
 
         if (wanted == FighterAction.Dash && !Grounded)
         {
@@ -529,23 +440,6 @@ public sealed class Fighter
         {
             PressParry();
         }
-    }
-
-    /// <summary>
-    /// 차지를 놓았다 — 모은 만큼이 <b>이 한 번의 스윙에 굳는다.</b>
-    /// 단계를 여기서 고정하는 이유는 스윙이 도는 동안 시계가 계속 가기 때문이다:
-    /// 매 틱 다시 계산하면 칼이 나가는 프레임의 배수가 놓은 순간의 배수와 달라진다.
-    /// </summary>
-    private void Swing()
-    {
-        _tier = TierFor(ActionElapsed);
-
-        // 붙들고 있던 시간이 곧 선딜이다 — 남은 만큼만 더 기다린다. 0.8초(1단계)면 이미 한참
-        // 넘겼으므로 칼이 곧장 나간다. 경계를 계단이 아니라 연속으로 두는 이유는, 선딜보다
-        // 짧게 붙든 경우(0.07초)가 그냥 누르기보다 느려지는 구멍을 만들지 않기 위해서다.
-        _windup = Math.Max(0, Step.Windup - ActionElapsed);
-        Action = FighterAction.Attack;
-        ActionElapsed = 0;
     }
 
     /// <summary>

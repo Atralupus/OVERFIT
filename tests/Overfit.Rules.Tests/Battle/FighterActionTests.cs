@@ -12,12 +12,6 @@ public class FighterActionTests
     private static readonly InputFrame _parry = new(0, false, false, true, false);
     private static readonly InputFrame _attack = new(0, false, false, false, true);
 
-    /// <summary>공격 키를 <b>누르는 순간</b>. 엣지와 누름 유지가 같이 참이다 — 사람이 누르면 늘 이 모양이다.</summary>
-    private static readonly InputFrame _attackPress = new(0, false, false, false, true, AttackHeld: true);
-
-    /// <summary>공격 키를 <b>누르고 있는</b> 틱. 엣지는 이미 지났다.</summary>
-    private static readonly InputFrame _attackHold = new(0, false, false, false, false, AttackHeld: true);
-
     /// <summary>패리 키를 <b>누르는 순간</b>. 엣지와 누름 유지가 같이 참이다 — 사람이 누르면 늘 이 모양이다.</summary>
     private static readonly InputFrame _parryPress = new(0, false, false, true, false, ParryHeld: true);
 
@@ -264,229 +258,171 @@ public class FighterActionTests
     }
 
 
-    // ── 차지 공격 (이슈 #40) ─────────────────────────────────────────────────
+    // ── 2연격 (설계 §5.1) ────────────────────────────────────────────────────
 
-    /// <summary>차지를 <paramref name="ticks"/> 틱 동안 붙들고 있는다.</summary>
-    private static void Hold(Fighter f, int ticks)
+    /// <summary>1타를 누르고, <paramref name="queueAfter"/> 틱째에 한 번 더 누른다 — 1타 도중이다.</summary>
+    private static Fighter TwoPresses(int queueAfter = 2)
     {
-        for (int i = 0; i < ticks; i++)
-        {
-            f.Tick(_attackHold, _dt);
-        }
+        Fighter f = Spawn();
+        f.Tick(_attack, _dt);
+        Idle(f, queueAfter - 2);
+        f.Tick(_attack, _dt);
+        return f;
     }
 
-    /// <summary><paramref name="tier"/> 단계에 닿을 때까지 붙들고 있는다. <b>틱 수를 세지 않는다</b> —
-    /// 단계 시간은 데이터고, 여기서 세면 그 값을 손으로 베낀 사본이 된다.</summary>
-    private static void HoldToTier(Fighter f, int tier)
+    /// <summary>2타가 이어지는 틱까지 민다. 이어진 뒤라 <c>ComboStep</c> 이 1 이다.</summary>
+    private static void UntilSecond(Fighter f)
     {
-        f.Tick(_attackPress, _dt);
-        int guard = 0;
-        while (f.ChargeTier < tier && guard++ < 600)
+        for (int i = 0; i < 120 && f.ComboStep == 0 && f.Action == FighterAction.Attack; i++)
         {
-            f.Tick(_attackHold, _dt);
+            f.Tick(default, _dt);
         }
+
+        f.ComboStep.ShouldBe(1, "2타가 안 이어졌다 — 이 테스트가 2타를 안 본다");
     }
 
     [Fact]
-    public void 그냥_누르면_예전처럼_곧장_휘두른다()
+    public void 누르면_곧장_1타를_휘두른다()
     {
-        // 누름 유지가 없는 입력(봇의 탭 · 옛 입력 시퀀스)은 **한 틱도 안 늘어나야 한다** —
-        // 늘어나면 지금까지의 모든 리플레이가 한 틱씩 밀린다.
         Fighter f = Spawn();
         f.Tick(_attack, _dt);
 
         f.Action.ShouldBe(FighterAction.Attack);
-        f.Charging.ShouldBeFalse();
-        f.ChargeTier.ShouldBe(0);
-        f.AttackDamage.ShouldBe(8, "0단계는 배수 1 이다");
+        f.ComboStep.ShouldBe(0);
+        f.AttackDamage.ShouldBe(TestConfigs.Fighter().Combo[0].Damage);
     }
 
     [Fact]
-    public void 누르고_있으면_차지에_들어간다()
+    public void 연격_1타_도중_또_누르면_1타가_끝나는_틱에_2타가_이어진다()
     {
-        Fighter f = Spawn();
-        f.Tick(_attackPress, _dt);
+        // 설계 §5.1 — 2타는 눌러 둔 순간이 아니라 1타가 끝나는 틱에 선다. 1타는 끝까지 커밋이다.
+        // "끝나는 틱" 을 숫자로 안 적는다: 한 번만 누른 1타가 서는(Idle 이 되는) 틱과 견준다.
+        Fighter single = Spawn();
+        single.Tick(_attack, _dt);
+        int end = 1;
+        while (single.Action == FighterAction.Attack)
+        {
+            single.Tick(default, _dt);
+            end++;
+        }
 
-        f.Action.ShouldBe(FighterAction.Charge);
-        f.Charging.ShouldBeTrue();
-        f.AttackActive.ShouldBeFalse("차지 중에는 판정이 없다");
-        f.Stamina.ShouldBe(100 - 12, "값은 누를 때 한 번 낸다");
+        Fighter combo = TwoPresses();
+        combo.ComboStep.ShouldBe(0, "눌러 둔 순간 2타가 섰다 — 1타가 잘렸다");
+        combo.ComboQueued.ShouldBeTrue();
+
+        int chained = 2;
+        while (combo.ComboStep == 0 && combo.Action == FighterAction.Attack)
+        {
+            combo.Tick(default, _dt);
+            chained++;
+        }
+
+        combo.ComboStep.ShouldBe(1);
+        combo.Action.ShouldBe(FighterAction.Attack, "1타가 끝나고 서 버렸다");
+        chained.ShouldBe(end, "2타가 1타가 끝나는 틱이 아닌 때에 섰다");
     }
 
     [Fact]
-    public void 차지는_놓을_때까지_안_끝난다()
-    {
-        // 차지를 끝내는 것은 시간이 아니라 **손가락**이다. 최대에 닿아도 저절로 안 나간다 —
-        // 저절로 나가면 "언제 놓을까" 가 사라져 이 기술에 판단이 없어진다.
-        Fighter f = Spawn();
-        f.Tick(_attackPress, _dt);
-        Hold(f, 180);   // 3초 — 최대(1.0초)를 한참 지났다
-
-        f.Action.ShouldBe(FighterAction.Charge);
-        f.ChargeTier.ShouldBe(2);
-        f.ChargeProgress.ShouldBe(1.0, 1e-9, "진행도는 1 을 안 넘는다");
-    }
-
-    [Fact]
-    public void 놓으면_모은_만큼의_배수로_휘두른다()
+    public void 안_누르면_1타로_끝난다()
     {
         Fighter f = Spawn();
-        HoldToTier(f, 2);
-        f.Tick(default, _dt);   // 놓았다
-
-        f.Action.ShouldBe(FighterAction.Attack);
-        f.Charging.ShouldBeFalse();
-        f.ChargeTier.ShouldBe(2);
-        f.AttackDamage.ShouldBe(24, "8 × 3");
-    }
-
-    [Fact]
-    public void 중간에_놓으면_중간_단계다()
-    {
-        Fighter f = Spawn();
-        HoldToTier(f, 1);
-        f.Tick(default, _dt);
-
-        f.Action.ShouldBe(FighterAction.Attack);
-        f.ChargeTier.ShouldBe(1);
-        f.AttackDamage.ShouldBe(16, "8 × 2");
-    }
-
-    [Fact]
-    public void 스윙이_끝나면_단계가_0_으로_돌아온다()
-    {
-        Fighter f = Spawn();
-        HoldToTier(f, 2);
-        f.Tick(default, _dt);
-        Idle(f, 30);   // 공격(0.28초)이 끝나고도 남는다
+        f.Tick(_attack, _dt);
+        Idle(f, 60);
 
         f.Action.ShouldBe(FighterAction.Idle);
-        f.ChargeTier.ShouldBe(0, "다음 탭이 지난 스윙의 배수를 물려받으면 안 된다");
-        f.AttackDamage.ShouldBe(8);
+        f.ComboStep.ShouldBe(0);
     }
 
     [Fact]
-    public void 붙들고_있는_시간이_곧_선딜이다()
+    public void 연격_2타는_2타의_시간과_피해로_돈다()
     {
-        // **차지는 선딜 앞에 붙는 것이 아니라 선딜 그 자체다** (이슈 #40). 그림이 먼저 그렇게 말하고
-        // 있었다 — 차지 자세는 attack 시트의 선딜 마지막 장(칼을 끝까지 뒤로 뺀 그림)이라,
-        // 놓은 뒤에 선딜을 처음부터 또 기다리면 화면에서 **같은 동작을 두 번** 감는 셈이다.
-        // 그래서 놓는 순간 칼이 곧장 나간다 — 선딜은 붙들고 있는 동안 이미 다 지났다.
-        Fighter f = Spawn();
-        HoldToTier(f, 2);
+        // 2타는 attack2 를 반속으로 도는 무거운 칼이다 — 선딜도 피해도 2타 칸의 것이어야 한다.
+        ComboStepDef second = TestConfigs.Fighter().Combo[1];
+        Fighter f = TwoPresses();
+        UntilSecond(f);
 
-        f.Tick(default, _dt);   // 놓았다
+        f.AttackDamage.ShouldBe(second.Damage);
+        int ticks = 0;
+        while (!f.AttackActive && ticks < 600)
+        {
+            f.Tick(default, _dt);
+            ticks++;
+        }
+
+        (ticks * _dt).ShouldBe(second.Windup, 1.5 * _dt, "2타의 선딜이 2타 칸의 것이 아니다");
+    }
+
+    [Fact]
+    public void 연격_2타_뒤에는_이어_칠_것이_없다()
+    {
+        Fighter f = TwoPresses();
+        UntilSecond(f);
+        f.Tick(_attack, _dt);   // 2타 도중 또 누른다
+
+        f.ComboQueued.ShouldBeFalse("2타 뒤에 셋째를 눌러 뒀다 — 2연격이다");
+        while (f.Action == FighterAction.Attack)
+        {
+            f.Tick(default, _dt);
+        }
+
+        f.ComboStep.ShouldBe(0, "칼질이 끝났는데 다음 칼이 2타로 시작한다");
+    }
+
+    [Fact]
+    public void 연격_2타는_이을_때_값을_낸다()
+    {
+        // 스태미나는 타마다 낸다 (설계 §5.1). 눌러 둘 때가 아니라 이을 때 낸다 — 이 계획이 정한 것 4.
+        FighterConfig c = TestConfigs.Fighter();
+        Fighter f = TwoPresses();
+        f.Stamina.ShouldBe(c.MaxStamina - c.AttackCost, 1e-9, "눌러 둔 순간 2타 값을 냈다");
+
+        UntilSecond(f);
+        f.Stamina.ShouldBe(c.MaxStamina - (2 * c.AttackCost), 1e-9);
+    }
+
+    [Fact]
+    public void 연격_2타_값이_모자라면_잇지_않고_선다()
+    {
+        // Review Focus 2 — 1타 도중 스태미나가 바닥났으면 2타는 안 서고 1타로 끝난다. 음수로 가지 않는다.
+        FighterConfig c = TestConfigs.Fighter();
+        Fighter f = Spawn();
+        f.Spend(c.MaxStamina - c.AttackCost - 1);   // 1타 값 + 1 만 남긴다
+        f.Tick(_attack, _dt);
+        f.Tick(_attack, _dt);
+        while (f.Action == FighterAction.Attack)
+        {
+            f.Tick(default, _dt);
+        }
+
+        f.ComboStep.ShouldBe(0, "값이 모자라는데 2타가 섰다");
+        f.Stamina.ShouldBeGreaterThanOrEqualTo(0);
+    }
+
+    [Fact]
+    public void 칼질_중에는_다른_것을_못_한다()
+    {
+        // 끝까지 커밋 (설계 §5.1). 2타는 1초짜리라 그 사이 무엇도 못 하는 것이 2타의 값이다.
+        Fighter f = Spawn();
+        f.Tick(_attack, _dt);
+        double x = f.X, stamina = f.Stamina;
+
+        f.Tick(new InputFrame(1, Jump: true, Dash: true, Parry: true, Attack: false), _dt);
 
         f.Action.ShouldBe(FighterAction.Attack);
-        f.AttackActive.ShouldBeTrue("붙들고 있었는데 선딜을 또 기다린다");
+        f.X.ShouldBe(x, 1e-9, "칼질 중에 걸었다");
+        f.Grounded.ShouldBeTrue("칼질 중에 뛰었다");
+        f.Stamina.ShouldBe(stamina, 1e-9, "버린 입력이 값을 냈다");
     }
 
     [Fact]
-    public void 짧게_붙들면_남은_선딜만큼만_기다린다()
+    public void 맞아도_칼질은_안_끊긴다()
     {
-        // 경계가 계단이 아니라 연속이어야 한다. 선딜(0.08)보다 짧게 붙들었으면 남은 만큼만
-        // 더 기다린다 — 안 그러면 "0.07초 붙들기" 가 그냥 누르기보다 느려지는 구멍이 생긴다.
+        // 이 계획이 정한 것 5 — 끝까지 커밋이다. 맞으면 끊기던 것은 차지였다.
         Fighter f = Spawn();
-        f.Tick(_attackPress, _dt);
-        f.Tick(_attackHold, _dt);   // 두 틱(0.0333초) 붙들었다 — 선딜 0.08 의 절반쯤
-        f.Tick(default, _dt);       // 놓았다
-
-        f.AttackActive.ShouldBeFalse("남은 선딜이 있는데 칼이 나갔다");
-
-        f.Tick(default, _dt);
-        f.Tick(default, _dt);       // 0.05초 — 남은 선딜(0.0467)을 지났다
-        f.AttackActive.ShouldBeTrue("남은 선딜보다 오래 기다렸다");
-    }
-
-    [Fact]
-    public void 붙들어도_그냥_누른_것보다_빨라지지_않는다()
-    {
-        // 위 둘의 당연한 따름이지만 못박아 둔다. 칼이 닿기까지는 **max(붙든 시간, 선딜) + 판정**이라
-        // 붙드는 것으로 공짜 속도를 얻을 수 없다 — 얻을 수 있으면 아무도 그냥 안 누른다.
-        Fighter tap = Spawn();
-        tap.Tick(_attack, _dt);
-        int tapTicks = 1;
-        while (!tap.AttackActive)
-        {
-            tap.Tick(default, _dt);
-            tapTicks++;
-        }
-
-        Fighter held = Spawn();
-        held.Tick(_attackPress, _dt);
-        int heldTicks = 1;
-        for (int i = 0; i < 4; i++)   // 0.0667초 — 선딜(0.08)보다 짧게 붙든다
-        {
-            held.Tick(_attackHold, _dt);
-            heldTicks++;
-        }
-
-        held.Tick(default, _dt);
-        heldTicks++;
-        while (!held.AttackActive)
-        {
-            held.Tick(default, _dt);
-            heldTicks++;
-        }
-
-        heldTicks.ShouldBeGreaterThanOrEqualTo(tapTicks, "붙드는 것이 그냥 누르는 것보다 빠르다");
-    }
-
-    [Fact]
-    public void 차지_중에는_움직이지도_뛰지도_못한다()
-    {
-        // 차지의 값은 **아무것도 못 한다는 것**이다. 걸으면서 모을 수 있으면 위험이 없고,
-        // 위험이 없으면 greed 축이 재는 것이 사라진다.
-        Fighter f = Spawn();
-        f.Tick(_attackPress, _dt);
-        double x = f.X;
-
-        f.Tick(new InputFrame(1, Jump: true, false, false, false, AttackHeld: true), _dt);
-
-        f.X.ShouldBe(x, 1e-9, "차지 중에 걸었다");
-        f.Grounded.ShouldBeTrue("차지 중에 뛰었다");
-        f.Action.ShouldBe(FighterAction.Charge);
-    }
-
-    [Fact]
-    public void 차지_중에_맞으면_모은_것이_전부_날아간다()
-    {
-        // 끊기 대신 유지를 고르면 "패턴 위에 겹쳐 모으는 것" 이 가장 좋은 수가 되고,
-        // 그러면 보스의 패턴이 이 기술의 판단에서 통째로 빠진다. 값은 이미 냈으므로 돌려받지도 않는다.
-        Fighter f = Spawn();
-        HoldToTier(f, 2);
-        double paid = f.Stamina;
-
+        f.Tick(_attack, _dt);
         f.TakeDamage(9);
 
-        f.Action.ShouldBe(FighterAction.Idle);
-        f.Charging.ShouldBeFalse();
-        f.ChargeTier.ShouldBe(0);
-        f.Stamina.ShouldBe(paid, 1e-9, "끊겼다고 스태미나를 돌려주지 않는다");
-    }
-
-    [Fact]
-    public void 차지_중에는_스태미나가_안_찬다()
-    {
-        // 차지의 진짜 값이 여기 있다 — 회복은 Idle 일 때만 도므로 2초를 모으는 것은
-        // 그동안의 회복(40/s)을 통째로 포기하는 것이다. 그래서 차지에 값을 더 안 매긴다.
-        Fighter f = Spawn();
-        f.Tick(_attackPress, _dt);
-        double low = f.Stamina;
-        Hold(f, 60);
-
-        f.Stamina.ShouldBe(low, 1e-9);
-    }
-
-    [Fact]
-    public void 누름_유지만으로는_차지가_안_시작된다()
-    {
-        // 차지는 **엣지**에서만 시작한다. 레벨만 보고 시작하면 앞 스윙이 끝나는 순간
-        // 키를 놓지 않은 손가락이 저절로 다음 차지를 물고, 그건 누른 적 없는 입력이다.
-        Fighter f = Spawn();
-        f.Tick(_attackHold, _dt);
-
-        f.Action.ShouldBe(FighterAction.Idle);
+        f.Action.ShouldBe(FighterAction.Attack);
     }
 
     [Fact]
@@ -635,7 +571,7 @@ public class FighterActionTests
     [Fact]
     public void 방어_중에는_스태미나가_안_찬다()
     {
-        // 회복은 Idle 일 때만 돈다(차지와 같은 규칙). 방어 중에 차면 버티는 것에 값이 없어져
+        // 회복은 Idle 일 때만 돈다. 방어 중에 차면 버티는 것에 값이 없어져
         // "계속 들고 있기" 가 언제나 최선이 되고, 그러면 방어에 판단이 사라진다.
         Fighter f = Guarding();
         f.Spend(40);

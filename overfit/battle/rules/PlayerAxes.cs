@@ -6,7 +6,7 @@ namespace Overfit.Battle.Rules;
 /// <summary>
 /// 플레이어가 어떻게 싸우는가, 10개 숫자로. <b>열이라는 것이 계약이다</b> — 망의 입력 모양이라
 /// 늘리는 것은 수치 하나를 고치는 것과 다른 종류의 변경이고, 새 기술의 신호는 축이 아니라
-/// <b>개수</b>로 실린다 (<see cref="ChargedGreedSamples"/> · <see cref="GuardSamples"/>).
+/// <b>개수</b>로 실린다 (<see cref="GuardSamples"/>).
 /// <see cref="DodgeEvent"/> 목록만 받으므로
 /// <b>전투를 안 돌려도 테스트된다.</b>
 ///
@@ -167,7 +167,7 @@ public sealed class PlayerAxes
     /// </para>
     ///
     /// <para>
-    /// 그동안에는 <see cref="ChargedGreedSamples"/> 와 같은 자리에 개수로 싣는다. 잃는 것도 적다 — 가드는 이미 다른 축을 움직인다:
+    /// 그동안에는 개수로 싣는다. 잃는 것도 적다 — 가드는 이미 다른 축을 움직인다:
     /// 가드로 받은 판정은 <see cref="ParryReliance"/> 의 분모에 들어가되 분자에는 안 들어가고
     /// ("패리 말고 다른 것을 골랐다"), 거리는 <see cref="DistanceBias"/> 에 그대로 쌓인다.
     /// </para>
@@ -175,23 +175,11 @@ public sealed class PlayerAxes
     public int GuardSamples { get; private init; }
 
     /// <summary>
-    /// 그중 <b>깨진</b> 가드의 수 (이슈 #47). <see cref="ChargedGreedSamples"/> 와 같은 자리다 —
-    /// 개수 하나가 없으면 "버텨냈다" 와 "버티다 무너졌다" 가 한 점이 되는데, 그 둘은 결과가 정반대다
-    /// (흘린 피해 0.25 · 자세 유지 ↔ 전액 · guard_break_lock 고정). 무엇이 깼는지(고갈 · 가드 불가)는
+    /// 그중 <b>깨진</b> 가드의 수 (이슈 #47). 개수 하나가 없으면 "버텨냈다" 와 "버티다 무너졌다" 가
+    /// 한 점이 되는데, 그 둘은 결과가 정반대다 (흘린 피해 0.25 · 자세 유지 ↔ 전액 · guard_break_lock 고정). 무엇이 깼는지(고갈 · 가드 불가)는
     /// 여기서 안 가른다: 고른 것도 겪은 것도 같은 "깨졌다" 이고, 가르려면 축이 아니라 이벤트를 본다.
     /// </summary>
     public int GuardBrokenSamples { get; private init; }
-
-    /// <summary>
-    /// <c>Greed</c> 로 센 것 중 <b>모아 둔 칼을 들고 있던</b> 관측 수 (이슈 #40).
-    /// <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
-    ///
-    /// <para>
-    /// 비율 하나로는 "휘두르다 맞았다"(0.5초)와 "2초를 모으고 서 있다 맞았다"(2.08초)가
-    /// 한 점이 된다. 욕심의 <b>깊이</b>가 여기 있고, <c>GuardSamples</c> 와 같은 자리다.
-    /// </para>
-    /// </summary>
-    public int ChargedGreedSamples { get; private init; }
 
     /// <summary>
     /// 관측들을 축으로 접는다.
@@ -220,7 +208,7 @@ public sealed class PlayerAxes
         var dashErrors = new List<double>();
         var jumpErrors = new List<double>();
         int dashes = 0, jumps = 0, parries = 0, parried = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
-        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0, chargedGreed = 0;
+        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0;
         int guards = 0, guardsBroken = 0;
         double distance = 0;
 
@@ -237,11 +225,6 @@ public sealed class PlayerAxes
             if (e.GreedWindow)
             {
                 greedy++;
-            }
-
-            if (e.ChargeTier > 0)
-            {
-                chargedGreed++;
             }
 
             // 의존도의 분모는 **진짜 선택이 있었던** 판정뿐이다 — 그 수단이 가능했고,
@@ -326,7 +309,6 @@ public sealed class PlayerAxes
             GuardBrokenSamples = guardsBroken,
             JumpChoiceSamples = jumpChoices,
             ParryChoiceSamples = parryChoices,
-            ChargedGreedSamples = chargedGreed,
         };
     }
 
