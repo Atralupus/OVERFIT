@@ -72,11 +72,13 @@ public class BossDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                // 칼이 닿기까지 = 1타 전체 + 2타의 선딜 + 판정 (TestConfigs.ComboLead).
-                double lead = TestConfigs.ComboLead(c);
+                // 칼이 닿기까지 = 패리 커밋의 나머지 + 1타 전체 + 2타의 선딜 + 판정 (TestConfigs.FinisherPunishLead).
+                // **J 는 패리 커밋이 끝나야 나간다** — 받아쳐도 커밋은 끝까지 가고, 그동안 누른 J 는 버려진다(설계 §5.3).
+                // 그 나머지를 빼고 재면 경직이 실제보다 최대 0.333초 넉넉해 보인다(2번 PR 이 패리를 커밋으로 바꾸며 생긴 몫).
+                double lead = TestConfigs.FinisherPunishLead(c);
                 boss.FinisherParryStagger.ShouldBeGreaterThanOrEqualTo(lead,
                     $"{id}: 경직 {boss.FinisherParryStagger} 초에"
-                    + $" {who} 의 2연격({lead:0.000}초)가 안 들어간다");
+                    + $" {who} 의 패리 커밋 + 2연격({lead:0.000}초)가 안 들어간다");
             }
         }
     }
@@ -93,9 +95,10 @@ public class BossDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                double lead = TestConfigs.ComboLead(c);
+                // 여유는 **패리 커밋이 끝난 뒤부터** 센다 — 커밋 동안에는 알아차려도 J 가 안 나간다(위 테스트의 주석).
+                double lead = TestConfigs.FinisherPunishLead(c);
                 (boss.FinisherParryStagger - lead).ShouldBeGreaterThanOrEqualTo(0.15,
-                    $"{id}: {who} 의 2연격({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
+                    $"{id}: {who} 의 패리 커밋 + 2연격({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
             }
         }
     }

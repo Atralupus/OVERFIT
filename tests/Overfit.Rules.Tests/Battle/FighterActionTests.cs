@@ -426,17 +426,39 @@ public class FighterActionTests
     {
         // 누르면 0.333초 커밋이고 앞 0.133초가 창이다. 창이 닫혀도 커밋은 끝까지 간다 — 누를 때마다 60% 는
         // 무방비로 서 있는 것이 스펙이 연타 징벌을 지운 근거다.
+        //
+        // 두 경계를 **양쪽에서** 못박는다 — 창의 마지막 틱과 첫 바깥 틱, 커밋의 마지막 틱과 끝난 틱. 한쪽만 볼 때는
+        // 창이 한 틱 넓어져도 모든 스위트가 초록이었고, 커밋이 한 틱 짧아져도 골든만 빨개졌다(리뷰가 변이로 확인했다).
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
         f.Action.ShouldBe(FighterAction.Parry);
         f.Parrying.ShouldBeTrue("누른 틱에 창이 안 열렸다");
 
-        Idle(f, 8);   // 9틱 = 0.15초 — 창 밖
-        f.Parrying.ShouldBeFalse("창(0.133초)이 안 닫혔다 — 그러면 패리에 실패가 없다");
+        Idle(f, 6);   // 7틱 = 0.1167초 — 창(0.133)의 마지막 틱
+        f.Parrying.ShouldBeTrue("창이 한 틱 일찍 닫혔다");
+
+        Idle(f, 1);   // 8틱 = 0.1333초 — 창 밖의 첫 틱
+        f.Parrying.ShouldBeFalse("창(0.133초)이 제때 안 닫혔다 — 창이 데이터보다 넓다");
         f.Action.ShouldBe(FighterAction.Parry, "창이 닫히면서 커밋까지 풀렸다 — 누를 때의 값이 없다");
 
-        Idle(f, 11);   // 20틱 = 0.333초 — 커밋이 끝났다
+        Idle(f, 11);   // 19틱 = 0.3167초 — 커밋(0.3333)의 마지막 틱
+        f.Action.ShouldBe(FighterAction.Parry, "커밋이 한 틱 일찍 끝났다");
+
+        Idle(f, 1);   // 20틱 = 0.3333초 — 커밋이 끝났다
         f.Action.ShouldBe(FighterAction.Idle);
+    }
+
+    [Fact]
+    public void 패리는_공중에서도_선다()
+    {
+        // 이 계획이 정한 것 3 — 스펙은 "땅에서만" 을 가드에만 적었다. 공중 패리를 막으면 받아쳐 공중 대시를
+        // 되돌려 받는 보상(ParryPrecise)이 설 자리가 없다.
+        Fighter f = Spawn();
+        f.Tick(new InputFrame(0, Jump: true, false, false, false), _dt);
+        f.Tick(_parry, _dt);
+
+        f.Grounded.ShouldBeFalse("아직 공중이어야 이 테스트가 공중 패리를 본다");
+        f.Action.ShouldBe(FighterAction.Parry, "공중에서 누른 패리가 안 섰다");
     }
 
     [Fact]

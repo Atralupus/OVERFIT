@@ -105,6 +105,13 @@ public static class TestConfigs
     }
 
     /// <summary>
+    /// 마무리를 받아친 틱부터 2연격의 마지막 칼이 닿기까지(초) — <b>최악의 경우</b>다. 받아쳐도 패리의 커밋은
+    /// 끝까지 가고(<c>Fighter.ParryPrecise</c> 는 커밋을 안 푼다) 그동안 누른 J 는 버려지므로, 2연격은 커밋이
+    /// 끝나야 시작한다(설계 §5.3). 창의 첫 틱에 받아치면 커밋이 거의 통째로 남으니 커밋 길이를 통째로 더한다.
+    /// </summary>
+    public static double FinisherPunishLead(FighterConfig c) => c.ParryDuration + ComboLead(c);
+
+    /// <summary>
     /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
     /// 그리는 것은 뷰다. 여기 있는 이유는 <c>PatternDef.Tell</c> 이 required 이기 때문뿐이다.
     /// </summary>

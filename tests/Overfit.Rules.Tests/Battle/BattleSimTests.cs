@@ -1046,6 +1046,23 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 커밋이_끝난_뒤에_맞은_판정은_패리의_공이_아니다()
+    {
+        // 이 계획이 정한 것 6 — 패리 시도의 공은 **커밋이 도는 동안만** 산다(대시의 공이 대시 행동이 도는 동안인 것과
+        // 같은 경계). 커밋이 끝난 뒤에 선 판정까지 그 누름의 시도로 세면 사람이 한 적 없는 -0.4초짜리 표본이
+        // parry 축에 섞이고, "아무것도 안 하고 맞았다" 가 "늦게 누르고 맞았다" 로 기록된다.
+        // 위 테스트(12틱에 누른 것)와 짝이다: 거기는 커밋 안에서 맞아 Parry, 여기는 커밋 밖에서 맞아 None.
+        const int press = 3;
+        (DodgeEvent e, int hitTick) = ParryAt(press);
+
+        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(TestConfigs.Fighter().ParryDuration,
+            "판정이 커밋 안에 섰다 — 이 테스트가 커밋이 끝난 뒤를 안 본다");
+        e.Verdict.ShouldBe(HitVerdict.Hit);
+        e.Verb.ShouldBe(DodgeVerb.None, "커밋이 끝난 누름이 이 판정의 공을 가져갔다");
+        e.TimingError.ShouldBe(0);
+    }
+
+    [Fact]
     public void 앞의_연타를_받아치면_피해_0_뿐이다()
     {
         // **박자가 고정되는 자리다** (이슈 #53). 전에는 여기서 0.5초 경직이 붙어, 같은 패턴인데
@@ -1435,11 +1452,12 @@ public class BattleSimTests
         // 이 테스트가 **1단계**인 것이 요점이다 — 유저가 실제로 하고 있는 단계가 여기라, 여기서 안
         // 서면 요청받은 것이 하나도 안 된 것이다. 1단계의 마무리도 빨간 가드 불가이고(이슈 #53 ·
         // 유저 결정), 붙들고 버티는 사람은 거기서 깨지고 받아친 사람은 보스를 굳힌다.
+        // 2연격은 받아친 패리의 커밋이 끝나야 시작한다 — 그 나머지까지 담아야 한다(TestConfigs.FinisherPunishLead).
         FighterConfig f = TestConfigs.Fighter();
-        double lead = TestConfigs.ComboLead(f);
+        double lead = TestConfigs.FinisherPunishLead(f);
 
         RealFinisherStagger().ShouldBeGreaterThanOrEqualTo(lead,
-            $"1단계 마무리를 받아쳤는데 경직이 2연격({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
+            $"1단계 마무리를 받아쳤는데 경직이 패리 커밋 + 2연격({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
     }
 
     /// <summary>
