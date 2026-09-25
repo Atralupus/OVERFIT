@@ -49,6 +49,7 @@ public class VariantRhythmTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = fighter,
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999),
         PatternIds = new[] { pattern },
         Patterns = TestConfigs.Patterns(),
@@ -244,28 +245,29 @@ public class VariantRhythmTests
         }
     }
 
-    // ── 역린: 헛스윙은 마무리 앞, 기억 창 안 · 패리 창 밖에 선다 ─────────────────
+    // ── 역린: 헛스윙에 지른 패리는 마무리 앞에서 커밋에 묶인다 ─────────────────
 
     [Fact]
-    public void 역린의_헛스윙은_마무리_앞_기억_창_안이고_패리_창_밖이다()
+    public void 역린의_헛스윙에_지른_패리는_마무리를_못_받아친다()
     {
-        // 역린이 패리 의존을 봉인하는 산수는 두 창 사이에 서 있다 (patterns.json 의 `III-역린` _note):
-        //   · 헛스윙에 지른 누름과 마무리에 지른 누름이 **기억 창 안**이어야 연타 사슬이 자라
-        //     마무리의 패리 창이 깎인다(0.133 → 0.1).
-        //   · 헛스윙에 누르고 버틴 누름이 마무리에서 **정확 창 밖**이어야 그 누름이 낡아 가드가 되고,
-        //     빨간 마무리가 그 가드를 깬다.
-        // 이슈 #54 가 뼈대를 넓히며 헛스윙 → 마무리가 0.30 → 0.37 이 됐다. 뼈대를 더 넓히다 이 간격이
-        // 기억 창(0.5)을 넘으면 헛스윙은 아무것도 안 깎는 빈 시간이 된다 — 여기서 빨개진다.
+        // 역린이 패리 의존을 봉인하는 산수가 바뀌었다 (이슈 #59 · 설계 §5.3). 전에는 헛스윙에 지른 누름이 연타 사슬을
+        // 키워 마무리의 창을 깎았다(기억 창 0.5 안) — 스펙이 연타 징벌을 지웠다. 이제 패리는 누르면 0.333초 커밋이라,
+        // 헛스윙에 지른 사람은 그 커밋에 묶인다.
+        //   · 헛스윙 → 마무리가 패리 **창 밖**이어야 헛스윙에 지른 누름이 마무리를 그대로 받아치지 못한다.
+        //   · 헛스윙 → 마무리가 **커밋 + 사람의 반응(0.2초 — 설계 §11 의 가정)** 보다 짧아야, 커밋이 풀린 뒤 마무리를
+        //     보고 다시 누를 틈이 없다. 커밋이 풀리는 순간에 맞춰 미리 누르는 것(박자를 외운 사람)은 된다 —
+        //     봉인은 난사를 치지 보고 누르는 사람을 치지 않는다.
+        const double reaction = 0.2;
         PatternDef def = TestConfigs.Patterns()["내려찍기 III-역린"];
         double feint = def.Timeline.Single(s => s.Kind == "feint").T;
         double finisher = def.Timeline.Last(s => s.Kind == "active").T;
 
         foreach ((string id, FighterConfig c) in TestConfigs.Fighters())
         {
-            (finisher - feint).ShouldBeLessThan(c.ParryMemoryWindow,
-                $"{id}: 헛스윙 → 마무리 {finisher - feint:0.00}초가 기억 창 밖이다 — 헛스윙에 지른 패리가 아무것도 안 깎는다");
             (finisher - feint).ShouldBeGreaterThan(c.ParryPreciseWindow,
                 $"{id}: 헛스윙 → 마무리 {finisher - feint:0.00}초가 패리 창 안이다 — 헛스윙에 누른 것이 마무리를 그대로 받아친다");
+            (finisher - feint).ShouldBeLessThan(c.ParryDuration + reaction,
+                $"{id}: 헛스윙 → 마무리 {finisher - feint:0.00}초면 커밋이 풀린 뒤 보고 다시 누를 틈이 있다 — 헛스윙이 아무것도 안 묶는다");
         }
     }
 }

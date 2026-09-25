@@ -75,6 +75,7 @@ public static class Det
         /// 최소 봇이 공격을 <b>얼마나 모을지</b> 고를 때 (이슈 #40).
         /// 회피 선택과 <b>같은 스트림을 쓰지 않는다</b> — 한 스트림을 나눠 쓰면 봇이 회피를 한 번 더
         /// 고른 것만으로 그 뒤의 모든 차지가 달라져, 두 판단이 서로를 흔든다.
+        /// <para>⚠ <b>은퇴했다</b> (이슈 #59 — 차지가 없어졌다). 번호는 비워 둔다: 재사용하면 옛 리플레이의 스트림과 섞인다.</para>
         /// </summary>
         public const uint BotCharge = 3;
 
@@ -86,6 +87,12 @@ public static class Det
         /// </summary>
         public const uint BotGuard = 4;
 
+        /// <summary>
+        /// 최소 봇이 1타를 누를 때 <b>2타를 이을지</b> 고를 때 (이슈 #59 · 설계 §5.1). 회피 선택 · 가드 선택과
+        /// 같은 스트림을 안 쓴다 — 나눠 쓰면 칼질 하나가 그 뒤의 모든 회피 선택을 민다. 번호는 뒤에 더할 뿐이다.
+        /// </summary>
+        public const uint BotCombo = 5;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -93,6 +100,7 @@ public static class Det
             BotChoice => "bot_choice",
             BotCharge => "bot_charge",
             BotGuard => "bot_guard",
+            BotCombo => "bot_combo",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

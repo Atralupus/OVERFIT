@@ -44,7 +44,7 @@ public sealed class BossConfig
     /// </para>
     ///
     /// <para>
-    /// 길이는 <b>최대 차지 한 번이 이 경직 안에 들어가는가</b>로 정해진다. 전에는
+    /// 길이는 <b>2연격 한 번이 이 경직 안에 들어가는가</b>로 정해진다(이슈 #59 — 전에는 최대 차지였다). 전에는
     /// 경직 + <see cref="PatternGap"/> 을 합쳐서 쟀는데, 그러면 패턴 간격을 고치는 날
     /// 이 상이 조용히 사라진다. <c>BossDataTests</c> 가 그 산수를 <c>fighters.json</c> 과 대조한다.
     /// </para>

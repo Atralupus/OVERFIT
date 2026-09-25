@@ -25,6 +25,7 @@ public class BossFacingTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(),
         PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
         Patterns = TestConfigs.Patterns(),

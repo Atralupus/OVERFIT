@@ -41,17 +41,28 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 패리_창_셋이_연타_패리_기억_순으로_선다()
+    public void 패리_창은_커밋_안의_앞쪽이다()
     {
-        // 세 창의 **순서가 곧 규칙**이다 (이슈 #27 · #53).
-        // 연타 창이 패리 창보다 넓으면 난사가 벌이 아니라 상이 되고,
-        // 기억 창이 패리 창보다 좁으면 "늦게 눌렀다" 가 다시 "아무것도 안 했다" 와 같은 점이 된다 —
-        // 그 창이 계측의 공을 그 누름에 붙들어 두는 것이라 판정보다 오래 살아야 한다.
+        // 패리는 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 창이 커밋보다 길면 커밋이 끝난 뒤에도
+        // 받아치는 유령 창이 되고, 커밋이 창과 같으면 "누를 때마다 60% 는 무방비" 라는 연타의 벌이 사라진다 —
+        // 스펙이 연타 징벌(parry_spam_window)을 지운 근거가 그 벌이다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.ParrySpamWindow.ShouldBeLessThan(c.ParryPreciseWindow, $"{id}: 연타 징벌이 창을 안 좁힌다");
-            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryMemoryWindow, $"{id}: 패리 창이 기억 창보다 넓다");
-            c.ParryCost.ShouldBeGreaterThan(0, $"{id}: 방어 자세가 공짜다 — 난사에 값이 없다");
+            c.ParryPreciseWindow.ShouldBeGreaterThan(0, $"{id}: 패리 창이 없다");
+            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryDuration, $"{id}: 패리 창이 커밋보다 길다 — 난사에 벌이 없다");
+            c.ParryCost.ShouldBeGreaterThan(0, $"{id}: 패리가 공짜다 — 난사에 값이 없다");
+        }
+    }
+
+    [Fact]
+    public void 패리_커밋이_그림_네_장과_같은_길이다()
+    {
+        // 패리는 attack2 의 f0~f3(칼을 사선으로 세운 자세)을 12fps 로 돈다 (설계 §5.3). 커밋이 그림보다 짧으면 칼을
+        // 세우다 말고 idle 로 돌아가고, 길면 마지막 장에 멈춰 선다 — 이슈 #38 과 같은 종류의 어긋남이다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.ParryDuration.ShouldBe(c.ParryAnimFrames / c.ParryAnimFps, _halfTick,
+                $"{id}: 패리 커밋 {c.ParryDuration:0.0000}초가 {c.ParryAnim} {c.ParryAnimFrames}장({c.ParryAnimFrames / c.ParryAnimFps:0.0000}초)과 다르다");
         }
     }
 
@@ -105,182 +116,36 @@ public class FighterDataTests
         }
     }
 
-    // ── 차지 공격 (이슈 #40) ─────────────────────────────────────────────────
+    // ── 2연격 (설계 §5.1) ────────────────────────────────────────────────────
 
     [Fact]
-    public void 차지는_2초에_최대다()
+    public void 칼질은_1타와_2타_둘이다()
     {
-        // 유저가 정한 값이다 (이슈 #40: "차지는 2초동안 최대로"). 마지막 단계의 시간이 곧
-        // 최대 차지 시간이라 데이터에 키가 따로 없다 — 그래서 그 규약을 여기서 못박는다.
+        // 유저가 정한 모양이다 (설계 §5.1): 1타는 attack(팩의 attack1) · 2타는 attack2.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.ChargeTiers[^1].Seconds.ShouldBe(2.0, $"{id}: 최대 차지가 2초가 아니다");
+            c.Combo.Count.ShouldBe(2, $"{id}: 2연격이 아니다");
+            c.Combo[0].Anim.ShouldBe("attack", $"{id}: 1타의 그림");
+            c.Combo[1].Anim.ShouldBe("attack2", $"{id}: 2타의 그림");
         }
     }
 
     [Fact]
-    public void 차지_단계는_시간과_배수가_같이_오른다()
+    public void 연격_2타는_1타의_세_배고_반속이다()
     {
-        // 표의 **순서가 곧 규칙**이다 — Fighter.TierFor 가 "닿은 마지막 칸" 을 답으로 쓰므로
-        // 시간이 뒤죽박죽이면 더 모은 쪽이 더 낮은 단계를 받는다. 첫 칸이 0초 ×1 이어야
-        // "그냥 누른 것" 이 0단계로 서고, 배수가 안 오르면 모을 이유가 없다.
+        // **유저가 정한 값이다** (설계 §5.1): "2타 3배 공격력, 속도는 반". 값을 바꾸면 이 테스트도 같이 고친다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.ChargeTiers.Count.ShouldBeGreaterThan(1, $"{id}: 단계가 하나뿐이면 차지가 아니다");
-            c.ChargeTiers[0].Seconds.ShouldBe(0, $"{id}: 첫 칸이 0초가 아니다 — 그냥 누른 것이 0단계다");
-            c.ChargeTiers[0].DamageMultiplier.ShouldBe(1.0, $"{id}: 안 모은 한 대의 피해가 attack_damage 가 아니다");
-
-            for (int i = 1; i < c.ChargeTiers.Count; i++)
-            {
-                c.ChargeTiers[i].Seconds.ShouldBeGreaterThan(
-                    c.ChargeTiers[i - 1].Seconds, $"{id}: 단계 {i} 의 시간이 앞 단계보다 안 크다");
-                c.ChargeTiers[i].DamageMultiplier.ShouldBeGreaterThan(
-                    c.ChargeTiers[i - 1].DamageMultiplier, $"{id}: 단계 {i} 를 모을 이유가 없다");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 실제 캐릭터가 <paramref name="tier"/> 단계까지 모았다가 놓은 칼의 피해. <b>규칙을 돌려서</b> 잰다 —
-    /// 배수 × 기본 피해를 여기서 곱해 적으면 반올림 규약(Fighter.AttackDamage 의 AwayFromZero)이
-    /// 테스트 밖에 남는다.
-    /// </summary>
-    private static int ChargedDamage(FighterConfig c, int tier)
-    {
-        var fighter = new Fighter(c, TestConfigs.Arena(), TestConfigs.Arena().Width / 2);
-        fighter.Tick(new InputFrame(0, false, false, false, Attack: true, AttackHeld: true), BattleSim.Dt);
-        for (int i = 0; i < 60 * 5 && fighter.ChargeTier < tier; i++)
-        {
-            fighter.Tick(new InputFrame(0, false, false, false, false, AttackHeld: true), BattleSim.Dt);
-        }
-
-        fighter.Tick(default, BattleSim.Dt);   // 놓는다 — 모은 단계가 이 칼질에 굳는다
-        fighter.ChargeTier.ShouldBe(tier, "모으다 말았다 — 이 도우미가 아무것도 안 잰다");
-        return fighter.AttackDamage;
-    }
-
-    [Fact]
-    public void 모은_칼은_두_배_반과_다섯_배다()
-    {
-        // **유저가 직접 해 보고 낸 요청이다** (이슈 #54): "차지시 공격력 배수를 더 높여주세요
-        // 차지공격에 메리트가 크도록". 이슈가 그것을 ×1 · ×2.5 · ×5 로 옮겼다 — 최대가 ×3 이던 때는
-        // 2초를 서 있어도 30 이라 설 값이 없었다. 기본 피해 10 으로 25 · 50 이고, 50 은 보스 체력
-        // 200 의 4분의 1 이다. **값은 유저가 손으로 판단한다** — 바꾸면 이 테스트도 같이 고친다
-        // (차지는_2초에_최대다 와 같은 자리다).
-        foreach ((string id, FighterConfig c) in Load())
-        {
-            ChargedDamage(c, 1).ShouldBe(25, $"{id}: 0.8초 모은 칼");
-            ChargedDamage(c, 2).ShouldBe(50, $"{id}: 2초 모은 칼(최대)");
-        }
-    }
-
-    /// <summary>
-    /// 한 패턴의 <b>마지막 판정</b>부터 다음 패턴의 <b>첫 판정</b>까지 맞을 일이 없는 시간(초).
-    /// 패턴 꼬리(마지막 판정 → 끝) + 패턴 간격 + 다음 패턴의 선딜이다.
-    /// <b>패리는 안 센다</b> — 차지는 패리와 상관없는 기술이라, 이 창은 아무것도 안 하고
-    /// 서 있기만 해도 주어지는 시간이어야 한다.
-    /// </summary>
-    private static double Window(PatternDef ended, PatternDef next, double gap)
-    {
-        double lastActive = 0;
-        double firstActive = double.PositiveInfinity;
-        foreach (PatternStep step in ended.Timeline)
-        {
-            if (step.Kind == "active" && step.T > lastActive)
-            {
-                lastActive = step.T;
-            }
-        }
-
-        foreach (PatternStep step in next.Timeline)
-        {
-            if (step.Kind == "active" && step.T < firstActive)
-            {
-                firstActive = step.T;
-            }
-        }
-
-        return (ended.Duration - lastActive) + gap + firstActive;
-    }
-
-    /// <summary>
-    /// 차지 <paramref name="tier"/> 단계의 칼이 닿기까지 서 있어야 하는 시간(초).
-    /// <b>붙들고 있는 시간이 곧 선딜이다</b> — 그래서 더해지는 것은 모은 시간과 <b>남은</b> 선딜뿐이고,
-    /// 0.8초 이상을 모으면 선딜은 이미 다 지나 판정까지의 시간만 남는다.
-    /// </summary>
-    private static double StandingTime(FighterConfig c, int tier)
-    {
-        double held = c.ChargeTiers[tier].Seconds;
-        return held + Math.Max(0, c.AttackWindup - held) + c.AttackActive;
-    }
-
-    [Fact]
-    public void 중간_차지는_백장의_빈_시간에_언제나_들어간다()
-    {
-        // **이 기술이 죽어 있지 않다는 증명이다.** 중간 단계(0.8초)는 1.2166초면 칼이 닿는데
-        // 백장의 가장 좁은 빈 시간이 1.90초라, 어떤 패턴 뒤에 어떤 패턴이 와도 성립한다.
-        // 여기가 깨지면 차지는 "쓸 수 있는 자리가 없는 기술" 이 된다.
-        BossConfig boss = TestConfigs.Boss();
-        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
-
-        foreach ((string id, FighterConfig c) in Load())
-        {
-            double need = StandingTime(c, 1);
-            foreach ((string a, PatternDef ended) in patterns)
-            {
-                foreach ((string b, PatternDef next) in patterns)
-                {
-                    Window(ended, next, boss.PatternGap).ShouldBeGreaterThan(need,
-                        $"{id}: {a} → {b} 사이에 1단계 차지({need:0.000}초)가 안 들어간다");
-                }
-            }
+            c.Combo[1].Damage.ShouldBe(3 * c.Combo[0].Damage, $"{id}: 2타가 1타의 세 배가 아니다");
+            c.Combo[1].Fps.ShouldBe(c.Combo[0].Fps / 2, $"{id}: 2타가 반속이 아니다");
         }
     }
 
     [Fact]
-    public void 최대_차지가_백장의_빈_시간에_들어간다()
+    public void 칼질마다_액션이_그림_한_번과_같은_길이다()
     {
-        // **이 이슈에서 가장 중요한 숫자다** (이슈 #40). 최대 차지는 2.0833초를 서 있어야 칼이 닿고
-        // (모으기 2.0 + 남은 선딜 0 + 판정 0.0833 — 붙드는 것이 곧 선딜이다),
-        // 백장의 빈 시간은 1.90~2.40초다. 그래서 **패리 없이, 그냥 선 채로 여섯 짝에서 들어간다.**
+        // ← 공격_액션이_공격_애니메이션_한_번과_같은_길이다 의 주석 그대로
         //
-        // 안 들어가는 아홉 짝은 전부 **앞 변종이 `III-역습`** 인 경우다 (이슈 #48). 계열이 하나가 되며
-        // 선딜이 0.85 로 통일돼서, 도박을 지는 것은 이제 다음 패턴의 선딜이 아니라 **앞 패턴의 꼬리**다 —
-        // 계열에서 그것만 0.35 이고 나머지 여덟은 0.60 이다. 그리고 그 하나가 하필
-        // **욕심을 벌하는 변종**인 것이 이 설계의 문장이다: 그 뒤에 2초를 모으는 것이 바로 그 욕심이다.
-        //
-        // 두 단언이 같이 있어야 이 설계가 지켜진다. 위가 깨지면 최대 차지는 아무도 못 쓰는
-        // 장식이 되고, 아래가 깨지면 다음 패턴이 무엇이든 늘 되는 공짜가 된다.
-        BossConfig boss = TestConfigs.Boss();
-        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
-
-        foreach ((string id, FighterConfig c) in Load())
-        {
-            double need = StandingTime(c, c.ChargeTiers.Count - 1);
-            int pairs = 0, fits = 0;
-
-            foreach ((_, PatternDef ended) in patterns)
-            {
-                foreach ((_, PatternDef next) in patterns)
-                {
-                    pairs++;
-                    if (Window(ended, next, boss.PatternGap) >= need)
-                    {
-                        fits++;
-                    }
-                }
-            }
-
-            fits.ShouldBeGreaterThanOrEqualTo(pairs / 2,
-                $"{id}: 최대 차지({need:0.000}초)가 {fits}/{pairs} 짝에만 들어간다 — 쓸 수 없는 기술이다");
-            fits.ShouldBeLessThan(pairs,
-                $"{id}: 다음 패턴이 무엇이든 최대 차지가 들어간다 — 2초를 서 있는 데 도박이 없다");
-        }
-    }
-
-    [Fact]
-    public void 공격_액션이_공격_애니메이션_한_번과_같은_길이다()
-    {
         // **이 저장소에서 실제로 밟은 버그다** (이슈 #38). 공격 액션의 총 길이(선딜 + 판정 + 후딜)가
         // 애니메이션 재생 시간보다 짧으면, 액션이 끝나는 순간 뷰가 자세를 idle 로 되돌려
         // 애니메이션이 중간에서 잘린다. 중검은 0.30초짜리 액션으로 0.50초짜리 6프레임을 돌렸고,
@@ -289,22 +154,28 @@ public class FighterDataTests
         // 그래서 순서를 뒤집는다: 애니메이션이 먼저고 액션 길이가 거기 맞춘다.
         //
         // "한 번" 은 **시트 전체가 아니라 탭이 도는 구간**이다 (이슈 #54). 선딜을 0.3333 → 0.0833 으로
-        // 줄이면서 탭은 0번이 아니라 attack_anim_start_frame 에서 시작한다 — 칼을 뒤로 빼는 네 장을
+        // 줄이면서 탭은 0번이 아니라 start_frame 에서 시작한다 — 칼을 뒤로 빼는 네 장을
         // 0.0833초에 다 돌릴 수는 없어서다. 그래서 재는 길이도 거기서 끝까지다. 요구는 그대로다:
         // 액션이 끝나는 순간과 그림이 끝나는 순간이 같아야 한다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            double anim = (c.AttackAnimFrames - c.AttackAnimStartFrame) / c.AttackAnimFps;
-            double cycle = c.AttackWindup + c.AttackActive + c.AttackRecover;
-            cycle.ShouldBe(anim, _halfTick,
-                $"{id}: 공격 액션 {cycle:0.0000}초가 애니메이션({c.AttackAnimStartFrame}번부터) {anim:0.0000}초와 다르다"
-                + " — 그림이 잘리거나 남는다");
+            for (int i = 0; i < c.Combo.Count; i++)
+            {
+                ComboStepDef s = c.Combo[i];
+                double anim = (s.Frames - s.StartFrame) / s.Fps;
+                double cycle = s.Windup + s.Active + s.Recover;
+                cycle.ShouldBe(anim, _halfTick,
+                    $"{id} {i + 1}타: 액션 {cycle:0.0000}초가 {s.Anim} 의 {s.StartFrame}번부터 {anim:0.0000}초와 다르다"
+                    + " — 그림이 잘리거나 남는다");
+            }
         }
     }
 
     [Fact]
-    public void 공격_판정이_칼이_지나가는_프레임_위에_선다()
+    public void 칼질마다_판정이_칼이_지나가는_장_위에_선다()
     {
+        // ← 공격_판정이_칼이_지나가는_프레임_위에_선다 의 주석 그대로
+        //
         // 판정이 서는 구간과 **화면에서 칼이 지나가는 구간**이 같은 자리여야 한다.
         // 어긋나면 "닿았는데 칼은 아직 등 뒤" 또는 그 반대가 되고, 플레이어는 사거리를 못 배운다.
         // blade_frame 은 시트를 실제로 열어서 정한 값이다 — 프레임 번호로 짐작한 것이 아니다.
@@ -314,25 +185,60 @@ public class FighterDataTests
         // 전에 그림이 "벴다" 고 말한다(이슈 #38 의 반대쪽 거짓말이다).
         foreach ((string id, FighterConfig c) in Load())
         {
-            double frame = 1 / c.AttackAnimFps;
+            for (int i = 0; i < c.Combo.Count; i++)
+            {
+                ComboStepDef s = c.Combo[i];
+                double frame = 1 / s.Fps;
 
-            c.AttackAnimBladeFrame.ShouldBeInRange(0, c.AttackAnimFrames - 1,
-                $"{id}: blade_frame={c.AttackAnimBladeFrame} 이 {c.AttackAnimFrames}프레임 밖이다");
+                s.BladeFrame.ShouldBeInRange(0, s.Frames - 1,
+                    $"{id} {i + 1}타: blade_frame={s.BladeFrame} 이 {s.Frames}장 밖이다");
 
-            c.AttackAnimStartFrame.ShouldBeInRange(0, c.AttackAnimBladeFrame - 1,
-                $"{id}: start_frame={c.AttackAnimStartFrame} 이 칼이 나가는 {c.AttackAnimBladeFrame}번 앞이 아니다"
-                + " — 선딜 동안 칼이 이미 나가 있다");
+                s.StartFrame.ShouldBeInRange(0, s.BladeFrame - 1,
+                    $"{id} {i + 1}타: start_frame={s.StartFrame} 이 칼이 나가는 {s.BladeFrame}번 앞이 아니다"
+                    + " — 선딜 동안 칼이 이미 나가 있다");
 
-            c.AttackWindup.ShouldBe((c.AttackAnimBladeFrame - c.AttackAnimStartFrame) * frame, _halfTick,
-                $"{id}: 선딜이 끝나는 자리가 칼이 나가는 {c.AttackAnimBladeFrame}번 프레임의 시작과 다르다"
-                + $" ({c.AttackAnimStartFrame}번부터 셌다)");
+                s.Windup.ShouldBe((s.BladeFrame - s.StartFrame) * frame, _halfTick,
+                    $"{id} {i + 1}타: 선딜이 끝나는 자리가 칼이 나가는 {s.BladeFrame}번 장의 시작과 다르다"
+                    + $" ({s.StartFrame}번부터 셌다)");
 
-            c.AttackActive.ShouldBeGreaterThanOrEqualTo(frame - _halfTick,
-                $"{id}: 판정이 한 프레임보다 짧다 — 칼이 지나가는 그림 위에 판정이 못 선다");
+                s.Active.ShouldBeGreaterThanOrEqualTo(frame - _halfTick,
+                    $"{id} {i + 1}타: 판정이 한 장보다 짧다 — 칼이 지나가는 그림 위에 판정이 못 선다");
 
-            (c.AttackWindup + c.AttackActive).ShouldBeLessThanOrEqualTo(
-                ((c.AttackAnimFrames - c.AttackAnimStartFrame) / c.AttackAnimFps) + _halfTick,
-                $"{id}: 판정이 애니메이션 밖으로 넘친다");
+                (s.Windup + s.Active).ShouldBeLessThanOrEqualTo(((s.Frames - s.StartFrame) * frame) + _halfTick,
+                    $"{id} {i + 1}타: 판정이 그림 밖으로 넘친다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 칼의_모양은_그_칼질의_칼_장에서_뽑은_것이다()
+    {
+        // 칼질의 그림과 칼의 모양이 **같은 장**이어야 보이는 것이 곧 맞는 것이다(설계 §3). 판정 id 는
+        // `팩/애니메이션/장` 이라(설계 §3.2) 그 셋이 칼질의 sprite · anim · blade_frame 과 같아야 한다 —
+        // 다른 장의 모양을 달면 2타를 휘두르는데 판정은 1타의 궤적인 식으로 조용히 갈린다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            foreach (ComboStepDef s in c.Combo)
+            {
+                s.Hitbox.ShouldBe($"{c.Sprite}/{s.Anim}/{s.BladeFrame}",
+                    $"{id}: 칼의 모양이 칼이 지나가는 장에서 온 것이 아니다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 칼의_모양이_hitboxes_json_에_있다()
+    {
+        // 없는 id 는 판을 세울 때 BattleSim 이 거절한다(ArgumentException) — 게임이 첫 전투에서 멈추기 전에 여기서 잡는다.
+        Dictionary<string, HitShape> shapes = HitShapeTable.Parse(
+            File.ReadAllText(Path.Combine("data", "hitboxes.json")), "hitboxes.json");
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            foreach (ComboStepDef s in c.Combo)
+            {
+                shapes.ShouldContainKey(s.Hitbox,
+                    $"{id}: {s.Hitbox} 가 hitboxes.json 에 없다 — tools/extract_hitboxes.py 의 목록에 넣고 다시 뽑는다");
+            }
         }
     }
 
@@ -344,7 +250,7 @@ public class FighterDataTests
         // 이슈가 제안한 것은 0.08초 — 60Hz 로 **5틱**이다. 그 틱 수를 못박는다.
         //
         // 산수로 재지 않고 **규칙을 돌려서** 센다. 경계는 틱 누산의 부동소수에 걸리므로
-        // (Fighter.TierFor 의 주석) 숫자만 보고 "0.0833 이니 5틱" 이라 적으면 실제로는 6틱일 수 있다.
+        // (TestConfigs.UntilNear 의 주석) 숫자만 보고 "0.0833 이니 5틱" 이라 적으면 실제로는 6틱일 수 있다.
         // 누른 틱이 1틱째다 — Begin 이 Advance 보다 먼저라 누른 틱도 선딜에 들어간다.
         foreach ((string id, FighterConfig c) in Load())
         {

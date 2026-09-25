@@ -89,16 +89,6 @@ public class HitShapeTests
     }
 
     [Fact]
-    public void Reach_는_높이를_안_본다()
-    {
-        // 옛 공격 판정(Strike)은 |dx| − 보스 반폭 ≤ 사거리만 봤다. 높이가 얼마든 같은 답이어야 한다.
-        HitShape reach = HitShape.Reach(110);
-
-        ShapeHit.Test(reach, _right, Body(1100, y: 5000)).ShouldBe(ShapeContact.Overlap);
-        ShapeHit.Test(reach, _left, Body(1100)).ShouldBe(ShapeContact.Overlap, "옛 판정은 등 뒤도 쳤다");
-    }
-
-    [Fact]
     public void 외곽_상자는_모든_사각형을_덮는다()
     {
         var shape = new HitShape(new[] { new HitRect(-120, -20, 40, 90), new HitRect(60, 260, 0, 30) });

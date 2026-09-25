@@ -10,24 +10,17 @@ public enum FighterPose
     Idle,
     Run,
     Attack,
-
-    /// <summary>
-    /// 모으고 있다 (이슈 #40). <c>attack</c> 시트의 <b>선딜 마지막 프레임</b>에 몸을 세운 자세다 —
-    /// 칼을 끝까지 뒤로 뺀 그 그림이 곧 "모으는 중" 이라, 없는 애니메이션을 만들지 않는다.
-    /// </summary>
-    Charge,
     Dash,
 
     /// <summary>
-    /// <b>방어 자세</b>다 (이슈 #47 · #53). 팩에 가드 그림이 <b>없어서</b> <c>idle</c> 을 빌려 쓰고,
-    /// 갈라 보이게 하는 것은 <b>색과 멈춘 링</b>이다.
-    ///
-    /// <para>
-    /// <b>패리 자세가 따로 없다</b> (이슈 #53). 전에는 <c>Parry</c> 가 있었고 몸 색도 링도 달랐는데,
-    /// 패리와 가드가 한 행동이 된 이상 그림도 하나여야 한다 — 누른 사람은 자기가 창 안에 들었는지를
-    /// 누르는 순간엔 알 수 없고(그건 판정이 서야 정해진다), 화면이 미리 갈라 말하면 거짓말이다.
-    /// 받아쳤다는 것은 <b>그 뒤에</b> 한 번 터지는 작은 고리로만 말한다.
-    /// </para>
+    /// 패리 — <c>attack2</c> 의 f0~f3(칼을 사선으로 세운 자세)을 12fps 로 도는 0.333초 커밋 (설계 §5.3).
+    /// 가드와 그림이 갈린다: 패리는 칼을 세우며 <b>움직이고</b> 가드는 서 있다.
+    /// </summary>
+    Parry,
+
+    /// <summary>
+    /// ↓ 를 누르고 있는 동안의 가드다 (설계 §5.2). 팩에 가드 그림이 없어 <c>idle</c> 을 빌리고, 갈라 보이게 하는 것은
+    /// <b>색과 멈춘 링</b>이다 — <c>attack2</c> 의 f1 자세로 바꾸는 것은 4번 PR(연출)이다.
     /// </summary>
     Guard,
     Hit,
@@ -64,14 +57,9 @@ public enum BossPhase
 /// <param name="Locked">가드가 깨져 굳었나. <c>guard_break_lock</c> 동안 아무것도 못 한다 —
 /// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.
 /// 부정확 패리의 고정이 없어져(이슈 #53) 이 색은 이제 한 가지 뜻뿐이다.</param>
-/// <param name="ChargeProgress">차지를 얼마나 모았나(0~1). 링의 반지름이 이것이다 —
-/// <c>ParryProgress</c> 와 같은 규약으로, 최대 시간(캐릭터마다 다르다)의 사본을 뷰에 두지 않는다.</param>
-/// <param name="ChargeMaxed">차지가 <b>최대에 닿았나</b> (이슈 #40). 진행도만 넘기고 뷰가
-/// <c>progress &gt;= 1</c> 로 판단하게 두지 않는다 — 단계는 구간이고 그 경계를 아는 곳은 규칙 하나다.
-/// <b>최대인지 모르면 2초를 셀 수가 없다</b>, 그래서 이 한 칸이 색과 섬광을 가른다.</param>
 /// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.
 /// 가드 링의 굵기가 아니라 <b>밝기</b>가 이것이라, 바닥에 가까울수록 링이 꺼져 간다.
-/// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다 — <c>ChargeProgress</c> 와 같은 규약이다.</param>
+/// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다.</param>
 public readonly record struct FighterFrame(
     double X,
     double Y,
@@ -79,9 +67,18 @@ public readonly record struct FighterFrame(
     FighterPose Pose,
     bool Invulnerable,
     bool Locked,
-    double ChargeProgress,
-    bool ChargeMaxed,
     double GuardStamina);
+
+/// <summary>
+/// 칼질 한 칸을 <b>그리는 데</b> 필요한 것 — 어느 시트를 몇 fps 로, 몇 번 장부터 돌리고 몇 번 장에서 칼이 나가나.
+/// 규칙의 <c>ComboStepDef</c> 를 그대로 안 넘긴다: 뷰가 규칙 DTO 에 묶이면 그 타입을 고치는 날 그림까지 끌려온다
+/// (<see cref="FighterFrame"/> 과 같은 이유다). <c>Battle</c> 이 데이터에서 옮겨 준다.
+/// </summary>
+/// <param name="Anim"><c>.tres</c> 의 애니메이션 이름.</param>
+/// <param name="Fps">이 칼질의 재생 속도. 시트의 속도와 다르면 그 비율로 돌린다(2타는 반속).</param>
+/// <param name="StartFrame">칼질이 시작하는 장.</param>
+/// <param name="BladeFrame">칼이 지나가는 장 — 판정이 서는 틱에 여기로 맞춰 세운다.</param>
+public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame, int BladeFrame);
 
 /// <summary>
 /// 한 프레임에 보스의 <b>예고 표지</b>를 그리는 데 필요한 전부.

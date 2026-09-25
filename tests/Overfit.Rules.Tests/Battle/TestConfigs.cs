@@ -32,41 +32,86 @@ public static class TestConfigs
         DashDuration = 0.18,
         DashIFrames = 0.14,
         DashCost = 25,
+        // 패리는 **실제 값 그대로**다 (설계 §5.3) — 가드 셋과 같이 캐릭터 성능이 아니라 조작의 정의다.
         ParryPreciseWindow = 0.133,
-        ParryMemoryWindow = 0.5,
-        ParrySpamWindow = 0.1,
+        ParryDuration = 0.3333,
         ParryCost = 15,
-        AttackWindup = 0.08,
-        AttackActive = 0.06,
-        AttackRecover = 0.14,
-        // 기준 파이터에는 그림이 없지만 넷의 관계는 진짜여야 한다 — 50fps · 14프레임이면
-        // 재생 0.28초로 위 셋의 합과 같고, 0번에서 시작해 4번 프레임(0.08초)이 선딜의 끝이다.
-        // 거짓 값을 넣으면 이 픽스처가 "애니메이션에서 거꾸로 정한다"는 규칙의 반례가 된다.
-        AttackAnimFps = 50,
-        AttackAnimFrames = 14,
-        AttackAnimBladeFrame = 4,
-        AttackAnimStartFrame = 0,
-        AttackReach = 90,
-        AttackDamage = 8,
+        ParryAnim = "attack2",
+        ParryAnimFps = 12,
+        ParryAnimFrames = 4,
+        // 기준 파이터에는 그림이 없지만 칼질 한 칸의 관계는 진짜여야 한다 — 50fps · 14장이면 재생 0.28초로
+        // 셋의 합과 같고, 0번에서 시작해 4번 장(0.08초)이 선딜의 끝이다. 거짓 값을 넣으면 이 픽스처가
+        // "그림에서 거꾸로 정한다" 는 규칙의 반례가 된다.
+        Combo = new List<ComboStepDef>
+        {
+            new()
+            {
+                Anim = "attack", Fps = 50, Frames = 14, StartFrame = 0, BladeFrame = 4,
+                Windup = 0.08, Active = 0.06, Recover = 0.14, Damage = 8, Hitbox = TestSwordId,
+            },
+            // 2타 — 기준값이라 짧다(실제는 1.0초). 여기서 진짜여야 하는 것은 **모양**이다: 1타보다 선딜이 길고 더 아프다.
+            // 20fps · 12장이면 재생 0.6초로 셋의 합과 같고, 0번에서 시작해 6번 장(0.3초)이 선딜의 끝이다.
+            // 칼은 1타와 같은 기준 사각형이다 — 기준 파이터는 그림이 없다.
+            new()
+            {
+                Anim = "attack2", Fps = 20, Frames = 12, StartFrame = 0, BladeFrame = 6,
+                Windup = 0.3, Active = 0.1, Recover = 0.2, Damage = 24, Hitbox = TestSwordId,
+            },
+        },
         AttackCost = 12,
         // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
         // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
         GuardChipRatio = 0.25,
         GuardStaminaPerDamage = 1.8,
         GuardBreakLock = 1.1,
-        // 기준값이라 **짧다.** 실제 캐릭터는 0 / 0.8 / 2.0 초인데(fighters.json) 그 값을 베끼면
-        // 차지 한 번을 재는 테스트가 120틱을 돌고, 무엇보다 캐릭터의 차지 시간을 고칠 때마다
-        // 무관한 테스트가 같이 빨개진다. 여기서 진짜여야 하는 것은 수치가 아니라 **모양**이다:
-        // 시간 오름차순 · 첫 칸은 0초 ×1.
-        ChargeTiers = new List<ChargeTierDef>
-        {
-            new() { Seconds = 0.0, DamageMultiplier = 1.0 },
-            new() { Seconds = 0.5, DamageMultiplier = 2.0 },
-            new() { Seconds = 1.0, DamageMultiplier = 3.0 },
-        },
         StaminaRegen = 40,
         Sprite = "test_unit",
     };
+
+    /// <summary>기준 파이터의 칼 id. <c>hitboxes.json</c> 에는 없다 — <see cref="HitShapes"/> 가 더해 준다.</summary>
+    public const string TestSwordId = "test/sword";
+
+    /// <summary>
+    /// 기준 파이터의 칼 — 옛 사거리 90 을 높이 300 으로 막은 사각형 하나(좌우 대칭). <b>그림에서 안 뽑는다</b>:
+    /// 기준 파이터가 실제 그림의 모양을 쓰면 <c>hitboxes.json</c> 을 다시 뽑는 날(흰색 기준 하나만 바꿔도) 칼질을
+    /// 세는 모든 테스트와 골든이 같이 움직인다 — 이 파일 머리의 "기준값" 과 같은 이유다.
+    /// 보스 몸통(키 297) 앞에서 옛 판정(|dx| − 보스 반폭 ≤ 90)과 가로가 정확히 같아, 칼을 모양으로 옮긴 것이
+    /// 기준 파이터의 판을 바꾸지 않는다.
+    /// </summary>
+    public static HitShape TestSword() => new(new[] { new HitRect(-90, 90, 0, 300) });
+
+    /// <summary>실제 <c>hitboxes.json</c> 에 기준 파이터의 칼을 더한 표. 판을 세울 때 이것을 넘긴다.</summary>
+    public static Dictionary<string, HitShape> HitShapes()
+    {
+        Dictionary<string, HitShape> shapes = HitShapeTable.Parse(
+            File.ReadAllText(Path.Combine("data", "hitboxes.json")), "hitboxes.json");
+        shapes[TestSwordId] = TestSword();
+        return shapes;
+    }
+
+    /// <summary>
+    /// 2연격의 마지막 칼이 닿기까지(초) — 앞 칼질 전부 + 마지막 칼질의 선딜 + 판정. 2타는 1타가 끝나는 틱에
+    /// 이어진다(설계 §5.1). 마무리를 받아친 경직이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
+    /// </summary>
+    public static double ComboLead(FighterConfig c)
+    {
+        double lead = 0;
+        for (int i = 0; i < c.Combo.Count - 1; i++)
+        {
+            lead += c.Combo[i].Windup + c.Combo[i].Active + c.Combo[i].Recover;
+        }
+
+        return lead + c.Combo[^1].Windup + c.Combo[^1].Active;
+    }
+
+    /// <summary>
+    /// 마무리를 받아친 틱부터 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
+    /// (<c>Fighter.Begin</c> 의 되받아치기 · 판정 13) — 커밋이 끝나기를 안 기다린다. 가장 이른 J 는 받아친
+    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 경직)을 파이터의 틱
+    /// 뒤에 내므로 받아친 그 틱의 J 는 이미 지나갔다. <see cref="ComboLead"/> 만 쓰면 받아친 그 틱에 누른 J 를 세는
+    /// 셈이고, 그 J 는 규칙이 못 받는다. 사람의 반응은 여기 안 넣는다 — 그 여유는 BossDataTests 가 따로 잰다.
+    /// </summary>
+    public static double FinisherPunishLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
 
     /// <summary>
     /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
@@ -124,6 +169,7 @@ public static class TestConfigs
     {
         Arena = Arena(),
         Fighter = Fighter(),
+        HitShapes = HitShapes(),
         Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
         PatternIds = new[] { SweepId },
         Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },

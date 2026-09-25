@@ -22,9 +22,7 @@ public sealed class BotPolicy
 {
     /// <summary>
     /// 대시·패리를 걸 창(초). 무적창(0.14) · 패리창(0.133)보다 좁게 잡아 판정이 서는 순간까지
-    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 <b>가드</b>가 된다 (이슈 #53).
-    /// 연타 징벌(이슈 #27)도 여기에 걸려 있다: 이 창 안에서만 누르므로 누름은 거의 항상
-    /// 받아치고, 받아친 누름은 사슬을 푼다.
+    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 커밋 안에서 맞는다 (설계 §5.3).
     /// </summary>
     private const double _lateReact = 0.10;
 
@@ -35,6 +33,13 @@ public sealed class BotPolicy
     /// 셋에 하나면 한 판(패턴 20~40회)에 가드가 여러 번 들어가 계측이 실제로 도는지 보인다.
     /// </summary>
     private const int _guardOdds = 3;
+
+    /// <summary>
+    /// 몇 칼질에 한 번 2타를 이을까. <see cref="_guardOdds"/> 와 같은 자리 · 같은 이유다 — 봇의 성향이지 캐릭터의 수치가
+    /// 아니고, 봇 함대는 이것을 파라미터로 받는다. 둘에 하나(반반)인 이유: 한쪽만 나오면 그 칸(2타를 이은 칼질 · 1타로
+    /// 끝낸 칼질)이 데이터에 없는 것과 같다.
+    /// </summary>
+    private const int _chainOdds = 2;
 
     private readonly ulong _seed;
     private int _decisions;
@@ -48,15 +53,14 @@ public sealed class BotPolicy
     /// <summary>이번 패턴을 가드로 받기로 했나.</summary>
     private bool _guardThis;
 
-    /// <summary>지금까지 시작한 공격의 수. 차지 단계를 고르는 좌표의 키다.</summary>
+    /// <summary>지금까지 시작한 칼질의 수. 2타를 이을지 고르는 좌표의 키다.</summary>
     private int _swings;
 
     /// <summary>
-    /// 지금 모으는 차지의 목표 시간(초). 누를 때 정해 놓고, 닿으면 놓는다.
-    /// 매 틱 다시 뽑지 않는 이유는 그러면 "얼마나 모을 작정이었나" 가 기록에 안 남기 때문이다 —
-    /// 사람은 누를 때 정하고 그 판단이 곧 데이터다.
+    /// 이번 칼질에 2타를 이을 작정인가. 1타를 <b>누를 때</b> 정한다 — 사람은 1타를 누를 때 이미 2타를 정해 두고,
+    /// 매 틱 다시 뽑으면 "이을 작정이었나" 가 기록에 안 남는다.
     /// </summary>
-    private double _chargeGoal;
+    private bool _chainThis;
 
     public BotPolicy(ulong seed) => _seed = seed;
 
@@ -68,20 +72,15 @@ public sealed class BotPolicy
         double gap = Math.Abs(sim.Fighter.X - sim.Boss.X) - sim.Boss.HalfWidth;
         sbyte move = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
 
-        // 가드는 **패턴이 시작할 때** 정한다. 자세는 이제 누르는 그 틱에 서지만(이슈 #53)
-        // 아래의 반응 창(_lateReact 0.10초) 안에서 누르면 그건 가드가 아니라 **패리**다 —
-        // 창 안에 판정이 서기 때문이다. 가드를 실제로 내려면 일찍 눌러 창을 흘려보내야 하고,
-        // 그 판단은 패턴마다 한 번이어야 한다: 틱마다 마음이 바뀌면 버티는 일이 없다.
+        // 가드는 **패턴이 시작할 때** 정한다 — 틱마다 마음이 바뀌면 버티는 일이 없다.
         DecideGuard(sim);
 
-        // 모으는 중이면 할 일은 하나다 — 놓을 때인가 (이슈 #40).
-        // **패턴 갈래보다 먼저 본다.** 아래에 맡기면 패턴이 서는 순간 default(누름 없음)가 나가
-        // 봇은 자기가 왜 놓았는지도 모른 채 모은 것을 잃는다. 여기서 두 조건으로 명시한다:
-        // ① 목표만큼 모았다, ② 칼이 닿기 전에 판정이 선다(모은 채로 맞으면 전부 날아간다).
-        if (sim.Fighter.Charging)
+        // 칼질 중이면 할 일은 하나다 — 이을 작정이면 한 번 더 누른다 (설계 §5.1 · §5.4: 2연격도 엣지 두 번이다).
+        // **패턴 갈래보다 먼저 본다**: 칼질은 끝까지 커밋이라 판정이 와도 할 수 있는 것이 없다.
+        if (sim.Fighter.Action == FighterAction.Attack)
         {
-            bool hold = sim.Fighter.ChargeSeconds < _chargeGoal && Safe(sim);
-            return new InputFrame(0, false, false, false, false, AttackHeld: hold);
+            bool press = _chainThis && sim.Fighter.ComboStep == 0 && !sim.Fighter.ComboQueued;
+            return new InputFrame(0, false, false, false, Attack: press);
         }
 
         // 패턴이 돌고 있으면 셋 중 하나로 반응한다. 무엇을 고를지는 좌표 조회로 정한다 —
@@ -100,28 +99,18 @@ public sealed class BotPolicy
         //    회피로 버리고 있었다. 받아낸 뒤가 내 차례라는 것이 정확 패리의 상이고(나인 솔즈),
         //    그 상을 쓰는 곳은 회피가 아니라 공격이다.
         // ② 후딜 — 남은 판정이 없으면(NextActiveIn == null) 패턴은 돌지만 빈 시간이다.
-        //    사람은 마지막 판정이 지나간 그 순간부터 모으기 시작하는데, 봇이 패턴이 끝나기를
-        //    기다리면 최대 차지에 필요한 시간의 절반을 문 앞에서 버린다 — 그러면 학습 데이터에
-        //    최대 차지가 영영 안 들어간다.
+        //    사람은 마지막 판정이 지나간 그 순간부터 칼을 넣는다 — 봇이 패턴이 끝나기를 기다리면
+        //    그 빈 시간을 문 앞에서 버린다.
         if (sim.Boss.CurrentPattern is not null && !sim.Boss.Staggered && sim.NextActiveIn is not null)
         {
-            // **행동 갈래보다 먼저 본다.** 아래에 맡기면 패리 동작이 도는 동안 default(누름 없음)가
-            // 나가 레벨이 꺼지고, 가드는 서기도 전에 풀린다 — 차지가 같은 자리에서 같은 이유로 깨졌다.
+            // **행동 갈래보다 먼저 본다.** 아래에 맡기면 가드(Idle 이 아니다) 동안 default(누름 없음)가
+            // 나가 레벨이 꺼지고, 가드는 서자마자 풀린다 — 차지가 같은 자리에서 같은 이유로 깨졌다.
+            //
+            // 가드로 받기로 한 패턴이면 ↓ 를 **붙든다** — 가드는 누르고 있는 동안이다 (설계 §5.2). 서 있기만 하면 되므로
+            // 판정 직전을 노릴 필요가 없고, 그래서 봇의 반응 창(_lateReact)과 무관하게 패턴 내내 든다.
             if (_guardThis)
             {
-                // 누름은 서 있을 때 한 번, 그 뒤로는 **유지**다. 엣지가 시작하고 레벨이 붙든다.
-                bool press = sim.Fighter.Action == FighterAction.Idle;
-                return new InputFrame(0, false, false, Parry: press, false, ParryHeld: true);
-            }
-
-            // 패리로 선 자세는 **판정이 지나갈 때까지만** 붙든다 (이슈 #53). 놓으면 그 자리에서
-            // 무방비이고, 다시 누르면 연타 사슬이 패리 창을 깎는다 — 전에는 0.30초짜리 패리
-            // 행동이 그 사이를 막아 줬는데 그 행동이 없어졌다.
-            // **계속** 붙들지는 않는다: 그러면 남은 연타를 전부 가드가 받아 대시·점프 표본이 마른다.
-            if (sim.Fighter.Guarding)
-            {
-                bool keep = sim.NextActiveIn is double left && left <= _lateReact;
-                return new InputFrame(0, false, false, false, false, ParryHeld: keep);
+                return new InputFrame(0, false, false, false, false, GuardHeld: true);
             }
 
             if (sim.Fighter.Action != FighterAction.Idle)
@@ -141,26 +130,21 @@ public sealed class BotPolicy
             {
                 0 => new InputFrame(0, false, Dash: true, false, false),
                 1 => new InputFrame(0, Jump: true, false, false, false),
-                // 누르는 그 틱부터 붙든다 — 자세가 곧 방어라 엣지만 보내면 다음 틱에 풀린다.
-                _ => new InputFrame(0, false, false, Parry: true, false, ParryHeld: true),
+                // 패리는 누르는 것 한 번이다 — 0.333초 커밋 동안 앞 0.133초가 창이라 붙들 것이 없다 (설계 §5.3).
+                _ => new InputFrame(0, false, false, Parry: true, false),
             };
         }
 
         // 쉬는 동안에는 붙어서 때린다.
-        if (gap > sim.Fighter.AttackReach)
+        if (gap > sim.FighterReach)
         {
             return new InputFrame(move, false, false, false, false);
         }
 
-        // 얼마나 모을지는 **누를 때** 좌표 조회로 정한다. 단계 수와 그 시간은 데이터가 알고
-        // (fighters.json 의 charge_tiers) 봇은 묻기만 한다 — 수치를 여기 베끼면 캐릭터를
-        // 고치는 순간 봇만 옛 값으로 계속 돈다.
+        // 2타를 이을지는 **1타를 누를 때** 좌표 조회로 정한다 (_chainOdds).
         _swings++;
-        int tier = Det.RollInt(_seed, Det.Domain.BotCharge, sim.Fighter.ChargeTierCount, k1: _swings);
-        _chargeGoal = sim.Fighter.ChargeTierSeconds(tier);
-
-        // 0단계는 누름 유지가 없다 — 옛 봇과 한 틱도 안 다른 그냥 한 대다.
-        return new InputFrame(0, false, false, false, Attack: true, AttackHeld: _chargeGoal > 0);
+        _chainThis = Det.RollInt(_seed, Det.Domain.BotCombo, _chainOdds, k1: _swings) == 0;
+        return new InputFrame(0, false, false, false, Attack: true);
     }
 
     /// <summary>
@@ -186,15 +170,4 @@ public sealed class BotPolicy
         _patterns++;
         _guardThis = Det.RollInt(_seed, Det.Domain.BotGuard, _guardOdds, k1: _patterns) == 0;
     }
-
-    /// <summary>
-    /// 지금 모으고 있어도 <b>칼이 닿을 때까지 안 맞는가.</b>
-    /// 굳은 보스는 타임라인이 안 밀리므로 안전하고, 남은 판정이 없어도(<c>null</c>) 안전하다.
-    /// 아니면 판정까지 남은 시간이 "선딜 + 판정"(<see cref="Fighter.AttackLead"/>)에 반응 여유를
-    /// 더한 것보다 길어야 한다 — 그보다 짧으면 지금 놓아도 칼이 판정에 먹힌다.
-    /// </summary>
-    private static bool Safe(BattleSim sim) =>
-        sim.Boss.Staggered
-        || sim.NextActiveIn is not double until
-        || until > sim.Fighter.AttackLead + _lateReact;
 }

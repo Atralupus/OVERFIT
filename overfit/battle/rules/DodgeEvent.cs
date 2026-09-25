@@ -23,7 +23,7 @@ public enum DodgeVerb
     /// <para>
     /// ⚠ <b>그 자리를 대시가 만들었으면 여기가 아니라 <see cref="Dash"/> 다</b> (이슈 #46).
     /// 대시로 사거리를 벗어난 판정은 무적이 보이기도 전에 거리에서 빠지는데, 그것까지 간격으로 적으면
-    /// 대시 의존자가 간격 의존자로 기록된다. 판단은 <c>BattleSim.CreditDistance</c> 에 있다.
+    /// 대시 의존자가 간격 의존자로 기록된다. 판단은 <c>DodgeCredit</c> 의 거리 갈래(<c>CreditDistance</c>)에 있다.
     /// </para>
     /// </summary>
     Spacing,
@@ -34,11 +34,8 @@ public enum DodgeVerb
     /// 고른 것은 같고 결과가 다르다.
     ///
     /// <para>
-    /// ⚠ <b><see cref="Parry"/> 와 갈리는 자리가 바뀌었다</b> (이슈 #53). 둘은 이제 <b>같은 키의
-    /// 같은 자세</b>라 "무엇을 골랐나" 로는 안 갈린다 — 가르는 것은 <b>언제 눌렀나</b> 하나다:
-    /// 판정이 창 안에 서면 <see cref="Parry"/>, 밖이면 여기다. 그래도 둘을 한 verb 로 뭉치지
-    /// 않는 이유는 계측이 재려는 것이 정확히 그 차이이기 때문이다 — 셋(패리 · 가드 · 무반응)이
-    /// 갈려야 "이 사람이 얼마나 정확한가" 가 남는다.
+    /// <see cref="Parry"/> 와 다시 다른 키 · 다른 행동이다 (설계 §5.2 · §5.3) — 셋(패리 · 가드 · 무반응)이 갈려야
+    /// "이 사람이 얼마나 정확한가" 가 남는다.
     /// </para>
     ///
     /// <para>
@@ -70,11 +67,7 @@ public enum DodgeVerb
 /// <param name="Airborne">그 순간 공중에 있었나.</param>
 /// <param name="Distance">보스와의 거리.</param>
 /// <param name="GreedWindow">판정이 서는 그 순간 공격 중이었나 — 보스의 선딜을 욕심내 파고든 흔적이다.
-/// <b>모으고 선 것(차지)도 여기 든다</b> (이슈 #40): 차지는 더 오래 서 있는 공격이라
-/// 정확히 이 축의 이야기고, 빼면 새 기술이 생긴 자리에서 축만 눈을 감는다.</param>
-/// <param name="ChargeTier">그 순간 들고 있던 차지 단계 (0 = 안 모았다).
-/// <b>비율이 아니라 깊이를 나른다</b> — GreedWindow 만으로는 "휘두르다 맞았다" 와
-/// "2초를 모으고 서 있다 맞았다" 가 한 점이 되는데, 그 둘은 건 것의 크기가 다르다.</param>
+/// 1타든 2타든 칼질 중이면 여기 든다 — 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다 (설계 §7.2).</param>
 /// <param name="DashAvailable">이 판정을 대시로 피할 수 있었나 (<c>dash_window &gt; 0</c>).</param>
 /// <param name="JumpAvailable">점프로 넘을 수 있었나 (<c>jumpable</c>).</param>
 /// <param name="ParryAvailable">패리로 받을 수 있었나 (<c>parryable</c>).</param>
@@ -119,7 +112,6 @@ public readonly record struct DodgeEvent(
     bool Airborne,
     double Distance,
     bool GreedWindow,
-    int ChargeTier,
 
     // 무엇을 골랐나뿐 아니라 **무엇을 고를 수 있었나**를 같이 싣는다.
     // PlayerAxes.From 은 이벤트 목록만 받으므로 구조상 패턴 태그에 손이 안 닿는다 —

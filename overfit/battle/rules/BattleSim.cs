@@ -20,6 +20,12 @@ public sealed class BattleSetup
 
     public required BossConfig Boss { get; set; }
 
+    /// <summary>
+    /// 판정 모양 표 — <c>hitboxes.json</c> (이슈 #59). 파이터의 칼질이 id 로 가리키는 모양을 여기서 찾는다.
+    /// 규칙 층은 파일을 안 읽는다(Godot 을 모른다) — 부르는 쪽(게임 · 데모 · 테스트)이 읽어 넘긴다.
+    /// </summary>
+    public required IReadOnlyDictionary<string, HitShape> HitShapes { get; set; }
+
     /// <summary>이 단계의 보스가 쓰는 패턴 id 들. 단계가 오를수록 길어진다 (2 · 3 · 5 · 7 · 10).</summary>
     public required IReadOnlyList<string> PatternIds { get; set; }
 
@@ -48,10 +54,10 @@ public sealed class BattleSim
     private readonly BattleSetup _setup;
 
     /// <summary>
-    /// 파이터 칼의 판정 모양 (이슈 #59). 지금은 옛 사거리를 그대로 옮긴 것이다(<see cref="HitShape.Reach"/>) —
-    /// 옛 판정 <c>|dx| − 보스 반폭 ≤ 사거리</c> 와 가로가 정확히 같다. 그림의 모양으로 가는 것은 설계 §10 의 2번이다.
+    /// 칼질 단계마다의 칼 — <c>hitboxes.json</c> 에서 그림의 흰 궤적으로 뽑은 모양 (이슈 #59 · 설계 §5.1).
+    /// 판을 세울 때 한 번 찾는다(<see cref="Swords"/>). 칼질마다 모양이 다르다 — 1타와 2타는 다른 장의 궤적이다.
     /// </summary>
-    private readonly HitShape _attackShape;
+    private readonly HitShape[] _swords;
 
     private PatternRunner? _runner;
     private PatternDef? _current;
@@ -59,6 +65,9 @@ public sealed class BattleSim
     private int _picks;
 
     private readonly List<DodgeEvent> _events = new();
+
+    /// <summary>회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 관측을 지을 때 묻는다.</summary>
+    private readonly DodgeCredit _credit = new();
 
     /// <summary>
     /// 살아 있는 보스 판정들 (이슈 #59 · 설계 §3.5). 보통 0~1개다. 러너가 판정을 내는 틱에 들어오고,
@@ -73,48 +82,8 @@ public sealed class BattleSim
     /// </summary>
     private readonly List<(HitShape Shape, Placement At)> _tested = new();
 
-    /// <summary>이 틱에 보스에게 대 본 파이터 칼의 자리. 안 댔으면 null.</summary>
-    private Placement? _attackTested;
-
-    // 회피 수단마다 **따로** 시작 시각을 들고 있는다(초, NaN = 지금 그 수단이 없다).
-    // 슬롯이 하나였을 때는 "가장 최근에 시작한 행동" 이 판정을 다 가져갔다 —
-    // 점프로 넘긴 지면쓸기가 같이 눌러둔 패리의 공이 되어, 데모 10건 중 4건이
-    // 엉뚱한 verb 로 기록됐고 parry_rate 까지 그 실패로 오염됐다.
-    private double _dashStartedAt = double.NaN;
-
-    private double _parryStartedAt = double.NaN;
-
-    private double _jumpStartedAt = double.NaN;
-
-    /// <summary>
-    /// 방어 자세가 선 시각(초, NaN = 지금 자세가 아니다) — 이슈 #47 · #53.
-    ///
-    /// <para>
-    /// 패리 칸과 <b>따로</b> 둔다. 둘은 이제 같은 누름에서 같은 틱에 시작하지만(이슈 #53)
-    /// 수명이 다르다: 누름 기억은 손을 뗀 뒤에도 <c>parry_memory_window</c> 동안 살아 있고,
-    /// 자세는 놓는 그 틱에 사라진다. 한 칸으로 합치면 "놓고 나서 맞았다" 와 "붙든 채 맞았다" 가
-    /// 같은 시각을 싣게 되고, 그 둘은 계측이 갈라야 하는 바로 그 둘이다.
-    /// </para>
-    /// </summary>
-    private double _guardStartedAt = double.NaN;
-
-    private int _dashDirection;
-
-    /// <summary>
-    /// 대시를 <b>시작하기 직전</b>의 몸통과 그때의 보스 자리 (null = 대시 중이 아니다).
-    /// "그 자리에 서 있었으면 이 판정에 맞았나" 를 판정마다 물어보는 반사실(counterfactual)이다 —
-    /// 맞았을 것이면 대시가 빼낸 것이고, 거기서도 안 맞았으면 간격이다 (이슈 #46).
-    ///
-    /// <para>
-    /// 대시 중이라는 것만으로는 부족하다. 사거리 100 짜리 판정 앞에서 960px 떨어져 대시하면
-    /// 대시는 돌지만 그 거리는 대시가 만든 것이 아니다 — 그것까지 대시의 공으로 돌리면
-    /// <c>dash_timing_bias</c> 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
-    /// 옛 반사실은 거리 하나(보스 중심에서)를 띠와 견줬고, 이제는 몸통을 모양에 댄다 (이슈 #59).
-    /// </para>
-    /// </summary>
-    private HitRect? _dashStartBody;
-
-    private double _dashStartBossX;
+    /// <summary>이 틱에 보스에게 대 본 파이터 칼 — (모양, 놓은 자리). 안 댔으면 null.</summary>
+    private (HitShape Shape, Placement At)? _attackTested;
 
     public BattleSim(BattleSetup setup)
     {
@@ -129,7 +98,7 @@ public sealed class BattleSim
         }
 
         _setup = setup;
-        _attackShape = HitShape.Reach(setup.Fighter.AttackReach);
+        _swords = Swords(setup);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
 
@@ -138,6 +107,48 @@ public sealed class BattleSim
         Boss.Face(Fighter.X);
         _gapLeft = setup.Boss.PatternGap;
     }
+
+    /// <summary>
+    /// 칼질 단계마다 칼의 모양을 찾는다. <b>판을 세울 때</b> 한 번이다 — 칼이 처음 서는 틱에 찾다 틀리면 판이 한참
+    /// 돈 뒤라 무엇이 빠졌는지가 스택에 안 남는다(빈 명부를 세울 때 거절하는 것과 같은 이유다). 빠진 것은
+    /// <b>전부</b> 모아 한 번에 거절한다 — 부팅이 빠진 키를 전부 나열하는 것과 같은 규약이다.
+    /// </summary>
+    private static HitShape[] Swords(BattleSetup setup)
+    {
+        List<ComboStepDef> steps = setup.Fighter.Combo;
+        if (steps.Count == 0)
+        {
+            throw new ArgumentException("칼질이 하나도 없다 — fighters.json 의 combo 가 비었다", nameof(setup));
+        }
+
+        var swords = new HitShape[steps.Count];
+        var missing = new List<string>();
+        for (int i = 0; i < steps.Count; i++)
+        {
+            if (setup.HitShapes.TryGetValue(steps[i].Hitbox, out HitShape? shape))
+            {
+                swords[i] = shape;
+            }
+            else
+            {
+                missing.Add(steps[i].Hitbox);
+            }
+        }
+
+        if (missing.Count > 0)
+        {
+            throw new ArgumentException(
+                $"칼의 판정 모양이 hitboxes.json 에 없다 — {string.Join(", ", missing)}", nameof(setup));
+        }
+
+        return swords;
+    }
+
+    /// <summary>
+    /// 첫 칼질의 칼이 몸 중심에서 <b>앞으로</b> 닿는 끝(px) — 그림의 궤적에서 뽑은 모양 외곽 상자의 앞끝이다.
+    /// 봇이 "붙었나" 를 이것으로 잰다. 수치를 봇 쪽에 베끼지 않는다.
+    /// </summary>
+    public double FighterReach => _swords[0].Bounds.X1;
 
     public Fighter Fighter { get; }
 
@@ -261,7 +272,7 @@ public sealed class BattleSim
 
     /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
     public IReadOnlyList<HitRect> FighterTestedRects =>
-        _attackTested is { } at ? _attackShape.Place(at) : Array.Empty<HitRect>();
+        _attackTested is { } tested ? tested.Shape.Place(tested.At) : Array.Empty<HitRect>();
 
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
@@ -275,7 +286,7 @@ public sealed class BattleSim
         double wasX = Fighter.X;
         double wasY = Fighter.Y;
         Fighter.Tick(input, Dt);
-        RememberDodgeStart(input, wasGrounded, wasX, wasY);
+        _credit.Remember(Ticks * Dt, input, wasGrounded, wasX, wasY, Fighter, Boss);
         AdvanceBoss();
         ResolveLive();
         Strike();
@@ -396,197 +407,6 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 이번 틱에 시작된 회피 행동의 시각을 그 수단의 칸에 적고, 끝난 수단의 칸은 지운다.
-    /// <b>판정이 설 때 이것과의 차이가 타이밍 오차가 된다.</b>
-    ///
-    /// <para>
-    /// 수단마다 칸이 따로다. 하나로 합치면 나중에 시작한 행동이 앞선 행동을 덮어써서,
-    /// 정작 판정을 피하게 한 수단의 시각이 사라진다.
-    /// </para>
-    /// </summary>
-    /// <param name="input">이번 틱의 입력. 점프가 눌렸는지를 본다.</param>
-    /// <param name="wasGrounded">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 접지 상태.
-    /// 점프 엣지 검출에 쓴다 — <see cref="Fighter.Grounded"/> 만 보면 "떨어진 순간"과
-    /// "이미 공중인데 또 눌렀다"를 구별할 수 없다.</param>
-    /// <param name="wasX">이번 틱이 시작될 때(<see cref="Fighter.Tick"/> 이전) 파이터의 자리.
-    /// 대시가 시작된 틱에는 이미 한 틱을 이동한 뒤라, 대시 <b>전</b>의 거리는 이것으로만 잡힌다.</param>
-    /// <param name="wasY">이번 틱이 시작될 때의 발바닥 높이. 공중 대시의 반사실이 이것을 쓴다.</param>
-    private void RememberDodgeStart(InputFrame input, bool wasGrounded, double wasX, double wasY)
-    {
-        double now = Ticks * Dt;
-
-        // 시작한 행동은 **그 행동이 끝났을 때만** 지운다. Land 에서 지우면 대시 한 번의 무적이
-        // 막은 연속타 중 첫 대가 기록을 소비해 버려 나머지가 "회피 수단 없음" 으로 기록된다 —
-        // 근거가 없는 게 아니라 **잘못 붙는다.**
-        if (Fighter.Action == FighterAction.Dash && Fighter.ActionElapsed <= Dt)
-        {
-            _dashStartedAt = now;
-            // 보스 쪽으로 갔으면 안(+1), 반대면 밖(-1)
-            _dashDirection = Math.Sign(Fighter.Facing * (Boss.X - Fighter.X)) >= 0 ? 1 : -1;
-            // 보스는 아직 이번 틱을 안 밀었으므로(AdvanceBoss 는 뒤에 온다) 둘 다 틱 시작의 자리다.
-            _dashStartBody = new HitRect(
-                wasX - Fighter.HalfWidth, wasX + Fighter.HalfWidth, wasY, wasY + Fighter.BodyHeight);
-            _dashStartBossX = Boss.X;
-        }
-        else if (Fighter.Action != FighterAction.Dash)
-        {
-            _dashStartedAt = double.NaN;
-            _dashDirection = 0;
-            _dashStartBody = null;
-        }
-
-        // 패리 칸은 **자세가 아니라 누름**을 따라 산다. 누르자마자 놓아도 그 누름은 시도였고,
-        // 그 뒤 창 안에 선 판정은 그 시도의 결과다 — 자세가 풀릴 때 지우면 "늦어서 못 받았다" 가
-        // TimingError 0 이 되어 "아무것도 안 했다" 와 같은 점이 된다.
-        // 지우는 경계는 **누름의 기억 창**이다: 그보다 오래된 누름을 이 판정의 시도로 세면
-        // 사람이 한 적 없는 -0.6초짜리 표본이 축에 섞인다.
-        if (Fighter.SinceParryPress <= Dt)
-        {
-            _parryStartedAt = now;
-        }
-        else if (Fighter.SinceParryPress > Fighter.ParryMemoryWindow)
-        {
-            _parryStartedAt = double.NaN;
-        }
-
-        // 자세는 **누름이 아니라 서 있는 동안**을 잡는다. 서 있는 내내 살아 있고
-        // (연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
-        if (Fighter.Guarding)
-        {
-            if (double.IsNaN(_guardStartedAt))
-            {
-                _guardStartedAt = now;
-            }
-        }
-        else
-        {
-            _guardStartedAt = double.NaN;
-        }
-
-        if (input.Jump && wasGrounded && !Fighter.Grounded)
-        {
-            _jumpStartedAt = now;
-        }
-        else if (Fighter.Grounded)
-        {
-            _jumpStartedAt = double.NaN;
-        }
-    }
-
-    /// <summary>
-    /// 이 판정을 <b>무엇이</b> 그렇게 만들었나. 결과가 이미 답을 들고 있다 —
-    /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다.
-    /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
-    ///
-    /// <para>
-    /// <b>Dodged 는 무적이 먹은 그 틱에만 크레딧을 문다</b> (이슈 #59 · 리뷰 라운드 1). 창이 몇 틱 더
-    /// 사는 동안 미뤘다 나중에 물으면 그새 대시가 끝나 <c>_dashStartedAt</c> 이 NaN 으로 돌아가 있을 수
-    /// 있고, 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 크레딧이 나간다 — 그래서 <see cref="Step"/> 은
-    /// Dodged 를 처음 본 틱에 곧장 <see cref="BuildEvent"/> 를 불러 관측을 지어 두고, 창이 닫힐 때
-    /// 그 스냅샷을 그대로 내보낸다(다시 묻지 않는다).
-    /// </para>
-    /// </summary>
-    private (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict, HitBox box) => verdict switch
-    {
-        HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
-
-        // 받아친 것은 패리다. 시각은 **누름**이다 — 창 안에 들어왔는가가 이 판정의 전부라,
-        // 재야 하는 것은 "언제 눌렀나" 이지 "언제부터 서 있었나" 가 아니다.
-        HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
-
-        // 막아냈든 깨졌든 **고른 것은 가드**다 (이슈 #47) — 둘의 차이는 verb 가 아니라
-        // Verdict 가 나른다. 시각은 자세가 **선** 순간이다: 그래야 "얼마나 오래 버티고
-        // 있었나" 가 오차로 실리고, 누름 시각을 쓰면 패리와 같은 값이 되어 둘이 뭉친다.
-        HitVerdict.Guarded or HitVerdict.GuardBroken => (DodgeVerb.Guard, _guardStartedAt),
-
-        // 높이로 빗나갔다. 점프 기록이 있으면 점프가 넘긴 것이고, 없으면 대공 판정 아래에
-        // 그냥 서 있었던 것이다 — 후자를 점프로 세면 jump_reliance 가 **정반대 행동**으로 부푼다.
-        HitVerdict.MissedByHeight => double.IsNaN(_jumpStartedAt)
-            ? (DodgeVerb.None, double.NaN)
-            : (DodgeVerb.Jump, _jumpStartedAt),
-
-        // 거리로 빗나갔다 — 안이든 밖이든. 서 있던 자리가 피하게 했으면 간격이지만,
-        // **그 자리를 대시가 만들었으면 대시다** (이슈 #46).
-        HitVerdict.MissedTooFar or HitVerdict.MissedByGap => CreditDistance(box),
-
-        // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
-        _ => MostRecentAction(),
-    };
-
-    /// <summary>
-    /// 거리로 빗나간 판정의 공을 <b>대시</b>와 <b>간격</b> 중 어디로 돌릴 것인가 (이슈 #46).
-    ///
-    /// <para>
-    /// 고치기 전에는 무조건 간격이었다. 판정 순서가 거리 → 높이 → 대시무적이라 대시로 사거리를
-    /// 벗어나면 무적이 보이기도 전에 거리에서 빠지는데, 그것을 전부 <c>Spacing</c> 으로 적고 있었다:
-    /// 무적 8틱 · 대시 36.67px/틱 · 서는 자리 115 에서 밖으로 나가면 250 을 4틱째 넘으므로
-    /// <b>무적 8틱 중 3틱만 <c>Dodged</c></b> 이었다. <b>대시 의존자가 간격 의존자로 기록된다</b> —
-    /// 그 둘은 봉인할 것이 정반대라 2단계가 정확히 반대 변종을 뽑는다.
-    /// </para>
-    ///
-    /// <para>
-    /// 조건은 "대시 중" 이 아니라 <b>"대시 시작 자리에서는 닿았는가"</b> 다. 대시가 돌기만 하면
-    /// 공을 주면, 애초에 사거리 밖에 서 있다 대시한 것까지 대시의 공이 되어
-    /// <c>dash_timing_bias</c> 가 판정과 무관한 대시들로 채워진다.
-    /// </para>
-    ///
-    /// <para>
-    /// ⚠ <b>경계는 대시 행동이 끝나는 자리다.</b> 무적(0.14초 = 8틱)이 대시(0.18초 = 11틱)보다
-    /// 짧으므로 무적 창은 통째로 대시의 공이 되지만, 대시가 끝난 뒤에도 사거리 밖에 남아 있는 것은
-    /// <b>그 자리에 서 있기로 한 것</b>이라 간격이다. 유예 창(대시 종료 후 N초까지는 대시의 공)을
-    /// 두는 쪽도 생각했고, 되돌리지 않기 위해 왜 안 두는지를 적어 둔다.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>공에는 시각이 따라붙기 때문이다.</b> 이 함수가 돌려주는 시작 시각이 곧
-    /// <c>TimingError</c> 이고 그것이 <c>dash_timing_bias</c> · <c>dash_timing_var</c> 의 표본이다.
-    /// 연속타의 2타는 1타에서 0.35초 뒤에 서는데, 1타를 겨냥해 뛴 대시를 2타의 공으로도 돌리면
-    /// <b>-0.35초짜리 표본</b>이 하나 생긴다 — "이 사람은 판정 0.35초 전에 뛴다" 는 그가 한 적 없는 말이고,
-    /// 표본이 늘수록 축은 "늘 일찍 누른다" 쪽으로 끌려간다. 대시가 <b>어느 판정을 겨냥했나</b>가
-    /// 성립하는 구간이 딱 행동이 도는 동안이라, 거기를 경계로 삼는다.
-    /// 덤으로 데이터에 없는 수치("얼마나 오래 봐주나")를 새로 만들지 않아도 된다.
-    /// </para>
-    /// </summary>
-    private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box) =>
-        !double.IsNaN(_dashStartedAt)
-        && _dashStartBody is { } before
-        && ShapeHit.Test(box.Shape, new Placement(_dashStartBossX, Boss.Y, Boss.Facing), before) == ShapeContact.Overlap
-            ? (DodgeVerb.Dash, _dashStartedAt)
-            : (DodgeVerb.Spacing, double.NaN);
-
-    /// <summary>
-    /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 판정에만 쓴다 —
-    /// 겹쳐 있으면 그 판정을 겨냥한 쪽이 더 나중이다.
-    /// 동시 시작은 대시 → 패리 → 점프 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
-    /// 다른 라벨을 내 학습 데이터가 재현되지 않는다.
-    /// </summary>
-    private (DodgeVerb Verb, double StartedAt) MostRecentAction()
-    {
-        DodgeVerb verb = DodgeVerb.None;
-        double at = double.NaN;
-
-        if (!double.IsNaN(_dashStartedAt))
-        {
-            verb = DodgeVerb.Dash;
-            at = _dashStartedAt;
-        }
-
-        if (!double.IsNaN(_parryStartedAt) && (double.IsNaN(at) || _parryStartedAt > at))
-        {
-            verb = DodgeVerb.Parry;
-            at = _parryStartedAt;
-        }
-
-        if (!double.IsNaN(_jumpStartedAt) && (double.IsNaN(at) || _jumpStartedAt > at))
-        {
-            verb = DodgeVerb.Jump;
-            at = _jumpStartedAt;
-        }
-
-        return (verb, at);
-    }
-
-    /// <summary>
     /// 판정 창 길이(초)를 틱으로. <b>반올림은 여기 한 곳이다</b> (설계 §3.5) — 8fps 한 장은 0.125초 =
     /// 7.5틱이라, 뷰와 규칙이 각자 반올림하면 반 틱씩 어긋난다. 0 이하는 한 틱 — 옛 패턴은 전부 그렇다.
     /// </summary>
@@ -637,7 +457,7 @@ public sealed class BattleSim
             case HitVerdict.Dodged:
                 // 처음 무적이 먹은 틱에서만 짓는다 (이슈 #59 · 리뷰 라운드 1) — 그 틱의 크레딧(대시
                 // 시작 시각·방향)이 아직 살아 있다. 창이 몇 틱 더 사는 동안 다시 Dodged 여도 안 다시
-                // 짓는다: 미뤘다 나중에 지으면 그새 대시가 끝나 _dashStartedAt 이 NaN 이 됐을 수 있고,
+                // 짓는다: 미뤘다 나중에 지으면 그새 대시가 끝나 DodgeCredit 의 대시 시각이 NaN 이 됐을 수 있고,
                 // 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 관측이 나간다.
                 swing.DodgeSnapshot ??= BuildEvent(swing, swing.Box, verdict);
                 break;
@@ -720,9 +540,9 @@ public sealed class BattleSim
     private DodgeEvent BuildEvent(LiveSwing swing, HitBox box, HitVerdict verdict)
     {
         double now = Ticks * Dt;
-        (DodgeVerb verb, double startedAt) = Credit(verdict, box);
+        (DodgeVerb verb, double startedAt) = _credit.Credit(verdict, box, Boss);
         double error = double.IsNaN(startedAt) ? 0 : startedAt - now;
-        int direction = verb == DodgeVerb.Dash ? _dashDirection : 0;
+        int direction = verb == DodgeVerb.Dash ? _credit.DashDirection : 0;
 
         return new DodgeEvent(
             PatternId: swing.PatternId,
@@ -732,10 +552,8 @@ public sealed class BattleSim
             Direction: direction,
             Airborne: !Fighter.Grounded,
             Distance: Math.Abs(Fighter.X - Boss.X),
-            // 모으고 선 것도 욕심이다 (이슈 #40). 차지는 휘두르는 0.5초가 아니라 최대 2.08초를
-            // 무방비로 서 있는 것이라, 여기서 빼면 축이 가장 크게 건 순간에만 눈을 감는다.
-            GreedWindow: Fighter.Action is FighterAction.Attack or FighterAction.Charge,
-            ChargeTier: Fighter.ChargeTier,
+            // 칼질 중이면 욕심이다 — 1타든 2타든 (설계 §7.2). 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다.
+            GreedWindow: Fighter.Action == FighterAction.Attack,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
             // 이 셋이 없으면 만들어지지 않는다.
@@ -762,7 +580,7 @@ public sealed class BattleSim
         // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
         //
-        // air · dist · charge 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
+        // air · dist 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
         // 먹은 틱에 지어 두고 창이 닫히는 틱에 여기로 오므로, 그때의 라이브 값을 읽으면 한 줄에 두 틱이 섞인다 —
         // 땅에서 사거리 안에서 피한 관측이 "공중 · 사거리 밖" 으로 찍혔다. hp · qi · stam 은 관측에 없는 값이라
         // 지금 값이다: 판정의 결과가 몸에 실린 뒤의 잔량이다.
@@ -771,8 +589,7 @@ public sealed class BattleSim
             + $" dist={evt.Distance:0} hp={Fighter.Health} qi={Fighter.Qi}"
             // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
             // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
-            + $" stam={Fighter.Stamina:0}"
-            + $" charge={evt.ChargeTier}");
+            + $" stam={Fighter.Stamina:0}");
     }
 
     /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
@@ -782,45 +599,51 @@ public sealed class BattleSim
         Commit(BuildEvent(swing, swing.Box, verdict));
     }
 
-    /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
+    /// <summary>
+    /// 파이터의 칼이 보스에 닿았는가 (이슈 #59 · 설계 §5.1). 칼은 <b>판정 창 동안 산다</b> — 창의 첫 틱에 안 닿아도
+    /// 그 뒤 틱에 보스가 들어오면 맞고, <b>한 번 닿으면 그 칼질은 끝난다</b>(한 번 휘두르면 한 번만 맞는다).
+    /// 보스의 휘두름(<see cref="ResolveLive"/>)과 같은 규칙이다. 전에는 창의 첫 틱에만 한 번 대 봤다 — 그 틱에
+    /// 1px 모자라면 창이 남아 있어도 헛쳤고, 판정 보기에서는 칼이 한 프레임만 번쩍였다.
+    /// </summary>
     private void Strike()
     {
         _attackTested = null;
-        if (!Fighter.AttackActive || _struckThisSwing)
+        if (!Fighter.AttackActive)
         {
-            if (!Fighter.AttackActive)
-            {
-                _struckThisSwing = false;
-            }
-
+            _struckThisSwing = false;
             return;
         }
 
-        var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
-        _attackTested = at;
-        if (ShapeHit.Test(_attackShape, at, Boss.Body)
-            == ShapeContact.Overlap)
+        if (_struckThisSwing)
         {
-            // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
-            // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
-            int damage = Fighter.AttackDamage;
-            Boss.TakeDamage(damage);
-
-            // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
-            // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
-            // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
-            // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
-            // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
-            if (Log.IsEnabled(LogLevel.Debug))
-            {
-                double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-                Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
-            }
+            return;
         }
 
+        HitShape sword = _swords[Fighter.ComboStep];
+        var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
+        _attackTested = (sword, at);
+        if (ShapeHit.Test(sword, at, Boss.Body) != ShapeContact.Overlap)
+        {
+            return;
+        }
+
+        int damage = Fighter.AttackDamage;
+        Boss.TakeDamage(damage);
         _struckThisSwing = true;
+
+        // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
+        // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
+        // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
+        // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
+        // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
+        if (Log.IsEnabled(LogLevel.Debug))
+        {
+            double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
+            Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} step={Fighter.ComboStep} gap={gap:0} tick={Ticks}");
+        }
     }
 
+    /// <summary>이번 칼질이 이미 보스에 닿았나. 창이 닫히면(<c>AttackActive</c> 가 꺼지면) 풀린다.</summary>
     private bool _struckThisSwing;
 
     /// <summary>
@@ -849,7 +672,7 @@ public sealed class BattleSim
         /// <summary>
         /// 무적이 <b>처음</b> 먹은 틱에 지어 둔 관측 (이슈 #59 · 리뷰 라운드 1). 창이 안 닿고 닫히면
         /// 이것이 그대로 나간다 — <b>그 틱의</b> 크레딧(대시 시작 시각 · 방향) · 공중 · 거리로 지었으므로,
-        /// 창이 그 뒤로 몇 틱을 더 살아 무적이 풀려도(라이브 <c>_dashStartedAt</c> 이 NaN 이 돼도)
+        /// 창이 그 뒤로 몇 틱을 더 살아 무적이 풀려도(<see cref="DodgeCredit"/> 의 라이브 대시 시각이 NaN 이 돼도)
         /// 이 기록은 안 바뀐다. null 이면 아직 한 번도 안 먹었다.
         /// </summary>
         public DodgeEvent? DodgeSnapshot { get; set; }

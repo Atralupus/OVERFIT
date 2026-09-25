@@ -50,12 +50,6 @@ public enum ShapeContact
 /// </summary>
 public sealed class HitShape
 {
-    /// <summary>
-    /// <see cref="Reach"/> 의 높이 — "높이를 안 본다" 를 사각형으로 말하는 값이다. 옛 공격 판정(Strike)은
-    /// 가로 거리만 봤고, 그림의 모양으로 갈아끼우기(설계 §10 의 2번) 전까지 그 성질을 그대로 옮긴다.
-    /// </summary>
-    private const double _unbounded = 1_000_000;
-
     private readonly HitRect[] _local;
 
     public HitShape(IReadOnlyList<HitRect> local)
@@ -106,14 +100,6 @@ public sealed class HitShape
             new HitRect(minDistance, maxDistance, lowHeight, highHeight),
             new HitRect(-maxDistance, -minDistance, lowHeight, highHeight),
         });
-
-    /// <summary>
-    /// 옛 공격 사거리를 모양으로 옮긴다 — 좌우로 <paramref name="reach"/>, 높이는 안 본다.
-    /// 옛 판정(<c>|dx| − 보스 반폭 ≤ 사거리</c>)은 몸통 대 사각형으로 옮겨도 가로가 정확히 같다:
-    /// 보스 몸통(중심 ± 반폭)이 이 사각형과 겹치는 조건이 바로 그 부등식이다.
-    /// </summary>
-    public static HitShape Reach(double reach) =>
-        new(new[] { new HitRect(-reach, reach, -_unbounded, _unbounded) });
 
     /// <summary>
     /// 공격자 기준 사각형 하나를 월드로 놓는다. <b>놓는 계산은 여기 하나다</b> — 판정(<see cref="ShapeHit"/>)과

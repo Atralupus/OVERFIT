@@ -21,6 +21,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: bossHealth),
         PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
         Patterns = Patterns(),
@@ -97,6 +98,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, patternGap: 1000),
         PatternIds = new[] { "내려찍기 I" },
         Patterns = Patterns(),
@@ -148,6 +150,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
         PatternIds = new[] { "내려찍기 I" },
         Patterns = Patterns(),
@@ -213,6 +216,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             // 걷는 틱 수와 patternGap 은 **짝이다** — 걸어 붙는 동안 패턴이 서면 대시가 아니라
             // 걷기가 판정을 받는다. 그래서 132틱(= 2.2초)으로 둘을 맞춰 둔다.
             // 거리는 데이터에서 온다 — 보스 반폭이 바뀌어도 검사는 한 글자도 안 바뀐다.
@@ -335,6 +339,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
             PatternIds = new[] { "내려찍기 II-끌기" },
             Patterns = Patterns(),
@@ -507,6 +512,17 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 칼의_모양이_없으면_판을_세울_때_거절한다()
+    {
+        // 빈 명부와 같은 이유다 — 칼이 처음 서는 틱에 모양을 찾다 틀리면 판이 한참 돈 뒤라 무엇이 빠졌는지가
+        // 그 스택에 안 남는다. 빠진 id 를 메시지에 싣는다.
+        BattleSetup setup = Setup();
+        setup.HitShapes = new Dictionary<string, HitShape>();
+
+        Should.Throw<ArgumentException>(() => new BattleSim(setup)).Message.ShouldContain(TestConfigs.TestSwordId);
+    }
+
+    [Fact]
     public void 없는_패턴_id_는_매_틱_에러를_쏟지_않는다()
     {
         // Begin 이 간격을 안 되돌린 채 나가면 _gapLeft 가 0 이하로 남아 다음 틱에도 곧장
@@ -517,6 +533,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 10 * BattleSim.Dt),
             PatternIds = new[] { "없는패턴" },
             Patterns = new Dictionary<string, PatternDef>(),
@@ -566,6 +583,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
         PatternIds = new[] { "단타" },
         Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern },
@@ -743,6 +761,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             // 파이터가 주머니 앞까지 걸어갈 시간을 준다 (960 → 300 이 95틱이다).
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 100 * BattleSim.Dt),
             PatternIds = new[] { "단타" },
@@ -795,6 +814,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
             Patterns = Patterns(),
@@ -937,17 +957,23 @@ public class BattleSimTests
 
     // ── 방어 하나와 계측 (이슈 #27 · #53) ────────────────────────────────────
 
+    /// <summary>패리 가능한 판정 하나를 <paramref name="pressAt"/> 틱에 K 로 받아 본다. 관측과 <b>판정이 선 틱</b>을 돌려준다.</summary>
+    private static (DodgeEvent Event, int Tick) ParryAt(int? pressAt) =>
+        OneAt(i => new InputFrame(0, false, false, Parry: i == pressAt, false));
+
+    /// <summary>같은 판정을 <paramref name="from"/> 틱부터 ↓ 를 붙들어 가드로 받아 본다 (설계 §5.2).</summary>
+    private static (DodgeEvent Event, int Tick) GuardFrom(int from) =>
+        OneAt(i => new InputFrame(0, false, false, false, false, GuardHeld: i >= from));
+
     /// <summary>
-    /// 패리 가능한 판정 하나를 <paramref name="pressAt"/> 틱에 눌러 보고, 그 관측과
-    /// <b>판정이 선 틱</b>을 같이 돌려준다. <paramref name="hold"/> 면 누른 뒤 계속 붙든다 —
-    /// 그 하나가 "늦어서 그냥 맞았다" 와 "늦었지만 막았다" 를 가른다 (이슈 #53).
+    /// 패리 가능한 판정 하나(24틱째)를 틱마다 <paramref name="input"/> 으로 받아 본다.
     ///
     /// <para>
     /// 판정 틱을 손으로 안 적는 이유는 간격 소진이 부동소수 누적에 걸려 한 틱씩 밀릴 수 있기
     /// 때문이다 — 박아 두면 타임라인을 건드릴 때마다 무관한 실패가 난다.
     /// </para>
     /// </summary>
-    private static (DodgeEvent Event, int Tick) ParryAt(int? pressAt, bool hold = false)
+    private static (DodgeEvent Event, int Tick) OneAt(Func<int, InputFrame> input)
     {
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
@@ -957,8 +983,7 @@ public class BattleSimTests
 
         for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
         {
-            sim.Tick(new InputFrame(
-                0, false, false, Parry: i == pressAt, false, ParryHeld: hold && pressAt is int at && i >= at));
+            sim.Tick(input(i));
         }
 
         return (sim.Events.Single(), sim.Ticks);
@@ -972,7 +997,7 @@ public class BattleSimTests
         // 셋이 다시 뭉치면 여기서 빨개진다.
         const int early = 12;
         (DodgeEvent parried, int hitTick) = ParryAt(26);              // 판정 코앞 — 창(0.133) 안
-        (DodgeEvent guarded, _) = ParryAt(early, hold: true);         // 일찍 눌러 붙들고 있었다
+        (DodgeEvent guarded, _) = GuardFrom(early);                   // 일찍부터 ↓ 를 붙들고 있었다
         (DodgeEvent none, _) = ParryAt(null);                         // 아무것도 안 했다
 
         parried.Verdict.ShouldBe(HitVerdict.Parried);
@@ -1007,16 +1032,34 @@ public class BattleSimTests
     }
 
     [Fact]
-    public void 늦게_누르고_놓으면_그냥_맞고_붙들면_막는다()
+    public void 늦은_패리는_그냥_맞고_붙든_가드는_막는다()
     {
-        // **이 이슈가 요청받은 것이 이 한 쌍이다** (이슈 #53): "패리가 실패해도 가드는 되는겁니다."
-        // 같은 시각에 같은 키를 눌렀고 다른 것은 손을 뗐는가뿐인데, 결과가 맞은 것과 막은 것으로 갈린다.
-        (DodgeEvent released, _) = ParryAt(12);
-        (DodgeEvent held, _) = ParryAt(12, hold: true);
+        // 스펙이 패리와 가드를 다시 갈랐다 (설계 §5.3: "그 밖이면 그냥 맞는다 — 가드가 아니다"). 같은 시각(12틱)에
+        // K 를 누른 것과 ↓ 를 붙든 것이 맞은 것과 막은 것으로 갈린다. 12틱에 누른 패리는 판정(27틱 언저리)에서
+        // 창 밖(0.25초)이지만 커밋(0.333초) 안이다 — 그 시도는 패리의 것으로 남는다.
+        (DodgeEvent late, _) = ParryAt(12);
+        (DodgeEvent guarded, _) = GuardFrom(12);
 
-        released.Verdict.ShouldBe(HitVerdict.Hit, "놓았는데 막혔다");
-        released.Verb.ShouldBe(DodgeVerb.Parry, "눌렀다 놓친 것은 패리 시도다 — 무반응과 같은 점이면 안 된다");
-        held.Verdict.ShouldBe(HitVerdict.Guarded);
+        late.Verdict.ShouldBe(HitVerdict.Hit, "창을 놓친 패리가 막았다 — 패리가 다시 가드가 됐다");
+        late.Verb.ShouldBe(DodgeVerb.Parry, "눌렀다 놓친 것은 패리 시도다 — 무반응과 같은 점이면 안 된다");
+        guarded.Verdict.ShouldBe(HitVerdict.Guarded);
+    }
+
+    [Fact]
+    public void 커밋이_끝난_뒤에_맞은_판정은_패리의_공이_아니다()
+    {
+        // 이 계획이 정한 것 6 — 패리 시도의 공은 **커밋이 도는 동안만** 산다(대시의 공이 대시 행동이 도는 동안인 것과
+        // 같은 경계). 커밋이 끝난 뒤에 선 판정까지 그 누름의 시도로 세면 사람이 한 적 없는 -0.4초짜리 표본이
+        // parry 축에 섞이고, "아무것도 안 하고 맞았다" 가 "늦게 누르고 맞았다" 로 기록된다.
+        // 위 테스트(12틱에 누른 것)와 짝이다: 거기는 커밋 안에서 맞아 Parry, 여기는 커밋 밖에서 맞아 None.
+        const int press = 3;
+        (DodgeEvent e, int hitTick) = ParryAt(press);
+
+        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(TestConfigs.Fighter().ParryDuration,
+            "판정이 커밋 안에 섰다 — 이 테스트가 커밋이 끝난 뒤를 안 본다");
+        e.Verdict.ShouldBe(HitVerdict.Hit);
+        e.Verb.ShouldBe(DodgeVerb.None, "커밋이 끝난 누름이 이 판정의 공을 가져갔다");
+        e.TimingError.ShouldBe(0);
     }
 
     [Fact]
@@ -1043,7 +1086,7 @@ public class BattleSimTests
         // 대시 무적(0.14초) 한 번이 멀티히트 판정 두 개를 다 덮도록 타임라인을 짠다.
         // Land 가 첫 판정에서 회피 행동을 지워 버리면 두 번째 판정은 "아무것도 안 했다"로
         // 잘못 기록된다 — 근거가 없는 게 아니라 잘못 붙는 사고다. 그래서 행동은 Land 가 아니라
-        // RememberDodgeStart 가 그 행동이 끝났을 때만 지운다.
+        // DodgeCredit.Remember 가 그 행동이 끝났을 때만 지운다.
         var pattern = new PatternDef
         {
             Tell = TestConfigs.Tell(),
@@ -1074,6 +1117,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
             PatternIds = new[] { "멀티히트" },
             Patterns = new Dictionary<string, PatternDef> { ["멀티히트"] = pattern },
@@ -1096,8 +1140,7 @@ public class BattleSimTests
     // ── 가드 (이슈 #47 · #53) ────────────────────────────────────────────────
 
     /// <summary>
-    /// 판정 하나를 <b>가드로</b> 받아 본다. 첫 틱에 누르고 붙들면 자세는 그 틱에 서고
-    /// (이슈 #53) 패리 창은 판정(0.5초)이 오기 한참 전에 닫힌다.
+    /// 판정 하나를 <b>가드로</b> 받아 본다. 첫 틱부터 ↓ 를 붙든다 (설계 §5.2).
     /// </summary>
     private static BattleSim GuardOne(bool guardBreak)
     {
@@ -1110,7 +1153,7 @@ public class BattleSimTests
 
         for (int i = 1; i <= 40 && sim.Events.Count == 0; i++)
         {
-            sim.Tick(new InputFrame(0, false, false, Parry: i == 1, false, ParryHeld: true));
+            sim.Tick(new InputFrame(0, false, false, false, false, GuardHeld: true));
         }
 
         return sim;
@@ -1195,7 +1238,8 @@ public class BattleSimTests
 
         // OneHit 의 피해는 5 — 0.25 는 반올림해 1 이고 값은 5 × 1.8 = 9 다.
         sim.Fighter.Health.ShouldBe(c.MaxHealth - 1);
-        sim.Fighter.Stamina.ShouldBe(c.MaxStamina - c.ParryCost - 9, 1e-9);
+        // 가드를 드는 값은 없다(이 계획이 정한 것 1) — 값은 막아낸 피해에 비례하는 9 뿐이다.
+        sim.Fighter.Stamina.ShouldBe(c.MaxStamina - 9, 1e-9);
         sim.Fighter.Locked.ShouldBeFalse("깨지지도 않았는데 굳었다");
         sim.Fighter.Guarding.ShouldBeTrue("받아낸 가드가 풀렸다");
     }
@@ -1218,7 +1262,7 @@ public class BattleSimTests
     [Fact]
     public void 마무리를_받아쳤을_때만_보스가_굳는다()
     {
-        // 상은 **최대 차지 한 번 들어갈 길이**이고, 그 길이를 bosses.json 이 정한다 —
+        // 상은 **2연격 한 번 들어갈 길이**이고, 그 길이를 bosses.json 이 정한다 —
         // BossDataTests 가 그 산수를 본다. "받아쳤다 → 제일 센 걸 꽂는다" 가 한 동작으로
         // 이어지는 것이 이 숫자의 전부다.
         //
@@ -1293,6 +1337,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: BattleSim.Dt),
             PatternIds = new[] { "두 대" },
             Patterns = new Dictionary<string, PatternDef> { ["두 대"] = pattern },
@@ -1352,6 +1397,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "내려찍기 I" },
             Patterns = Patterns(),
@@ -1364,8 +1410,7 @@ public class BattleSimTests
         for (int t = 1; t <= 60 * 60; t++)
         {
             // 한 패턴의 2타 앞에서만, 그리고 **한 번만** 누른다. 판정 셋이 한 패턴이므로 3 으로
-            // 나눈 나머지가 자리다. 창이 열린 내내 누르면 연타 사슬이 자라 패리 창이 0 이 되고
-            // (이슈 #27 의 난사 징벌), 그러면 받아치려던 테스트가 조용히 아무것도 안 받아친다.
+            // 나눈 나머지가 자리다. 창이 열린 내내 누르면 패리 커밋(0.333초)에 묶여 정작 2타 앞에서 못 누른다 — 한 번만 누른다.
             bool press = parry && !pressedForThisHit && ticks.Count % 3 == 1
                 && sim.NextActiveIn is double left && left <= _lateReact;
             pressedForThisHit |= press;
@@ -1398,19 +1443,21 @@ public class BattleSimTests
     private const double _lateReact = 0.10;
 
     [Fact]
-    public void 실제_1단계에서_마무리를_받아치면_풀차지가_들어간다()
+    public void 실제_1단계에서_마무리를_받아치면_2연격이_들어간다()
     {
         // **유저가 요청한 고리 전체를 한 줄로 못박는다** (이슈 #53): "3타 패리시 경직이 훨씬
         // 길어야합니다. 풀차지를 해서 공격을 할 수 있을만큼."
+        // 차지는 2번 PR(#59)에서 2연격으로 바뀌었다 — 상의 뜻(제일 센 것을 꽂는다)은 그대로다.
         //
         // 이 테스트가 **1단계**인 것이 요점이다 — 유저가 실제로 하고 있는 단계가 여기라, 여기서 안
         // 서면 요청받은 것이 하나도 안 된 것이다. 1단계의 마무리도 빨간 가드 불가이고(이슈 #53 ·
         // 유저 결정), 붙들고 버티는 사람은 거기서 깨지고 받아친 사람은 보스를 굳힌다.
+        // 2연격은 받아친 다음 틱의 J 로 곧장 시작한다 — 패리 커밋이 끝나기를 안 기다린다(되받아치기 · TestConfigs.FinisherPunishLead).
         FighterConfig f = TestConfigs.Fighter();
-        double lead = f.ChargeTiers[^1].Seconds + f.AttackActive;
+        double lead = TestConfigs.FinisherPunishLead(f);
 
         RealFinisherStagger().ShouldBeGreaterThanOrEqualTo(lead,
-            $"1단계 마무리를 받아쳤는데 경직이 최대 차지({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
+            $"1단계 마무리를 받아쳤는데 경직이 되받아치기 2연격({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
     }
 
     /// <summary>
@@ -1423,6 +1470,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "내려찍기 I" },
             Patterns = Patterns(),
@@ -1508,6 +1556,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: BattleSim.Dt),
             PatternIds = new[] { "3연타" },
             Patterns = new Dictionary<string, PatternDef> { ["3연타"] = pattern },
@@ -1554,7 +1603,7 @@ public class BattleSimTests
 
     /// <summary>
     /// 진짜 판정 앞에 헛스윙 하나가 서는 패턴. <c>III-역린</c> 의 모양이다 —
-    /// 거기 패리를 지르면 연타 사슬이 걸려 <b>진짜 판정의 정확 창이 좁아진다.</b>
+    /// 거기 패리를 지르면 <b>0.333초 커밋에 묶여</b> 진짜 판정 앞에서 다시 못 누른다 (설계 §5.3).
     /// </summary>
     private static PatternDef WithFeint() => new()
     {

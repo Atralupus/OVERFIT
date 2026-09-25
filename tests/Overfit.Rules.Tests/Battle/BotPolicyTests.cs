@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Overfit.Battle.Rules;
 using Overfit.Core;
 using Shouldly;
@@ -13,6 +14,7 @@ public class BotPolicyTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(),
         PatternIds = StageRoster.For(TestConfigs.Stages(), 3),
         Patterns = JsonData<PatternDef>.ParseTable(
@@ -77,7 +79,7 @@ public class BotPolicyTests
     /// <para>
     /// ⚠ <b>증인을 여럿 세운다.</b> 한 판은 관측이 15건 안팎뿐이고 봇은 수단을 좌표로 고르므로,
     /// 어느 한 수단이 한 판에 안 나오는 것은 흔한 일이지 설계가 깨진 것이 아니다
-    /// (<c>최대_차지가_패리_없이_닿는다</c> 가 같은 이유로 같은 시드 목록을 돈다).
+    /// (<c>봇의_2타가_보스에_닿는다</c> 가 같은 이유로 같은 시드 목록을 돈다).
     /// 수단이 넷이 되면서(가드 · 이슈 #47) 한 판의 관측이 더 얇게 나뉘어, 시드 51 한 판은
     /// 실제로 점프 없이 끝난다 — <b>단언이 아니라 표본을 넓힌다.</b>
     /// </para>
@@ -119,72 +121,56 @@ public class BotPolicyTests
     }
 
     [Fact]
-    public void 봇도_차지를_낸다()
+    public void 봇도_2연격을_낸다()
     {
-        // **입력 계약은 사람과 봇이 같이 쓰는 통로다.** 사람만 차지할 수 있으면 나중에 망이
-        // "차지가 없는 전투" 를 배우고, 그 데이터는 사람에게 아무 의미가 없다 (이슈 #40).
-        // 그래서 봇이 실제로 모아서 휘두르는지를 본다 — 계약에 칸이 있는지가 아니라.
-        var sim = new BattleSim(Setup(51));
-        var bot = new BotPolicy(51);
-        var swings = new HashSet<int>();
-        bool charged = false;
-
-        BattleOutcome? outcome = null;
-        while (outcome is null)
+        // **입력 계약은 사람과 봇이 같이 쓰는 통로다** (설계 §5.4). 봇이 1타만 치면 망은 "2타가 없는 전투" 를 배우고,
+        // 그 데이터는 사람에게 아무 의미가 없다. 칼이 나가는 틱의 칼질 번호를 모은다.
+        var steps = new HashSet<int>();
+        foreach (ulong seed in _seeds.Take(4))
         {
-            outcome = sim.Tick(bot.Next(sim));
-            charged |= sim.Fighter.Charging;
-
-            // 칼이 나가는 틱의 단계가 곧 "얼마를 모아서 휘둘렀나" 다.
-            if (sim.Fighter.AttackActive)
+            var sim = new BattleSim(Setup(seed));
+            var bot = new BotPolicy(seed);
+            BattleOutcome? outcome = null;
+            while (outcome is null)
             {
-                swings.Add(sim.Fighter.ChargeTier);
+                outcome = sim.Tick(bot.Next(sim));
+                if (sim.Fighter.AttackActive)
+                {
+                    steps.Add(sim.Fighter.ComboStep);
+                }
             }
         }
 
-        charged.ShouldBeTrue("봇이 한 번도 안 모았다");
-        swings.ShouldContain(0, "봇이 그냥 누르는 공격을 아예 안 낸다");
-        swings.Count.ShouldBeGreaterThan(1, $"봇이 낸 차지 단계가 {string.Join(",", swings)} 뿐이다 — 한 종류면 차지가 데이터에 없는 것과 같다");
+        steps.ShouldContain(0, "봇이 1타를 안 낸다");
+        steps.ShouldContain(1, "봇이 2타를 한 번도 안 이었다 — 2연격이 데이터에 없다");
     }
 
     [Fact]
-    public void 최대_차지가_패리_없이_닿는다()
+    public void 봇의_2타가_보스에_닿는다()
     {
-        // **차지는 패리와 상관없는 기술이다** (이슈 #40). 최대 차지가 백장의 빈 시간에 들어간다는
-        // 것은 FighterDataTests 가 산수로 보지만, 산수는 "그런 자리가 있다" 까지만 말한다 —
-        // 실제로 한 판을 돌려서 최대로 모은 칼이 보스에 닿는지는 여기서 본다.
-        //
-        // 이 봇은 정확 패리를 노리고 치지 않는다(회피 셋을 좌표로 고를 뿐이다). 그래서 여기서
-        // 최대 차지가 나온다는 것은 **패리 없이도 닿는다**는 뜻이다.
-        //
-        // 시드를 여럿 도는 이유는 한 시드에 매다는 것이 증인을 하나만 세우는 일이기 때문이다 —
-        // 봇은 단계를 좌표로 고르고 패턴 순서도 시드가 정하므로, 한 판에 최대 차지가 없는 것은
-        // 흔한 일이고 그건 설계가 깨진 것이 아니다. 여덟 판을 다 뒤져도 한 번도 없다면 그때가
-        // 진짜 빨개져야 하는 자리다.
-        var landed = new HashSet<int>();
-        foreach (ulong seed in new ulong[] { 7, 51, 99, 777, 2024, 31337, 12345, 8 })
+        // 2타는 1초를 서 있는 무거운 칼이다. 이어 놓고 한 번도 안 닿으면 그 칸은 데이터에 벌만 남는다 —
+        // 닿은 칼만 센다(휘두른 것이 아니라 보스 체력이 준 그 틱이다).
+        bool landed = false;
+        foreach (ulong seed in _seeds)
         {
             var sim = new BattleSim(Setup(seed));
             var bot = new BotPolicy(seed);
             BattleOutcome? outcome = null;
             int lastBossHealth = sim.Boss.Health;
-
-            while (outcome is null)
+            while (outcome is null && !landed)
             {
                 outcome = sim.Tick(bot.Next(sim));
+                landed = sim.Boss.Health < lastBossHealth && sim.Fighter.ComboStep == 1;
+                lastBossHealth = sim.Boss.Health;
+            }
 
-                // 닿은 칼만 센다 — 휘두른 것이 아니라 보스 체력이 준 그 틱이다.
-                if (sim.Boss.Health < lastBossHealth)
-                {
-                    landed.Add(sim.Fighter.ChargeTier);
-                    lastBossHealth = sim.Boss.Health;
-                }
+            if (landed)
+            {
+                break;
             }
         }
 
-        landed.ShouldContain(2,
-            $"여덟 판 동안 최대 차지가 한 번도 안 닿았다 — 닿은 단계는 {string.Join(",", landed)} 뿐이다. "
-            + "패리 없이는 최대 차지를 못 쓰는 상태라면 이 기술의 마지막 단계는 장식이다.");
+        landed.ShouldBeTrue("열여섯 판 동안 2타가 한 번도 안 닿았다 — 2타는 장식이다");
     }
 
     [Fact]
@@ -210,12 +196,9 @@ public class BotPolicyTests
     [Fact]
     public void 봇도_가드를_낸다()
     {
-        // **사람과 봇이 같은 통로를 타야 학습 데이터가 뜻을 가진다** (이슈 #47). 봇이 못 내는
-        // 기술은 봇 함대가 만드는 데이터에 영영 안 들어가고, 망은 그 기술이 없는 게임을 배운다.
-        // 가드는 다른 셋과 달리 **미리** 서야 한다 — 자세는 누르는 그 틱에 서지만(이슈 #53)
-        // 판정 직전에 누르면 그건 가드가 아니라 **패리**이기 때문이다(창 안에 판정이 선다).
-        // 즉 봇의 반응 창(_lateReact)만으로는 가드가 구조적으로 안 나온다: 창을 일부러
-        // 흘려보내는 판단이 따로 있어야 하고, 여기서 그것이 실제로 도는지 본다.
+        // **사람과 봇이 같은 통로를 타야 학습 데이터가 뜻을 가진다** (이슈 #47 · 설계 §5.4). 봇이 못 내는 기술은 봇 함대가
+        // 만드는 데이터에 영영 안 들어가고, 망은 그 기술이 없는 게임을 배운다. 가드는 이제 ↓ 를 **누르고 있는 동안**이라
+        // (설계 §5.2) 봇이 레벨(GuardHeld)을 실제로 내는지를 본다.
         VerbsUsed().ShouldContain(DodgeVerb.Guard, "봇이 한 번도 안 막았다");
     }
 

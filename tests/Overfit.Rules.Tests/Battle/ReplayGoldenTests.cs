@@ -32,13 +32,10 @@ public class ReplayGoldenTests
     /// 골든을 만든 입력 시퀀스. <b>이 함수를 바꾸면 골든도 바꿔야 한다.</b>
     ///
     /// <para>
-    /// 누름 유지 두 칸(<c>AttackHeld</c> · <c>ParryHeld</c>)을 <b>안 적는다</b> — 기본값 false 라
-    /// 전부 탭이고, 그래서 차지(이슈 #40)도 가드(이슈 #47)도 이 스트림에 안 실린다.
-    /// <c>ParryHeld</c> 를 실어 보고 안 실은 이유는 <c>tools/replay_golden.txt</c> 에 적어 뒀다:
-    /// 이 스크립트는 17틱마다 공격하고 23틱마다 대시하는 멍청이라 29틱마다 오는 패리 누름이
-    /// 거의 언제나 <b>행동 중</b>에 떨어지고, 그래서 붙들어도 가드가 판정을 받는 일이 없다.
-    /// 판만 달라지고 덮이는 것은 없다. 가드의 회귀는 <c>FighterActionTests</c> ·
-    /// <c>HitResolverTests</c> · <c>BattleSimTests</c> · <c>BotPolicyTests</c> 가 본다.
+    /// <c>GuardHeld</c> 를 <b>안 적는다</b> — 기본값 false 라 가드(설계 §5.2)가 이 스트림에 안 실린다.
+    /// 공격은 17틱마다 누르는데 1타(기준 17틱)가 끝난 다음 틱이라 2타를 한 번도 안 잇는다.
+    /// 가드의 회귀는 <c>FighterActionTests</c> · <c>HitResolverTests</c> · <c>BattleSimTests</c> ·
+    /// <c>BotPolicyTests</c> 가 본다. 29틱마다의 K 는 이제 0.333초 커밋의 패리다(설계 §5.3).
     /// </para>
     /// </summary>
     private static InputFrame[] Script()
@@ -74,9 +71,6 @@ public class ReplayGoldenTests
             text.Append(CultureInfo.InvariantCulture, $"{e.PatternId}|{e.Verb}|{e.Verdict}|");
             text.Append(CultureInfo.InvariantCulture, $"{e.TimingError:0.0000}|{e.Direction}|");
             text.Append(CultureInfo.InvariantCulture, $"{e.Airborne}|{e.Distance:0.000}|{e.GreedWindow}|");
-            // 차지 단계도 넣는다 (이슈 #40). 이 스크립트는 한 번도 안 모으므로 값은 전부 0 이지만,
-            // 빼 두면 "모으고 맞았다" 가 골든 밖이 되어 배수 규칙을 통째로 바꿔도 초록이다.
-            text.Append(CultureInfo.InvariantCulture, $"{e.ChargeTier}|");
             // 가능했던 수단도 넣는다. 패턴 id 에서 따라 나오는 값처럼 보이지만, patterns.json 의
             // 태그를 고치면 id 는 그대로인 채 의존도 축의 분모가 통째로 달라진다 —
             // 다이제스트에서 빼면 그 변화가 골든 밖이 된다.
@@ -115,6 +109,7 @@ public class ReplayGoldenTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(),
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.

@@ -65,24 +65,32 @@ public class HitDebugTests
     }
 
     [Fact]
-    public void 파이터_칼은_규칙이_댄_틱에만_보인다()
+    public void 파이터_칼은_판정_창_동안_보인다()
     {
+        // 칼은 판정 창 동안 산다 (이슈 #59 · 2번 PR) — 옛 칼은 창의 첫 틱에만 대 봐서 한 프레임만 번쩍였다.
+        // 보스는 960px 밖이라 안 닿는다: 안 닿은 칼은 창 내내 대 보고, 표시는 그 틱마다 보인다.
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 5000, activeSeconds: 0.5);
         sim.Tick(new InputFrame(0, false, false, false, true));
 
-        int shown = 0;
+        int shown = 0, active = 0;
         for (int i = 0; i < 30; i++)
         {
+            if (sim.Fighter.AttackActive)
+            {
+                active++;
+            }
+
             if (sim.FighterTestedRects.Count > 0)
             {
                 shown++;
                 var at = new Placement(sim.Fighter.X, sim.Fighter.Y, sim.Fighter.Facing);
-                sim.FighterTestedRects.ShouldBe(HitShape.Reach(TestConfigs.Fighter().AttackReach).Place(at));
+                sim.FighterTestedRects.ShouldBe(TestConfigs.TestSword().Place(at));
             }
 
             sim.Tick(default);
         }
 
-        shown.ShouldBe(1, "옛 칼 판정은 한 번 휘두를 때 한 틱만 댄다 — 그 틱에만 보여야 한다");
+        active.ShouldBeGreaterThan(1, "판정 창이 한 틱뿐이다 — 이 테스트가 창을 못 본다");
+        shown.ShouldBe(active, "칼이 판정 창의 일부 틱에만 보인다 — 규칙이 창 내내 대 보지 않는다");
     }
 }

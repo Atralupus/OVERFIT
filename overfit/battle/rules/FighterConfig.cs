@@ -3,25 +3,50 @@ using System.Collections.Generic;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 차지 한 단계. <c>data/fighters.json</c> 의 <c>charge_tiers</c> 한 칸이고,
-/// <b>목록의 순서가 곧 단계 번호</b>다 (0 = 안 모은 것).
+/// 칼질 한 단계 (이슈 #59 · 설계 §5.1). <c>data/fighters.json</c> 의 <c>combo</c> 한 칸이다. 그림의 사실(어느 시트의
+/// 몇 번 장을 몇 fps 로), 규칙의 시간(선딜 · 판정 · 후딜), 칼의 모양(<c>hitboxes.json</c> 의 id)을 <b>한 칸에</b> 둔다 —
+/// 셋이 따로 적혀 있으면 한쪽만 고치는 날 칼과 그림이 갈린다.
 ///
 /// <para>
-/// 왜 구간인가 — 연속 배수가 더 단순한데도 구간을 고른 이유는 <b>최대에 닿았는지를 화면이
-/// 말해야 하기 때문</b>이다 (이슈 #40). 2초를 세라고 하면서 "거의 최대" 와 "최대" 를 같은
-/// 그림으로 두면 아무도 못 센다. 게다가 피해는 정수라 연속 배수는 반올림에서 이웃한 값들이
-/// 같은 수로 뭉개진다 — 눈에도 안 보이고 숫자로도 안 갈리는 차이는 없는 차이다.
-/// 구간이면 단계 번호 하나가 계측에 그대로 실려(<see cref="DodgeEvent.ChargeTier"/>) 학습
-/// 데이터에도 남는다.
+/// 시간은 그림에서 <b>거꾸로</b> 정한다 (이슈 #38 · #54). 규칙은 시간과 피해와 모양만 읽고, 그림의 사실 넷
+/// (<see cref="Fps"/> · <see cref="Frames"/> · <see cref="StartFrame"/> · <see cref="BladeFrame"/>)은 뷰가 그리고
+/// <c>FighterDataTests</c> 가 시간과 맞대어 본다. 그 넷을 뷰나 .tres 에만 두면 테스트가 못 읽어, 액션이 그림보다
+/// 짧아도 아무도 안 빨개진다 — 실제로 그랬다(이슈 #38): 칼 휘두르는 그림이 한 번도 화면에 안 나왔다.
 /// </para>
 /// </summary>
-public sealed class ChargeTierDef
+public sealed class ComboStepDef
 {
-    /// <summary>이 단계에 들어가는 <b>하한</b> 시간(초). 첫 칸은 0 이어야 한다 — 그냥 누른 것이 0단계다.</summary>
-    public required double Seconds { get; init; }
+    /// <summary><c>.tres</c> 의 애니메이션 이름 — 시트 파일 이름이 아니다 (1타는 <c>attack</c>, 팩의 attack1).</summary>
+    public required string Anim { get; init; }
 
-    /// <summary><see cref="FighterConfig.AttackDamage"/> 에 곱할 배수.</summary>
-    public required double DamageMultiplier { get; init; }
+    /// <summary>이 칼질의 재생 속도(fps). 시트의 속도와 다를 수 있다 — 같은 시트를 반속으로 돌리는 칼질이 있다.</summary>
+    public required double Fps { get; init; }
+
+    /// <summary>시트의 장 수. 칼질은 <see cref="StartFrame"/> 부터 끝까지 돈다.</summary>
+    public required int Frames { get; init; }
+
+    /// <summary>
+    /// 칼질이 시작하는 장(0부터). 선딜은 <b>손</b>이 정하고 시트는 <b>작가</b>가 정해서, 둘이 어긋나면 그림을
+    /// 빨리 돌리지 않고 앞 장을 건너뛴다 — 빨리 돌리면 칼이 나가는 장까지 같이 빨라져 판정 위에 그림이 못 선다(이슈 #38).
+    /// </summary>
+    public required int StartFrame { get; init; }
+
+    /// <summary>칼이 실제로 지나가는 장(0부터). <b>시트를 열어서 정한다</b> — 선딜은 여기까지, 판정은 여기서부터.</summary>
+    public required int BladeFrame { get; init; }
+
+    public required double Windup { get; init; }
+
+    public required double Active { get; init; }
+
+    public required double Recover { get; init; }
+
+    public required int Damage { get; init; }
+
+    /// <summary>
+    /// 칼의 판정 모양 — <c>hitboxes.json</c> 의 id(<c>팩/애니메이션/장</c>). <see cref="BladeFrame"/> 의 흰 궤적에서
+    /// 뽑은 것이다. <c>BattleSim</c> 이 판을 세울 때 모양을 찾고, 없는 id 면 그 자리에서 거절한다.
+    /// </summary>
+    public required string Hitbox { get; init; }
 }
 
 /// <summary>
@@ -53,95 +78,41 @@ public sealed class FighterConfig
 
     public required double DashCost { get; init; }
 
-    /// <summary>
-    /// <b>패리</b>의 창 (이슈 #53). 적중이 누름에서 이 시간 안에 서면 피해 0 이고,
-    /// 그 밖이면 붙들고 있는 한 <b>가드</b>다 — 이 한 숫자가 방어 하나를 둘로 가른다.
-    /// 그래서 이것은 캐릭터 성능이 아니라 <b>조작의 정의</b>다.
-    /// </summary>
+    /// <summary>패리의 창 (설계 §5.3) — 누른 순간부터 이 안에 선 판정을 받아친다. 그 밖이면 그냥 맞는다. 조작의 정의라 캐릭터 성능이 아니다.</summary>
     public required double ParryPreciseWindow { get; init; }
 
-    /// <summary>
-    /// 한 번의 누름이 <b>아직 그 사람의 것</b>인 시간(초) — 이슈 #53. 두 곳이 쓴다:
-    /// 연타 사슬(이 안에서 또 누르면 사슬이 자란다)과 계측의 공 돌리기(<c>BattleSim</c> 이
-    /// 이 안의 누름까지만 그 판정의 시도로 센다).
-    ///
-    /// <para>
-    /// 전에는 <c>parry_imprecise_window</c> 였다 — "늦게 눌렀지만 절반은 받아낸다" 는 중간 단계의 창.
-    /// 그 단계를 가드가 대신하면서 창의 <b>뜻</b>만 남았다. 없는 기능을 가리키는 이름을 남겨 두면
-    /// 다음 사람이 그 기능을 찾으러 간다.
-    /// </para>
-    /// </summary>
-    public required double ParryMemoryWindow { get; init; }
-
-    /// <summary>
-    /// 연타 징벌로 좁아진 패리 창. 앞 누름의 기억 창 안에서 또 누르면 두 번째 누름이 이 창을 쓰고,
-    /// 세 번째부터는 패리 창이 아예 없다 — 붙들고 있으면 가드로는 여전히 막는다.
-    /// </summary>
-    public required double ParrySpamWindow { get; init; }
-
-    /// <summary>
-    /// 방어 자세를 <b>누를 때</b> 한 번 드는 스태미나. 버티는 값은 시간이 아니라 막아낸 피해에
-    /// 비례해 나간다(<see cref="GuardStaminaPerDamage"/>) — 그래서 이것은 "손을 댄 값" 이다.
-    /// </summary>
+    /// <summary>패리를 누를 때 드는 스태미나 (설계 §5.3: 15). 가드를 드는 값은 없다 — _note_guard.</summary>
     public required double ParryCost { get; init; }
 
-    public required double AttackWindup { get; init; }
+    /// <summary>
+    /// 패리의 커밋(초) — 누르면 이 동안 가드 · 패리 · 대시 · 이동을 못 한다 (설계 §5.3). 앞쪽 <see cref="ParryPreciseWindow"/> 만
+    /// 받아치므로 나머지는 무방비다: 그것이 난사의 벌이라 연타 징벌이 따로 없다. 받아쳤으면 J 만은 커밋 안에서도 곧장
+    /// 1타다(<c>Fighter</c> 의 되받아치기).
+    /// </summary>
+    public required double ParryDuration { get; init; }
 
-    public required double AttackActive { get; init; }
+    /// <summary>패리가 도는 시트(<c>.tres</c> 의 이름). <b>규칙은 안 읽는다</b> — 뷰가 그리고 테스트가 커밋과 맞대어 본다.</summary>
+    public required string ParryAnim { get; init; }
 
-    public required double AttackRecover { get; init; }
+    /// <summary>패리 시트의 재생 속도(fps).</summary>
+    public required double ParryAnimFps { get; init; }
 
-    public required double AttackReach { get; init; }
+    /// <summary>패리가 도는 장 수 — 0번부터(설계 §5.3: f0~f3 이면 4).</summary>
+    public required int ParryAnimFrames { get; init; }
 
-    public required int AttackDamage { get; init; }
+    /// <summary>
+    /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 1타 · 2타. 첫 칸이 J 를 눌렀을 때 나가는
+    /// 칼이고, 칼질 도중 J 를 또 누르면 그 칼질이 끝나는 틱에 다음 칸이 이어진다.
+    /// </summary>
+    public required List<ComboStepDef> Combo { get; init; }
 
+    /// <summary>칼질마다 드는 스태미나 — 1타는 누를 때, 2타는 이을 때(설계 §5.1: 타마다 14).</summary>
     public required double AttackCost { get; init; }
 
-    /// <summary>
-    /// 차지 단계표. <b>시간 오름차순</b>이고 첫 칸은 0초 · 배수 1 이다(그냥 누른 것).
-    /// <b>마지막 칸의 <see cref="ChargeTierDef.Seconds"/> 가 곧 최대 차지 시간</b>이라
-    /// 따로 키를 두지 않는다 — 두 곳에 적으면 갈린다.
-    /// 순서와 첫 칸의 규약은 <c>FighterDataTests</c> 가 지킨다.
-    /// </summary>
-    public required List<ChargeTierDef> ChargeTiers { get; init; }
-
-    // ── 공격 애니메이션의 사실 넷 ────────────────────────────────────────────────
+    // ── 가드 (이슈 #47 · 설계 §5.2) ─────────────────────────────────────────────
     //
-    // **규칙은 이 넷을 안 읽는다.** 여기 있는 이유는 위의 세 시간(선딜·판정·후딜)이
-    // 이 넷에서 **거꾸로 정해지기 때문**이다 — 그리고 그 관계를 지키는 것이 테스트의 일이다.
-    // 값을 뷰나 .tres 에만 두면 테스트가 못 읽어, 액션이 그림보다 짧아도 아무도 안 빨개진다.
-    // 실제로 그랬다(이슈 #38): 0.30초짜리 공격이 0.50초짜리 6프레임을 돌려 칼이 나가기 전에
-    // idle 로 돌아갔고, 그래서 **칼 휘두르는 그림이 한 번도 화면에 안 나왔다.**
-
-    /// <summary>공격 애니메이션의 재생 속도(fps). <c>.tres</c> 의 <c>speed</c> 와 같은 값이다.</summary>
-    public required double AttackAnimFps { get; init; }
-
-    /// <summary>공격 애니메이션의 프레임 수. 재생 시간은 <c>frames / fps</c> 다.</summary>
-    public required int AttackAnimFrames { get; init; }
-
-    /// <summary>
-    /// 칼이 실제로 지나가는 프레임의 번호(0부터). <b>시트를 열어서 정한다</b> —
-    /// 번호로 짐작하지 않는다. 선딜은 여기까지고, 판정은 여기서부터 선다.
-    /// </summary>
-    public required int AttackAnimBladeFrame { get; init; }
-
-    /// <summary>
-    /// 칼질이 <b>시트의 몇 번 장에서 시작하나</b>(0부터) — 이슈 #54. 선딜은 여기서
-    /// <see cref="AttackAnimBladeFrame"/> 까지이고, 차지도 여기서 시작해 칼이 나가기 바로 앞 장에 선다.
-    ///
-    /// <para>
-    /// 0 이 아닐 수 있는 이유: 선딜은 <b>손</b>이 정하고(유저: "공격하면 거의 바로 공격이 되게")
-    /// 시트는 <b>작가</b>가 정했다. 둘이 어긋나면 그림을 빨리 돌리는 대신 앞 장들을 건너뛴다 —
-    /// 빨리 돌리면 칼이 나가는 장까지 같이 빨라져 판정 위에 그림이 못 선다(이슈 #38 의 버그다).
-    /// </para>
-    /// </summary>
-    public required int AttackAnimStartFrame { get; init; }
-
-    // ── 가드 (이슈 #47 · #53) ───────────────────────────────────────────────────
-    //
-    // 가드는 패리와 **같은 행동**이다 (이슈 #53). 누르면 그 틱부터 방어 자세이고, 판정이
-    // parry_precise_window 안에 서면 패리 · 그 밖이면 가드다. 가드의 값은 피해가 아니라
-    // **스태미나**로 내고, 그래서 세 수치가 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
+    // 가드는 ↓ (또는 S) 를 **누르고 있는 동안**이다. 드는 값은 없고, 값은 막아낸 피해에 비례하는
+    // **스태미나**로 낸다 — 그래서 세 수치가 "얼마나 흘리나 · 얼마나 드나 · 깨지면 얼마나 아픈가" 다.
 
     /// <summary>
     /// 가드가 <b>흘려보내는</b> 피해의 비율. 1 보다 작아야 막는 것에 뜻이 있고, 0 보다 커야
