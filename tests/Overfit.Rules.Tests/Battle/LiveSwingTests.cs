@@ -109,7 +109,7 @@ public class LiveSwingTests
         // 보스를 등지고(Facing=-1) 대시하면 무적(0.14초 = 8틱) 동안은 아직 사거리(1120) 안이라
         // Dodged 지만, 대시(0.18초 · 367px)가 등진 방향으로 계속 밀어내 곧 사거리 밖(MissedTooFar)이
         // 되고, 창(30틱)이 닫힐 때는 대시가 완전히 끝나 있다(대시는 11틱 안에 끝난다). 창이 닫히는
-        // 그 틱의 라이브 _dashStartedAt/_dashDirection 으로 다시 크레딧을 매기면 이미 NaN/0 이 된 뒤라
+        // 그 틱의 라이브 DodgeCredit(대시 시각 · 방향)으로 다시 크레딧을 매기면 이미 NaN/0 이 된 뒤라
         // "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 관측이 나간다(이슈 #59 · 리뷰 라운드 1) —
         // 무적이 처음 먹은 틱의 크레딧을 지어 둬야 맞다.
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 1120, activeSeconds: 0.5);

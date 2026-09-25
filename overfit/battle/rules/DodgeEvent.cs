@@ -23,7 +23,7 @@ public enum DodgeVerb
     /// <para>
     /// ⚠ <b>그 자리를 대시가 만들었으면 여기가 아니라 <see cref="Dash"/> 다</b> (이슈 #46).
     /// 대시로 사거리를 벗어난 판정은 무적이 보이기도 전에 거리에서 빠지는데, 그것까지 간격으로 적으면
-    /// 대시 의존자가 간격 의존자로 기록된다. 판단은 <c>BattleSim.CreditDistance</c> 에 있다.
+    /// 대시 의존자가 간격 의존자로 기록된다. 판단은 <c>DodgeCredit</c> 의 거리 갈래(<c>CreditDistance</c>)에 있다.
     /// </para>
     /// </summary>
     Spacing,

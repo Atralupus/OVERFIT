@@ -1043,7 +1043,7 @@ public class BattleSimTests
         // 대시 무적(0.14초) 한 번이 멀티히트 판정 두 개를 다 덮도록 타임라인을 짠다.
         // Land 가 첫 판정에서 회피 행동을 지워 버리면 두 번째 판정은 "아무것도 안 했다"로
         // 잘못 기록된다 — 근거가 없는 게 아니라 잘못 붙는 사고다. 그래서 행동은 Land 가 아니라
-        // RememberDodgeStart 가 그 행동이 끝났을 때만 지운다.
+        // DodgeCredit.Remember 가 그 행동이 끝났을 때만 지운다.
         var pattern = new PatternDef
         {
             Tell = TestConfigs.Tell(),

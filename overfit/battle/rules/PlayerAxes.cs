@@ -59,7 +59,7 @@ public sealed class PlayerAxes
     /// </para>
     ///
     /// <para>
-    /// 경계는 <c>BattleSim.CreditDistance</c> 와 <b>같은 규칙</b>이다: 대시의 공은 대시 행동이
+    /// 경계는 <c>DodgeCredit</c> 의 거리 갈래와 <b>같은 규칙</b>이다: 대시의 공은 대시 행동이
     /// 끝나는 곳까지다. 둘이 다른 경계를 쓰면 같은 대시가 축마다 다른 개수로 세어진다.
     /// </para>
     /// </summary>

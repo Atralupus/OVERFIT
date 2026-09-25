@@ -67,6 +67,7 @@
     <Compile Include="../../overfit/battle/rules/Boss.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BattleSim.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/DodgeEvent.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/DodgeCredit.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotPolicy.cs" LinkBase="linked/battle/rules" />
   </ItemGroup>
