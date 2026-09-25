@@ -384,18 +384,37 @@ public class FighterActionTests
     public void 연격_2타_값이_모자라면_잇지_않고_선다()
     {
         // Review Focus 2 — 1타 도중 스태미나가 바닥났으면 2타는 안 서고 1타로 끝난다. 음수로 가지 않는다.
+        //
+        // ⚠ 칼질이 **끝난 뒤**의 값은 증인이 못 된다: 끝나면 ComboStep 은 언제나 0 으로 돌아오고, Spend 는 0 에서
+        // 멈춰 스태미나가 음수가 될 수도 없다 — 그 둘을 끝에서 보던 이 테스트는 값 검사를 통째로 지워도 초록이었다
+        // (리뷰가 변이로 확인했다). 그래서 **도는 동안**을 본다: 1타가 끝나는 틱에 서는가(한 번만 누른 1타와
+        // 견준다 — …1타가_끝나는_틱에_2타가_이어진다 와 같은 방법), 그리고 도는 내내 값이 1타 하나만큼인가.
         FighterConfig c = TestConfigs.Fighter();
+        Fighter single = Spawn();
+        single.Tick(_attack, _dt);
+        int end = 1;
+        while (single.Action == FighterAction.Attack)
+        {
+            single.Tick(default, _dt);
+            end++;
+        }
+
         Fighter f = Spawn();
         f.Spend(c.MaxStamina - c.AttackCost - 1);   // 1타 값 + 1 만 남긴다
         f.Tick(_attack, _dt);
-        f.Tick(_attack, _dt);
+        f.Tick(_attack, _dt);                        // 1타 도중 — 2타를 눌러 둔다
+        f.ComboQueued.ShouldBeTrue("눌러 두지도 않았다 — 이 테스트가 모자란 값을 안 본다");
+
+        int stood = 2;
         while (f.Action == FighterAction.Attack)
         {
+            // 이었다면 잇는 틱에 값을 한 번 더 내 0 으로 깎이고(Spend 가 0 에서 멈춘다) 칼질은 2타로 계속 돈다.
+            f.Stamina.ShouldBe(1, 1e-9, "이을 수 없는 2타가 값을 냈다");
             f.Tick(default, _dt);
+            stood++;
         }
 
-        f.ComboStep.ShouldBe(0, "값이 모자라는데 2타가 섰다");
-        f.Stamina.ShouldBeGreaterThanOrEqualTo(0);
+        stood.ShouldBe(end, "값이 모자라는데 2타가 섰다 — 1타가 끝나는 틱에 안 섰다");
     }
 
     [Fact]
