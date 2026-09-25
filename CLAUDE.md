@@ -89,7 +89,7 @@ DTO 는 `core/BalanceData.cs` 이고, `required` 가 붙은 키가 빠지면 부
 | 명령 | 무엇을 본다 | Godot 필요 |
 |---|---|---|
 | `tools/build.sh test` | 규칙 — 초 단위 | 아니오 |
-| `tools/build.sh check` | 포맷 · 빌드 · 규칙 · uid (커밋 게이트) | 아니오 |
+| `tools/build.sh check` | 포맷 · 빌드 · 규칙 · uid · 판정 모양(그림이 없으면 경고로 건너뜀) (커밋 게이트) | 아니오 |
 | `tools/build.sh smoke` | 씬이 뜨는지 · 스크립트가 붙는지 · **C# 예외가 나는지** | 예 |
 
 마지막 항목이 중요하다. C# 예외는 우리 로그 형식(`[tag][E]`)으로 안 찍히고 엔진의 `ERROR:` 블록으로만 나온다 —
