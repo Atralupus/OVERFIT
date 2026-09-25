@@ -20,6 +20,12 @@ public sealed class BattleSetup
 
     public required BossConfig Boss { get; set; }
 
+    /// <summary>
+    /// 판정 모양 표 — <c>hitboxes.json</c> (이슈 #59). 파이터의 칼질이 id 로 가리키는 모양을 여기서 찾는다.
+    /// 규칙 층은 파일을 안 읽는다(Godot 을 모른다) — 부르는 쪽(게임 · 데모 · 테스트)이 읽어 넘긴다.
+    /// </summary>
+    public required IReadOnlyDictionary<string, HitShape> HitShapes { get; set; }
+
     /// <summary>이 단계의 보스가 쓰는 패턴 id 들. 단계가 오를수록 길어진다 (2 · 3 · 5 · 7 · 10).</summary>
     public required IReadOnlyList<string> PatternIds { get; set; }
 
@@ -48,10 +54,10 @@ public sealed class BattleSim
     private readonly BattleSetup _setup;
 
     /// <summary>
-    /// 파이터 칼의 판정 모양 (이슈 #59). 지금은 옛 사거리를 그대로 옮긴 것이다(<see cref="HitShape.Reach"/>) —
-    /// 옛 판정 <c>|dx| − 보스 반폭 ≤ 사거리</c> 와 가로가 정확히 같다. 그림의 모양으로 가는 것은 설계 §10 의 2번이다.
+    /// 칼질 단계마다의 칼 — <c>hitboxes.json</c> 에서 그림의 흰 궤적으로 뽑은 모양 (이슈 #59 · 설계 §5.1).
+    /// 판을 세울 때 한 번 찾는다(<see cref="Swords"/>).
     /// </summary>
-    private readonly HitShape _attackShape;
+    private readonly HitShape[] _swords;
 
     private PatternRunner? _runner;
     private PatternDef? _current;
@@ -76,8 +82,8 @@ public sealed class BattleSim
     /// </summary>
     private readonly List<(HitShape Shape, Placement At)> _tested = new();
 
-    /// <summary>이 틱에 보스에게 대 본 파이터 칼의 자리. 안 댔으면 null.</summary>
-    private Placement? _attackTested;
+    /// <summary>이 틱에 보스에게 대 본 파이터 칼 — (모양, 놓은 자리). 안 댔으면 null.</summary>
+    private (HitShape Shape, Placement At)? _attackTested;
 
     public BattleSim(BattleSetup setup)
     {
@@ -92,7 +98,7 @@ public sealed class BattleSim
         }
 
         _setup = setup;
-        _attackShape = HitShape.Reach(setup.Fighter.AttackReach);
+        _swords = Swords(setup);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
 
@@ -101,6 +107,48 @@ public sealed class BattleSim
         Boss.Face(Fighter.X);
         _gapLeft = setup.Boss.PatternGap;
     }
+
+    /// <summary>
+    /// 칼질 단계마다 칼의 모양을 찾는다. <b>판을 세울 때</b> 한 번이다 — 칼이 처음 서는 틱에 찾다 틀리면 판이 한참
+    /// 돈 뒤라 무엇이 빠졌는지가 스택에 안 남는다(빈 명부를 세울 때 거절하는 것과 같은 이유다). 빠진 것은
+    /// <b>전부</b> 모아 한 번에 거절한다 — 부팅이 빠진 키를 전부 나열하는 것과 같은 규약이다.
+    /// </summary>
+    private static HitShape[] Swords(BattleSetup setup)
+    {
+        List<ComboStepDef> steps = setup.Fighter.Combo;
+        if (steps.Count == 0)
+        {
+            throw new ArgumentException("칼질이 하나도 없다 — fighters.json 의 combo 가 비었다", nameof(setup));
+        }
+
+        var swords = new HitShape[steps.Count];
+        var missing = new List<string>();
+        for (int i = 0; i < steps.Count; i++)
+        {
+            if (setup.HitShapes.TryGetValue(steps[i].Hitbox, out HitShape? shape))
+            {
+                swords[i] = shape;
+            }
+            else
+            {
+                missing.Add(steps[i].Hitbox);
+            }
+        }
+
+        if (missing.Count > 0)
+        {
+            throw new ArgumentException(
+                $"칼의 판정 모양이 hitboxes.json 에 없다 — {string.Join(", ", missing)}", nameof(setup));
+        }
+
+        return swords;
+    }
+
+    /// <summary>
+    /// 첫 칼질의 칼이 몸 중심에서 <b>앞으로</b> 닿는 끝(px) — 그림의 궤적에서 뽑은 모양 외곽 상자의 앞끝이다.
+    /// 봇이 "붙었나" 를 이것으로 잰다. 수치를 봇 쪽에 베끼지 않는다.
+    /// </summary>
+    public double FighterReach => _swords[0].Bounds.X1;
 
     public Fighter Fighter { get; }
 
@@ -224,7 +272,7 @@ public sealed class BattleSim
 
     /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
     public IReadOnlyList<HitRect> FighterTestedRects =>
-        _attackTested is { } at ? _attackShape.Place(at) : Array.Empty<HitRect>();
+        _attackTested is { } tested ? tested.Shape.Place(tested.At) : Array.Empty<HitRect>();
 
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
@@ -554,45 +602,53 @@ public sealed class BattleSim
         Commit(BuildEvent(swing, swing.Box, verdict));
     }
 
-    /// <summary>파이터의 공격이 보스에 닿았는가. 판정이 선 틱에만 한 번 본다.</summary>
+    /// <summary>
+    /// 파이터의 칼이 보스에 닿았는가 (이슈 #59 · 설계 §5.1). 칼은 <b>판정 창 동안 산다</b> — 창의 첫 틱에 안 닿아도
+    /// 그 뒤 틱에 보스가 들어오면 맞고, <b>한 번 닿으면 그 칼질은 끝난다</b>(한 번 휘두르면 한 번만 맞는다).
+    /// 보스의 휘두름(<see cref="ResolveLive"/>)과 같은 규칙이다. 전에는 창의 첫 틱에만 한 번 대 봤다 — 그 틱에
+    /// 1px 모자라면 창이 남아 있어도 헛쳤고, 판정 보기에서는 칼이 한 프레임만 번쩍였다.
+    /// </summary>
     private void Strike()
     {
         _attackTested = null;
-        if (!Fighter.AttackActive || _struckThisSwing)
+        if (!Fighter.AttackActive)
         {
-            if (!Fighter.AttackActive)
-            {
-                _struckThisSwing = false;
-            }
-
+            _struckThisSwing = false;
             return;
         }
 
-        var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
-        _attackTested = at;
-        if (ShapeHit.Test(_attackShape, at, Boss.Body)
-            == ShapeContact.Overlap)
+        if (_struckThisSwing)
         {
-            // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
-            // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
-            int damage = Fighter.AttackDamage;
-            Boss.TakeDamage(damage);
-
-            // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
-            // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
-            // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
-            // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
-            // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
-            if (Log.IsEnabled(LogLevel.Debug))
-            {
-                double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-                Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
-            }
+            return;
         }
 
+        HitShape sword = _swords[0];
+        var at = new Placement(Fighter.X, Fighter.Y, Fighter.Facing);
+        _attackTested = (sword, at);
+        if (ShapeHit.Test(sword, at, Boss.Body) != ShapeContact.Overlap)
+        {
+            return;
+        }
+
+        // 피해에는 차지 배수가 이미 들어 있다 (Fighter.AttackDamage). 여기서 곱하면
+        // 곱셈이 두 곳이 되고, 그중 하나만 고치는 날이 온다.
+        int damage = Fighter.AttackDamage;
+        Boss.TakeDamage(damage);
         _struckThisSwing = true;
+
+        // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
+        // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
+        // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
+        // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
+        // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
+        if (Log.IsEnabled(LogLevel.Debug))
+        {
+            double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
+            Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} charge={Fighter.ChargeTier} gap={gap:0} tick={Ticks}");
+        }
     }
 
+    /// <summary>이번 칼질이 이미 보스에 닿았나. 창이 닫히면(<c>AttackActive</c> 가 꺼지면) 풀린다.</summary>
     private bool _struckThisSwing;
 
     /// <summary>

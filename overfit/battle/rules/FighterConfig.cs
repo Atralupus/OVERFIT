@@ -3,6 +3,53 @@ using System.Collections.Generic;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
+/// 칼질 한 단계 (이슈 #59 · 설계 §5.1). <c>data/fighters.json</c> 의 <c>combo</c> 한 칸이다. 그림의 사실(어느 시트의
+/// 몇 번 장을 몇 fps 로), 규칙의 시간(선딜 · 판정 · 후딜), 칼의 모양(<c>hitboxes.json</c> 의 id)을 <b>한 칸에</b> 둔다 —
+/// 셋이 따로 적혀 있으면 한쪽만 고치는 날 칼과 그림이 갈린다.
+///
+/// <para>
+/// 시간은 그림에서 <b>거꾸로</b> 정한다 (이슈 #38 · #54). 규칙은 시간과 피해와 모양만 읽고, 그림의 사실 넷
+/// (<see cref="Fps"/> · <see cref="Frames"/> · <see cref="StartFrame"/> · <see cref="BladeFrame"/>)은 뷰가 그리고
+/// <c>FighterDataTests</c> 가 시간과 맞대어 본다. 그 넷을 뷰나 .tres 에만 두면 테스트가 못 읽어, 액션이 그림보다
+/// 짧아도 아무도 안 빨개진다 — 실제로 그랬다(이슈 #38): 칼 휘두르는 그림이 한 번도 화면에 안 나왔다.
+/// </para>
+/// </summary>
+public sealed class ComboStepDef
+{
+    /// <summary><c>.tres</c> 의 애니메이션 이름 — 시트 파일 이름이 아니다 (1타는 <c>attack</c>, 팩의 attack1).</summary>
+    public required string Anim { get; init; }
+
+    /// <summary>이 칼질의 재생 속도(fps). 시트의 속도와 다를 수 있다 — 같은 시트를 반속으로 돌리는 칼질이 있다.</summary>
+    public required double Fps { get; init; }
+
+    /// <summary>시트의 장 수. 칼질은 <see cref="StartFrame"/> 부터 끝까지 돈다.</summary>
+    public required int Frames { get; init; }
+
+    /// <summary>
+    /// 칼질이 시작하는 장(0부터). 선딜은 <b>손</b>이 정하고 시트는 <b>작가</b>가 정해서, 둘이 어긋나면 그림을
+    /// 빨리 돌리지 않고 앞 장을 건너뛴다 — 빨리 돌리면 칼이 나가는 장까지 같이 빨라져 판정 위에 그림이 못 선다(이슈 #38).
+    /// </summary>
+    public required int StartFrame { get; init; }
+
+    /// <summary>칼이 실제로 지나가는 장(0부터). <b>시트를 열어서 정한다</b> — 선딜은 여기까지, 판정은 여기서부터.</summary>
+    public required int BladeFrame { get; init; }
+
+    public required double Windup { get; init; }
+
+    public required double Active { get; init; }
+
+    public required double Recover { get; init; }
+
+    public required int Damage { get; init; }
+
+    /// <summary>
+    /// 칼의 판정 모양 — <c>hitboxes.json</c> 의 id(<c>팩/애니메이션/장</c>). <see cref="BladeFrame"/> 의 흰 궤적에서
+    /// 뽑은 것이다. <c>BattleSim</c> 이 판을 세울 때 모양을 찾고, 없는 id 면 그 자리에서 거절한다.
+    /// </summary>
+    public required string Hitbox { get; init; }
+}
+
+/// <summary>
 /// 차지 한 단계. <c>data/fighters.json</c> 의 <c>charge_tiers</c> 한 칸이고,
 /// <b>목록의 순서가 곧 단계 번호</b>다 (0 = 안 모은 것).
 ///
@@ -20,7 +67,7 @@ public sealed class ChargeTierDef
     /// <summary>이 단계에 들어가는 <b>하한</b> 시간(초). 첫 칸은 0 이어야 한다 — 그냥 누른 것이 0단계다.</summary>
     public required double Seconds { get; init; }
 
-    /// <summary><see cref="FighterConfig.AttackDamage"/> 에 곱할 배수.</summary>
+    /// <summary><see cref="ComboStepDef.Damage"/> 에 곱할 배수.</summary>
     public required double DamageMultiplier { get; init; }
 }
 
@@ -85,16 +132,13 @@ public sealed class FighterConfig
     /// </summary>
     public required double ParryCost { get; init; }
 
-    public required double AttackWindup { get; init; }
+    /// <summary>
+    /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 지금은 1타 하나.
+    /// 첫 칸이 J 를 눌렀을 때 나가는 칼이다.
+    /// </summary>
+    public required List<ComboStepDef> Combo { get; init; }
 
-    public required double AttackActive { get; init; }
-
-    public required double AttackRecover { get; init; }
-
-    public required double AttackReach { get; init; }
-
-    public required int AttackDamage { get; init; }
-
+    /// <summary>칼질마다 드는 스태미나 — 누를 때(1타) 한 번씩.</summary>
     public required double AttackCost { get; init; }
 
     /// <summary>
@@ -104,38 +148,6 @@ public sealed class FighterConfig
     /// 순서와 첫 칸의 규약은 <c>FighterDataTests</c> 가 지킨다.
     /// </summary>
     public required List<ChargeTierDef> ChargeTiers { get; init; }
-
-    // ── 공격 애니메이션의 사실 넷 ────────────────────────────────────────────────
-    //
-    // **규칙은 이 넷을 안 읽는다.** 여기 있는 이유는 위의 세 시간(선딜·판정·후딜)이
-    // 이 넷에서 **거꾸로 정해지기 때문**이다 — 그리고 그 관계를 지키는 것이 테스트의 일이다.
-    // 값을 뷰나 .tres 에만 두면 테스트가 못 읽어, 액션이 그림보다 짧아도 아무도 안 빨개진다.
-    // 실제로 그랬다(이슈 #38): 0.30초짜리 공격이 0.50초짜리 6프레임을 돌려 칼이 나가기 전에
-    // idle 로 돌아갔고, 그래서 **칼 휘두르는 그림이 한 번도 화면에 안 나왔다.**
-
-    /// <summary>공격 애니메이션의 재생 속도(fps). <c>.tres</c> 의 <c>speed</c> 와 같은 값이다.</summary>
-    public required double AttackAnimFps { get; init; }
-
-    /// <summary>공격 애니메이션의 프레임 수. 재생 시간은 <c>frames / fps</c> 다.</summary>
-    public required int AttackAnimFrames { get; init; }
-
-    /// <summary>
-    /// 칼이 실제로 지나가는 프레임의 번호(0부터). <b>시트를 열어서 정한다</b> —
-    /// 번호로 짐작하지 않는다. 선딜은 여기까지고, 판정은 여기서부터 선다.
-    /// </summary>
-    public required int AttackAnimBladeFrame { get; init; }
-
-    /// <summary>
-    /// 칼질이 <b>시트의 몇 번 장에서 시작하나</b>(0부터) — 이슈 #54. 선딜은 여기서
-    /// <see cref="AttackAnimBladeFrame"/> 까지이고, 차지도 여기서 시작해 칼이 나가기 바로 앞 장에 선다.
-    ///
-    /// <para>
-    /// 0 이 아닐 수 있는 이유: 선딜은 <b>손</b>이 정하고(유저: "공격하면 거의 바로 공격이 되게")
-    /// 시트는 <b>작가</b>가 정했다. 둘이 어긋나면 그림을 빨리 돌리는 대신 앞 장들을 건너뛴다 —
-    /// 빨리 돌리면 칼이 나가는 장까지 같이 빨라져 판정 위에 그림이 못 선다(이슈 #38 의 버그다).
-    /// </para>
-    /// </summary>
-    public required int AttackAnimStartFrame { get; init; }
 
     // ── 가드 (이슈 #47 · #53) ───────────────────────────────────────────────────
     //

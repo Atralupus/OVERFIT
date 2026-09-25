@@ -138,7 +138,7 @@ public partial class FighterView : Node2D
     private int _facing = 1;
 
     /// <summary>
-    /// 칼질이 시작하는 장 (<c>fighters.json</c> 의 <c>attack_anim_start_frame</c>). 탭도 차지도 여기서
+    /// 칼질이 시작하는 장 (<c>fighters.json</c> 의 <c>combo</c> 한 칸의 <c>start_frame</c>). 탭도 차지도 여기서
     /// 시작한다 — 이슈 #54 에서 선딜이 0.0833 이 되면서 시트의 앞 장(칼을 뒤로 빼는 동작)을 건너뛴다.
     /// 여기 숫자를 박으면 시트를 갈아끼울 때 조용히 엉뚱한 장에서 시작한다.
     /// </summary>
@@ -150,7 +150,7 @@ public partial class FighterView : Node2D
     /// </summary>
     private int _holdFrame;
 
-    /// <summary>칼이 실제로 지나가는 장 (<c>attack_anim_blade_frame</c>). 판정이 서는 틱에 여기로 맞춰 세운다.</summary>
+    /// <summary>칼이 실제로 지나가는 장 (<c>combo</c> 한 칸의 <c>blade_frame</c>). 판정이 서는 틱에 여기로 맞춰 세운다.</summary>
     private int _bladeFrame;
 
     /// <summary>
@@ -267,7 +267,7 @@ public partial class FighterView : Node2D
 
     /// <summary>
     /// 공격 판정이 선 틱 — 시트에서 <b>칼이 실제로 지나가는 프레임</b>이다
-    /// (fighters.json 의 attack_anim_blade_frame).
+    /// (fighters.json 의 combo 한 칸의 blade_frame).
     ///
     /// <para>
     /// 여기서 하는 일은 셋이다. <b>그림을 칼이 나가는 장으로 맞춰 세우고</b>(이슈 #54), 몸을 <b>살짝</b>
@@ -285,8 +285,8 @@ public partial class FighterView : Node2D
     /// </para>
     /// </summary>
     /// <param name="tier">모아서 휘두른 단계 (0 = 그냥 한 대). <b>반지름은 안 건드린다</b> —
-    /// 이 링의 끝 반지름은 <c>attack_reach</c> 와 같은 눈금이라(balance.json) 키우면 사거리를
-    /// 속이는 그림이 된다. 모은 값은 <b>스파크와 색</b>이 말한다: 닿는 곳은 같고 실린 것이 다르다.</param>
+    /// ⚠ 칼이 그림의 모양이 되면서(이슈 #59) 이 링은 더 이상 사거리를 말하지 않는다 — 링은 4번 PR(연출)이 걷는다.
+    /// 모은 값은 <b>스파크와 색</b>이 말한다: 닿는 곳은 같고 실린 것이 다르다.</param>
     public void AttackActive(int tier)
     {
         _bladeOut = true;

@@ -116,7 +116,7 @@ public partial class Battle : Node2D
 
     /// <summary>
     /// 공격 판정이 선 틱인가. 위와 같이 디버그 전용 읽기다 — 이 순간이 곧 <b>칼이 지나가는
-    /// 프레임</b>이라(fighters.json 의 attack_anim_blade_frame), 스크린샷이 "칼이 보이는가" 를
+    /// 프레임</b>이라(fighters.json 의 combo 한 칸의 blade_frame), 스크린샷이 "칼이 보이는가" 를
     /// 증명하려면 프레임 수를 세는 대신 이것을 보고 셔터를 눌러야 한다. 세어 두면 공격 타이밍을
     /// 고치는 순간 조용히 어긋나 선딜 자세만 찍힌다 — 이슈 #38 전의 스크린샷이 그랬다.
     /// </summary>
@@ -223,6 +223,9 @@ public partial class Battle : Node2D
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
         Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
 
+        // 판정 모양도 데이터다 (이슈 #59). 칼질이 id 로 가리키는 모양을 여기서 읽어 규칙에 넘긴다 — 규칙은 파일을 모른다.
+        Dictionary<string, HitShape> shapes = LoadShapes("res://data/hitboxes.json");
+
         // 아레나 폭 · 한 판의 상한 · 기본 보스 · 고정 캐릭터는 balance.json 이 정한다. 전에는 그 값들이
         // 게임 · 데모 · 테스트 다섯 곳에 리터럴로 흩어져 있었고 이미 갈려 있었다.
         BattleBalance battle = Balance.Data.Battle;
@@ -258,6 +261,7 @@ public partial class Battle : Node2D
         {
             Arena = new Arena(battle.ArenaWidth),
             Fighter = _fighterConfig,
+            HitShapes = shapes,
             Boss = _bossConfig,
             PatternIds = ids,
             Patterns = patterns,
@@ -271,7 +275,7 @@ public partial class Battle : Node2D
         // 칼질이 시작하는 장과 칼이 나가는 장을 건넨다 (이슈 #54). 차지 자세는 그 사이의 **선딜 마지막 장**
         // — 칼이 나가는 장 바로 앞이다. 뷰가 fighters.json 을 직접 읽지 않게 여기서 건네준다.
         _fighterView.Load(
-            _fighterConfig.Sprite, _fighterConfig.AttackAnimStartFrame, _fighterConfig.AttackAnimBladeFrame);
+            _fighterConfig.Sprite, _fighterConfig.Combo[0].StartFrame, _fighterConfig.Combo[0].BladeFrame);
         _bossView.Load(_bossConfig.Sprite);
 
         if (GetTree().DebugCollisionsHint)
@@ -745,5 +749,12 @@ public partial class Battle : Node2D
     {
         using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
         return JsonData<T>.ParseTable(file.GetAsText(), path);
+    }
+
+    /// <summary><c>hitboxes.json</c> → 판정 모양. 문제는 <c>HitShapeTable</c> 이 전부 모아 한 번에 던진다.</summary>
+    private static Dictionary<string, HitShape> LoadShapes(string path)
+    {
+        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+        return HitShapeTable.Parse(file.GetAsText(), path);
     }
 }

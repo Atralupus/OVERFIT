@@ -25,6 +25,7 @@ public partial class BattleDemo : Node
         Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
         Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
         Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
+        Dictionary<string, HitShape> shapes = LoadShapes("res://data/hitboxes.json");
 
         BattleBalance battle = Balance.Data.Battle;
 
@@ -59,6 +60,7 @@ public partial class BattleDemo : Node
         {
             Arena = new Arena(battle.ArenaWidth),
             Fighter = fighter,
+            HitShapes = shapes,
             Boss = boss,
             PatternIds = ids,
             Patterns = patterns,
@@ -106,5 +108,12 @@ public partial class BattleDemo : Node
     {
         using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
         return JsonData<T>.ParseTable(file.GetAsText(), path);
+    }
+
+    /// <summary><c>hitboxes.json</c> → 판정 모양. 문제는 <c>HitShapeTable</c> 이 전부 모아 한 번에 던진다.</summary>
+    private static Dictionary<string, HitShape> LoadShapes(string path)
+    {
+        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+        return HitShapeTable.Parse(file.GetAsText(), path);
     }
 }

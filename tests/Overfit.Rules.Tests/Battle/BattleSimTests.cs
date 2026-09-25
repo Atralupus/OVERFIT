@@ -21,6 +21,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: bossHealth),
         PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
         Patterns = Patterns(),
@@ -97,6 +98,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, patternGap: 1000),
         PatternIds = new[] { "내려찍기 I" },
         Patterns = Patterns(),
@@ -148,6 +150,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
         PatternIds = new[] { "내려찍기 I" },
         Patterns = Patterns(),
@@ -213,6 +216,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             // 걷는 틱 수와 patternGap 은 **짝이다** — 걸어 붙는 동안 패턴이 서면 대시가 아니라
             // 걷기가 판정을 받는다. 그래서 132틱(= 2.2초)으로 둘을 맞춰 둔다.
             // 거리는 데이터에서 온다 — 보스 반폭이 바뀌어도 검사는 한 글자도 안 바뀐다.
@@ -335,6 +339,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0),
             PatternIds = new[] { "내려찍기 II-끌기" },
             Patterns = Patterns(),
@@ -507,6 +512,17 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 칼의_모양이_없으면_판을_세울_때_거절한다()
+    {
+        // 빈 명부와 같은 이유다 — 칼이 처음 서는 틱에 모양을 찾다 틀리면 판이 한참 돈 뒤라 무엇이 빠졌는지가
+        // 그 스택에 안 남는다. 빠진 id 를 메시지에 싣는다.
+        BattleSetup setup = Setup();
+        setup.HitShapes = new Dictionary<string, HitShape>();
+
+        Should.Throw<ArgumentException>(() => new BattleSim(setup)).Message.ShouldContain(TestConfigs.TestSwordId);
+    }
+
+    [Fact]
     public void 없는_패턴_id_는_매_틱_에러를_쏟지_않는다()
     {
         // Begin 이 간격을 안 되돌린 채 나가면 _gapLeft 가 0 이하로 남아 다음 틱에도 곧장
@@ -517,6 +533,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 10 * BattleSim.Dt),
             PatternIds = new[] { "없는패턴" },
             Patterns = new Dictionary<string, PatternDef>(),
@@ -566,6 +583,7 @@ public class BattleSimTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
         PatternIds = new[] { "단타" },
         Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern },
@@ -743,6 +761,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             // 파이터가 주머니 앞까지 걸어갈 시간을 준다 (960 → 300 이 95틱이다).
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 100 * BattleSim.Dt),
             PatternIds = new[] { "단타" },
@@ -795,6 +814,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
             Patterns = Patterns(),
@@ -1074,6 +1094,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
             PatternIds = new[] { "멀티히트" },
             Patterns = new Dictionary<string, PatternDef> { ["멀티히트"] = pattern },
@@ -1293,6 +1314,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: BattleSim.Dt),
             PatternIds = new[] { "두 대" },
             Patterns = new Dictionary<string, PatternDef> { ["두 대"] = pattern },
@@ -1352,6 +1374,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "내려찍기 I" },
             Patterns = Patterns(),
@@ -1407,7 +1430,7 @@ public class BattleSimTests
         // 서면 요청받은 것이 하나도 안 된 것이다. 1단계의 마무리도 빨간 가드 불가이고(이슈 #53 ·
         // 유저 결정), 붙들고 버티는 사람은 거기서 깨지고 받아친 사람은 보스를 굳힌다.
         FighterConfig f = TestConfigs.Fighter();
-        double lead = f.ChargeTiers[^1].Seconds + f.AttackActive;
+        double lead = f.ChargeTiers[^1].Seconds + f.Combo[0].Active;
 
         RealFinisherStagger().ShouldBeGreaterThanOrEqualTo(lead,
             $"1단계 마무리를 받아쳤는데 경직이 최대 차지({lead:0.000}초)를 못 담는다 — 받아칠 값이 없다");
@@ -1423,6 +1446,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "내려찍기 I" },
             Patterns = Patterns(),
@@ -1508,6 +1532,7 @@ public class BattleSimTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: BattleSim.Dt),
             PatternIds = new[] { "3연타" },
             Patterns = new Dictionary<string, PatternDef> { ["3연타"] = pattern },

@@ -147,7 +147,7 @@ public sealed class BotPolicy
         }
 
         // 쉬는 동안에는 붙어서 때린다.
-        if (gap > sim.Fighter.AttackReach)
+        if (gap > sim.FighterReach)
         {
             return new InputFrame(move, false, false, false, false);
         }

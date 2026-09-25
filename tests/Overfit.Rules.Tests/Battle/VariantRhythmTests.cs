@@ -49,6 +49,7 @@ public class VariantRhythmTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = fighter,
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(maxHealth: 999_999),
         PatternIds = new[] { pattern },
         Patterns = TestConfigs.Patterns(),

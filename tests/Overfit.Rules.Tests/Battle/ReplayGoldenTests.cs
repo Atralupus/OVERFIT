@@ -115,6 +115,7 @@ public class ReplayGoldenTests
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(),
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.

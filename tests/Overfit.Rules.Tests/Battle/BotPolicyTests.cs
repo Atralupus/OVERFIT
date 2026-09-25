@@ -13,6 +13,7 @@ public class BotPolicyTests
     {
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
+        HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(),
         PatternIds = StageRoster.For(TestConfigs.Stages(), 3),
         Patterns = JsonData<PatternDef>.ParseTable(

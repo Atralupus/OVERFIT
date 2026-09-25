@@ -167,7 +167,10 @@ public sealed class FeelBalance
     /// <summary>공격 섬광의 시작 반지름(px).</summary>
     public required double AttackRingFrom { get; init; }
 
-    /// <summary>공격 섬광의 끝 반지름(px). 사거리(<c>attack_reach</c>)와 같은 눈금이어야 거짓말이 아니다.</summary>
+    /// <summary>
+    /// 공격 섬광의 끝 반지름(px). ⚠ 칼이 그림의 모양이 되면서(이슈 #59) 사거리와 같은 눈금이라는
+    /// 뜻은 없어졌다 — 링은 4번 PR(연출)이 걷는다.
+    /// </summary>
     public required double AttackRingTo { get; init; }
 
     /// <summary>

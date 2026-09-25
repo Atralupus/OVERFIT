@@ -210,8 +210,9 @@ public class FighterDataTests
     /// </summary>
     private static double StandingTime(FighterConfig c, int tier)
     {
+        // 지금 파이터는 칼질 한 칸뿐이다 — 그 칸(Combo[0])의 시간을 쓴다.
         double held = c.ChargeTiers[tier].Seconds;
-        return held + Math.Max(0, c.AttackWindup - held) + c.AttackActive;
+        return held + Math.Max(0, c.Combo[0].Windup - held) + c.Combo[0].Active;
     }
 
     [Fact]
@@ -279,8 +280,10 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 공격_액션이_공격_애니메이션_한_번과_같은_길이다()
+    public void 칼질마다_액션이_그림_한_번과_같은_길이다()
     {
+        // ← 공격_액션이_공격_애니메이션_한_번과_같은_길이다 의 주석 그대로
+        //
         // **이 저장소에서 실제로 밟은 버그다** (이슈 #38). 공격 액션의 총 길이(선딜 + 판정 + 후딜)가
         // 애니메이션 재생 시간보다 짧으면, 액션이 끝나는 순간 뷰가 자세를 idle 로 되돌려
         // 애니메이션이 중간에서 잘린다. 중검은 0.30초짜리 액션으로 0.50초짜리 6프레임을 돌렸고,
@@ -289,22 +292,28 @@ public class FighterDataTests
         // 그래서 순서를 뒤집는다: 애니메이션이 먼저고 액션 길이가 거기 맞춘다.
         //
         // "한 번" 은 **시트 전체가 아니라 탭이 도는 구간**이다 (이슈 #54). 선딜을 0.3333 → 0.0833 으로
-        // 줄이면서 탭은 0번이 아니라 attack_anim_start_frame 에서 시작한다 — 칼을 뒤로 빼는 네 장을
+        // 줄이면서 탭은 0번이 아니라 start_frame 에서 시작한다 — 칼을 뒤로 빼는 네 장을
         // 0.0833초에 다 돌릴 수는 없어서다. 그래서 재는 길이도 거기서 끝까지다. 요구는 그대로다:
         // 액션이 끝나는 순간과 그림이 끝나는 순간이 같아야 한다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            double anim = (c.AttackAnimFrames - c.AttackAnimStartFrame) / c.AttackAnimFps;
-            double cycle = c.AttackWindup + c.AttackActive + c.AttackRecover;
-            cycle.ShouldBe(anim, _halfTick,
-                $"{id}: 공격 액션 {cycle:0.0000}초가 애니메이션({c.AttackAnimStartFrame}번부터) {anim:0.0000}초와 다르다"
-                + " — 그림이 잘리거나 남는다");
+            for (int i = 0; i < c.Combo.Count; i++)
+            {
+                ComboStepDef s = c.Combo[i];
+                double anim = (s.Frames - s.StartFrame) / s.Fps;
+                double cycle = s.Windup + s.Active + s.Recover;
+                cycle.ShouldBe(anim, _halfTick,
+                    $"{id} {i + 1}타: 액션 {cycle:0.0000}초가 {s.Anim} 의 {s.StartFrame}번부터 {anim:0.0000}초와 다르다"
+                    + " — 그림이 잘리거나 남는다");
+            }
         }
     }
 
     [Fact]
-    public void 공격_판정이_칼이_지나가는_프레임_위에_선다()
+    public void 칼질마다_판정이_칼이_지나가는_장_위에_선다()
     {
+        // ← 공격_판정이_칼이_지나가는_프레임_위에_선다 의 주석 그대로
+        //
         // 판정이 서는 구간과 **화면에서 칼이 지나가는 구간**이 같은 자리여야 한다.
         // 어긋나면 "닿았는데 칼은 아직 등 뒤" 또는 그 반대가 되고, 플레이어는 사거리를 못 배운다.
         // blade_frame 은 시트를 실제로 열어서 정한 값이다 — 프레임 번호로 짐작한 것이 아니다.
@@ -314,25 +323,60 @@ public class FighterDataTests
         // 전에 그림이 "벴다" 고 말한다(이슈 #38 의 반대쪽 거짓말이다).
         foreach ((string id, FighterConfig c) in Load())
         {
-            double frame = 1 / c.AttackAnimFps;
+            for (int i = 0; i < c.Combo.Count; i++)
+            {
+                ComboStepDef s = c.Combo[i];
+                double frame = 1 / s.Fps;
 
-            c.AttackAnimBladeFrame.ShouldBeInRange(0, c.AttackAnimFrames - 1,
-                $"{id}: blade_frame={c.AttackAnimBladeFrame} 이 {c.AttackAnimFrames}프레임 밖이다");
+                s.BladeFrame.ShouldBeInRange(0, s.Frames - 1,
+                    $"{id} {i + 1}타: blade_frame={s.BladeFrame} 이 {s.Frames}장 밖이다");
 
-            c.AttackAnimStartFrame.ShouldBeInRange(0, c.AttackAnimBladeFrame - 1,
-                $"{id}: start_frame={c.AttackAnimStartFrame} 이 칼이 나가는 {c.AttackAnimBladeFrame}번 앞이 아니다"
-                + " — 선딜 동안 칼이 이미 나가 있다");
+                s.StartFrame.ShouldBeInRange(0, s.BladeFrame - 1,
+                    $"{id} {i + 1}타: start_frame={s.StartFrame} 이 칼이 나가는 {s.BladeFrame}번 앞이 아니다"
+                    + " — 선딜 동안 칼이 이미 나가 있다");
 
-            c.AttackWindup.ShouldBe((c.AttackAnimBladeFrame - c.AttackAnimStartFrame) * frame, _halfTick,
-                $"{id}: 선딜이 끝나는 자리가 칼이 나가는 {c.AttackAnimBladeFrame}번 프레임의 시작과 다르다"
-                + $" ({c.AttackAnimStartFrame}번부터 셌다)");
+                s.Windup.ShouldBe((s.BladeFrame - s.StartFrame) * frame, _halfTick,
+                    $"{id} {i + 1}타: 선딜이 끝나는 자리가 칼이 나가는 {s.BladeFrame}번 장의 시작과 다르다"
+                    + $" ({s.StartFrame}번부터 셌다)");
 
-            c.AttackActive.ShouldBeGreaterThanOrEqualTo(frame - _halfTick,
-                $"{id}: 판정이 한 프레임보다 짧다 — 칼이 지나가는 그림 위에 판정이 못 선다");
+                s.Active.ShouldBeGreaterThanOrEqualTo(frame - _halfTick,
+                    $"{id} {i + 1}타: 판정이 한 장보다 짧다 — 칼이 지나가는 그림 위에 판정이 못 선다");
 
-            (c.AttackWindup + c.AttackActive).ShouldBeLessThanOrEqualTo(
-                ((c.AttackAnimFrames - c.AttackAnimStartFrame) / c.AttackAnimFps) + _halfTick,
-                $"{id}: 판정이 애니메이션 밖으로 넘친다");
+                (s.Windup + s.Active).ShouldBeLessThanOrEqualTo(((s.Frames - s.StartFrame) * frame) + _halfTick,
+                    $"{id} {i + 1}타: 판정이 그림 밖으로 넘친다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 칼의_모양은_그_칼질의_칼_장에서_뽑은_것이다()
+    {
+        // 칼질의 그림과 칼의 모양이 **같은 장**이어야 보이는 것이 곧 맞는 것이다(설계 §3). 판정 id 는
+        // `팩/애니메이션/장` 이라(설계 §3.2) 그 셋이 칼질의 sprite · anim · blade_frame 과 같아야 한다 —
+        // 다른 장의 모양을 달면 2타를 휘두르는데 판정은 1타의 궤적인 식으로 조용히 갈린다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            foreach (ComboStepDef s in c.Combo)
+            {
+                s.Hitbox.ShouldBe($"{c.Sprite}/{s.Anim}/{s.BladeFrame}",
+                    $"{id}: 칼의 모양이 칼이 지나가는 장에서 온 것이 아니다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 칼의_모양이_hitboxes_json_에_있다()
+    {
+        // 없는 id 는 판을 세울 때 BattleSim 이 거절한다(ArgumentException) — 게임이 첫 전투에서 멈추기 전에 여기서 잡는다.
+        Dictionary<string, HitShape> shapes = HitShapeTable.Parse(
+            File.ReadAllText(Path.Combine("data", "hitboxes.json")), "hitboxes.json");
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            foreach (ComboStepDef s in c.Combo)
+            {
+                shapes.ShouldContainKey(s.Hitbox,
+                    $"{id}: {s.Hitbox} 가 hitboxes.json 에 없다 — tools/extract_hitboxes.py 의 목록에 넣고 다시 뽑는다");
+            }
         }
     }
 

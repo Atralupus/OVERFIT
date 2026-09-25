@@ -72,7 +72,8 @@ public class BossDataTests
             foreach ((string who, FighterConfig c) in fighters)
             {
                 // 칼이 닿기까지 = 최대 차지 시간 + 판정. **붙든 시간이 곧 선딜**이라 선딜이 안 더해진다.
-                double lead = c.ChargeTiers[^1].Seconds + c.AttackActive;
+                // 지금 파이터는 칼질 한 칸뿐이다 — 그 칸(Combo[0])의 판정 시간을 쓴다.
+                double lead = c.ChargeTiers[^1].Seconds + c.Combo[0].Active;
                 boss.FinisherParryStagger.ShouldBeGreaterThanOrEqualTo(lead,
                     $"{id}: 경직 {boss.FinisherParryStagger} 초에"
                     + $" {who} 의 최대 차지({lead:0.000}초)가 안 들어간다");
@@ -92,7 +93,7 @@ public class BossDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                double lead = c.ChargeTiers[^1].Seconds + c.AttackActive;
+                double lead = c.ChargeTiers[^1].Seconds + c.Combo[0].Active;
                 (boss.FinisherParryStagger - lead).ShouldBeGreaterThanOrEqualTo(0.15,
                     $"{id}: {who} 의 최대 차지({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
             }

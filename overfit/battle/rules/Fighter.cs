@@ -71,7 +71,7 @@ public sealed class Fighter
     /// 그만큼 깎여 0 이 된다 — <b>붙드는 것이 곧 선딜이기 때문이다</b> (이슈 #40).
     ///
     /// <para>
-    /// 설정값(<c>attack_windup</c>)을 그대로 안 읽고 칼질마다 들고 있는 이유가 여기다. 그림이 먼저
+    /// 설정값(칼질 칸의 <c>windup</c>)을 그대로 안 읽고 칼질마다 들고 있는 이유가 여기다. 그림이 먼저
     /// 그렇게 말하고 있었다: 차지 자세는 attack 시트의 <b>선딜 마지막 장</b>(칼을 끝까지 뒤로 뺀 그림)이라,
     /// 놓은 뒤에 선딜을 처음부터 또 기다리면 같은 동작을 두 번 감는 셈이다. 규칙으로도 그 편이 옳다 —
     /// 그래야 2초 차지가 칼 닿기까지 2.0 + 선딜 + 판정이 아니라 <b>2.0833초</b>가 되어 내려찍기 계열의
@@ -194,12 +194,16 @@ public sealed class Fighter
     /// <summary>패리로 모은 기. 지금은 쓰는 곳이 없다 — 쓰임(스펙 7)이 생기면 그 비용이 데이터로 온다.</summary>
     public int Qi { get; private set; }
 
+    /// <summary>
+    /// 지금 칼질의 한 칸 (<c>fighters.json</c> 의 <c>combo</c>). 지금 파이터는 첫 칸 하나만 휘두른다.
+    /// 시간과 피해는 여기서 읽는다 — 파이터 설정의 옛 키(attack_windup …)는 칼질 목록으로 들어갔다.
+    /// </summary>
+    private ComboStepDef Step => _config.Combo[0];
+
     /// <summary>공격 판정이 서 있는가. 선딜을 지나고 후딜 전.</summary>
     public bool AttackActive => Action == FighterAction.Attack
         && ActionElapsed >= _windup
-        && ActionElapsed < _windup + _config.AttackActive;
-
-    public double AttackReach => _config.AttackReach;
+        && ActionElapsed < _windup + Step.Active;
 
     /// <summary>
     /// 이 칼질의 피해. <b>차지 단계의 배수가 이미 곱해져 있다</b> — 곱셈을 부르는 쪽에 두면
@@ -212,7 +216,7 @@ public sealed class Fighter
     /// </para>
     /// </summary>
     public int AttackDamage =>
-        (int)Math.Round(_config.AttackDamage * _config.ChargeTiers[_tier].DamageMultiplier, MidpointRounding.AwayFromZero);
+        (int)Math.Round(Step.Damage * _config.ChargeTiers[_tier].DamageMultiplier, MidpointRounding.AwayFromZero);
 
     /// <summary>지금 모으고 있나.</summary>
     public bool Charging => Action == FighterAction.Charge;
@@ -241,7 +245,7 @@ public sealed class Fighter
     /// 닿을 수 있는 차지를 스스로 버린다.
     /// </summary>
     public double AttackLead =>
-        Math.Max(0, _config.AttackWindup - ChargeSeconds) + _config.AttackActive;
+        Math.Max(0, Step.Windup - ChargeSeconds) + Step.Active;
 
     /// <summary>최대 차지 시간(초). <b>마지막 단계의 시간이 곧 그것</b>이라 데이터에 따로 없다.</summary>
     public double ChargeMaxSeconds => _config.ChargeTiers[^1].Seconds;
@@ -437,7 +441,7 @@ public sealed class Fighter
     {
         FighterAction.Dash => _config.DashDuration,
         // 선딜은 설정값이 아니라 **이번 칼질의 남은 선딜**이다. 붙들고 있었으면 그만큼 짧다.
-        FighterAction.Attack => _windup + _config.AttackActive + _config.AttackRecover,
+        FighterAction.Attack => _windup + Step.Active + Step.Recover,
         _ => 0,
     };
 
@@ -514,7 +518,7 @@ public sealed class Fighter
         _tier = 0;
 
         // 그냥 누른 칼질은 선딜을 통째로 기다린다 — 붙든 시간이 0 이니 깎일 것이 없다.
-        _windup = _config.AttackWindup;
+        _windup = Step.Windup;
 
         if (wanted == FighterAction.Dash && !Grounded)
         {
@@ -539,7 +543,7 @@ public sealed class Fighter
         // 붙들고 있던 시간이 곧 선딜이다 — 남은 만큼만 더 기다린다. 0.8초(1단계)면 이미 한참
         // 넘겼으므로 칼이 곧장 나간다. 경계를 계단이 아니라 연속으로 두는 이유는, 선딜보다
         // 짧게 붙든 경우(0.07초)가 그냥 누르기보다 느려지는 구멍을 만들지 않기 위해서다.
-        _windup = Math.Max(0, _config.AttackWindup - ActionElapsed);
+        _windup = Math.Max(0, Step.Windup - ActionElapsed);
         Action = FighterAction.Attack;
         ActionElapsed = 0;
     }

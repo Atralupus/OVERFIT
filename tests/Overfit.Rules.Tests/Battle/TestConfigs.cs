@@ -36,18 +36,17 @@ public static class TestConfigs
         ParryMemoryWindow = 0.5,
         ParrySpamWindow = 0.1,
         ParryCost = 15,
-        AttackWindup = 0.08,
-        AttackActive = 0.06,
-        AttackRecover = 0.14,
-        // 기준 파이터에는 그림이 없지만 넷의 관계는 진짜여야 한다 — 50fps · 14프레임이면
-        // 재생 0.28초로 위 셋의 합과 같고, 0번에서 시작해 4번 프레임(0.08초)이 선딜의 끝이다.
-        // 거짓 값을 넣으면 이 픽스처가 "애니메이션에서 거꾸로 정한다"는 규칙의 반례가 된다.
-        AttackAnimFps = 50,
-        AttackAnimFrames = 14,
-        AttackAnimBladeFrame = 4,
-        AttackAnimStartFrame = 0,
-        AttackReach = 90,
-        AttackDamage = 8,
+        // 기준 파이터에는 그림이 없지만 칼질 한 칸의 관계는 진짜여야 한다 — 50fps · 14장이면 재생 0.28초로
+        // 셋의 합과 같고, 0번에서 시작해 4번 장(0.08초)이 선딜의 끝이다. 거짓 값을 넣으면 이 픽스처가
+        // "그림에서 거꾸로 정한다" 는 규칙의 반례가 된다.
+        Combo = new List<ComboStepDef>
+        {
+            new()
+            {
+                Anim = "attack", Fps = 50, Frames = 14, StartFrame = 0, BladeFrame = 4,
+                Windup = 0.08, Active = 0.06, Recover = 0.14, Damage = 8, Hitbox = TestSwordId,
+            },
+        },
         AttackCost = 12,
         // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
         // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
@@ -67,6 +66,27 @@ public static class TestConfigs
         StaminaRegen = 40,
         Sprite = "test_unit",
     };
+
+    /// <summary>기준 파이터의 칼 id. <c>hitboxes.json</c> 에는 없다 — <see cref="HitShapes"/> 가 더해 준다.</summary>
+    public const string TestSwordId = "test/sword";
+
+    /// <summary>
+    /// 기준 파이터의 칼 — 옛 사거리 90 을 높이 300 으로 막은 사각형 하나(좌우 대칭). <b>그림에서 안 뽑는다</b>:
+    /// 기준 파이터가 실제 그림의 모양을 쓰면 <c>hitboxes.json</c> 을 다시 뽑는 날(흰색 기준 하나만 바꿔도) 칼질을
+    /// 세는 모든 테스트와 골든이 같이 움직인다 — 이 파일 머리의 "기준값" 과 같은 이유다.
+    /// 보스 몸통(키 297) 앞에서 옛 판정(|dx| − 보스 반폭 ≤ 90)과 가로가 정확히 같아, 칼을 모양으로 옮긴 것이
+    /// 기준 파이터의 판을 바꾸지 않는다.
+    /// </summary>
+    public static HitShape TestSword() => new(new[] { new HitRect(-90, 90, 0, 300) });
+
+    /// <summary>실제 <c>hitboxes.json</c> 에 기준 파이터의 칼을 더한 표. 판을 세울 때 이것을 넘긴다.</summary>
+    public static Dictionary<string, HitShape> HitShapes()
+    {
+        Dictionary<string, HitShape> shapes = HitShapeTable.Parse(
+            File.ReadAllText(Path.Combine("data", "hitboxes.json")), "hitboxes.json");
+        shapes[TestSwordId] = TestSword();
+        return shapes;
+    }
 
     /// <summary>
     /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
@@ -124,6 +144,7 @@ public static class TestConfigs
     {
         Arena = Arena(),
         Fighter = Fighter(),
+        HitShapes = HitShapes(),
         Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
         PatternIds = new[] { SweepId },
         Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
