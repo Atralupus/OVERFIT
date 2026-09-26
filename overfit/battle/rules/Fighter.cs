@@ -28,7 +28,8 @@ public enum FighterAction
 }
 
 /// <summary>
-/// 플레이어 상태 기계. <b>보스를 모른다</b> — 둘을 아는 것은 <see cref="BattleSim"/> 하나다.
+/// 플레이어 상태 기계. <b>보스를 모른다</b> — 보스의 판정을 이 몸에 대고 결과를 싣는 것은 <see cref="BossSwings"/>
+/// (<see cref="BossSwings.Resolve"/>), 이 칼을 보스에 대는 것은 <see cref="BattleSim"/> 이다.
 /// 그래야 FighterActionTests 가 보스 없이 돈다.
 /// </summary>
 public sealed class Fighter
@@ -223,13 +224,15 @@ public sealed class Fighter
 
     /// <summary>
     /// 패리가 받아쳤다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> — "잘 받아내면 다시 움직일 수
-    /// 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈). 보스를 무너뜨리는 것은 여기가 아니다 — 판정과 보스를 둘 다
-    /// 아는 곳은 <see cref="BattleSim"/> 하나다(탈진 루틴 · #72).
+    /// 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈). 보스를 무너뜨리는 것은 여기가 아니다 — 이것을 부르는
+    /// <c>BossSwings.ApplyVerdict</c> 가 받아쳤다는 답을 <see cref="BossSwings.Resolve"/> 로 돌려주고, 그 답으로 탈진 루틴
+    /// (<c>BattleSim.Exhaust</c> · 하나다)을 부르는 것은 <see cref="BattleSim"/> 이다(#72 · 설계 §4.3).
     ///
     /// <para>
     /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
-    /// 이 뒤의 틱에 누른 J 는 곧장 1타가 된다(<see cref="Begin"/> — 되받아치기). <see cref="BattleSim"/> 은 이것을
-    /// 파이터의 틱 <b>뒤</b> 판정에서 부르므로, 받아친 그 틱의 J 는 이미 지나갔고 되받아치기는 다음 틱부터다.
+    /// 이 뒤의 틱에 누른 J 는 곧장 1타가 된다(<see cref="Begin"/> — 되받아치기). 이것은 <see cref="BattleSim"/> 의 틱에서
+    /// 파이터의 틱 <b>뒤</b>에 도는 보스 판정(<see cref="BossSwings.Resolve"/>)에서 불리므로, 받아친 그 틱의 J 는 이미 지나갔고
+    /// 되받아치기는 다음 틱부터다.
     /// </para>
     /// </summary>
     public void ParryPrecise()

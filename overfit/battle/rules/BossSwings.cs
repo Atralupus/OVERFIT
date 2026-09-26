@@ -210,9 +210,10 @@ public sealed class BossSwings
     }
 
     /// <summary>
-    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴의 부작용. 회피(Dodged)와 빗나감은
-    /// 아무것도 안 한다(<c>default</c> 갈래). <see cref="Land"/> 와 <see cref="Step"/> 의 무적 스냅샷
-    /// 양쪽에서 같은 부작용을 내야 하므로 <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔다.
+    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
+    /// <b>닿은</b> 결과로만 부른다. 무적(Dodged)과 빗나감에는 부작용이 없어 <see cref="Step"/> 이 관측만 지어 두므로
+    /// <c>default</c> 갈래는 지금 안 온다. <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔 것은 그래서다 — 무적 · 빗나감의
+    /// 관측은 부작용 없이 지어야 한다.
     /// </summary>
     private void ApplyVerdict(HitBox box, HitVerdict verdict)
     {

@@ -53,7 +53,13 @@ public sealed class BattleSetup
 }
 
 /// <summary>
-/// 전투 한 판. <b>여기만이 파이터와 보스를 동시에 안다.</b>
+/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 탈진 · 승패를 한 틱씩 민다.
+///
+/// <para>
+/// 보스의 판정을 파이터 몸에 대고, 그 결과를 몸에 싣고, 관측을 짓는 것은 여기가 아니라 <see cref="BossSwings"/> 다
+/// (<see cref="BossSwings.Resolve"/> · #72 · 설계 §10 의 3번). 여기는 러너가 낸 판정을 거기 열고(<see cref="BossSwings.Open"/>)
+/// 받아쳤다는 답을 받아 탈진 루틴을 부른다 — 같은 틱의 순서(보스 판정 → 파이터의 칼 → 끊기 · 설계 §3.5 5)가 여기 있다.
+/// </para>
 ///
 /// <para>
 /// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 지금은 <b>무작위</b>(<c>uniform</c>)뿐이다. 일부러다 —
@@ -102,7 +108,10 @@ public sealed class BattleSim
     /// <summary>지난 틱의 움직임이 이 틱의 패턴 시계를 세웠나 (<see cref="MotionStep.HoldClock"/>).</summary>
     private bool _holdClock;
 
-    /// <summary>회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 관측을 지을 때 묻는다.</summary>
+    /// <summary>
+    /// 회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 여기는 틱마다 <see cref="DodgeCredit.Remember"/> 로
+    /// 먹이기만 한다 — 관측을 지으며 묻는 것은 <see cref="BossSwings"/> 이고, 같은 인스턴스를 세울 때 넘긴다.
+    /// </summary>
     private readonly DodgeCredit _credit = new();
 
     /// <summary>보스의 산 판정과 그 관측 (<see cref="BossSwings"/>).</summary>
@@ -480,8 +489,16 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 판정 창 길이(초)를 틱으로. <b>반올림은 여기 한 곳이다</b> (설계 §3.5) — 8fps 한 장은 0.125초 =
-    /// 7.5틱이라, 뷰와 규칙이 각자 반올림하면 반 틱씩 어긋난다. 0 이하는 한 틱 — 옛 패턴은 전부 그렇다.
+    /// 초를 틱으로. <b>규칙의 초→틱 반올림은 여기 한 곳이다</b> (설계 §3.5 · §3.6 ⑤) — 반 틱은 0 에서 먼 쪽으로 간다.
+    /// 쓰는 곳은 다섯이다: 판정 창의 길이(<see cref="BossSwings.Open"/> · <see cref="BossHits"/> 의 점프 가능), 타임라인 단계의
+    /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>).
+    /// 8fps 한 장은 0.125초 = 7.5틱이라, 이 중 둘이 각자 반올림하면 반 틱씩 어긋난다.
+    ///
+    /// <para>
+    /// 한 틱보다 짧은 값은 0 이하까지 전부 <b>한 틱</b>이다 — 어느 쓰임에도 0 틱이 안 나온다. 타임라인에서는 그래서 T = 0 인
+    /// 첫 단계가 틱 1 이고, 러너는 제 첫 틱을 1 로 세므로(<see cref="PatternRunner.Ticks"/>) 그 단계는 <b>러너의 첫 틱</b>에 든다
+    /// (설계 §3.6 ⑤). 한 틱(1/60초) 아래의 T 도 같은 틱이다.
+    /// </para>
     /// </summary>
     public static int TicksFor(double seconds) =>
         seconds <= 0 ? 1 : Math.Max(1, (int)Math.Round(seconds / Dt, MidpointRounding.AwayFromZero));

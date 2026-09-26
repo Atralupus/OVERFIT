@@ -5,11 +5,11 @@ namespace Overfit.Battle.Rules;
 
 /// <summary>
 /// 타임라인을 틱으로 돌린다. <b>플레이어를 모른다</b> — 어디에 판정이 서는지만 말하고,
-/// 그게 누구에게 닿는지는 <c>BattleSim</c> 이 정한다.
+/// 그게 누구에게 닿는지는 <see cref="BossSwings"/> 가 정한다(<c>BattleSim</c> 이 러너가 낸 판정을 거기 연다).
 ///
 /// <para>
 /// 판정은 <b>단계에 들어선 틱에 한 번</b> 나고, 그 판정이 몇 틱 동안 살아 있을지는 싣기만 한다
-/// (<see cref="HitBox.ActiveSeconds"/>) — 살아 있는 동안 몸에 대 보는 것은 <c>BattleSim</c> 이다.
+/// (<see cref="HitBox.ActiveSeconds"/>) — 살아 있는 동안 몸에 대 보는 것은 <see cref="BossSwings.Resolve"/> 다.
 /// 그래서 <c>multi_hit</c> 을 타임라인의 active 개수로 셀 수 있고, 한 번 휘두른 칼에 여러 번 맞는 일이 없다.
 /// </para>
 ///
@@ -117,7 +117,7 @@ public sealed class PatternRunner
 
     /// <summary>
     /// <b>다음 판정</b>(아직 안 든 첫 <c>active</c> 단계)이 칠 모양 — 디버그 표시의 "다음 판정" 이 러너가 낼 바로 그 판정을 그린다.
-    /// 없으면 null. 판정이 선 틱에 그 단계는 "다음" 이기를 그친다 — 창이 살아 있는지는 <c>BattleSim</c> 이 따로 안다.
+    /// 없으면 null. 판정이 선 틱에 그 단계는 "다음" 이기를 그친다 — 창이 살아 있는지는 <see cref="BossSwings.Live"/>(밖으로는 <c>BattleSim.SwingLive</c>)가 따로 안다.
     /// </summary>
     public HitBox? NextHit => NextActiveAt() is int k ? _hits[k] : null;
 
