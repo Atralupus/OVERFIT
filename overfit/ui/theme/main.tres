@@ -80,7 +80,7 @@ corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
 ; 경직 게이지 = 흰색 계열 (#71 · 설계 §6). 빨간 체력바 바로 밑이라 색상이 아니라 **밝기**로 갈린다 — 호박은 "막아도 되는
-; 연타" 라 안 쓴다(보스의 선딜 링과 틴트가 호박이다).
+; 연타" 라 안 쓴다(보스의 선딜 틴트가 호박이다 — 같은 호박이던 선딜 링은 #81 로 걷었다).
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_poise"]
 bg_color = Color(0.905882, 0.921569, 0.960784, 1)
 corner_radius_top_left = 4

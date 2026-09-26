@@ -15,9 +15,15 @@ namespace Overfit.Battle.View;
 ///
 /// <para>
 /// 패턴 중 붉은 틴트 하나로는 <b>무엇이 오는지</b>가 안 보인다는 것이 플레이 피드백이었다.
-/// 그래서 선딜과 판정이 서는 순간을 확실히 가른다 — 선딜에는 단계가 붙든 공격 자세와 함께
-/// 예고 링이 <b>조여 들고</b>, 판정이 서면 충격파가 <b>퍼진다</b>. 방향이 반대라
-/// 둘을 헷갈릴 수 없다.
+/// 그래서 선딜과 판정이 서는 순간을 가른다 — 선딜에는 단계가 붙든 공격 자세에 서서 몸이 선딜 틴트 쪽으로
+/// 무르익고, 판정이 서면 몸이 한 번 번쩍인다(화면 흔들림은 <c>BattleCues</c> 가 같이 건다).
+/// </para>
+///
+/// <para>
+/// <b>보스 공격에는 링이 없다</b> (#81). 전에는 선딜에 예고 링이 <b>조여 들고</b> 판정이 서면 충격파가 스파크와 함께
+/// <b>퍼졌다</b>(<see cref="RingBurst"/> 하나 · <c>feel.tell_ring_*</c> · <c>boss_ring_*</c>). 유저가 걷었다 —
+/// "적 공격에 동그라미 연출은 제거해주세요 전체적으로 캐릭터는 남겨놔도 됩니다." (2026-09-26). 파이터의 링
+/// (<c>FighterView</c>)은 그 "캐릭터" 라 남는다. 판정이 서는 순간의 번쩍임과 흔들림은 동그라미가 아니라 남겼다.
 /// </para>
 ///
 /// <para>
@@ -29,7 +35,7 @@ namespace Overfit.Battle.View;
 /// <b>무엇이 오는지는 그림이 말한다</b> (#72 · 설계 §6). 규칙의 단계가 가리키는 장(<c>anim</c> · <c>frame</c>)을 그대로
 /// 붙든다 — 3연격은 칼을 든 f0, 점프 공격은 웅크린 <c>jump</c> f0 다. 옛 변종의 예고 표지(칼 · 끌기 · 도약 표지 아홉)와
 /// 빨간 가드 불가 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 새 두 패턴에는 가드 불가 판정이 없어 빨강이 말할
-/// 것이 없다. 남은 링과 선딜 틴트는 "언제" 를 말하고, 5번 PR(링의 조임 · 틴트의 무르익음) · 6번 PR(링 전부)이 걷는다.
+/// 것이 없다. 선딜 틴트의 무르익음(<see cref="Ripeness"/>)이 "언제" 를 거들고, 5번 PR 이 그것도 걷는다(설계 §6).
 /// </para>
 /// </summary>
 public partial class BossView : Node2D
@@ -49,12 +55,9 @@ public partial class BossView : Node2D
     /// <summary>흰 플래시 셰이더의 세기 — <c>hit_flash.gdshader</c> 의 <c>uniform float flash</c> 다.</summary>
     private static readonly StringName _flashParam = "flash";
 
-    private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
-    private static readonly Color _shockRingColor = new(1.00f, 0.80f, 0.35f, 1.00f);
     private static readonly Color _activeFlash = new(2.60f, 2.30f, 1.60f);
 
     private AnimatedSprite2D _sprite = null!;
-    private RingBurst _ring = null!;
     private FeelBalance _feel = null!;
 
     private double _flashLeft;
@@ -81,12 +84,6 @@ public partial class BossView : Node2D
         _sprite.Scale = new Vector2((float)_feel.BossSpriteScale, (float)_feel.BossSpriteScale);
         _hitFlash = new ShaderMaterial { Shader = GD.Load<Shader>("res://battle/view/hit_flash.gdshader") };
         _sprite.Material = _hitFlash;
-        _ring = new RingBurst
-        {
-            Position = new Vector2(0, (float)-_feel.BossRingOffsetY),
-            LineWidth = (float)_feel.RingWidth * 1.6f,
-        };
-        AddChild(_ring);
     }
 
     public void Load(string spriteId)
@@ -122,7 +119,7 @@ public partial class BossView : Node2D
         Position = new Vector2((float)frame.X, (float)-frame.Y);
 
         // 스프라이트 원본은 오른쪽을 본다 — 팩의 규약이고 FighterView 도 같다.
-        // **뒤집어도 자리가 안 어긋난다**: Offset 의 x 는 0 이고(AlignToGround 는 y 만 건드린다) 링도 x=0 에 선다.
+        // **뒤집어도 자리가 안 어긋난다**: Offset 의 x 는 0 이다(AlignToGround 는 y 만 건드린다).
         _sprite.FlipH = frame.Facing < 0;
 
         BossPhase phase = frame.Phase;
@@ -131,13 +128,9 @@ public partial class BossView : Node2D
         _hitFlashLeft = System.Math.Max(0, _hitFlashLeft - dt);
         HoldLastFrameWhenDead();
 
-        // 탈진하면 패턴이 끊겨 Phase 가 Idle 이므로 링은 저절로 안 그려진다 (#72 · 설계 §4.3).
+        // 선딜 틴트의 무르익음만 쓴다 — 같은 값으로 조여 들던 예고 링은 걷었다(#81). 탈진하면 패턴이 끊겨 Phase 가 Idle 이라
+        // 0 이다 (#72 · 설계 §4.3).
         float ripeness = Ripeness(phase, frame.NextActiveIn);
-        if (ripeness > 0)
-        {
-            // 판정이 가까울수록 링이 **조여 든다.** 퍼지는 충격파와 방향이 반대라 둘을 헷갈릴 수 없다.
-            _ring.Charge(Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness), _tellRingColor);
-        }
 
         string anim = AnimationFor(frame.Anim, frame.Exhausted);
         if (anim == frame.Anim && frame.Frame is int held)
@@ -164,17 +157,13 @@ public partial class BossView : Node2D
         }
     }
 
-    /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
+    /// <summary>
+    /// 판정이 선 틱. 몸이 한 번 <b>번쩍인다</b>. 여기서 퍼지던 충격파와 스파크는 걷었다 — 보스 공격에 동그라미를 안 그린다
+    /// (#81 · 클래스 머리).
+    /// </summary>
     public void ActiveNow()
     {
         Flash(_activeFlash, _feel.FlashSeconds);
-        _ring.Burst(
-            (float)_feel.TellRingTo,
-            (float)_feel.BossRingTo,
-            _feel.BurstSeconds,
-            _shockRingColor,
-            _feel.SparkCount,
-            (float)_feel.SparkLength);
     }
 
     /// <summary>
