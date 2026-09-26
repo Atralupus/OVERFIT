@@ -338,8 +338,9 @@ public class FighterExhaustTests
     public void 탈진한_채_맞으면_그대로_맞고_탈진은_제_틱에_풀린다()
     {
         // Review Focus 1 — 설계 §5.5: 탈진 동안 맞으면 그대로 맞는다. ↓ 를 붙들어도 가드가 안 서고, 맞았다고 탈진이 끊기거나 늘지도
-        // 않는다 — 1.1초가 "남은 타격을 그대로 맞는 값" 인 까닭이다. 3연격이 서고 조금 뒤 마지막 칼(1타)을 휘둘러 탈진에 들고, 그 탈진
-        // 안에 보스의 1타(8)가 온다.
+        // 않는다 — 1.1초가 "남은 타격을 그대로 맞는 값" 인 까닭이다. 3연격이 서자마자 마지막 칼(1타)을 휘둘러 경직까지 끝나는 틱(41틱 ·
+        // #82)에 탈진에 들고, 그 탈진 안에 보스의 1타(8 · 패턴의 51틱)가 온다. 전에는 3연격이 서고 20틱 뒤에 휘둘렀다 — 칼질이 17틱에 끝나던
+        // 때의 숫자라, 경직이 붙자 보스의 1타가 탈진 전(경직 중)에 닿았다.
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -364,11 +365,6 @@ public class FighterExhaustTests
         }
 
         sim.Boss.CurrentPattern.ShouldBe("3연격", "3연격이 안 섰다");
-        for (int i = 0; i < 20; i++)
-        {
-            sim.Tick(default);
-        }
-
         sim.Fighter.Spend(sim.Fighter.Stamina - 5);
         sim.Tick(_attack);
         for (int i = 0; i < 120 && !sim.Fighter.Exhausted; i++)
@@ -377,6 +373,7 @@ public class FighterExhaustTests
         }
 
         sim.Fighter.Exhausted.ShouldBeTrue("마지막 칼이 끝났는데 탈진하지 않았다 — 이 테스트가 탈진한 채 맞는 것을 못 본다");
+        sim.Events.ShouldBeEmpty("탈진에 들기 전에 보스의 1타가 왔다 — 이 테스트가 탈진한 채 맞는 것을 못 본다");
         int start = sim.Ticks;
         int health = sim.Fighter.Health;
         for (int i = 0; i < 120 && sim.Events.Count == 0; i++)

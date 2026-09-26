@@ -137,23 +137,17 @@ public partial class ShotRunner : Node
         // 판정까지 0.3초 넘게 남은 선딜만 고른다: 1타는 누른 뒤 5틱에 서므로 칼이 f0 에 선 보스에 닿는다. 번쩍인 장은
         // [view][D] boss_flash anim=… frame=… flash=… 로도 남는다(맞은 뒤 첫 BossView.Show — 플래시 아래 그린 장이다).
         //
-        // **닿을 때까지 0.4초마다 다시 누른다** (#72) — 보스와 겹친 채 서 있어도 첫 칼이 빗나갈 수 있다. 0.4초는 1타 한 바퀴(0.25초)보다
-        // 길어 2타로 이어지지 않는다.
-        const double strikeEvery = 0.4;
+        // **닿을 때까지, 칼질이 끝나 설 때마다 다시 누른다** (#72 · #82) — 보스와 겹친 채 서 있어도 첫 칼이 빗나갈 수 있다. 칼질이 경직까지
+        // 끝나기를 규칙에게 묻는다(FighterFree): 전에는 0.4초마다 눌렀는데, 칼질 뒤 경직(0.40초)이 들자 둘째 J 가 1타의 경직에 떨어져
+        // 2타가 됐다 — 1타의 경직 중 J 는 곧장 2타다.
         await Until(
             () => _battle is { BossPattern: "3연격", BossWindingUp: true } && _battle.BossNextActiveIn > 0.3,
             _patternTimeout);
         int bossBefore = _battle?.BossHealth ?? 0;
         bool BossHit() => (_battle?.BossHealth ?? 0) < bossBefore;
-        int every = (int)(strikeEvery * Engine.PhysicsTicksPerSecond);
         for (int f = 0; f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
         {
-            if (f % every == 0)
-            {
-                Tap("attack");
-            }
-
-            await Frames(1);
+            await PressWhenFree("attack");
             if (BossHit() && Pause())
             {
                 break;
@@ -352,11 +346,14 @@ public partial class ShotRunner : Node
         bool half = false;
         for (int round = 0; round < 12 && _battle is { BossExhausted: false }; round++)
         {
-            // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다. 2연격 한 바퀴(0.25 + 1.0초) 뒤에 다시 누른다.
+            // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다. 2연격이 2타 뒤 경직(0.50초 · #82)까지 끝나 서면 다시
+            // 누른다(FighterFree). 전에는 80프레임(2연격 한 바퀴 0.25 + 1.0초) 뒤에 눌렀는데, 경직이 들자 그 J 둘이 2타의 경직에 버려져
+            // 한 판 걸러 한 번만 쳤다 — 두 연격 사이가 벌어져 게이지가 줄면 두 번째 2타에 안 무너진다.
             Tap("attack");
             await Frames(2);
             Tap("attack");
-            for (int f = 0; f < 80 && _battle is { BossExhausted: false }; f++)
+            await Frames(2);
+            for (int f = 0; f < 150 && _battle is { BossExhausted: false, FighterFree: false }; f++)
             {
                 await Frames(1);
             }
@@ -378,24 +375,29 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 스태미나를 다 써 탈진한 파이터 한 장 (#71 · 설계 §5.5 · §9). 제자리에서 1타만 거듭 누른다 — 14 씩 일곱 번이면 한 자리 수가 남고,
-    /// 모자란 마지막 한 번도 나가 0 까지 쓴다. 그 칼질이 끝나는 틱에 탈진한다. take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야
+    /// 스태미나를 다 써 탈진한 파이터 한 장 (#71 · 설계 §5.5 · §9). 제자리에서 <b>패리만</b> 거듭 누른다 — 15 씩 여섯 번이면 두 자리 수가
+    /// 남고, 모자란 마지막 한 번도 나가 0 까지 쓴다. 그 패리가 끝나는 틱에 탈진한다. take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야
     /// 마지막 장에 선 자세가 찍힌다 — 30프레임 뒤다. 몸은 탈진 색이고 스태미나 바는 파랗다(보스 게이지의 탈진과 같은 파랑). 가드
     /// 붕괴로 든 탈진과 같은 그림이다(<c>battle-10b</c> 는 붕괴의 순간 · 큰 고리).
     ///
     /// <para>
     /// <b>첫 패턴이 3연격인 새 판에서</b> 찍는다(<see cref="NewBattleOpening"/>). 3연격은 보스가 선 자리(≈ 1312)에서 3.25초 동안 427px 까지만
-    /// 쳐 파이터가 선 자리(480)에 안 닿고, 여덟 번의 칼질(≈ 2.1초)과 셔터가 그 안에 든다. 점프 공격이면 도약이 파이터 앞에 내려 맞는
+    /// 쳐 파이터가 선 자리(480)에 안 닿고, 일곱 번의 패리(20틱씩 ≈ 2.4초)와 셔터가 그 안에 든다. 점프 공격이면 도약이 파이터 앞에 내려 맞는
     /// 자세가 섞인다. 대시로 바닥내 봤더니 네 번 만에 벽에 붙어 몸이 화면 왼쪽 끝에서 잘렸다.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>전에는 1타를 16프레임마다 눌렀다</b>(여덟 번 ≈ 2.1초). 칼질 뒤 경직(0.40초 · #82)이 들자 1타가 경직까지 0.67초라 여덟 번이 5초를
+    /// 넘어 3연격 밖으로 나가고, 16프레임마다의 J 는 1타의 경직에 떨어져 2타가 됐다. 패리는 경직이 없다 — 누를 때마다 설 때(FighterFree)
+    /// 누른다.
     /// </para>
     /// </summary>
     private async Task Exhaustion()
     {
         await NewBattleOpening(1, "3연격");
-        for (int i = 0; i < 12 && _battle is { FighterExhausted: false }; i++)
+        for (int f = 0; f < 6 * Engine.PhysicsTicksPerSecond && _battle is { FighterExhausted: false }; f++)
         {
-            Tap("attack");
-            await Frames(16);
+            await PressWhenFree("parry");
         }
 
         if (_battle is { FighterExhausted: false })
@@ -446,7 +448,7 @@ public partial class ShotRunner : Node
         //
         // **걸음이 아니라 대시로 넘는다.** 보스 몸이 반폭 85 라 걸음(420px/s)으로는 선딜 하나 안에
         // 몸 밖으로 확실히 못 나간다 — 겹친 채 찍히면 어느 쪽에 섰는지가 그림에서 안 읽힌다.
-        // 대시는 0.18초에 396px 이라 한 번에 넘기고, 남은 프레임은 이어지는 걸음이 더 벌린다.
+        // 대시는 0.18초에 396px 이라 한 번에 넘기고, 대시 뒤 경직(0.1초 · #82)이 지나면 이어지는 걸음이 남은 프레임만큼 더 벌린다.
         // **3연격만 고른다** — 점프 공격은 도약하는 틱(0.40초)에 착지 자리 쪽으로 돌아선다(설계 §4.2 · 잠금의 유일한 예외).
         await Until(
             () => _battle is { BossWindingUp: true, BossPattern: "3연격" } && _battle.BossNextActiveIn >= 0.6,
@@ -545,6 +547,27 @@ public partial class ShotRunner : Node
     /// <summary>보스 판정을 대 본 그 틱에 찍는다 — <see cref="CaptureOn"/> 의 보스 쪽.</summary>
     private Task CaptureTested(string name, double timeout) =>
         CaptureOn(name, () => _battle is { BossSwingTested: true }, timeout);
+
+    /// <summary>
+    /// 파이터가 서 있으면(<c>FighterFree</c>) 한 번 누르고 <b>그 누름이 먹을 때까지</b> 기다린다(상한 10프레임) — 안 서 있으면 한 프레임만
+    /// 민다. 누른 뒤 한 프레임만 기다리고 다시 물으면, 누름이 아직 안 먹은 틱의 "서 있다" 를 한 번 더 읽어 둘째 누름이 1타 도중에 떨어진다 —
+    /// 그러면 2타가 이어진다(#82 · 실제로 밟았다: 보스 피격 장 뒤에 이을 생각 없던 2타가 닿아 결과 화면의 보스 체력이 160 이었다).
+    /// </summary>
+    private async Task PressWhenFree(string action)
+    {
+        if (_battle is not { FighterFree: true })
+        {
+            await Frames(1);
+            return;
+        }
+
+        Tap(action);
+        await Frames(1);
+        for (int i = 0; i < 10 && _battle is { FighterFree: true }; i++)
+        {
+            await Frames(1);
+        }
+    }
 
     /// <summary>트리를 멈춘다. <see cref="CaptureOn"/> 의 조건 안에서 부르려고 참을 돌려준다.</summary>
     private bool Pause()

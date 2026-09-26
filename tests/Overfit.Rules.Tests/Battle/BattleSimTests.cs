@@ -324,13 +324,14 @@ public class BattleSimTests
     {
         var sim = new BattleSim(Setup());
         int before = sim.Boss.Health;
-        // 보스가 오른쪽(1440)에 있으니 걸어가야 붙는다. 60틱 주기 공격은 스태미나가
-        // 버틴다(실측 최소 88/100) — 30틱 주기는 회복(~8.7/주기)보다 비용(12)이 커서
-        // 스태미나가 바닥나 탈진한다(1.1초씩 선다 · #71).
-        // 실측 125틱에 첫 타격이 들어간다 — 여유를 두고 2배인 250틱까지 돈다.
-        for (int i = 0; i < 250; i++)
+        // 보스가 오른쪽(1440)에 있으니 걸어가야 붙는다. **칼이 닿는 거리에 들어온 뒤에만** 휘두른다 — 칼질은 경직까지 커밋이라
+        // (1타 0.28 + 0.40초 · #82) 걸으며 60틱마다 휘두르던 옛 대본은 250틱 중 205틱을 서서 끝내 못 닿았다. 붙기까지 실측 100틱
+        // 안팎이다 — 여유를 두고 250틱까지 돈다. 휘두르는 것은 칼질이 없을 때뿐이라 스태미나가 버틴다.
+        for (int i = 0; i < 250 && sim.Boss.Health == before; i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, Attack: i % 60 == 0));
+            bool near = sim.Boss.X - sim.Fighter.X <= sim.Boss.HalfWidth + sim.FighterReach;
+            bool free = sim.Fighter.Action == FighterAction.Idle;
+            sim.Tick(new InputFrame((sbyte)(near ? 0 : 1), false, false, false, Attack: near && free));
         }
 
         sim.Boss.Health.ShouldBeLessThan(before);
@@ -924,7 +925,8 @@ public class BattleSimTests
         // **경계를 대시 행동이 끝나는 곳에 둔다.** 무적(8틱)은 대시(11틱)보다 짧으므로
         // 무적 창은 통째로 대시의 공이 되고, 그 뒤로 사거리 밖에 남아 있는 것은 **그 자리에
         // 서 있기로 한 것**이라 간격이다. 유예 창을 두면 "얼마나 오래 봐주나" 라는 수치가
-        // 새로 생기고(데이터에 없는 수치다) 그만큼 대시가 간격의 표본을 먹는다.
+        // 새로 생기고(데이터에 없는 수치다) 그만큼 대시가 간격의 표본을 먹는다. 대시 행동은 대시 뒤 경직까지다(#82) — 경직 중에 선
+        // 판정이 대시의 것인 것은 FighterStiffTests 가 본다. 여기 판정은 경직까지 끝난 뒤에 선다.
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 1000 },
             height: new double[] { 0, 300 },
@@ -933,7 +935,7 @@ public class BattleSimTests
 
         for (int i = 1; i <= 30; i++)
         {
-            // 대시는 2틱에 시작해 12틱에 끝난다. 판정은 23틱 언저리다.
+            // 대시는 2틱에 시작해 12틱에 끝나고, 경직(6틱)까지 18틱에 끝난다. 판정은 23틱 언저리다.
             sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false, false));
         }
 

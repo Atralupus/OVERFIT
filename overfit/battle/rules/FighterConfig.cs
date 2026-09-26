@@ -40,6 +40,15 @@ public sealed class ComboStepDef
 
     public required double Recover { get; init; }
 
+    /// <summary>
+    /// 이 칼질 뒤의 <b>경직</b>(초) (#82 · 설계 §5.1) — 칼질이 제 시간(선딜 + 판정 + 후딜)을 다 돌고 <b>이어지는 칼이 없으면</b> 이만큼 더
+    /// 커밋한다: 행동 · 이동 · 점프 · 가드가 막히고, 그림은 이 칼질의 마지막 장을 붙든다. 이어지는 칼이 있으면 안 붙는다 — 2타는
+    /// 지금처럼 1타가 끝나는 틱에 서고, 1타의 경직 중에 누른 J 도 그 틱에 2타가 된다. 한 번만 치고 마는 사람만 선다. 2타 뒤에는
+    /// 이을 칼이 없어 언제나 붙는다. 유저: "1타공격 후 경직, 2타는 2타까지 공격후에는 좀더 오래 경직이 있게".
+    /// 틱으로 센다(반올림은 <c>BattleSim.TicksFor</c> 한 곳 · 0 이면 경직이 없다).
+    /// </summary>
+    public required double Stiff { get; init; }
+
     public required int Damage { get; init; }
 
     /// <summary>
@@ -85,6 +94,13 @@ public sealed class FighterConfig
 
     public required double DashCost { get; init; }
 
+    /// <summary>
+    /// 대시 뒤의 <b>경직</b>(초) (#82 · 설계 §5.6) — 대시가 끝난 뒤 이만큼 아무것도(행동 · 이동 · 점프 · 가드) 못 한다. 유저: "대시 후
+    /// 경직 살짝". 대시 행동의 일부다 — 그동안 파이터는 대시를 끝낸 자리에 선 채 대시의 마지막 자세를 붙들고, 맞으면 그 판정은
+    /// 대시의 것이다(<c>DodgeCredit</c>). 무적은 그 전에 끝나 있다(<see cref="DashIFrames"/>). 틱으로 센다(0 이면 경직이 없다).
+    /// </summary>
+    public required double DashRecover { get; init; }
+
     /// <summary>패리의 창 (설계 §5.3) — 누른 순간부터 이 안에 선 판정을 받아친다. 그 밖이면 그냥 맞는다. 조작의 정의라 캐릭터 성능이 아니다.</summary>
     public required double ParryPreciseWindow { get; init; }
 
@@ -109,7 +125,7 @@ public sealed class FighterConfig
 
     /// <summary>
     /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 1타 · 2타. 첫 칸이 J 를 눌렀을 때 나가는
-    /// 칼이고, 칼질 도중 J 를 또 누르면 그 칼질이 끝나는 틱에 다음 칸이 이어진다.
+    /// 칼이고, 칼질 도중 J 를 또 누르면 그 칼질이 끝나는 틱에 다음 칸이 이어진다 — 그 칼질 뒤 경직 중에 누르면 누른 틱에 이어진다(#82).
     /// </summary>
     public required List<ComboStepDef> Combo { get; init; }
 

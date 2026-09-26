@@ -163,6 +163,12 @@ public partial class Battle : Node2D
     public bool FighterExhausted => !_broken && !_over && _sim.Fighter.Exhausted;
 
     /// <summary>
+    /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82)도 탈진도 아니다. 위와 같이 디버그 전용 읽기다 — 스크린샷이
+    /// 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자 둘째 J 가 1타의 경직에 떨어져 2타가 됐다.
+    /// </summary>
+    public bool FighterFree => !_broken && !_over && _sim.Fighter.Action == FighterAction.Idle && !_sim.Fighter.Exhausted;
+
+    /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 보스가 <b>희게 번쩍이는</b> 순간이고(#71 ·
     /// <c>hit_flash.gdshader</c>), 그건 <c>feel.boss_hit_flash_seconds</c>(0.12초)뿐이라 벽시계로 노리면 대부분 놓친다.
     /// </summary>
@@ -528,7 +534,8 @@ public partial class Battle : Node2D
             _sim.Fighter.Exhausted,
             // 남은 스태미나를 **비율로** 넘긴다 (이슈 #47) — 최대값의 사본을 뷰에 두면
             // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다.
-            _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina));
+            _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina,
+            _sim.Fighter.Stiff));
 
         _bossView.Show(new BossFrame(
             _sim.Boss.X,

@@ -218,6 +218,13 @@ public sealed class DodgeCredit
     /// 성립하는 구간이 딱 행동이 도는 동안이라, 거기를 경계로 삼는다.
     /// 덤으로 데이터에 없는 수치("얼마나 오래 봐주나")를 새로 만들지 않아도 된다.
     /// </para>
+    ///
+    /// <para>
+    /// <b>대시 행동은 대시 뒤 경직까지다</b> (<c>dash_recover</c> · 0.10초 = 6틱 · #82). 경직 동안 파이터는 서 있기로 한 것이 아니라
+    /// <b>못 움직이는</b> 것이라 그 자리는 대시가 만든 것이고, 거기서 맞은 판정도 대시가 실패한 것이다(<see cref="MostRecentAction"/>).
+    /// 유예 창과 다르다 — 새 수치가 아니라 데이터의 경직 그대로고, 그동안 파이터가 고를 수 있는 것이 없다. 늘어난 구간은 6틱이라
+    /// 대시 하나(11 + 6틱)가 3연격의 두 판정(42틱 · 66틱 사이)을 같이 설명하는 일도 없다.
+    /// </para>
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box, Boss boss) =>
         !double.IsNaN(_dashStartedAt)

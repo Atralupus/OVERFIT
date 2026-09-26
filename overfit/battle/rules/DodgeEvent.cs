@@ -70,7 +70,7 @@ public enum DodgeVerb
 /// 닫히는 틱에 재면 창 안에서 대시가 끝난 사람이 <c>Spacing</c> 으로 적힌다(#46 의 편향).</param>
 /// <param name="Distance">보스와의 거리 — 공중과 같은 틱(결과를 가른 틱)의 값이다.</param>
 /// <param name="GreedWindow">결과를 가른 틱(공중과 같은 틱)에 공격 중이었나 — 보스의 선딜을 욕심내 파고든 흔적이다.
-/// 1타든 2타든 칼질 중이면 여기 든다 — 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다 (설계 §7.2).</param>
+/// 1타든 2타든 칼질 중이면 여기 든다 — 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다 (설계 §7.2). 칼질 뒤 경직(#82)도 칼질이다.</param>
 /// <param name="DashAvailable">이 판정을 대시로 피할 수 있었나 (<c>dash_window &gt; 0</c>).</param>
 /// <param name="JumpAvailable">점프로 넘을 수 있었나 — <b>판정 단위</b>다 (#72 · 설계 §7.3): 그 판정의
 /// <see cref="HitBox.Jumpable"/>, 곧 판을 세울 때 모양의 윗끝과 이 판의 파이터 점프로 잰 값이다(<c>BossHits.TicksAbove</c>).

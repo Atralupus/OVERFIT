@@ -220,7 +220,11 @@ public partial class FighterView : Node2D
         // 선딜인지 칼이 나간 뒤인지를 가르는데, 이름만 보는 Animate 는 그 둘을 구별하지 못한다.
         // 맞았거나 죽었으면 그 그림이 이긴다: 칼질은 규칙에서 안 끊겼지만 그림은 맞은 자세가 이긴다.
         bool swinging = frame.Pose == FighterPose.Attack && !_dead && _hitPoseLeft <= 0;
-        if (swinging && !_bladeOut)
+        if (swinging && frame.Stiff)
+        {
+            HoldLast();
+        }
+        else if (swinging && !_bladeOut)
         {
             HoldWindup();
         }
@@ -231,6 +235,7 @@ public partial class FighterView : Node2D
         else
         {
             Animate(AnimationFor(frame.Pose));
+            HoldDash(frame);
         }
 
         _sprite.Modulate = Tint(frame);
@@ -509,6 +514,60 @@ public partial class FighterView : Node2D
         if (_sprite.Animation != Sheet.Anim)
         {
             ShowBlade(Sheet.BladeFrame + 1);
+        }
+    }
+
+    /// <summary>
+    /// 칼질 뒤 경직 (#82) — 이 칼질 시트의 <b>마지막 장</b>을 붙든다. 시트가 반복하지 않아(<c>.tres</c> 의 loop false) 흘려 두어도 마지막
+    /// 장에 서지만 그 플래그에 기대지 않는다: 반복으로 바뀌는 날 경직 동안 칼을 다시 뒤로 빼는 그림이 된다. 피격 자세에 끊겼다 돌아와도
+    /// 여기로 선다 — 칼은 이미 지나갔다(<see cref="FollowBlade"/> 와 같은 이유). 1타의 경직 중 J 로 이은 2타는 <see cref="SwingBegan"/> 이
+    /// 선딜부터 다시 세운다.
+    /// </summary>
+    private void HoldLast()
+    {
+        SwingSheet sheet = Sheet;
+        if (!HasSheet(sheet))
+        {
+            return;
+        }
+
+        if (_sprite.Animation != sheet.Anim)
+        {
+            _sprite.Play(sheet.Anim, SpeedFor(sheet));
+            AlignToGround(sheet.Anim);
+        }
+
+        int last = _sprite.SpriteFrames!.GetFrameCount(sheet.Anim) - 1;
+        if (_sprite.Frame != last || _sprite.IsPlaying())
+        {
+            _sprite.Frame = last;
+            _sprite.Pause();
+        }
+    }
+
+    /// <summary>
+    /// 대시 뒤 경직 (#82) — 대시의 <b>마지막 자세</b>를 붙든다(규칙: 경직도 대시다). 대시는 <c>run</c> 을 빌려 도는데, 경직 동안 흘려
+    /// 두면 제자리에서 달리는 그림이 되고, <c>idle</c> 로 두면 "이제 움직일 수 있다" 고 말하는데 키는 안 먹는다 — 탈진에 색을 입히는
+    /// 것과 같은 이유다(안 보이면 버그로 읽힌다). 멈춘 <c>run</c> 장과 꺼진 꼬리 색(<see cref="_dashTailTint"/>)이 "아직 대시다" 를
+    /// 말한다. 경직이 끝나 바로 이어진 새 대시는 이름이 같아 <see cref="Animate"/> 가 다시 안 틀므로 여기서 다시 흘린다.
+    /// </summary>
+    private void HoldDash(FighterFrame frame)
+    {
+        if (frame.Pose != FighterPose.Dash || _dead || _hitPoseLeft > 0)
+        {
+            return;
+        }
+
+        if (frame.Stiff)
+        {
+            if (_sprite.IsPlaying())
+            {
+                _sprite.Pause();
+            }
+        }
+        else if (!_sprite.IsPlaying())
+        {
+            _sprite.Play();
         }
     }
 

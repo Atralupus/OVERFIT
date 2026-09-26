@@ -121,7 +121,12 @@ public class FighterActionTests
         f.Action.ShouldBe(FighterAction.Dash);
         f.AirDashSpent.ShouldBeTrue();
 
-        Idle(f, 12);   // 대시가 끝나기를 기다린다 (0.18초)
+        // 대시가 끝나기를 기다린다 — 0.18초에 대시 뒤 경직(#82)까지. 틱 수를 적지 않는다: 경직을 고치는 날 이 기다림만 조용히 모자란다.
+        for (int i = 0; i < 60 && f.Action == FighterAction.Dash; i++)
+        {
+            f.Tick(default, _dt);
+        }
+
         f.Action.ShouldBe(FighterAction.Idle);
         f.Grounded.ShouldBeFalse("아직 공중이어야 이 테스트가 공중 대시를 본다");
         f.Tick(_dash, _dt);
@@ -216,11 +221,12 @@ public class FighterActionTests
     public void 연격_1타_도중_또_누르면_1타가_끝나는_틱에_2타가_이어진다()
     {
         // 설계 §5.1 — 2타는 눌러 둔 순간이 아니라 1타가 끝나는 틱에 선다. 1타는 끝까지 커밋이다.
-        // "끝나는 틱" 을 숫자로 안 적는다: 한 번만 누른 1타가 서는(Idle 이 되는) 틱과 견준다.
+        // "끝나는 틱" 을 숫자로 안 적는다: 한 번만 누른 1타가 제 시간을 다 돌고 경직에 드는(#82) 틱과 견준다 — 전에는 Idle 이 되는
+        // 틱이었는데, 이제 한 번만 친 1타는 그 뒤에 경직을 선다(FighterStiffTests).
         Fighter single = Spawn();
         single.Tick(_attack, _dt);
         int end = 1;
-        while (single.Action == FighterAction.Attack)
+        while (single.Action == FighterAction.Attack && !single.Stiff)
         {
             single.Tick(default, _dt);
             end++;
@@ -309,7 +315,8 @@ public class FighterActionTests
         // ⚠ 칼질이 **끝난 뒤**의 값은 증인이 못 된다: 끝나면 ComboStep 은 언제나 0 으로 돌아오고, Spend 는 0 에서
         // 멈춰 스태미나가 음수가 될 수도 없다 — 그 둘을 끝에서 보던 이 테스트는 값 검사를 통째로 지워도 초록이었다
         // (리뷰가 변이로 확인했다). 그래서 **도는 동안**을 본다: 1타가 끝나는 틱에 서는가(한 번만 누른 1타와
-        // 견준다 — …1타가_끝나는_틱에_2타가_이어진다 와 같은 방법), 그리고 도는 내내 값이 1타 하나만큼인가.
+        // 견준다 — …1타가_끝나는_틱에_2타가_이어진다 와 같은 방법), 그리고 도는 내내 값이 1타 하나만큼인가. 도는 내내 J 를 누른다 —
+        // 1타의 경직 중에 누른 J 는 곧장 2타가 되는 자리라(#82) 0 에서는 거기서도 안 이어야 한다. 한 번만 누른 1타와 길이가 같다(경직까지).
         FighterConfig c = TestConfigs.Fighter();
         Fighter single = Spawn();
         single.Tick(_attack, _dt);
@@ -331,7 +338,7 @@ public class FighterActionTests
         {
             f.ComboStep.ShouldBe(0, "스태미나 0 에서 2타를 이었다");
             f.Stamina.ShouldBe(0, 1e-9, "도는 칼질 중에 스태미나가 움직였다");
-            f.Tick(default, _dt);
+            f.Tick(_attack, _dt);
             stood++;
         }
 
