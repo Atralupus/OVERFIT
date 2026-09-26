@@ -117,8 +117,8 @@ public class ReplayGoldenTests
             Boss = TestConfigs.Boss(),
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
-            // **1단계로 돈다** (#72 · 설계 §9) — 2단계 명부는 5번 PR 이 통째로 바꾸므로, 거기 걸면 그 PR 이 결정론과 무관하게
-            // 골든을 움직인다. 1단계는 망이 들어와도 uniform 이라(설계 §4.4) 이 판의 순서도 시드만으로 선다.
+            // **1단계로 돈다** (#72 · 설계 §9) — 2단계 명부는 #78 이 통째로 바꿨다: 거기 걸었으면 그 PR 이 결정론과 무관하게
+            // 골든을 움직였다. 1단계는 망이 들어와도 uniform 이라(설계 §4.4) 이 판의 순서도 시드만으로 선다.
             PatternIds = stage.PatternIds,
             Patterns = JsonData<PatternDef>.ParseTable(
                 File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),

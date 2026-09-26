@@ -80,6 +80,39 @@ public class BotPolicyTests
     }
 
     [Fact]
+    public void 데모의_봇이_실제_2단계를_이긴다()
+    {
+        // #78 완료 조건 — "2단계 데모 봇이 이긴다". EXTRA=--stage=2 tools/build.sh demo 가 도는 바로 그 판이다(시드 51 · 2단계 명부 다섯 · uniform).
+        // 봇은 태그를 안 보는 최소 봇이고(설계 §5.4) 값보다 많을 때만 누른다 — 이 PR 은 봇을 안 고친다. 잡기 앞에서 대시 · 패리를 고르면 잡히고,
+        // 점프를 고르면 넘는다. 이 판은 2506틱 · 파이터 HP 2 · 관측 24 로 **아슬하게** 이긴다: 행동 뒤 경직(#82)이 든 파이터에게 2단계의 넷은
+        // 1단계보다 아프다. 16 시드(_seeds)를 2단계로 돌리면 아홉 판을 이긴다(1단계는 열다섯 판) — PR 설명에 적는다. 여기서는 데모의 한 판만
+        // 못박는다: 지면 규칙이 아니라 봇의 성향을 고친다(설계 §9 · #82).
+        BalanceData balance = TestConfigs.Balance();
+        StageSetup stage = StageRoster.Setup(TestConfigs.Stages(), 2, 51, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException("stages.json 에 2단계가 안 선다");
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
+            PatternIds = stage.PatternIds,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Picker = stage.Picker,
+            MaxTicks = balance.Battle.MaxTicks,
+        });
+        var bot = new BotPolicy(51);
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(bot.Next(sim));
+        }
+
+        outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 2단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
+    }
+
+    [Fact]
     public void 봇은_값보다_많을_때만_눌러_스스로_탈진하지_않는다()
     {
         // 설계 §5.4 · §5.5 — 규칙은 스태미나가 남아 있으면 모자라도 마지막 한 번을 허락하지만, 봇은 값보다 많을 때만 누른다: 마지막

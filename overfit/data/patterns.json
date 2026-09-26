@@ -1,8 +1,9 @@
 {
   "_comment": "보스 패턴. tags 는 망의 입력이 되므로 PatternDataTests 가 타임라인과 대조한다.",
-  "_units": "t 초 (패턴이 선 뒤) · anim 은 보스 팩 .tres 의 애니메이션 이름 · frame 은 그 장(0부터) · hitbox 는 hitboxes.json 의 id · band [안쪽, 바깥쪽, 아래, 위] px (보스 중심에서 · 발바닥에서 · 좌우 대칭) · damage 정수 · active_seconds 초 · motion 의 height px · air 초",
+  "_units": "t 초 (패턴이 선 뒤 · 패턴 시계) · anim 은 보스 팩 .tres 의 애니메이션 이름 · frame 은 그 장(0부터 · 없으면 제 속도로 돈다) · hitbox 는 hitboxes.json 의 id · band [안쪽, 바깥쪽, 아래, 위] px (보스 중심에서 · 발바닥에서 · 좌우 대칭) · damage 정수 · active_seconds 초 · dash · guard · parry 는 판정의 답(false 만 적는다) · grab_hold_seconds 초 · motion 의 leap: height px · air 초 · rush: speed px/s · stop px",
 
-  "_note_두패턴": "**그림에 맞춘 패턴만 둔다** (#72 · 설계 §4). 옛 내려찍기 변종 아홉(이슈 #48)과 그 예고 표지 · 가드 불가 마무리 · 헛스윙을 모두 걷었다 — 유저: \"기존에 짜둔 패턴들은 다 제거하시고, 이번에 새로 애니메이션에 맞게 만든 패턴만 두세요\". 1단계는 둘이다: 3연격 · 점프 공격. 2단계의 넷(1타 돌진 · 1타 잡기 · 점프 3연속 · 엇박 3연격)은 5번 PR 이 더한다.",
+  "_note_여섯패턴": "**그림에 맞춘 패턴만 둔다** (#72 · 설계 §4). 옛 내려찍기 변종 아홉(이슈 #48)과 그 예고 표지 · 가드 불가 마무리 · 헛스윙을 모두 걷었다 — 유저: \"기존에 짜둔 패턴들은 다 제거하시고, 이번에 새로 애니메이션에 맞게 만든 패턴만 두세요\". 1단계는 둘이다: 3연격 · 점프 공격. 2단계는 3연격에 넷을 더한다(#78): 1타 돌진 · 1타 잡기 · 점프 3연속 · 엇박 3연격 — 1단계의 습관을 하나씩 겨냥한다(stages.json 의 _note_두단계).\n\n**1타로 여는 세 패턴(3연격 · 1타 돌진 · 1타 잡기)은 1.30초까지 한 틱도 다르지 않다** (설계 §4). 1.30초에 3연격은 attack2 를 들고, 돌진은 달리고, 잡기는 idle 로 선다 — \"1타 뒤에 무엇이 오나\" 가 그 순간에 읽힌다. 엇박 3연격은 0.725초에 갈린다: 3연격이면 칼이 오르는(f1) 장에서 엇박은 칼을 든 f0 에 더 선다.",
+  "_note_판정의답": "**판정의 답** (#78 · 설계 §7.3 · §8.1). 판정 단계에 dash · guard · parry 를 false 로 적으면 그 판정만 그 수단을 안 받는다 — 없으면 태그대로 받는다. 좁히기만 한다(true 는 적지 않는다). 규칙(HitResolver)과 관측(DashAvailable · GuardAvailable · ParryAvailable)이 같은 값을 읽는다. grab_hold_seconds 가 있는 판정은 붙든다 — 맨몸에 닿으면 결과가 잡힘(Grabbed)이고 파이터가 그만큼 붙들린다. 가르는 것은 이 깃발이다(패턴 이름이 아니다). 점프는 답을 적지 않는다 — 넘을 수 있나는 판정이 선 자리에서 잰다(#85 · JumpClearance).",
 
   "_note_타임라인": "**단계 하나가 그림 한 장이다** (설계 §8.1). anim · frame 은 뷰만 읽는다 — 뷰가 그 장을 그대로 붙든다(장을 제 속도로 흘려 보내면 그림이 규칙의 창보다 먼저 지나간다). 판정 단계(active)는 hitbox(그림의 흰 궤적에서 뽑은 모양의 id) 또는 band(바닥 띠) 중 **꼭 하나**를 갖는다. motion 은 판정이 아닌 단계에만 단다 — 보스는 판정 창 동안 안 움직인다.\n\n**시각은 러너가 틱으로 센다** (설계 §3.6 ⑤). t 는 불러올 때 한 번 round(t × 60)(0 에서 먼 쪽) 틱이 되고, 패턴의 첫 틱이 1 이다. 그래서 **판정 단계의 t × 60 은 정수여야 한다** — 반 틱이면 반올림이 창을 한 틱 밀어 창이 다음 장까지 산다. 그림 장의 경계(0.725 = 43.5틱)는 반 틱이어도 된다: 뷰가 규칙의 단계를 그리므로 그림과 판정은 같은 틱에 바뀐다. 8fps 한 장은 0.125초 = 7.5틱이고, 창은 한 장(active_seconds 0.125 → 8틱)이다. 다음 단계는 창이 닫힌 뒤에 든다. PatternDataTests 가 셋 다 본다.",
 
@@ -45,6 +46,101 @@
       { "t": 1.0,   "kind": "active",  "anim": "attack3", "frame": 2, "band": [0, 1920, 0, 60], "damage": 12, "active_seconds": 0.125 },
       { "t": 1.125, "kind": "recover", "anim": "attack3", "frame": 3 },
       { "t": 1.5,   "kind": "end" }
+    ]
+  },
+
+  "1타 돌진": {
+    "_note": "**1타 → 돌진 → 3타** (#78 · 설계 §4.6). 유저: \"멀리서 패턴을 보고 패턴이 끝난 경직 타이밍만 노려서 찔끔 공격하는 유저를 타겟으로 1타 공격까지만하고 run 애니메이션을 재생해서 유저에게 아주 빠르게 다가가서 3타 공격을 하는겁니다.\" 1.30초까지 3연격과 한 틱도 안 다르다 — 멀리서 지켜보는 사람이 \"3연격이구나\" 하고 후딜을 기다리게 두는 것이 미끼다.\n\n**돌진(motion rush)은 패턴 시계를 세운다.** 1.30초(78틱)의 run 에 들면 매 틱 파이터를 다시 재고 파이터 앞 280 에 닿을 때까지 3600 px/s(틱당 60px)로 달린다 — 닿는 틱 A 까지 시계가 1.30 에 서고, 그 뒤의 단계는 T 가 같아도(attack3 f0 도 1.30) A + 1 부터 든다. 그래서 3타(attack3 f2 · 14)는 늘 도착 뒤 15틱(A + 15)에 선다. 이미 280 안이면(붙어 있던 사람) 0틱이라 3타가 93틱에 떨어진다 — 겨냥 밖의 사람에게는 두 대짜리 연격(8 + 14)이다. 1타 동안 보스를 뚫고 등 뒤에 선 사람에게도 0틱이고 3타는 앞으로 헛친다(보스는 뒤로 안 가고 돌지도 않는다).\n\n**찌른 한 번이 묶는다** (#82). 1타(16틱) 뒤에 1타 뒤 경직(0.40초 · 24틱)이 붙어 J 한 번이 40틱을 묶는다 — 도착 24틱 앞부터 도착 뒤 15틱 사이에 누른 1타는 3타가 설 때 칼질이나 그 경직 중이다(경직이 없던 때는 도착한 틱부터 누른 것만). 후딜을 노려 걸어 들어가다 달려오는 보스를 찌른 사람(78틱에 J — 칼은 84틱에 닿는다)은 94틱에 칼질이 끝나도 118틱까지 서 있어 3타를 맞는다 — 경직이 없으면 95틱의 대시로 보스를 뚫고 나갔다(Stage2BattleTests).\n\n**수치.** 3600 — 방 끝에서 끝(d = 1805)을 26틱(0.433초)에 오고, 파이터 걷기(7px/틱)의 8.6배 · 대시(36.7px/틱)의 1.64배라 걷든 대시로 빼든 벌어지지 않는다. 280 — 3타의 땅 사거리(+80 ~ +404) 안이다. 돌진 도중에는 파이터가 한 틱에 많아야 36.7px 다가오므로 돌진은 늘 d ∈ [243.3, 280] 에서 멈추고, 3타의 선딜 15틱 동안 걸어서는(105px) 못 벗어난다. 대시로 빼면(366.7px) 벗어나고 안으로 뚫으면 등 뒤라 안 맞는다 — 둘 다 칼질과 그 경직에 묶이지 않았을 때다. 3타는 3연격의 3타라 가드 · 패리도 된다. 그림의 run 은 feel.rush_anim_speed(3)배로 돈다(뷰만 읽는다).",
+    "tags": {
+      "dash_window": 0.2, "dash_direction": "out", "jumpable": true, "anti_air": false,
+      "parryable": true, "parry_window": 0.18, "punish_greed": true, "reach": "far",
+      "multi_hit": 2, "tracking": true
+    },
+    "timeline": [
+      { "t": 0.0,   "kind": "windup",  "anim": "attack",  "frame": 0 },
+      { "t": 0.725, "kind": "windup",  "anim": "attack",  "frame": 1 },
+      { "t": 0.85,  "kind": "active",  "anim": "attack",  "frame": 2, "hitbox": "medieval_king/attack/2", "damage": 8, "active_seconds": 0.125 },
+      { "t": 0.975, "kind": "recover", "anim": "attack",  "frame": 3 },
+      { "t": 1.3,   "kind": "windup",  "anim": "run", "motion": { "id": "rush", "speed": 3600, "stop": 280 } },
+      { "t": 1.3,   "kind": "windup",  "anim": "attack3", "frame": 0 },
+      { "t": 1.425, "kind": "windup",  "anim": "attack3", "frame": 1 },
+      { "t": 1.55,  "kind": "active",  "anim": "attack3", "frame": 2, "hitbox": "medieval_king/attack3/2", "damage": 14, "active_seconds": 0.125 },
+      { "t": 1.675, "kind": "recover", "anim": "attack3", "frame": 3 },
+      { "t": 2.15,  "kind": "end" }
+    ]
+  },
+
+  "1타 잡기": {
+    "_note": "**1타 → 잡기** (#78 · 설계 §4.7). 유저: \"대시로만 피하는 상대를 위해 1타 공격 후 잡기공격을 해봅시다. 잡기 연출은 idle애니메이션 상태에서 그냥 흰색 구가 캐릭터를 잡도록 합니다. 잡기는 대시중에도 잡히는 공격이고 이 공격은 판정범위가 좀 길게 해주세요 대시로 벗어나거나 움직이고 있어도 잡히게, 가드도 패리도 안되고 점프로만 회피 가능하면 됩니다.\" 1.30초까지 3연격과 같고, 1.30초에 idle 로 선다 — 흰 구가 보스에게서 떠나 1.70초(102틱)의 창에 파이터에 닿는다(뷰가 규칙의 단계를 보고 그린다).\n\n**판정은 바닥 전체 · 높이 0 ~ 60 · 창 8틱 · 피해 25 · 1.0초 붙든다.** band [0, 1920, 0, 60] 은 점프 공격의 착지 띠와 같은 모양이다 — 보는 쪽으로만 길게 두면 보스 몸을 대시로 뚫고 지나가 빠진다(서 있는 거리 115 에서 4틱 뒤 −31.7). 답은 dash · guard · parry 셋 다 false 다: 대시 무적을 안 받고, 가드 중이어도(붕괴가 아니다) 패리 창 안이어도 맨몸이다 — 점프로만 넘는다. 닿으면 결과는 잡힘이고 파이터는 60틱 붙들린다(행동 · 이동 · 점프 · 가드가 다 막히고, 하던 행동은 그 뒤 경직까지 그 자리에서 끝난다).\n\n**1.70초에 여는 이유** — 대시로 피하는 사람은 창의 시각과 무관하게 잡힌다. 1타를 대시로 흘린 대시(11틱)와 그 뒤 경직(6틱 · #82)은 68틱에 풀려, 창 앞 어느 틱에 다시 대시해도 잡힌다. 그래서 시각은 점프로 답하는 사람을 위해 고른다: 3연격 · 돌진과 갈리는 첫 그림(78틱의 idle)에서 창(102틱)까지 흰 구가 0.40초를 날고, 누름은 창보다 3틱 앞이면 되니 보고 뛰는 몫이 21틱(0.35초)이다. **2.70초에 끝나는 이유** — 창이 열린 뒤 붙드는 1.0초가 지나야 보스가 다음으로 간다. 흰 구가 붙들고 있는 동안 다음 패턴이 서면 그림이 거짓말이다(Stage2DataTests 가 창 + 붙듦 ≤ 끝을 본다). 25 는 한 대(14)보다 크고 3연격 한 바퀴(30)보다 작다 — 체력 110 이면 다섯 번째에 죽는다.",
+    "tags": {
+      "dash_window": 0.2, "dash_direction": "out", "jumpable": true, "anti_air": false,
+      "parryable": true, "parry_window": 0.18, "punish_greed": false, "reach": "far",
+      "multi_hit": 2, "tracking": true
+    },
+    "timeline": [
+      { "t": 0.0,   "kind": "windup",  "anim": "attack",  "frame": 0 },
+      { "t": 0.725, "kind": "windup",  "anim": "attack",  "frame": 1 },
+      { "t": 0.85,  "kind": "active",  "anim": "attack",  "frame": 2, "hitbox": "medieval_king/attack/2", "damage": 8, "active_seconds": 0.125 },
+      { "t": 0.975, "kind": "recover", "anim": "attack",  "frame": 3 },
+      { "t": 1.3,   "kind": "windup",  "anim": "idle" },
+      { "t": 1.7,   "kind": "active",  "anim": "idle", "band": [0, 1920, 0, 60], "damage": 25, "active_seconds": 0.125,
+        "dash": false, "guard": false, "parry": false, "grab_hold_seconds": 1.0 },
+      { "t": 1.825, "kind": "recover", "anim": "idle" },
+      { "t": 2.7,   "kind": "end" }
+    ]
+  },
+
+  "점프 3연속": {
+    "_note": "**점프 ×3** (#78 · 설계 §4.8). 유저: \"점프공격은 2단계에선 그냥 3번 재생되도록 만들어봅시다.\" 점프 공격의 1.50초를 그대로 세 번 잇는다 — 0 · 1.50 · 3.00초에서 세 번 적었다. 매 도약(0.40 · 1.90 · 3.40초)이 그 틱의 파이터를 겨냥하고 그쪽으로 돌아선다. 착지 창은 60 · 150 · 240틱이고 4.50초(270틱)에 끝난다. 착지마다 흰 충격파가 한 번씩 선다(#83 — 뷰가 바닥 전체를 치는 판정을 보고 건다).\n\n**점프로 매번 답이 된다** — 창 사이 90틱에, 앞 창을 넘은 누름이 내리고도 다음 창을 넘는 누름이 30틱 남는다. **가드로도 매번 답이 된다** — 12 × 1.8 = 21.6 씩 세 번 = 64.8 < 100 이라 가득 찬 스태미나로 셋을 다 막는다. 가드 중에는 안 차므로 이어 막을수록 준다(100 → 78.4 → 56.8 → 35.2). 3연격을 막은 뒤(54)면 셋째를 못 낸다(54 + 21.6 × 2 = 97.2) — 가드로 버티는 사람을 겨냥한 자리다(설계 §6.2). 패리는 안 받고 대시는 창이 열리는 그 틱만 산다. 공중에서 게이지로 무너지면(#71) 그 도약은 높이만 따라 내리고 남은 도약은 없다(패턴이 끊긴다).",
+    "tags": {
+      "dash_window": 0.2, "dash_direction": "either", "jumpable": true, "anti_air": false,
+      "parryable": false, "parry_window": 0, "punish_greed": false, "reach": "far",
+      "multi_hit": 3, "tracking": true
+    },
+    "timeline": [
+      { "t": 0.0,   "kind": "windup",  "anim": "jump",    "frame": 0 },
+      { "t": 0.4,   "kind": "windup",  "anim": "jump",    "frame": 1, "motion": { "id": "leap", "height": 280, "air": 0.6 } },
+      { "t": 0.75,  "kind": "windup",  "anim": "attack3", "frame": 0 },
+      { "t": 0.875, "kind": "windup",  "anim": "attack3", "frame": 1 },
+      { "t": 1.0,   "kind": "active",  "anim": "attack3", "frame": 2, "band": [0, 1920, 0, 60], "damage": 12, "active_seconds": 0.125 },
+      { "t": 1.125, "kind": "recover", "anim": "attack3", "frame": 3 },
+      { "t": 1.5,   "kind": "windup",  "anim": "jump",    "frame": 0 },
+      { "t": 1.9,   "kind": "windup",  "anim": "jump",    "frame": 1, "motion": { "id": "leap", "height": 280, "air": 0.6 } },
+      { "t": 2.25,  "kind": "windup",  "anim": "attack3", "frame": 0 },
+      { "t": 2.375, "kind": "windup",  "anim": "attack3", "frame": 1 },
+      { "t": 2.5,   "kind": "active",  "anim": "attack3", "frame": 2, "band": [0, 1920, 0, 60], "damage": 12, "active_seconds": 0.125 },
+      { "t": 2.625, "kind": "recover", "anim": "attack3", "frame": 3 },
+      { "t": 3.0,   "kind": "windup",  "anim": "jump",    "frame": 0 },
+      { "t": 3.4,   "kind": "windup",  "anim": "jump",    "frame": 1, "motion": { "id": "leap", "height": 280, "air": 0.6 } },
+      { "t": 3.75,  "kind": "windup",  "anim": "attack3", "frame": 0 },
+      { "t": 3.875, "kind": "windup",  "anim": "attack3", "frame": 1 },
+      { "t": 4.0,   "kind": "active",  "anim": "attack3", "frame": 2, "band": [0, 1920, 0, 60], "damage": 12, "active_seconds": 0.125 },
+      { "t": 4.125, "kind": "recover", "anim": "attack3", "frame": 3 },
+      { "t": 4.5,   "kind": "end" }
+    ]
+  },
+
+  "엇박 3연격": {
+    "_note": "**엇박 3연격** (#78 · 설계 §4.9). 유저: \"2단계 공격에 패리를 많이 하던 유저를 위해 엇박으로 타이밍을 바꾸는 3타공격도 넣어봅시다\" 3연격과 **같은 세 타**다 — 같은 판정 · 같은 피해(8 · 8 · 14) · 가드 · 패리 · 대시 · 간격이 다 된다. 다른 것은 박자 하나다: 타마다 칼이 오르기 **전**의 장(f0)을 0.15초 더 붙든다. 칼이 오르는 f1 에서 판정까지는 3연격과 같은 한 장(0.125초 · 7틱)이다. 판정은 60 · 111 · 186틱이고 222틱에 끝난다.\n\n**셋 다 늦춘다** — 한 타만 늦추면 패리하는 사람은 앞의 제 박자 타를 받아쳐 패턴을 끝낸다. 박자로 누르는 사람은 첫 타부터 맞고, 맞은 뒤 다음 타를 3연격의 간격으로 재도 또 늦다(+9틱씩). **0.15초 = 9틱** — 3연격의 박자에 맞춰 받아쳤을 누름(판정 0 ~ 6틱 앞)이 늦은 판정을 누름 + 9 ~ + 15 에 받는다: 창(+6)을 3틱 넘고 커밋(+18) 안이다. 헛친 패리는 커밋 뒤 패리 뒤 경직(0.25초 · #82)까지 맨몸이라(+33) 늦춤이 28틱까지 맨몸에 떨어지고, 판정이 정수 틱인 소수 초 늦춤 중 창 밖 · 커밋 안(7 ~ 13틱)은 9 · 12 둘이라 여유가 넓은 9 를 골랐다. 헛친 한 번이 0.583초라 풀려도(+34) 다음 타를 3연격의 간격으로 재어 누르면 또 헛친다(Stage2BattleTests).\n\n**보고 누르는 사람은 받아친다** — 3연격이면 칼이 오르는 44틱에 엇박은 f0 에 그대로 서 있다. 판정 16틱(0.267초) 앞에 보이는 다름이라 반응 0.2초(12틱)로 누르면 창(54 ~ 60)에 든다. f1 을 붙들면 두 패턴이 44틱에 똑같이 칼을 올려 51틱에야 갈린다 — 판정 9틱 앞이라 누구도 못 받아친다. 그래서 f0 를 붙든다. 한 장(0.125초)을 붙들면 판정이 반 틱에 떨어져 창이 흔들린다.",
+    "tags": {
+      "dash_window": 0.2, "dash_direction": "out", "jumpable": true, "anti_air": false,
+      "parryable": true, "parry_window": 0.18, "punish_greed": false, "reach": "mid",
+      "multi_hit": 3, "tracking": false
+    },
+    "timeline": [
+      { "t": 0.0,   "kind": "windup",  "anim": "attack",  "frame": 0 },
+      { "t": 0.875, "kind": "windup",  "anim": "attack",  "frame": 1 },
+      { "t": 1.0,   "kind": "active",  "anim": "attack",  "frame": 2, "hitbox": "medieval_king/attack/2", "damage": 8, "active_seconds": 0.125 },
+      { "t": 1.125, "kind": "recover", "anim": "attack",  "frame": 3 },
+      { "t": 1.45,  "kind": "windup",  "anim": "attack2", "frame": 0 },
+      { "t": 1.725, "kind": "windup",  "anim": "attack2", "frame": 1 },
+      { "t": 1.85,  "kind": "active",  "anim": "attack2", "frame": 2, "hitbox": "medieval_king/attack2/2", "damage": 8, "active_seconds": 0.125 },
+      { "t": 1.975, "kind": "recover", "anim": "attack2", "frame": 3 },
+      { "t": 2.7,   "kind": "windup",  "anim": "attack3", "frame": 0 },
+      { "t": 2.975, "kind": "windup",  "anim": "attack3", "frame": 1 },
+      { "t": 3.1,   "kind": "active",  "anim": "attack3", "frame": 2, "hitbox": "medieval_king/attack3/2", "damage": 14, "active_seconds": 0.125 },
+      { "t": 3.225, "kind": "recover", "anim": "attack3", "frame": 3 },
+      { "t": 3.7,   "kind": "end" }
     ]
   }
 }
