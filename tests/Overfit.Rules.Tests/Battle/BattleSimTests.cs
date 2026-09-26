@@ -629,6 +629,13 @@ public class BattleSimTests
         sim.Boss.Y.ShouldBe(0);
         sim.Boss.X.ShouldBe(sim.Fighter.X + Standoff(), 1e-9);
         sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit, "땅에 선 파이터가 바닥 전체 착지에 안 맞았다");
+
+        // 위의 Y · X 는 틱이 다 돈 뒤의 값이라 "판정을 댄 자리"를 못 본다 — 움직임을 판정 뒤로 옮기면 착지 판정이
+        // 앞 틱의 공중 자리(X ≈ 618 · Y ≈ 30)에서 서고 보스는 그 뒤에 내리는데, 위의 넷은 그대로 초록이었다.
+        // 그 자리의 띠는 30~90 이라 발이 60 위인 파이터(설계 §4.2 의 "넘는" 파이터)가 맞는다. 그래서 대 본 자리를 직접 본다.
+        sim.BossTestedRects.ShouldNotBeEmpty("착지 틱에 판정을 안 댔다");
+        sim.BossTestedRects.Min(r => r.Y0).ShouldBe(0, "착지 판정을 공중의 자리에서 댔다 — 움직임이 판정을 댄 뒤에 돈다");
+        sim.Events[0].Distance.ShouldBe(Standoff(), 1e-9, "착지 판정을 내리기 전의 X 에서 댔다 — 움직임이 판정을 댄 뒤에 돈다");
     }
 
     /// <summary>판정 하나짜리 패턴. 기하와 태그를 부르는 쪽이 정한다.</summary>
