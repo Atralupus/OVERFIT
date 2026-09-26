@@ -33,8 +33,8 @@ public sealed class BossSwings
 
     /// <summary>
     /// 이 틱에 파이터에게 대 본 보스 판정 — (모양, 놓은 자리). <b>기록만 한다</b> (이슈 #59 · 설계 §6.1).
-    /// 사각형으로 펴는 것은 디버그 표시가 물을 때(<see cref="TestedRects"/>)다: 봇이 수백만 판을 돌리는
-    /// 동안 이 목록은 용량을 다시 쓸 뿐 새로 할당하지 않는다.
+    /// 사각형으로 펴는 것은 뷰(판정 보기 · 착지 충격파 #83)가 물을 때(<see cref="TestedRects"/>)다: 뷰가 없는 봇이 수백만 판을
+    /// 돌리는 동안 이 목록은 용량을 다시 쓸 뿐 새로 할당하지 않는다.
     /// </summary>
     private readonly List<(HitShape Shape, Placement At)> _tested = new();
 
@@ -58,8 +58,9 @@ public sealed class BossSwings
     public IReadOnlyList<DodgeEvent> Events => _events;
 
     /// <summary>
-    /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드) — 디버그 표시용 (이슈 #59 · 설계 §6.1).
-    /// 표시가 이것을 받아 그리기만 하므로, 판정이 틀린 자리에 서면 화면도 그 틀린 자리를 보여 준다.
+    /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드). 뷰 둘이 읽는다 — 판정 보기(이슈 #59 · 설계 §6.1)와 착지
+    /// 충격파(#83 — 게임 화면에서 물리 틱마다 묻는다). 둘 다 이것을 받아 그리기만 하므로, 판정이 틀린 자리에 서면 화면도 그 틀린
+    /// 자리를 보여 준다. 부를 때마다 목록을 새로 짓는다 — 판정은 이것을 안 부른다.
     /// </summary>
     public IReadOnlyList<HitRect> TestedRects
     {

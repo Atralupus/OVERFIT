@@ -478,15 +478,47 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 공중의 점프 공격 한 장 (#72 · 설계 §4.2 · §9). <b>정점 근처</b>에서 찍는다 — 궤적은 4H·s(1−s)(H = 280)라 발이 250 위인 것은
-    /// 36틱 중 가운데 11틱 남짓이다. 규칙의 Y 를 그린 몸이 땅에서 떠 있어야 한다(설계 §6 「보스 높이」).
-    /// <b>첫 패턴이 점프 공격인 새 판에서</b> 찍는다(<see cref="NewBattleOpening"/>) — 한 판에서 기다리면 그 판의 순서에 달린다.
+    /// 점프 공격 두 장 — 공중과 착지 (#72 · #83 · 설계 §4.2 · §6 · §9). <b>첫 패턴이 점프 공격인 새 판에서</b> 찍는다
+    /// (<see cref="NewBattleOpening"/>) — 한 판에서 기다리면 그 판의 순서에 달린다.
+    ///
+    /// <para>
+    /// ① <c>battle-6a-leap</c> — <b>정점 근처</b>에서 찍는다. 궤적은 4H·s(1−s)(H = 280)라 발이 250 위인 것은 36틱 중 가운데 11틱 남짓이다.
+    /// 규칙의 Y 를 그린 몸이 땅에서 떠 있어야 한다(설계 §6 「보스 높이」).
+    /// </para>
+    ///
+    /// <para>
+    /// ② <c>battle-6b-landing-wave</c> (#83) — 착지 창 8틱 중 <b>넷째 틱</b>에 멈춰 찍는다(<see cref="CaptureTested"/>). 흰 충격파가
+    /// <b>반쯤 퍼진</b> 장이다: 밑깔개가 아레나 전체(판정을 아레나로 자른 것)에 옅게 깔려 있고, 밝은 앞머리 둘이 보스 발밑과 아레나 끝의
+    /// 가운데쯤(0.067초 / 0.125초 ≈ 절반)을 달리고 있으며, 띠의 높이는 판정의 높이(60)다. 전에는 창의 첫 틱에 찍었다 — 앞머리가 화면 밖으로
+    /// 곧장 나가던 때라 그 틱밖에 없었다(리뷰 m4). 지금 첫 틱에 찍으면 앞머리가 아직 발밑에 붙어 "달린다" 가 안 보인다.
+    /// 파이터는 그 전에 <b>뛰어</b> 띠 위에 떠 있다 — 띠 위와 띠 안이 한 장에서 갈려야 "낮은 곳이 맞는다" 가 읽힌다. 창이 열리기 0.3초(18틱)
+    /// 전에 누른다: 점프는 누른 틱 + 3 ~ + 55 동안 발이 60 위라(patterns.json 의 점프 공격 _note) 창 8틱을 다 덮는다. 몸에 안 닿은 띠는 창
+    /// 내내 대 보므로 넷째 틱에도 <c>BossSwingTested</c> 가 참이다.
+    /// </para>
     /// </summary>
     private async Task Leap()
     {
         await NewBattleOpening(1, "점프 공격");
         await Until(() => _battle is { BossPattern: "점프 공격" } && _battle.BossY >= 250, _patternTimeout);
         await Screenshot.CaptureAsync(this, "battle-6a-leap");
+
+        await Until(
+            () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn <= 0.3,
+            _pollTimeout);
+        Tap("jump");
+
+        // 창의 첫 틱을 보고 세 틱 더 민다 — 넷째 틱의 신호 안에서 멈춘다(CaptureOn 과 같은 자리). 그 장의 충격파는 네 프레임 퍼졌다.
+        await Until(() => _battle is { BossSwingTested: true }, _pollTimeout);
+        int hp = _battle?.FighterHealth ?? 0;
+        await Frames(3);
+        // 띠가 넷째 틱까지 살아 있어야 이 사진이 착지다. 뛴 파이터가 띠를 못 넘었으면 띠는 첫 틱에 닿아 끝나고, 아래의 CaptureTested 는
+        // 다음 보스 칼(대개 3연격)을 이 이름으로 말없이 찍는다 — 그 경우를 남긴다(리뷰 n4).
+        if (_battle is not { BossSwingTested: true, BossPattern: "점프 공격" } || (_battle?.FighterHealth ?? 0) < hp)
+        {
+            Log.Warn("shots", $"landing_wave_band_gone pattern={_battle?.BossPattern ?? "-"} hp={_battle?.FighterHealth ?? 0} was={hp}");
+        }
+
+        await CaptureTested("battle-6b-landing-wave", _pollTimeout);
     }
 
     /// <summary>

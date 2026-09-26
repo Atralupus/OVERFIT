@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://battle/Battle.cs" id="1_battle"]
 [ext_resource type="Script" path="res://battle/view/FighterView.cs" id="2_fighter"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://battle/view/BattleHud.cs" id="4_hud"]
 [ext_resource type="Script" path="res://battle/view/BattleResult.cs" id="5_result"]
 [ext_resource type="PackedScene" path="res://ui/Backdrop.tscn" id="6_backdrop"]
+[ext_resource type="Script" path="res://battle/view/LandingWave.cs" id="7_wave"]
 
 ; 바닥 덩어리. 위가 밝고 아래로 갈수록 어두워져 "선" 이 아니라 "땅" 이 된다.
 [sub_resource type="Gradient" id="Gradient_slab"]
@@ -114,6 +115,12 @@ script = ExtResource("2_fighter")
 [node name="Sprite" type="AnimatedSprite2D" parent="World/FighterView"]
 texture_filter = 1
 centered = true
+
+; 착지의 흰 충격파 (#83). 두 몸 **뒤**(트리 순서로 아래)라 몸 위에 그려진다 — 띠가 몸에 가려지면 발이 그 높이 안에 있는지가 안 보인다.
+; 보스 밑이 아니라 World 에 둔다: 보스가 걸어가도 띠는 착지한 자리에서 옅어진다. 원점이 바닥(규칙의 y = 0)이다.
+[node name="LandingWave" type="Node2D" parent="World"]
+unique_name_in_owner = true
+script = ExtResource("7_wave")
 
 [node name="HudLayer" type="CanvasLayer" parent="."]
 
