@@ -150,10 +150,10 @@ public sealed class BattleSim
         _setup = setup;
         _picker = setup.Picker ?? new UniformPicker(setup.Seed, setup.PatternIds.Count);
         _swords = Swords(setup);
-        _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes, setup.Fighter);
+        _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
-        _swings = new BossSwings(Fighter, Boss, _credit);
+        _swings = new BossSwings(Fighter, Boss, _credit, new JumpClearance(setup.Fighter));
         _poise = PoiseGauge.For(setup.Boss);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
@@ -583,7 +583,7 @@ public sealed class BattleSim
 
     /// <summary>
     /// 초를 틱으로. <b>규칙의 초→틱 반올림은 여기 한 곳이다</b> (설계 §3.5 · §3.6 ⑤) — 반 틱은 0 에서 먼 쪽으로 간다.
-    /// 쓰는 곳은 여덟이다: 판정 창의 길이(<see cref="BossSwings.Open"/> · <see cref="BossHits"/> 의 점프 가능), 타임라인 단계의
+    /// 쓰는 곳은 여덟이다: 판정 창의 길이(<see cref="BossSwings.Open"/> — 점프 가능도 그 창의 틱 수로 잰다 · #85), 타임라인 단계의
     /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 보스의 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>),
     /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>).
     /// 8fps 한 장은 0.125초 = 7.5틱이라, 이 중 둘이 각자 반올림하면 반 틱씩 어긋난다.

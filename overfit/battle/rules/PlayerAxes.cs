@@ -18,8 +18,9 @@ namespace Overfit.Battle.Rules;
 ///
 /// <para>
 /// <b>점프 축 둘이 다시 산다</b> (#72 · 설계 §7.2). 내려찍기 한 계열(이슈 #48)이던 동안은 점프로 넘을 판정이 없어
-/// <see cref="JumpReliance"/> 의 분모가 0 이었고 <see cref="JumpTimingBias"/> 는 실패한 점프만 모았다. 이제 3연격의 1타와
-/// 바닥 띠(점프 공격의 착지)를 점프로 넘는다. <see cref="AirborneAtImpactRatio"/> 는 여전히 예측력이 없다 — 대공 판정이
+/// <see cref="JumpReliance"/> 의 분모가 0 이었고 <see cref="JumpTimingBias"/> 는 실패한 점프만 모았다. 이제 3연격(1타는 어디서든 ·
+/// 2타는 보스 앞에서 · 3타는 바짝 붙어서 — 창이 열린 자리마다 잰다 · #85)과 바닥 띠(점프 공격의 착지)를 점프로 넘는다.
+/// <see cref="AirborneAtImpactRatio"/> 는 여전히 예측력이 없다 — 대공 판정이
 /// 없다. 정의는 남긴다: 축을 뺐다 넣는 것은 망의 입력 <b>모양</b>을 두 번 바꾸는 일이라 그 편이 훨씬 비싸다.
 /// </para>
 ///

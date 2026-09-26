@@ -23,9 +23,21 @@ public class PatternDataTests
     private static Dictionary<string, PatternDef> Load() =>
         JsonData<PatternDef>.ParseTable(File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json");
 
-    /// <summary>패턴의 판정들 — 판을 세울 때처럼 <see cref="BossHits"/> 가 이 캐릭터로 짓는다.</summary>
-    private static IEnumerable<HitBox> Hits(PatternDef def, FighterConfig fighter) =>
-        BossHits.Of(def, TestConfigs.HitShapes(), fighter).Where(h => h is not null).Select(h => h!.Value);
+    /// <summary>패턴의 판정들 — 판을 세울 때처럼 <see cref="BossHits"/> 가 짓는다.</summary>
+    private static IEnumerable<HitBox> Hits(PatternDef def) =>
+        BossHits.Of(def, TestConfigs.HitShapes()).Where(h => h is not null).Select(h => h!.Value);
+
+    /// <summary>
+    /// 보스 발 중심에서 <paramref name="dx"/> 떨어져(보는 쪽이 +) 선 이 캐릭터가 <b>서서는 맞고</b>, 제자리로 뛰면 창 내내 몸이 모양
+    /// 밖에 있을 수 있나 (#85 · <see cref="JumpClearance"/>). 서서도 안 맞는 자리는 점프가 답인 자리가 아니라 뺀다.
+    /// </summary>
+    private static bool JumpAnswers(HitBox hit, FighterConfig fighter, double dx)
+    {
+        var at = new Placement(960, 0, 1);
+        var standing = new HitRect(960 + dx - fighter.HalfWidth, 960 + dx + fighter.HalfWidth, 0, fighter.Height);
+        return ShapeHit.Test(hit.Shape, at, standing) == ShapeContact.Overlap
+            && new JumpClearance(fighter).Clears(hit.Shape, at, 960 + dx, BattleSim.TicksFor(hit.ActiveSeconds));
+    }
 
     /// <summary>단계가 드는 틱 — 러너와 같은 반올림이다(<see cref="BattleSim.TicksFor"/> · 패턴의 첫 틱이 1).</summary>
     private static int TickOf(PatternStep step) => BattleSim.TicksFor(step.T);
@@ -98,9 +110,10 @@ public class PatternDataTests
     [Fact]
     public void Jumpable_태그는_판정_하나라도_점프로_넘을_수_있는가와_같다()
     {
-        // 설계 §7.3 — 점프 가능은 **판정마다** 그 모양의 윗끝과 캐릭터의 실제 점프로 잰다(BossHits.TicksAbove — 관측의
-        // JumpAvailable 이 그 값이다). 태그 jumpable 은 패턴의 요약(망의 입력)이라 "판정 하나라도 넘을 수 있다" 와 같아야 한다.
-        // 전에는 정점과 판정 상단을 견줬다 — 발이 창 내내 위에 있어야 넘는다는 것(창이 여러 틱이다)을 못 봤다.
+        // 설계 §7.3 — 점프 가능은 **판정마다 · 자리마다** 캐릭터의 실제 점프로 잰다(JumpClearance — 관측의 JumpAvailable 이 창이 열린
+        // 자리의 그 값이다 · #85). 태그 jumpable 은 패턴의 요약(망의 입력)이라 "서서는 맞는 자리에서 뛰어 넘을 수 있는 판정이 하나라도
+        // 있다" 와 같아야 한다 — 보스 등 뒤 600 부터 앞 600 까지 한 px 씩 잰다. 서서도 안 맞는 자리는 빼야 뜻이 선다: 사거리 밖에서는
+        // 어느 판정이든 "뛰어도 산다".
         Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
 
         // 캐릭터가 없으면 아래 foreach 가 공허하게 참이다 — 이 가드가 한 번 그렇게 죽은 적이 있다.
@@ -110,23 +123,28 @@ public class PatternDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                Hits(def, c).Any(h => h.Jumpable).ShouldBe(def.Tags.Jumpable,
+                Hits(def).Any(h => Enumerable.Range(-600, 1201).Any(dx => JumpAnswers(h, c, dx))).ShouldBe(def.Tags.Jumpable,
                     $"{id}: jumpable={def.Tags.Jumpable} 인데 {who} 의 점프로 잰 판정들이 그 말과 다르다");
             }
         }
     }
 
     [Fact]
-    public void 실제_3연격은_1타만_점프로_넘고_점프_공격의_착지는_넘는다()
+    public void 실제_3연격의_점프_가능은_자리마다_다르고_점프_공격의_착지는_어디서든_넘는다()
     {
-        // 설계 §4.1 · §7.3 — 3연격에서 1타만 참이다(윗끝 236.5 위에 발이 27틱 · 창 8틱). 2 · 3타는 윗끝(346.5 · 566.5)이 정점
-        // 300 위라 거짓이다 — 태그를 그대로 실으면 둘까지 "점프도 됐다" 로 실려 점프 의존도의 분모가 부푼다. 점프 공격의
-        // 착지 띠(높이 60)는 발이 53틱 위에 있어 넘는다(설계 §4.2). 이 셋이 #48 에서 표본 0 이 된 점프 축 둘을 되살린다.
+        // 설계 §4.1 · §7.3 (#85) — 서서는 맞는 자리에서 잰다. 보스 앞 115(두고 서는 자리)에서는 셋 다 넘는다 — 2 · 3타도 몸에 닿는
+        // 칸은 낮다. 앞 300 에서는 2타는 넘고 3타는 높은 궤적(566.5) 안이라 못 넘는다. 등 뒤 300 에서는 2타의 높은 궤적(346.5) 아래라
+        // 못 넘는다(3타는 거기서 서서도 안 맞는다 — 등 뒤 궤적은 412.5 위에만 있다).
+        // 모양 전체의 윗끝 하나로 재던 때(#72)는 어디서나 [참, 거짓, 거짓] — "1타만 넘는다" 였다. 이름을 바꿨다(옛 이름:
+        // 실제_3연격은_1타만_점프로_넘고_점프_공격의_착지는_넘는다). 점프 공격의 착지 띠(높이 60)는 바닥 전체라 어디서든 53틱 몸이 빈다.
         Dictionary<string, PatternDef> patterns = Load();
         foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
         {
-            Hits(patterns["3연격"], c).Select(h => h.Jumpable).ShouldBe(new[] { true, false, false }, $"{who}: 3연격");
-            Hits(patterns["점프 공격"], c).Select(h => h.Jumpable).ShouldBe(new[] { true }, $"{who}: 점프 공격");
+            HitBox[] triple = Hits(patterns["3연격"]).ToArray();
+            triple.Select(h => JumpAnswers(h, c, 115)).ShouldBe(new[] { true, true, true }, $"{who}: 3연격 · 보스 앞 115");
+            triple.Skip(1).Select(h => JumpAnswers(h, c, 300)).ShouldBe(new[] { true, false }, $"{who}: 2 · 3타 · 앞 300");
+            JumpAnswers(triple[1], c, -300).ShouldBeFalse($"{who}: 2타 · 등 뒤 300");
+            JumpAnswers(Hits(patterns["점프 공격"]).Single(), c, -700).ShouldBeTrue($"{who}: 점프 공격 · 멀리");
         }
     }
 
@@ -136,7 +154,7 @@ public class PatternDataTests
         // 대공은 지상이 안전하다 — 판정의 아래끝이 땅에서 떠 있어야 한다.
         foreach ((string id, PatternDef def) in Load())
         {
-            bool offGround = Hits(def, TestConfigs.Fighter()).Any(h => h.Shape.Bounds.Y0 > _standingHeight);
+            bool offGround = Hits(def).Any(h => h.Shape.Bounds.Y0 > _standingHeight);
             def.Tags.AntiAir.ShouldBe(offGround, $"{id}: anti_air={def.Tags.AntiAir} 인데 판정 바닥이 맞지 않는다");
         }
     }

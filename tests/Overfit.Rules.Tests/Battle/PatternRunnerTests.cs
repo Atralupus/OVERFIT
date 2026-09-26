@@ -9,7 +9,7 @@ public class PatternRunnerTests
 {
     /// <summary>패턴 하나를 혼자 세운다 — 판정은 판을 세울 때처럼 <see cref="BossHits"/> 가 짓는다.</summary>
     private static PatternRunner Runner(PatternDef def) =>
-        new(def, BossHits.Of(def, TestConfigs.HitShapes(), TestConfigs.Fighter()));
+        new(def, BossHits.Of(def, TestConfigs.HitShapes()));
 
     private static PatternDef Slash() => new()
     {

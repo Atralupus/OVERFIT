@@ -23,6 +23,9 @@ public sealed class BossSwings
     /// <summary>회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 관측을 지을 때 묻는다.</summary>
     private readonly DodgeCredit _credit;
 
+    /// <summary>이 판의 파이터가 한 번 뛰어 몸이 비는 틱 (<see cref="JumpClearance"/> · #85). 창이 열릴 때 점프 가능을 잰다.</summary>
+    private readonly JumpClearance _jump;
+
     private readonly List<DodgeEvent> _events = new();
 
     /// <summary>
@@ -44,14 +47,16 @@ public sealed class BossSwings
     /// <summary>이 틱에 대 본 판정의 태그 — <see cref="TestedTags"/>.</summary>
     private PatternTags? _testedTags;
 
-    public BossSwings(Fighter fighter, Boss boss, DodgeCredit credit)
+    public BossSwings(Fighter fighter, Boss boss, DodgeCredit credit, JumpClearance jump)
     {
         ArgumentNullException.ThrowIfNull(fighter);
         ArgumentNullException.ThrowIfNull(boss);
         ArgumentNullException.ThrowIfNull(credit);
+        ArgumentNullException.ThrowIfNull(jump);
         _fighter = fighter;
         _boss = boss;
         _credit = credit;
+        _jump = jump;
     }
 
     /// <summary>이 판에서 일어난 회피 관측 전부. <see cref="PlayerAxes.From"/> 에 그대로 넣는다.</summary>
@@ -95,13 +100,23 @@ public sealed class BossSwings
     /// 러너가 방금 낸 판정을 <b>살려 둔다</b> (이슈 #59). 창이 몇 틱이든 대는 곳은 <see cref="Resolve"/> 하나다.
     /// 태그와 패턴 id 를 지금 받아 두는 것은 러너가 이 틱 끝에 끝나면 패턴과 <c>CurrentPattern</c> 이
     /// 지워지기 때문이다 — 마지막 판정이 end 와 같은 틱에 서면 그 관측이 "?" 패턴으로 남는다.
+    ///
+    /// <para>
+    /// <b>점프로 넘을 수 있었나도 지금 잰다</b> (#85 · 설계 §7.3) — 창이 열린 이 틱에 파이터가 선 자리에서 제자리로 뛰었다면 창 내내 몸이
+    /// 모양 밖에 있을 수 있나(<see cref="JumpClearance"/>). 관측을 짓는 틱(닿은 틱 · 무적이 먹은 틱)이 아니라 여는 틱인 까닭은 "그 판정이
+    /// 설 때 무엇을 고를 수 있었나" 가 분모이기 때문이다. 파이터는 이번 틱을 이미 움직였고 보스는 창 동안 안 움직인다(설계 §3.5 6).
+    /// </para>
     /// </summary>
     /// <param name="box">판정.</param>
     /// <param name="tags">그 패턴의 태그.</param>
     /// <param name="patternId">그 패턴의 id.</param>
     /// <param name="tick">창이 열리는 틱 — 칼이 선 틱이다. 관측의 타이밍 오차가 이 틱을 기준으로 잰다(설계 §3.6 ①).</param>
-    public void Open(HitBox box, PatternTags tags, string patternId, int tick) =>
-        _live.Add(new LiveSwing(box, tags, patternId, tick, BattleSim.TicksFor(box.ActiveSeconds)));
+    public void Open(HitBox box, PatternTags tags, string patternId, int tick)
+    {
+        int ticks = BattleSim.TicksFor(box.ActiveSeconds);
+        bool jumpable = _jump.Clears(box.Shape, new Placement(_boss.X, _boss.Y, _boss.Facing), _fighter.X, ticks);
+        _live.Add(new LiveSwing(box, tags, patternId, tick, ticks, jumpable));
+    }
 
     /// <summary>
     /// 살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다. <b>받아친 판정이 있었으면 true</b> —
@@ -257,7 +272,7 @@ public sealed class BossSwings
     private DodgeEvent BuildEvent(LiveSwing swing, HitBox box, HitVerdict verdict)
     {
         double opened = swing.OpenedTick * BattleSim.Dt;
-        (DodgeVerb verb, double startedAt) = _credit.Credit(verdict, box, _boss);
+        (DodgeVerb verb, double startedAt) = _credit.Credit(verdict, box, _boss, _fighter);
         double error = double.IsNaN(startedAt) ? 0 : startedAt - opened;
         int direction = verb == DodgeVerb.Dash ? _credit.DashDirection : 0;
 
@@ -278,9 +293,9 @@ public sealed class BossSwings
             DashAvailable: swing.Tags.DashWindow > 0,
             ParryAvailable: swing.Tags.Parryable,
 
-            // 점프만은 **판정 단위**다 (#72 · 설계 §7.3) — 모양의 윗끝과 파이터의 점프로 판을 세울 때 잰 값이다. 태그(jumpable)를
-            // 실으면 3연격의 2 · 3타까지 "점프도 됐다" 로 실려 점프 의존도의 분모가 부푼다.
-            JumpAvailable: box.Jumpable,
+            // 점프만은 **판정과 자리 단위**다 (#85 · 설계 §7.3) — 창이 열린 틱에 파이터가 선 자리에서 잰 값이다(Open). 태그(jumpable)를
+            // 실으면 판정마다의 답이 뭉개지고, 모양 전체의 윗끝으로 재면(#72) 보스 앞에서 넘는 2타 · 바짝 붙어 넘는 3타가 "못 넘었다" 로 실린다.
+            JumpAvailable: swing.Jumpable,
 
             // 가드는 지금 모든 판정에서 된다 (#72 · 설계 §7.2) — 가드 불가 판정을 걷었다. 5번 PR 의 잡기가 판정 단위의 답으로
             // 처음 거짓을 싣는다(설계 §7.3).
@@ -324,7 +339,7 @@ public sealed class BossSwings
     /// </summary>
     private sealed class LiveSwing
     {
-        public LiveSwing(HitBox box, PatternTags tags, string patternId, int openedTick, int ticks)
+        public LiveSwing(HitBox box, PatternTags tags, string patternId, int openedTick, int ticks, bool jumpable)
         {
             Box = box;
             Tags = tags;
@@ -332,6 +347,7 @@ public sealed class BossSwings
             OpenedTick = openedTick;
             Ticks = ticks;
             TicksLeft = ticks;
+            Jumpable = jumpable;
         }
 
         public HitBox Box { get; }
@@ -348,6 +364,9 @@ public sealed class BossSwings
 
         /// <summary>남은 틱. 대 볼 때마다 하나씩 준다.</summary>
         public int TicksLeft { get; set; }
+
+        /// <summary>창이 열린 틱의 자리에서 점프로 넘을 수 있었나 (#85) — 관측의 <c>JumpAvailable</c>.</summary>
+        public bool Jumpable { get; }
 
         /// <summary>
         /// 무적이 <b>처음</b> 먹은 틱에 지어 둔 관측 (이슈 #59 · 리뷰 라운드 1). 창이 안 닿고 닫히면

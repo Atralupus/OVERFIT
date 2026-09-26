@@ -989,7 +989,7 @@ public class BattleSimTests
         DodgeEvent e = sim.Events[0];
         e.DashAvailable.ShouldBeTrue("dash_window=0.14 인데 대시가 없었다고 실렸다");
         e.ParryAvailable.ShouldBeTrue("parryable=true 인데 패리가 없었다고 실렸다");
-        e.JumpAvailable.ShouldBeFalse("jumpable=false 인데 점프가 가능했다고 실렸다");
+        e.JumpAvailable.ShouldBeFalse("높이 300 띠가 온 바닥을 덮는데 점프가 가능했다고 실렸다 — 기준 파이터의 정점은 176 이다");
     }
 
     // ── 방어 하나와 계측 (이슈 #27 · #53) ────────────────────────────────────

@@ -15,8 +15,9 @@ public sealed class PatternTags
     public required string DashDirection { get; init; }
 
     /// <summary>
-    /// 점프로 넘을 수 있는 판정이 <b>하나라도</b> 있나 — 패턴의 요약(망의 입력)이다. 판정마다의 답은 모양과 캐릭터의 점프로
-    /// 판을 세울 때 잰다(<c>HitBox.Jumpable</c> · 설계 §7.3). 둘이 같은 말을 하는지는 <c>PatternDataTests</c> 가 본다.
+    /// 점프로 넘을 수 있는 판정이 <b>하나라도</b> 있나 — 서서는 맞는 자리에서 뛰어 넘을 수 있는 판정이다. 패턴의 요약(망의 입력)이다.
+    /// 관측의 답은 판정마다 · 자리마다 창이 열릴 때 잰다(<see cref="JumpClearance"/> · #85 · 설계 §7.3). 둘이 같은 말을 하는지는
+    /// <c>PatternDataTests</c> 가 본다.
     /// </summary>
     public required bool Jumpable { get; init; }
 
