@@ -23,6 +23,10 @@ public partial class Battle : Node2D
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
+
+    /// <summary>착지의 흰 충격파 (#83). 세우는 것은 <see cref="BattleCues"/> 다 — 여기는 씬에서 찾아 넘기기만 한다.</summary>
+    private LandingWave _landingWave = null!;
+
     private BattleHud _hud = null!;
     private BattleResult _result = null!;
     private Node2D _world = null!;
@@ -208,6 +212,7 @@ public partial class Battle : Node2D
     {
         _fighterView = GetNode<FighterView>("%FighterView");
         _bossView = GetNode<BossView>("%BossView");
+        _landingWave = GetNode<LandingWave>("%LandingWave");
         _hud = GetNode<BattleHud>("%Hud");
         _result = GetNode<BattleResult>("%Result");
         _world = GetNode<Node2D>("World");
@@ -269,7 +274,8 @@ public partial class Battle : Node2D
             MaxTicks = battle.MaxTicks,
         });
 
-        _cues = new BattleCues(_sim, _fighterView, _bossView, ShakeFor, StartHitstop);
+        // 바닥 충격파는 판정이 바닥 전체를 덮었는지를 아레나 폭으로 잰다(#83) — 판을 세운 바로 그 폭이다.
+        _cues = new BattleCues(_sim, _fighterView, _bossView, _landingWave, battle.ArenaWidth, ShakeFor, StartHitstop);
 
         // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59).
         _fighterView.Load(

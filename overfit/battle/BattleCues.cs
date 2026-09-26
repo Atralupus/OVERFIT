@@ -1,12 +1,13 @@
 using System;
 using Overfit.Battle.Rules;
 using Overfit.Battle.View;
+using Overfit.Core;
 
 namespace Overfit.Battle;
 
 /// <summary>
 /// 방금 지난 틱에서 <b>무슨 일이 일어났나</b>를 값의 차이로 읽어 뷰에 알린다 — 체력이 줄었나, 회피 관측이 늘었나,
-/// 보스가 탈진에 들었나, 새 칼질이 섰나.
+/// 보스가 탈진에 들었나, 새 칼질이 섰나, 바닥 전체를 치는 판정이 섰나(#83).
 ///
 /// <para>
 /// 규칙 층은 뷰를 모르므로 콜백이 없다 — 있으면 그 콜백이 곧 규칙의 일부가 되고, 헤드리스 봇이 그걸 들고 다니게
@@ -25,6 +26,12 @@ public sealed class BattleCues
     private readonly BattleSim _sim;
     private readonly FighterView _fighterView;
     private readonly BossView _bossView;
+
+    /// <summary>착지의 흰 충격파 (#83). 바닥 전체를 치는 판정이 서는 틱에 세운다.</summary>
+    private readonly LandingWave _landingWave;
+
+    /// <summary>바닥의 폭(아레나 폭) — 판정이 이만큼을 다 덮어야 바닥 충격파다(<see cref="FloorWave.Find"/>).</summary>
+    private readonly double _floorWidth;
 
     /// <summary>화면을 흔든다 — 배수를 받는다(1.0 이 피격). 씬이 World 노드를 흔든다.</summary>
     private readonly Action<double> _shake;
@@ -50,16 +57,29 @@ public sealed class BattleCues
     /// <summary>지난 틱에 보스가 탈진해 있었나. 꺼졌다 켜진 틱이 <b>무너지는 순간</b>이다 — 히트스톱이 거기 걸린다.</summary>
     private bool _lastBossExhausted;
 
-    public BattleCues(BattleSim sim, FighterView fighterView, BossView bossView, Action<double> shake, Action hitstop)
+    /// <summary>지난 틱에 바닥 전체를 치는 판정을 대 봤나. 꺼졌다 켜진 틱이 <b>착지</b>다 — 창 8틱 내내 대 봐도 충격파는 한 번이다.</summary>
+    private bool _lastFloorWave;
+
+    public BattleCues(
+        BattleSim sim,
+        FighterView fighterView,
+        BossView bossView,
+        LandingWave landingWave,
+        double floorWidth,
+        Action<double> shake,
+        Action hitstop)
     {
         ArgumentNullException.ThrowIfNull(sim);
         ArgumentNullException.ThrowIfNull(fighterView);
         ArgumentNullException.ThrowIfNull(bossView);
+        ArgumentNullException.ThrowIfNull(landingWave);
         ArgumentNullException.ThrowIfNull(shake);
         ArgumentNullException.ThrowIfNull(hitstop);
         _sim = sim;
         _fighterView = fighterView;
         _bossView = bossView;
+        _landingWave = landingWave;
+        _floorWidth = floorWidth;
         _shake = shake;
         _hitstop = hitstop;
         _lastFighterHealth = sim.Fighter.Health;
@@ -144,6 +164,18 @@ public sealed class BattleCues
         }
 
         _lastBossExhausted = _sim.Boss.Exhausted;
+
+        // **바닥 전체를 치는 판정이 서는 틱** (#83) — 착지의 흰 충격파. 패턴 id 가 아니라 규칙이 이 틱에 대 본 사각형으로 가른다
+        // (FloorWave.Find): 높이와 끝을 그 사각형에서 읽으므로 띠가 판정과 다른 말을 할 수 없다. 창의 첫 틱이다 — 땅에 선 몸은 첫 틱에
+        // 맞아 판정이 끝나므로 그 뒤 틱에는 대 본 사각형이 없다. 앞 틱과 견주는 것은 넘은 사람(창 8틱 내내 대 본다) 때문이다.
+        FloorWave? wave = FloorWave.Find(_sim.BossTestedRects, _sim.Boss.X, _floorWidth);
+        if (wave is { } landed && !_lastFloorWave)
+        {
+            _landingWave.Start(landed);
+            Log.Debug("view", $"landing_wave x={landed.Origin:0} left={landed.Left:0} right={landed.Right:0} height={landed.Height:0.#} tick={_sim.Ticks}");
+        }
+
+        _lastFloorWave = wave is not null;
 
         // 새 칼질이 시작된 **그 틱** (이슈 #54) — 1타든, 1타가 끝나는 틱에 이어진 2타든(설계 §5.1). 2타는 행동이
         // Attack 그대로라 "행동이 바뀌었나" 로는 못 본다: 몇 번째 칼질인지가 바뀐 것을 본다. 렌더 프레임이 아니라
