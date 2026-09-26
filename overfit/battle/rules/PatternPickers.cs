@@ -22,7 +22,7 @@ public interface IPatternPicker
 /// <param name="History">그때까지 끝난 시도들. <c>uniform</c> 은 안 읽는다 — 망이 읽는다.</param>
 /// <param name="Seed">시도 시드.</param>
 /// <param name="Stage">단계.</param>
-/// <param name="Script">대본 — 패턴 id 의 순서. <c>script</c> 고르기(5번 PR)만 읽는다. 3번 PR 에서는 늘 null 이다.</param>
+/// <param name="Script">대본 — 패턴 id 의 순서. <c>script</c> 고르기(#78)만 읽는다. 대본을 넘긴 전투(<c>Game</c> 의 대본 칸)가 아니면 null 이다.</param>
 public sealed record PickerInputs(
     IReadOnlyList<string> Roster, IReadOnlyList<AttemptRecord> History, ulong Seed, int Stage, IReadOnlyList<string>? Script = null);
 
@@ -47,14 +47,74 @@ public sealed class UniformPicker : IPatternPicker
 }
 
 /// <summary>
+/// 대본 — 정한 순서(<see cref="PickerInputs.Script"/>)를 돌고, 끝나면 처음부터 다시 돈다 (#78 · 설계 §4.4). GIF 도구와 스크린샷이 패턴을
+/// 고정하는 데 쓴다 — 무엇이 올지 알아야 "그 패턴이 왔을 때 그 사람이 어떻게 되는가" 를 찍는다. <b>데이터의 단계에는 안 쓴다</b>
+/// (<c>StageRosterTests</c> 가 막는다): 전투에 닿는 길은 <c>Game</c> 의 다음 전투 한 칸뿐이다.
+///
+/// <para>
+/// 명부에 없는 id 는 <b>세울 때</b> 거절한다 — 빠진 것을 전부 싣는다. 대본은 사람이 손으로 쓰는 것이라 틀리면 넘긴 자리에서 바로 멈춰야 한다
+/// (판 도중에 명부 밖을 내면 <c>BattleSim</c> 은 <c>[E]</c> 를 남기며 간격마다 다시 고를 뿐이다). uniform 과 같이 상태가 없다 — 몇 번째로
+/// 뽑는지(<c>draw</c>)를 받아 조회만 한다.
+/// </para>
+/// </summary>
+public sealed class ScriptPicker : IPatternPicker
+{
+    /// <summary>대본의 칸마다 명부의 칸 번호 — 세울 때 한 번 찾는다.</summary>
+    private readonly int[] _order;
+
+    public ScriptPicker(IReadOnlyList<string> roster, IReadOnlyList<string> script)
+    {
+        ArgumentNullException.ThrowIfNull(roster);
+        ArgumentNullException.ThrowIfNull(script);
+        if (script.Count == 0)
+        {
+            throw new ArgumentException("대본이 비었다 — 고를 패턴이 없다", nameof(script));
+        }
+
+        _order = new int[script.Count];
+        var missing = new List<string>();
+        for (int i = 0; i < script.Count; i++)
+        {
+            _order[i] = IndexOf(roster, script[i]);
+            if (_order[i] < 0)
+            {
+                missing.Add(script[i]);
+            }
+        }
+
+        if (missing.Count > 0)
+        {
+            throw new ArgumentException($"대본의 패턴이 명부에 없다 — {string.Join(", ", missing)}", nameof(script));
+        }
+    }
+
+    public int Pick(int draw) => _order[draw % _order.Length];
+
+    private static int IndexOf(IReadOnlyList<string> roster, string id)
+    {
+        for (int k = 0; k < roster.Count; k++)
+        {
+            if (string.Equals(roster[k], id, StringComparison.Ordinal))
+            {
+                return k;
+            }
+        }
+
+        return -1;
+    }
+}
+
+/// <summary>
 /// 고르기 등록표 — <c>stages.json</c> 의 <c>picker</c> id → 구현 (CLAUDE.md §2 · 설계 §4.4). 고르기를 하나 더할 때 이 표에
-/// 한 줄을 더한다 — <c>BattleSim</c> 은 안 연다. 3번 PR 은 <c>uniform</c> 하나다: <c>script</c>(대본)는 5번 PR, 망은 나중이다.
+/// 한 줄을 더한다 — <c>BattleSim</c> 은 안 연다. <c>uniform</c>(3번 PR) · <c>script</c>(대본 · #78)가 있고, 망은 나중이다.
 /// </summary>
 public static class PatternPickers
 {
     private static readonly Dictionary<string, Func<PickerInputs, IPatternPicker>> _table = new(StringComparer.Ordinal)
     {
         ["uniform"] = inputs => new UniformPicker(inputs.Seed, inputs.Roster.Count),
+        ["script"] = inputs => new ScriptPicker(
+            inputs.Roster, inputs.Script ?? throw new ArgumentException("script 고르기에 대본이 없다", nameof(inputs))),
     };
 
     /// <summary>등록된 id 들 — 데이터 테스트가 <c>stages.json</c> 의 <c>picker</c> 를 여기와 대 본다.</summary>

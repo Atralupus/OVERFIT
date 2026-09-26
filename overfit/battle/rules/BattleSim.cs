@@ -63,9 +63,9 @@ public sealed class BattleSetup
 /// </para>
 ///
 /// <para>
-/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 지금은 <b>무작위</b>(<c>uniform</c>)뿐이다. 일부러다 —
-/// 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
-/// 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 순서를 낸다.
+/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 게임의 단계는 지금 <b>무작위</b>(<c>uniform</c>)뿐이다 — 대본
+/// (<c>script</c> · #78)은 GIF · 스크린샷이 패턴을 고정하는 데만 쓴다. 일부러다 — 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다.
+/// 망이 정말 일하는지 증명할 방법이 그것 말고 없다. 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 순서를 낸다.
 /// </para>
 /// </summary>
 public sealed class BattleSim

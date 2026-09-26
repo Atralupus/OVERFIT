@@ -250,10 +250,11 @@ public partial class Battle : Node2D
         _hasNextStage = data.Stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
 
         // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
-        // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup).
+        // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup). 대본 칸이 차
+        // 있으면(GIF · 스크린샷 · #78) 이 전투만 그 대본으로 선다 — 가져가며 비우므로 다음 전투는 단계의 고르기로 돌아간다.
         RunHistory history = Game.Instance.History;
         _attempt = history.Open();
-        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records) is not { } stage)
+        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript()) is not { } stage)
         {
             _broken = true; // [E] 는 StageRoster 가 남겼다
             return;

@@ -75,6 +75,14 @@ public partial class Game : Node
     /// </summary>
     public RunHistory History { get; private set; } = null!;
 
+    /// <summary>
+    /// <b>다음 전투 하나에만</b> 쓰는 대본 — 패턴 id 의 순서 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). GIF 러너와 스크린샷 대본이 채우고
+    /// 전투로 가면, <c>Battle</c> 이 가져가며(<see cref="TakeScript"/>) 그 전투의 고르기를 단계의 <c>picker</c> 대신 <c>script</c> 로 세운다.
+    /// 단계처럼 여기(Autoload)에 두는 이유는 같다 — 전투 씬은 설 때마다 새로 만들어진다. <c>stages.json</c> 은 안 건드린다: 데이터에
+    /// <c>picker: script</c> 를 적는 길을 안 만든다.
+    /// </summary>
+    private IReadOnlyList<string>? _nextScript;
+
     public override void _Ready()
     {
         // 로그 출력을 Godot 에 꽂는다. 모듈 초기화(LogSink.AutoInstall)가 이미 꽂았으므로 여기선 멱등이다 —
@@ -120,6 +128,25 @@ public partial class Game : Node
     {
         Stage = System.Math.Max(1, stage);
         Log.Info("run", $"stage={Stage}");
+    }
+
+    /// <summary>다음 전투 하나를 대본으로 세운다 (<see cref="_nextScript"/>). 그 전투가 가져가면 비고, 그 뒤의 전투는 단계의 고르기로 돌아간다.</summary>
+    public void SetNextScript(IReadOnlyList<string> script)
+    {
+        ArgumentNullException.ThrowIfNull(script);
+        _nextScript = script;
+        Log.Info("run", $"next_script={string.Join(',', script)}");
+    }
+
+    /// <summary>
+    /// 대본 칸을 가져가며 비운다 — 전투를 세우는 <c>Battle</c> 만 부른다. 비었으면 null 이다. 가져가며 비우는 이유: 칸이 남으면 재시도나
+    /// 다음 단계의 전투까지 대본으로 서서 "재시도마다 다른 보스"(설계 §4.4)가 조용히 꺼진다.
+    /// </summary>
+    public IReadOnlyList<string>? TakeScript()
+    {
+        IReadOnlyList<string>? script = _nextScript;
+        _nextScript = null;
+        return script;
     }
 
     /// <summary>

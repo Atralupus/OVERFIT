@@ -149,6 +149,33 @@ public class StageRosterTests
     }
 
     [Fact]
+    public void 데이터의_단계는_대본_고르기를_안_쓴다()
+    {
+        // 설계 §4.4 「대본이 전투에 닿는 길」 — 대본은 Game 의 다음 전투 한 칸으로만 전투에 닿는다. stages.json 에 picker: script 를 적는 길을
+        // 안 만든다: 적으면 그 단계가 대본 없이 서 판을 세울 때 멈추고, 설령 선다 해도 무작위를 재야 할 단계가 정해진 순서로 돈다.
+        foreach ((string stage, StageDef def) in Stages())
+        {
+            def.Picker.ShouldNotBe("script", $"{stage}단계가 데이터에서 대본 고르기를 쓴다");
+        }
+    }
+
+    [Fact]
+    public void 대본을_주면_그_전투만_단계의_고르기_대신_대본으로_선다()
+    {
+        // 설계 §4.4 — Battle 은 Game 의 대본 칸이 차 있으면 그 전투의 고르기를 단계의 picker 대신 script 로 세운다(로그 picker=script). 명부는
+        // 그대로 그 단계의 것이다 — 대본은 명부 안의 순서만 정한다. 안 주면 전처럼 단계의 고르기다.
+        ulong seed = Det.Hash64(51, Det.Domain.Attempt, k1: 1);
+
+        StageSetup scripted = StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>(), new[] { "점프 공격" })
+            .ShouldNotBeNull();
+        scripted.PickerId.ShouldBe("script");
+        scripted.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
+        Enumerable.Range(0, 5).Select(scripted.Picker.Pick).ShouldAllBe(i => scripted.PatternIds[i] == "점프 공격");
+
+        StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>()).ShouldNotBeNull().PickerId.ShouldBe("uniform");
+    }
+
+    [Fact]
     public void 고르기가_빠진_단계는_읽을_때_빠진_키를_말한다()
     {
         // picker 는 required 다 — 빠진 채로 읽히면 어느 고르기로 돌지를 코드의 기본값이 조용히 정한다.

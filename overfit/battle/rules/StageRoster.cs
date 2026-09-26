@@ -51,22 +51,28 @@ public static class StageRoster
     /// <param name="stage">단계.</param>
     /// <param name="seed">시도 시드.</param>
     /// <param name="history">그때까지 끝난 시도들 — 데모는 빈 목록을 넘긴다(기록 없이 시드만으로 선다).</param>
+    /// <param name="script">
+    /// 대본 — 있으면 이 전투만 단계의 <c>picker</c> 대신 <c>script</c> 로 선다 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). <c>Game</c> 의 다음
+    /// 전투 한 칸이 GIF 러너 · 스크린샷에게서 받아 넘긴다. 명부는 그대로 그 단계의 것이다 — 대본은 명부 안의 순서만 정한다.
+    /// </param>
     public static StageSetup? Setup(
-        IReadOnlyDictionary<string, StageDef> stages, int stage, ulong seed, IReadOnlyList<AttemptRecord> history)
+        IReadOnlyDictionary<string, StageDef> stages, int stage, ulong seed, IReadOnlyList<AttemptRecord> history,
+        IReadOnlyList<string>? script = null)
     {
         if (Resolve(stages, stage) is not { } def)
         {
             return null;
         }
 
-        IPatternPicker? picker = PatternPickers.Create(def.Picker, new PickerInputs(def.Patterns, history, seed, stage));
+        string id = script is null ? def.Picker : "script";
+        IPatternPicker? picker = PatternPickers.Create(id, new PickerInputs(def.Patterns, history, seed, stage, script));
         if (picker is null)
         {
-            Log.Error("stage", $"picker_missing id={def.Picker} stage={stage}");
+            Log.Error("stage", $"picker_missing id={id} stage={stage}");
             return null;
         }
 
-        return new StageSetup(def.Patterns, def.Picker, picker);
+        return new StageSetup(def.Patterns, id, picker);
     }
 
     /// <summary>
