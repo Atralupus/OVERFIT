@@ -10,7 +10,7 @@ namespace Overfit.Battle.Debug;
 ///
 /// <para>
 /// 전에는 벽시계로만 기다렸다 — 정해진 초에 셔터를 눌렀다. 그러면 <b>무엇이 찍힐지 아무도 모른다</b>:
-/// 패턴 주기(간격 0.8초 + 패턴 1.65~1.90초)와 어긋나 실행할 때마다 다른 순간이 나오고,
+/// 패턴 주기(간격 0.8초 + 3연격 3.25초 또는 점프 공격 1.5초)와 어긋나 실행할 때마다 다른 순간이 나오고,
 /// 플레이어는 아무것도 안 하므로 대시·패리·공격은 한 번도 안 찍힌다.
 /// </para>
 ///
@@ -35,7 +35,7 @@ public partial class ShotRunner : Node
     /// 넘기면 경고만 남기고 그냥 찍는다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다.
     /// 정해진 패턴 하나를 기다리는 것은 이것이 아니라 <see cref="_patternTimeout"/> 이다.
     /// </summary>
-    private const double _tellTimeout = 16.0;
+    private const double _guardBreakTimeout = 16.0;
 
     /// <summary>
     /// 두 패턴 중 <b>정해진 하나</b>를 기다리는 상한(초) (#72). 1단계는 uniform 이라 한 주기(간격 0.8 + 3.25 또는 1.5초)마다
@@ -279,7 +279,7 @@ public partial class ShotRunner : Node
         // 붙든 가드는 3연격 한 바퀴에 54(8 · 8 · 14 의 1.8배)를, 점프 공격의 착지에 21.6 을 문다 — 두세 패턴이면 깨진다.
         // 깨지는 것은 **사건**이라 상태로는 못 노린다. 그래서 횟수가 늘어난 것을 보고 셔터를 누른다.
         int broke = _battle?.FighterGuardBreaks ?? 0;
-        await Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _tellTimeout);
+        await Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _guardBreakTimeout);
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
 

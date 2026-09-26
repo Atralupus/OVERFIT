@@ -103,7 +103,7 @@ public partial class Battle : Node2D
 
     /// <summary>
     /// 판이 끝났나. <b>디버그 전용 읽기</b> — <c>tools/build.sh shots</c> 의 <c>ShotRunner</c> 가
-    /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 1.65~1.90초 패턴)와
+    /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 3연격 3.25초 또는 점프 공격 1.5초)와
     /// 어긋나 매번 다른 순간이 찍힌다 — 그러면 스크린샷이 "무엇이 보이는가" 를 증명하지 못한다.
     /// </summary>
     public bool Over => _over;
@@ -395,8 +395,9 @@ public partial class Battle : Node2D
     {
         _walking = input.Move != 0 && _sim.Fighter.Action == FighterAction.Idle;
 
-        // 회피 관측은 보스 판정 하나마다 정확히 한 건 는다 — 늘었다는 것은 판정이 섰다는 뜻이다.
-        // 맞았든 빗나갔든 칼은 휘둘러졌으므로 충격파는 나와야 한다.
+        // 회피 관측은 끝까지 간 보스 판정 하나마다 한 건 는다 — 닿으면 닿은 틱에, 빗나가거나 무적으로 흘렸으면 창이 닫히는
+        // 틱에(스펙 §3.6 ①). 탈진이나 판 끝으로 끊긴 창은 관측이 없다(§3.5). 그래서 빗나간 칼의 충격파는 창이 닫힐 때 난다 —
+        // 칼이 선 순간과 어긋나는 것은 링을 걷는 6번 PR 이 다시 본다. 맞았든 빗나갔든 칼은 휘둘러졌으므로 충격파는 나와야 한다.
         if (_sim.Events.Count > _lastEventCount)
         {
             _bossView.ActiveNow();
