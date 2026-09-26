@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Godot;
 using Overfit.Core;
+using static Overfit.Battle.Debug.SceneDriver;
 
 namespace Overfit.Battle.Debug;
 
@@ -19,6 +20,10 @@ namespace Overfit.Battle.Debug;
 /// <c>Battle</c> 의 <c>Read()</c> 가 그대로 읽게 한다. ② <b>상태를 보고 셔터를 누른다</b> —
 /// 보스가 선딜에 들어갔을 때, 체력이 줄었을 때, 결과가 떴을 때.
 /// 그래야 스크린샷이 "이 피드백이 보이는가" 를 실제로 증명한다.
+/// </para>
+///
+/// <para>
+/// 여기는 <b>대본</b>(어느 장면을 언제 찍나)만 든다. 손(새 판 · 누르기 · 프레임과 상태를 기다리기)은 <see cref="SceneDriver"/> 다 (#78).
 /// </para>
 /// </summary>
 public partial class ShotRunner : Node
@@ -57,7 +62,12 @@ public partial class ShotRunner : Node
     /// </summary>
     private const int _openingTries = 8;
 
+    /// <summary>손과 기다림 — 새 판 · 누르기 · 프레임과 상태 (<see cref="SceneDriver"/>).</summary>
+    private readonly SceneDriver _drive;
+
     private Overfit.Battle.Battle? _battle;
+
+    public ShotRunner() => _drive = new SceneDriver(this, "shots");
 
     public override void _Ready() => _ = RunAsync();
 
@@ -65,59 +75,50 @@ public partial class ShotRunner : Node
     {
         Log.Info("shots", "start");
 
-        await Wait(0.6);
+        await _drive.Wait(0.6);
         await Screenshot.CaptureAsync(this, "title");
 
         // 크레딧도 찍는다. 이 화면은 data/credits.json 을 읽어 **자기가 짓는** 화면이라
         // 항목이 늘면 줄이 늘고 링크가 길면 잘린다 — 그 종류의 실패는 로그에 안 남는다.
         // 이 저장소는 화면의 실패를 여러 번 스크린샷에서 처음 봤다.
         Game.Instance.GoTo(Game.Scene.Credits);
-        await Frames(6);
+        await _drive.Frames(6);
         await Screenshot.CaptureAsync(this, "credits");
 
         // 1단계에서 찍는다 — 유저가 처음 만나는 판이다(#72 · 두 단계의 명부는 5번 PR 까지 같다).
-        Game.Instance.SetStage(1);
-        Game.Instance.GoTo(Game.Scene.Battle);
-        await Frames(4);
-        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
-        if (_battle is null)
-        {
-            // [E] 가 아니라 [W] 다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다.
-            // 대신 shots 는 PNG 개수를 세어 0장이면 실패시킨다.
-            Log.Warn("shots", "battle_scene_missing");
-        }
+        _battle = await _drive.NewBattle(1);
 
         await Shoot("battle-1-approach", 1.0);
 
         // 보스 쪽으로 붙는다. 붙어 있어야 판정에 걸리고, 그래야 피격·패리가 찍힌다.
         Hold("move_right", true);
-        await Wait(1.1);
+        await _drive.Wait(1.1);
         Hold("move_right", false);
 
         // ── 대시: 무적 창 한가운데를 잡는다 ────────────────────────────────
         // 무적은 0.14초(≈8프레임)이고 대시는 0.18초다. 4프레임째면 잔상이 서너 장 깔린 채
         // 아직 무적이다 — 정확히 그 차이를 보여주려고 이 순간을 고른다.
         Tap("dash");
-        await Frames(4);
+        await _drive.Frames(4);
         await Screenshot.CaptureAsync(this, "battle-2-dash");
 
         // 같은 대시의 9프레임째 — 무적은 끝났고(8.4프레임) 대시는 아직 돈다(10.8프레임까지).
         // **이 두 장이 나란히 있어야** 그 0.04초가 증명된다: 잔상이 멈추고 몸이 어두워진다.
         // 설계상 여기서 맞는 것이 맞는데, 플레이어에게는 지금까지 보이지 않던 구간이다.
-        await Frames(5);
+        await _drive.Frames(5);
         await Screenshot.CaptureAsync(this, "battle-3-dash-tail");
 
-        await Wait(0.5);
+        await _drive.Wait(0.5);
 
         // ── 패리: 칼을 사선으로 세우는 0.33초 커밋의 한가운데 (설계 §5.3) ─────────
         // 패리는 이제 누르는 것 한 번이다 — Tap. 가드(↓)와 그림이 갈리는지가 이 장의 증명이다: 패리는 칼을 세우며
         // 움직이고 가드는 서 있다(battle-10-guard 와 나란히 본다). 20틱 커밋의 10틱째가 한가운데다.
         Tap("parry");
-        await Until(() => _battle?.FighterParrying == true, _pollTimeout);
-        await Frames(10);
+        await _drive.Until(() => _battle?.FighterParrying == true, _pollTimeout);
+        await _drive.Frames(10);
         await Screenshot.CaptureAsync(this, "battle-4-parry");
 
-        await Wait(0.5);
+        await _drive.Wait(0.5);
 
         // ── 공격: 칼이 지나가는 그 프레임 ─────────────────────────────────
         // **프레임 수를 세지 않는다.** 전에는 "선딜 0.09초 ≈ 6프레임" 이라 적고 여섯을 셌는데,
@@ -140,7 +141,7 @@ public partial class ShotRunner : Node
         // **닿을 때까지, 칼질이 끝나 설 때마다 다시 누른다** (#72 · #82) — 보스와 겹친 채 서 있어도 첫 칼이 빗나갈 수 있다. 칼질이 경직까지
         // 끝나기를 규칙에게 묻는다(FighterFree): 전에는 0.4초마다 눌렀는데, 칼질 뒤 경직(0.40초)이 들자 둘째 J 가 1타의 경직에 떨어져
         // 2타가 됐다 — 1타의 경직 중 J 는 곧장 2타다.
-        await Until(
+        await _drive.Until(
             () => _battle is { BossPattern: "3연격", BossWindingUp: true } && _battle.BossNextActiveIn > 0.3,
             _patternTimeout);
         int bossBefore = _battle?.BossHealth ?? 0;
@@ -148,7 +149,7 @@ public partial class ShotRunner : Node
         for (int f = 0; f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
         {
             await PressWhenFree("attack");
-            if (BossHit() && Pause())
+            if (BossHit() && _drive.Pause())
             {
                 break;
             }
@@ -163,22 +164,22 @@ public partial class ShotRunner : Node
         // 멈추면 그림(Battle._Process 의 BossView.Show)도 멈춰 맞은 뒤 첫 프레임의 세기(≈ 0.86)가 찍힌다. 멈추지 않고 두 프레임 뒤를 찍었더니
         // 셔터가 그리기를 두 번 더 기다려 절반쯤 꺼진 흰색이 찍혔다. 옛 흰 실루엣은 4장 중 둘째가 흰 장이라 7프레임 뒤를 찍었다.
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
-        GetTree().Paused = false;
+        _drive.Resume();
 
         // ── 보스 선딜: 예고 자세에 서서 틴트가 무르익는 중 (링은 없다 · #81) ──
-        await Until(() => _battle?.BossWindingUp == true, _pollTimeout);
-        await Frames(12);
+        await _drive.Until(() => _battle?.BossWindingUp == true, _pollTimeout);
+        await _drive.Frames(12);
         await Screenshot.CaptureAsync(this, "battle-6-windup");
 
         // ── 피격: 체력이 줄어든 바로 다음 프레임 ──────────────────────────
         int before = _battle?.FighterHealth ?? 0;
-        await Until(() => (_battle?.FighterHealth ?? 0) < before, _pollTimeout);
-        await Frames(2);
+        await _drive.Until(() => (_battle?.FighterHealth ?? 0) < before, _pollTimeout);
+        await _drive.Frames(2);
         await Screenshot.CaptureAsync(this, "battle-7-hit");
 
         // ── 결과 화면: 아무것도 안 하고 맞아 죽는다 ───────────────────────
-        await Until(() => _battle?.ResultVisible == true, _battleTimeout);
-        await Frames(2);
+        await _drive.Until(() => _battle?.ResultVisible == true, _battleTimeout);
+        await _drive.Frames(2);
         await Screenshot.CaptureAsync(this, "battle-8-result");
 
         await Combo();
@@ -209,13 +210,11 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Combo()
     {
-        Game.Instance.GoTo(Game.Scene.Battle);
-        await Frames(4);
-        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+        _battle = await _drive.NewBattle(1);
 
         // 보스에게서 멀어진다. **벽까지 가지 않는다** — 벽에 붙으면 몸이 화면 왼쪽 끝에서 잘린다(실제로 그렇게 찍혔다).
         Hold("move_left", true);
-        await Wait(0.8);
+        await _drive.Wait(0.8);
         Hold("move_left", false);
 
         // 보스 쪽으로 **돌아선다.** 왼쪽을 본 채 휘두르면 칼이 몸 앞(왼쪽)으로 나가 2타의 긴 칼이 화면 왼쪽 끝 밖으로
@@ -223,18 +222,18 @@ public partial class ShotRunner : Node
         // ⚠ **두 프레임이다.** physics_frame 신호는 그 틱의 _PhysicsProcess **앞에** 오므로, 한 프레임만 기다리고
         // 놓으면 Battle 이 읽기 전에 손을 뗀다 — 처음에 Frames(1) 로 찍었더니 칼이 여전히 왼쪽 밖으로 나갔다.
         Hold("move_right", true);
-        await Frames(2);
+        await _drive.Frames(2);
         Hold("move_right", false);
 
         // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다.
         Tap("attack");
-        await Frames(2);
+        await _drive.Frames(2);
         Tap("attack");
 
         // 2타가 선 것은 규칙에게 묻는다. 선딜의 한가운데는 **20틱 뒤**다 — 2타 선딜(0.6667초 = 40틱)의 절반을 옮겨 적은
         // 숫자라, 선딜을 20틱 밑으로 줄이면 이 장이 칼 장을 찍어 아래 장과 같아진다(나란히 두면 바로 보인다).
-        await Until(() => _battle?.FighterComboStep == 1, _pollTimeout);
-        await Frames(20);
+        await _drive.Until(() => _battle?.FighterComboStep == 1, _pollTimeout);
+        await _drive.Frames(20);
         await Screenshot.CaptureAsync(this, "battle-5c-combo-windup");
 
         // 칼이 지나가는 그 프레임 (battle-5-attack 과 같은 규약 — 칼을 대 본 그 틱에 멈춰 찍는다).
@@ -258,30 +257,27 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Guarding()
     {
-        Game.Instance.SetStage(1);
-        Game.Instance.GoTo(Game.Scene.Battle);
-        await Frames(4);
-        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+        _battle = await _drive.NewBattle(1);
 
         // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
         Hold("move_right", true);
-        await Wait(1.1);
+        await _drive.Wait(1.1);
         Hold("move_right", false);
 
         // ── 버티는 자세 ───────────────────────────────────────────────────
         // **프레임을 세지 않는다.** 가드가 서는 것은 누른 그 틱이지만 규칙에게 물어보는 규약은
         // 그대로다 — 세어 두면 입력이 한 틱 밀리는 날 조용히 어긋난다.
         Hold("guard", true);
-        await Until(() => _battle?.FighterGuarding == true, _pollTimeout);
-        await Frames(2);
+        await _drive.Until(() => _battle?.FighterGuarding == true, _pollTimeout);
+        await _drive.Frames(2);
         await Screenshot.CaptureAsync(this, "battle-10-guard");
 
         // ── 붕괴: 스태미나가 바닥난 그 대 ─────────────────────────────────
         // 붙든 가드는 3연격 한 바퀴에 54(8 · 8 · 14 의 1.8배)를, 점프 공격의 착지에 21.6 을 문다 — 두세 패턴이면 깨진다.
         // 깨지는 것은 **사건**이라 상태로는 못 노린다. 그래서 횟수가 늘어난 것을 보고 셔터를 누른다.
         int broke = _battle?.FighterGuardBreaks ?? 0;
-        await Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _guardBreakTimeout);
-        await Frames(3);
+        await _drive.Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _guardBreakTimeout);
+        await _drive.Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
 
         // ── 받아친 순간 (이슈 #53) ────────────────────────────────────────
@@ -298,7 +294,7 @@ public partial class ShotRunner : Node
                 Tap("parry");
             }
 
-            await Frames(1);
+            await _drive.Frames(1);
         }
 
         if ((_battle?.FighterParries ?? 0) == parried)
@@ -310,7 +306,7 @@ public partial class ShotRunner : Node
         // 버려지지 않고 끝난 첫 틱에 넘어가 되받아치기 1타가 선다(로그 [battle][D] hitstop_carry … attack=True). 사람이 받아친 것을
         // 보고 곧장 누르는 자리가 여기다.
         Tap("attack");
-        await Frames(3);
+        await _drive.Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10d-parry");
 
         // ── 받아쳐 무너진 보스 (#72 · 설계 §4.3) ──────────────────────────
@@ -321,7 +317,7 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "exhaust_not_seen");
         }
 
-        await Frames(27);
+        await _drive.Frames(27);
         await Screenshot.CaptureAsync(this, "battle-10e-boss-exhausted");
     }
 
@@ -338,9 +334,9 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Poise()
     {
-        await NewBattle(1);
+        _battle = await _drive.NewBattle(1);
         Hold("move_right", true);
-        await Wait(1.1);
+        await _drive.Wait(1.1);
         Hold("move_right", false);
 
         bool half = false;
@@ -350,12 +346,12 @@ public partial class ShotRunner : Node
             // 누른다(FighterFree). 전에는 80프레임(2연격 한 바퀴 0.25 + 1.0초) 뒤에 눌렀는데, 경직이 들자 그 J 둘이 2타의 경직에 버려져
             // 한 판 걸러 한 번만 쳤다 — 두 연격 사이가 벌어져 게이지가 줄면 두 번째 2타에 안 무너진다.
             Tap("attack");
-            await Frames(2);
+            await _drive.Frames(2);
             Tap("attack");
-            await Frames(2);
+            await _drive.Frames(2);
             for (int f = 0; f < 150 && _battle is { BossExhausted: false, FighterFree: false }; f++)
             {
-                await Frames(1);
+                await _drive.Frames(1);
             }
 
             if (!half && _battle is { BossExhausted: false, BossPoise: > 0.3 and < 0.9 })
@@ -370,7 +366,7 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "poise_break_not_seen");
         }
 
-        await Frames(30);
+        await _drive.Frames(30);
         await Screenshot.CaptureAsync(this, "battle-12b-poise-break");
     }
 
@@ -399,14 +395,14 @@ public partial class ShotRunner : Node
         await NewBattleOpening(1, "3연격");
         foreach (string way in new[] { "move_left", "move_right", "move_left", "move_right" })
         {
-            await Until(() => _battle is { FighterFree: true } or { FighterExhausted: true }, _pollTimeout);
+            await _drive.Until(() => _battle is { FighterFree: true } or { FighterExhausted: true }, _pollTimeout);
             if (_battle is { FighterExhausted: true })
             {
                 break;
             }
 
             Hold(way, true);
-            await Frames(2);
+            await _drive.Frames(2);
             Hold(way, false);
             await PressWhenFree("dash");
         }
@@ -421,7 +417,7 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "fighter_exhaust_not_seen");
         }
 
-        await Frames(30);
+        await _drive.Frames(30);
         await Screenshot.CaptureAsync(this, "battle-10f-fighter-exhausted");
     }
 
@@ -440,17 +436,15 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Facing()
     {
-        Game.Instance.GoTo(Game.Scene.Battle);
-        await Frames(4);
-        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+        _battle = await _drive.NewBattle(1);
 
         // 파이터는 아레나의 25% · 보스는 75% 에 선다 — 보스는 처음부터 왼쪽을 본다.
-        await Wait(0.8);
+        await _drive.Wait(0.8);
         await FacingShot("battle-9-face-left");
 
         // 오른쪽으로 달려 보스를 지나간다.
         Hold("move_right", true);
-        await Wait(2.6);
+        await _drive.Wait(2.6);
         Hold("move_right", false);
         await FacingShot("battle-9b-face-right");
 
@@ -466,13 +460,13 @@ public partial class ShotRunner : Node
         // 몸 밖으로 확실히 못 나간다 — 겹친 채 찍히면 어느 쪽에 섰는지가 그림에서 안 읽힌다.
         // 대시는 0.18초에 396px 이라 한 번에 넘기고, 대시 뒤 경직(0.1초 · #82)이 지나면 이어지는 걸음이 남은 프레임만큼 더 벌린다.
         // **3연격만 고른다** — 점프 공격은 도약하는 틱(0.40초)에 착지 자리 쪽으로 돌아선다(설계 §4.2 · 잠금의 유일한 예외).
-        await Until(
+        await _drive.Until(
             () => _battle is { BossWindingUp: true, BossPattern: "3연격" } && _battle.BossNextActiveIn >= 0.6,
             _patternTimeout);
         Hold("move_left", true);
-        await Frames(2);   // 왼쪽을 보게 세운다 — 대시는 **바라보는 쪽으로만** 간다
+        await _drive.Frames(2);   // 왼쪽을 보게 세운다 — 대시는 **바라보는 쪽으로만** 간다
         Tap("dash");
-        await Frames(26);
+        await _drive.Frames(26);
         Hold("move_left", false);
         await Screenshot.CaptureAsync(this, "battle-9c-facing-locked");
     }
@@ -499,18 +493,18 @@ public partial class ShotRunner : Node
     private async Task Leap()
     {
         await NewBattleOpening(1, "점프 공격");
-        await Until(() => _battle is { BossPattern: "점프 공격" } && _battle.BossY >= 250, _patternTimeout);
+        await _drive.Until(() => _battle is { BossPattern: "점프 공격" } && _battle.BossY >= 250, _patternTimeout);
         await Screenshot.CaptureAsync(this, "battle-6a-leap");
 
-        await Until(
+        await _drive.Until(
             () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn <= 0.3,
             _pollTimeout);
         Tap("jump");
 
         // 창의 첫 틱을 보고 세 틱 더 민다 — 넷째 틱의 신호 안에서 멈춘다(CaptureOn 과 같은 자리). 그 장의 충격파는 네 프레임 퍼졌다.
-        await Until(() => _battle is { BossSwingTested: true }, _pollTimeout);
+        await _drive.Until(() => _battle is { BossSwingTested: true }, _pollTimeout);
         int hp = _battle?.FighterHealth ?? 0;
-        await Frames(3);
+        await _drive.Frames(3);
         // 띠가 넷째 틱까지 살아 있어야 이 사진이 착지다. 뛴 파이터가 띠를 못 넘었으면 띠는 첫 틱에 닿아 끝나고, 아래의 CaptureTested 는
         // 다음 보스 칼(대개 3연격)을 이 이름으로 말없이 찍는다 — 그 경우를 남긴다(리뷰 n4).
         if (_battle is not { BossSwingTested: true, BossPattern: "점프 공격" } || (_battle?.FighterHealth ?? 0) < hp)
@@ -528,9 +522,9 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task StageTwo()
     {
-        await NewBattle(2);
-        await Until(() => _battle?.ResultVisible == true, _battleTimeout);
-        await Frames(2);
+        _battle = await _drive.NewBattle(2);
+        await _drive.Until(() => _battle?.ResultVisible == true, _battleTimeout);
+        await _drive.Frames(2);
         await Screenshot.CaptureAsync(this, "battle-11-stage-2");
     }
 
@@ -555,23 +549,23 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Hitboxes()
     {
-        await NewBattle(1);
+        _battle = await _drive.NewBattle(1);
 
         // ① 3연격의 선딜을 기다려 셋을 차례로 — 대 본 틱을 찍고, 대 보기가 그친 것을 보고 다음 판정을 기다린다.
-        await Until(() => _battle is { BossPattern: "3연격", BossWindingUp: true }, _patternTimeout);
+        await _drive.Until(() => _battle is { BossPattern: "3연격", BossWindingUp: true }, _patternTimeout);
         for (int hit = 1; hit <= 3; hit++)
         {
             await CaptureTested($"hitbox-1-triple-{hit}", _pollTimeout);
-            await Until(() => _battle is { BossSwingTested: false }, _pollTimeout);
+            await _drive.Until(() => _battle is { BossSwingTested: false }, _pollTimeout);
         }
 
         // ②
-        await Until(() => _battle is { BossPattern: "점프 공격", BossWindingUp: true }, _patternTimeout);
+        await _drive.Until(() => _battle is { BossPattern: "점프 공격", BossWindingUp: true }, _patternTimeout);
         await CaptureTested("hitbox-2-landing", _pollTimeout);
 
         // ③ 판정까지 5틱(0.08초) 안이면 누른다 — 패리 창(0.133초 = 8틱)이 착지 창의 첫 틱을 덮는다(battle-10d 와 같은 규칙).
         await NewBattleOpening(1, "점프 공격");
-        await Until(
+        await _drive.Until(
             () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08,
             _patternTimeout);
         Tap("parry");
@@ -580,16 +574,16 @@ public partial class ShotRunner : Node
 
     /// <summary>
     /// 규칙이 판정을 대 본 <b>그 틱</b>의 화면을 찍는다 (설계 §6.1 · §9). 셔터가 한 틱만 늦어도 첫 틱에 닿아 끝난 판정의 사각형이 없고
-    /// 몸통 색도 파이터 쪽 상태로 돌아간 그림이 찍힌다. 그래서 조건이 참인 그 자리에서 트리를 멈춘다 — <see cref="Until"/> 의 조건은
+    /// 몸통 색도 파이터 쪽 상태로 돌아간 그림이 찍힌다. 그래서 조건이 참인 그 자리에서 트리를 멈춘다 — <see cref="SceneDriver.Until"/> 의 조건은
     /// 물리 틱 신호 안에서, <c>Battle</c> 이 다음 틱을 밀기 <b>전에</b> 돈다. 멈춘 동안 화면은 방금 그린 그 틱이고, 찍은 뒤 푼다.
     /// <paramref name="tested"/> 가 "대 봤나" 다 — 보스 칼은 <see cref="CaptureTested"/>, 파이터 칼은 <c>FighterSwingTested</c>.
     /// 판정 보기가 아닐 때 멈춰도 해가 없다: 찍히는 것은 같은 틱의 그림이다.
     /// </summary>
     private async Task CaptureOn(string name, Func<bool> tested, double timeout)
     {
-        await Until(() => tested() && Pause(), timeout);
+        await _drive.Until(() => tested() && _drive.Pause(), timeout);
         await Screenshot.CaptureAsync(this, name);
-        GetTree().Paused = false;
+        _drive.Resume();
     }
 
     /// <summary>보스 판정을 대 본 그 틱에 찍는다 — <see cref="CaptureOn"/> 의 보스 쪽.</summary>
@@ -605,32 +599,16 @@ public partial class ShotRunner : Node
     {
         if (_battle is not { FighterFree: true })
         {
-            await Frames(1);
+            await _drive.Frames(1);
             return;
         }
 
         Tap(action);
-        await Frames(1);
+        await _drive.Frames(1);
         for (int i = 0; i < 10 && _battle is { FighterFree: true }; i++)
         {
-            await Frames(1);
+            await _drive.Frames(1);
         }
-    }
-
-    /// <summary>트리를 멈춘다. <see cref="CaptureOn"/> 의 조건 안에서 부르려고 참을 돌려준다.</summary>
-    private bool Pause()
-    {
-        GetTree().Paused = true;
-        return true;
-    }
-
-    /// <summary>그 단계의 새 판을 세우고 씬이 설 때까지 기다린다.</summary>
-    private async Task NewBattle(int stage)
-    {
-        Game.Instance.SetStage(stage);
-        Game.Instance.GoTo(Game.Scene.Battle);
-        await Frames(4);
-        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
     }
 
     /// <summary>
@@ -642,8 +620,8 @@ public partial class ShotRunner : Node
     {
         for (int tries = 1; tries <= _openingTries; tries++)
         {
-            await NewBattle(stage);
-            await Until(() => _battle is { BossPattern: not null }, _pollTimeout);
+            _battle = await _drive.NewBattle(stage);
+            await _drive.Until(() => _battle is { BossPattern: not null }, _pollTimeout);
             string first = _battle?.BossPattern ?? "-";
             if (first == pattern)
             {
@@ -664,75 +642,14 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task FacingShot(string name)
     {
-        await Until(() => _battle is { BossPattern: null }, _pollTimeout);
-        await Frames(2);
+        await _drive.Until(() => _battle is { BossPattern: null }, _pollTimeout);
+        await _drive.Frames(2);
         await Screenshot.CaptureAsync(this, name);
-    }
-
-    /// <summary>
-    /// 액션 하나를 <b>이번 프레임에만</b> 누른다. 엔진의 입력 큐로 넣으므로
-    /// <c>Battle</c> 은 사람이 누른 것과 구별할 수 없다 — 합성 경로를 따로 만들지 않는 이유다.
-    /// </summary>
-    private static void Tap(string action)
-    {
-        Input.ParseInputEvent(new InputEventAction { Action = action, Pressed = true });
-        Input.ParseInputEvent(new InputEventAction { Action = action, Pressed = false });
-    }
-
-    /// <summary>이동처럼 누르고 있어야 하는 액션. <c>IsActionPressed</c>(레벨)가 읽는다.</summary>
-    private static void Hold(string action, bool pressed)
-    {
-        if (pressed)
-        {
-            Input.ActionPress(action);
-        }
-        else
-        {
-            Input.ActionRelease(action);
-        }
     }
 
     private async Task Shoot(string name, double after)
     {
-        await Wait(after);
+        await _drive.Wait(after);
         await Screenshot.CaptureAsync(this, name);
-    }
-
-    private async Task Wait(double seconds)
-    {
-        if (seconds <= 0)
-        {
-            return;
-        }
-
-        await ToSignal(GetTree().CreateTimer(seconds), SceneTreeTimer.SignalName.Timeout);
-    }
-
-    private async Task Frames(int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
-        }
-    }
-
-    /// <summary>
-    /// 조건이 참이 될 때까지 프레임 단위로 기다린다. <b>상한이 있다</b> —
-    /// 안 오는 상태를 영원히 기다리면 완료 표지가 안 찍혀 <c>shots</c> 가 "끝까지 못 갔다" 로 죽는데,
-    /// 진짜 이유(그 상태가 안 왔다)는 로그에 안 남는다.
-    /// </summary>
-    private async Task Until(Func<bool> ready, double timeout)
-    {
-        double waited = 0;
-        while (!ready() && waited < timeout)
-        {
-            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
-            waited += 1.0 / Engine.PhysicsTicksPerSecond;
-        }
-
-        if (!ready())
-        {
-            Log.Warn("shots", $"timeout waited={waited:0.0}s — 그 순간이 안 와서 그냥 찍는다");
-        }
     }
 }
