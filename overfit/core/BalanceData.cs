@@ -225,7 +225,7 @@ public sealed class FeelBalance
     public required double LandingWaveUnderlayAlpha { get; init; }
 
     /// <summary>
-    /// 충격파 앞머리의 폭(px) (#83) — 앞끝에서 안쪽으로 이만큼이 띠의 밝기에서 앞머리의 밝기로 올라간다. 앞머리는 한 프레임에 수백 px 를
+    /// 충격파 앞머리의 폭(px) (#83) — 앞끝에서 안쪽으로 이만큼이 띠의 밝기에서 앞머리의 밝기로 올라간다. 앞머리는 한 프레임에 백 px 안팎(80 ~ 250)을
     /// 가므로 얇은 선은 한 장면에서 선으로만 보이고 "달려간다" 가 안 읽힌다.
     /// </summary>
     public required double LandingWaveEdgeWidth { get; init; }

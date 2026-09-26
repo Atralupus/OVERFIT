@@ -16,7 +16,7 @@ namespace Overfit.Battle.View;
 /// </para>
 ///
 /// <para>
-/// <b>아레나로 자른다</b> (리뷰 m4). 착지 띠는 보스 발 ± 1920 이라 아레나 밖으로 한참 나간다 — 거기는 아무도 못 서고 화면에도 없다.
+/// <b>아레나로 자른다</b> (리뷰 m4). 착지 띠는 보스 발 ± 1920 이라 아레나 밖으로 한참 나간다 — 거기는 아무도 못 선다. 앞머리가 거기까지 달리면 화면 안의 퍼짐이 두세 프레임에 끝난다(흔들림만큼의 밑깔개 여백은 LandingWave 가 따로 준다).
 /// 자르기 전에는 앞머리가 그 끝을 향해 달려 화면에서 두세 프레임 만에 사라졌고, 퍼지는 것이 아니라 번쩍인 것으로 읽혔다.
 /// </para>
 ///
@@ -77,7 +77,7 @@ public readonly record struct FloorWave(double Origin, double Left, double Right
 
             if (run.X0 <= 0 && run.X1 >= floorWidth)
             {
-                // 아레나 밖은 못 서고 안 보인다 — 끝을 아레나로 자른다. 출발점도 자른 끝 사이다: 밖에서 출발하면 앞머리가 거꾸로 달린다.
+                // 아레나 밖은 아무도 못 선다 — 끝을 아레나로 자른다. 출발점도 자른 끝 사이다: 밖에서 출발하면 앞머리가 거꾸로 달린다.
                 double left = Math.Max(run.X0, 0);
                 double right = Math.Min(run.X1, floorWidth);
                 return new FloorWave(Math.Clamp(feetX, left, right), left, right, run.Y1 - _floor);

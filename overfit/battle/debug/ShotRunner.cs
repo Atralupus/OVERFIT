@@ -509,7 +509,15 @@ public partial class ShotRunner : Node
 
         // 창의 첫 틱을 보고 세 틱 더 민다 — 넷째 틱의 신호 안에서 멈춘다(CaptureOn 과 같은 자리). 그 장의 충격파는 네 프레임 퍼졌다.
         await Until(() => _battle is { BossSwingTested: true }, _pollTimeout);
+        int hp = _battle?.FighterHealth ?? 0;
         await Frames(3);
+        // 띠가 넷째 틱까지 살아 있어야 이 사진이 착지다. 뛴 파이터가 띠를 못 넘었으면 띠는 첫 틱에 닿아 끝나고, 아래의 CaptureTested 는
+        // 다음 보스 칼(대개 3연격)을 이 이름으로 말없이 찍는다 — 그 경우를 남긴다(리뷰 n4).
+        if (_battle is not { BossSwingTested: true, BossPattern: "점프 공격" } || (_battle?.FighterHealth ?? 0) < hp)
+        {
+            Log.Warn("shots", $"landing_wave_band_gone pattern={_battle?.BossPattern ?? "-"} hp={_battle?.FighterHealth ?? 0} was={hp}");
+        }
+
         await CaptureTested("battle-6b-landing-wave", _pollTimeout);
     }
 

@@ -51,8 +51,9 @@ public partial class LandingWave : Node2D
 
     /// <summary>
     /// 충격파를 세운다 — 바닥 전체를 치는 판정이 서는 틱에 <c>BattleCues</c> 가 부른다. 이미 퍼지던 것이 있으면 새것으로 갈아 끼운다.
-    /// 지금 데이터에서 둘이 겹치는 일은 없다 — 충격파는 0.4초 남짓 살고(퍼짐 0.125 + 옅어짐 0.3) 착지는 가장 잦은 2단계의 점프 ×3 도
-    /// 1.5초 간격이다(설계 §4.8). 갈아 끼우는 것은 그 간격이 줄어드는 날을 위한 것이다: 앞의 띠를 이어 그리면 새 착지의 발밑이 안 보인다.
+    /// 지금 데이터의 바닥 전체 판정은 점프 공격의 착지 하나라 겹칠 일이 없고, 설계의 점프 ×3(§4.8 · 5번 PR)도 착지가 1.5초 간격이다 —
+    /// 충격파는 0.4초 남짓 산다(퍼짐 0.125 + 옅어짐 0.3). 갈아 끼우는 것은 그 간격이 줄어드는 날을 위한 것이다: 앞의 띠를 이어 그리면
+    /// 새 착지의 발밑이 안 보인다.
     /// </summary>
     public void Start(FloorWave wave)
     {
@@ -103,7 +104,11 @@ public partial class LandingWave : Node2D
 
         // 밑깔개 — 판정 전체(아레나로 자른 것)를 첫 프레임부터. 앞머리가 발밑에 있는 첫 틱에 규칙은 이미 이 전부를 친다. 띠와 앞머리는 그
         // 위에 겹친다: 앞머리가 지나간 곳이 더 밝아 달리는 것이 읽힌다.
-        DrawRect(new Rect2((float)wave.Left, top, (float)(wave.Right - wave.Left), -top), underlay);
+        // 밑깔개는 아레나 끝보다 흔들림만큼 더 그린다 — 맞는 판정은 그 너머까지 가지만(아레나를 넘는 칸은 아무도 못 선다) 착지가 닿는
+        // 순간 화면이 흔들려 World 가 shake_pixels 만큼 밀리면, 딱 아레나에서 자른 띠는 화면 끝에서 그만큼 모자라 보인다(판정 보기 사진
+        // hitbox-2-landing 의 9px 틈 · 리뷰 n1). 바닥 슬래브(Battle.tscn 의 Ground)가 끝을 밖으로 흘리는 것과 같은 이유다.
+        float bleed = (float)_feel.ShakePixels;
+        DrawRect(new Rect2((float)wave.Left - bleed, top, (float)(wave.Right - wave.Left) + (2 * bleed), -top), underlay);
 
         // 앞머리 — 앞끝이 가장 밝고 안쪽으로 띠의 밝기까지 내려온다. 발밑보다 안쪽으로는 안 넘어간다(막 섰을 때 두 앞머리가 겹치지 않게).
         // 평평한 띠는 두 앞머리 **사이**에만 칠한다 — 앞머리 밑까지 칠하면 앞머리의 안쪽 끝에서 알파가 겹쳐 턱이 진다.
