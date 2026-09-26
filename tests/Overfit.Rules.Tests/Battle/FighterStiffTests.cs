@@ -538,16 +538,26 @@ public class FighterStiffTests
         e.GreedWindow.ShouldBeTrue("칼질 뒤 경직 중에 맞은 것이 욕심으로 안 실렸다");
     }
 
-    [Fact]
-    public void 칼질_뒤_경직은_맞아도_안_끊기고_안_맞은_판과_같은_틱에_끝난다()
+    [Theory]
+    [InlineData("칼질", 12)]
+    [InlineData("대시", 3)]
+    [InlineData("패리", 8)]
+    public void 경직은_맞아도_안_끊기고_안_맞은_판과_같은_틱에_끝난다(string name, int intoStiff)
     {
-        // 맞아도 안 끊긴다(설계 §5.1 — 끝까지 커밋, 경직까지 · #82). 맞는 것은 체력만 깎는다. 위 판(경직 12틱째에 창이 열려 맞는다)에서 맞은
-        // 틱에 칼질이 이어지고 경직이 참인지, 그리고 경직이 **판정이 빗나가는 같은 판**(거리 10 — 누른 틱 · 창이 열린 틱이 한 틱도 안
-        // 다르다)과 같은 틱에 끝나는지 본다. 맞자 경직을 끝내면 앞쪽이, 맞자 경직을 다시 세우거나 늘이면 뒤쪽이 빨개진다(변이로 확인했다 —
-        // 뒤쪽 변이는 이 테스트 전에는 골든만 잡거나 아무것도 못 잡았다). 맞는 틱을 이 테스트가 직접 민다: 위 판의 셋업 확인(창이 열린 틱의
-        // 경직)은 맞은 뒤에 보므로, 맞자 경직이 끝나는 규칙을 "셋업이 움직였다" 로 잘못 말한다.
+        // 맞아도 안 끊긴다(설계 §5.1 · §5.3 · §5.6 — 경직까지 커밋 · #82). 맞는 것은 체력만 깎는다. 경직 한가운데(intoStiff 틱째)에 창이 열려
+        // 맞는 판에서, 맞은 틱에 그 행동이 이어지고 경직이 참인지, 그리고 경직이 **판정이 빗나가는 같은 판**(거리 10 — 누른 틱 · 창이 열린
+        // 틱이 한 틱도 안 다르다)과 같은 틱에 끝나는지 본다. 맞자 경직을 끝내면 앞쪽이, 맞자 경직을 다시 세우거나 늘이면 뒤쪽이 빨개진다.
+        // 셋을 다 돈다: 한 행동만 끊거나 늘이는 변이(패리만 끊기 · 대시나 패리만 한 틱 늘이기)는 칼질만 보던 때 스위트 전체가 못 잡았다.
+        // 맞는 틱을 이 테스트가 직접 민다: StiffWhenOpened 의 셋업 확인(창이 열린 틱의 경직)은 맞은 뒤에 보므로, 맞자 경직이 끝나는 규칙을
+        // "셋업이 움직였다" 로 잘못 말한다.
+        (InputFrame press, FighterAction action) = name switch
+        {
+            "칼질" => (_attack, FighterAction.Attack),
+            "대시" => (_dash, FighterAction.Dash),
+            _ => (_parry, FighterAction.Parry),
+        };
         int max = TestConfigs.Fighter().MaxHealth;
-        (BattleSim hit, _) = Pressed(_attack, reach: 2000, intoStiff: 12);
+        (BattleSim hit, _) = Pressed(press, reach: 2000, intoStiff);
         bool stiffBefore = false;
         for (int i = 0; i < 120 && hit.Fighter.Health == max; i++)
         {
@@ -555,16 +565,16 @@ public class FighterStiffTests
             hit.Tick(default);
         }
 
-        hit.Fighter.Health.ShouldBeLessThan(max, "맞지 않았다 — 이 테스트가 아무것도 안 본다");
-        stiffBefore.ShouldBeTrue("경직 밖에서 맞았다 — 셋업이 움직였다");
-        hit.Fighter.Action.ShouldBe(FighterAction.Attack, "맞자 칼질이 끝났다 — 경직이 맞아서 끊겼다");
-        hit.Fighter.Stiff.ShouldBeTrue("맞자 경직이 풀렸다");
+        hit.Fighter.Health.ShouldBeLessThan(max, $"{name}: 맞지 않았다 — 이 테스트가 아무것도 안 본다");
+        stiffBefore.ShouldBeTrue($"{name}: 경직 밖에서 맞았다 — 셋업이 움직였다");
+        hit.Fighter.Action.ShouldBe(action, $"{name}: 맞자 행동이 끝났다 — 경직이 맞아서 끊겼다");
+        hit.Fighter.Stiff.ShouldBeTrue($"{name}: 맞자 경직이 풀렸다");
         int hitEnd = UntilIdle(hit);
 
-        (BattleSim miss, _) = Pressed(_attack, reach: 10, intoStiff: 12);
+        (BattleSim miss, _) = Pressed(press, reach: 10, intoStiff);
         int missEnd = UntilIdle(miss);
-        miss.Fighter.Health.ShouldBe(max, "대조군이 맞았다 — 대조가 무너졌다");
+        miss.Fighter.Health.ShouldBe(max, $"{name}: 대조군이 맞았다 — 대조가 무너졌다");
 
-        hitEnd.ShouldBe(missEnd, "맞은 경직이 안 맞은 경직과 다른 틱에 끝났다 — 맞아서 경직이 늘거나 줄었다");
+        hitEnd.ShouldBe(missEnd, $"{name}: 맞은 경직이 안 맞은 경직과 다른 틱에 끝났다 — 맞아서 경직이 늘거나 줄었다");
     }
 }

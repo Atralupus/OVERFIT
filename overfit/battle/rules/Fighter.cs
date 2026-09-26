@@ -201,8 +201,8 @@ public sealed class Fighter
 
     /// <summary>
     /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>) · 대시(<c>dash_recover</c>) · 패리(<c>parry_stiff</c>)가 제 시간을 다 돌고
-    /// 경직만 남았다. 행동은 그대로라(<see cref="Action"/>) 막는 것은 이것을 안 본다. 뷰가 칼질의 마지막 장 · 대시의 마지막 자세 · 패리의
-    /// 마지막 장을 붙드는 데 쓴다.
+    /// 경직만 남았다. 행동은 그대로라(<see cref="Action"/>) 막는 것은 이것을 안 본다. 뷰가 경직의 그림을 고르는 데 쓴다 — 칼질은 시트를
+    /// 끝까지 흘린 뒤 선 자세(<c>idle</c> 첫 장)에 멈추고, 대시는 마지막 자세 · 패리는 마지막 장을 붙든다.
     /// </summary>
     public bool Stiff => _stiffLeft > 0;
 
