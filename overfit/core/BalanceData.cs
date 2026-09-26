@@ -163,27 +163,21 @@ public sealed class FeelBalance
 
     /// <summary>
     /// 공격 섬광의 끝 반지름(px). ⚠ 칼이 그림의 모양이 되면서(이슈 #59) 사거리와 같은 눈금이라는
-    /// 뜻은 없어졌다 — 링은 6번 PR(연출)이 걷는다.
+    /// 뜻은 없어졌다. 그래도 캐릭터의 링이라 남긴다 — 유저: "전체적으로 캐릭터는 남겨놔도 됩니다" (2026-09-26 · #81).
     /// </summary>
     public required double AttackRingTo { get; init; }
 
     /// <summary>
-    /// 예고 링이 나타나는 시점 — 판정까지 <b>이만큼 남았을 때</b>부터 보인다(초).
+    /// 선딜 틴트가 무르익기 시작하는 시점 — 판정까지 <b>이만큼 남았을 때</b>부터 보스의 몸 색이 선딜 틴트 쪽으로 간다(초).
     /// 선딜 길이는 패턴마다 다르므로(0.40~0.80) 뷰가 그 값을 알 필요가 없게 고정 리드로 잡는다.
+    ///
+    /// <para>
+    /// 같은 리드로 <b>조여 들던 예고 링</b>과 판정에 퍼지던 충격파는 걷었다 (#81 — 유저: "적 공격에 동그라미 연출은
+    /// 제거해주세요"). 그 둘만 읽던 키 넷(<c>tell_ring_from</c> · <c>tell_ring_to</c> · <c>boss_ring_offset_y</c> ·
+    /// <c>boss_ring_to</c>)도 같이 지웠다. 틴트의 무르익음은 동그라미가 아니라 남았고, 5번 PR 이 걷는다(설계 §6).
+    /// </para>
     /// </summary>
     public required double TellLeadSeconds { get; init; }
-
-    /// <summary>보스 선딜 예고 링의 시작 반지름(px). 판정 순간을 향해 <b>줄어든다</b>.</summary>
-    public required double TellRingFrom { get; init; }
-
-    /// <summary>보스 선딜 예고 링이 판정 순간에 닿는 반지름(px).</summary>
-    public required double TellRingTo { get; init; }
-
-    /// <summary>보스 링을 그리는 높이(px, 발밑 기준). 보스는 297px 라 파이터와 같은 높이면 발치에 깔린다.</summary>
-    public required double BossRingOffsetY { get; init; }
-
-    /// <summary>보스 판정이 서는 순간 퍼지는 충격파의 끝 반지름(px). 보스 몸(반폭 85)보다 훨씬 커야 "퍼진다" 로 읽힌다.</summary>
-    public required double BossRingTo { get; init; }
 
     /// <summary>사망 애니메이션을 보여주고 결과 화면을 띄우기까지의 시간(초).</summary>
     public required double DeathHoldSeconds { get; init; }

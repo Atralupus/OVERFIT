@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using Overfit.Core;
 using Shouldly;
 using Xunit;
@@ -35,6 +38,24 @@ public class BalanceDataTests
         data.Feel.SparkCount.ShouldBeGreaterThan(0);
         data.Feel.DeathHoldSeconds.ShouldBeGreaterThan(0, "사망 애니메이션을 볼 시간이 없다");
         data.Feel.BossHitFlashSeconds.ShouldBeGreaterThan(0, "보스의 흰 플래시가 안 보인다 — 때린 것이 닿았는지가 화면에 안 남는다");
+    }
+
+    [Fact]
+    public void DTO_가_안_읽는_키가_balance_json_에_없다()
+    {
+        // JsonData 는 DTO 가 모르는 키를 조용히 버린다. 부팅의 `required` 검사는 "DTO 가 원하는 키가 JSON 에 있나" 한 방향만
+        // 보므로, 프로퍼티를 걷고 JSON 의 키를 남기면 아무도 안 읽는 수치가 진실 원천에 조용히 남는다.
+        // 보스 공격의 링 키 넷(tell_ring_from · tell_ring_to · boss_ring_offset_y · boss_ring_to)을 걷을 때(#81) DTO 만 먼저
+        // 뺀 상태로 규칙 테스트를 돌렸더니 389건 중 이것 하나만 빨갰다 — 다른 테스트는 그 상태를 못 본다.
+        using JsonDocument doc = JsonData.ParseDocument(ReadData("balance.json"), "balance.json");
+        JsonElement root = doc.RootElement;
+
+        var unread = new List<string>();
+        unread.AddRange(UnreadKeys(root, typeof(BalanceData), ""));
+        unread.AddRange(UnreadKeys(root.GetProperty("battle"), typeof(BattleBalance), "battle."));
+        unread.AddRange(UnreadKeys(root.GetProperty("feel"), typeof(FeelBalance), "feel."));
+
+        unread.ShouldBeEmpty("DTO 에 짝이 없는 키 — 아무도 안 읽는 수치다. 프로퍼티와 키는 같이 걷는다");
     }
 
     [Fact]
@@ -89,6 +110,16 @@ public class BalanceDataTests
 
         table.Keys.ShouldHaveSingleItem().ShouldBe("신경망");
         table["신경망"].N.ShouldBe(7);
+    }
+
+    /// <summary><paramref name="obj"/> 의 데이터 키(주석 <c>_…</c> 은 빼고) 중 <paramref name="dto"/> 의 프로퍼티와 짝이 없는 것.</summary>
+    private static IEnumerable<string> UnreadKeys(JsonElement obj, Type dto, string prefix)
+    {
+        HashSet<string> known = dto.GetProperties().Select(RequiredKeys.JsonName).ToHashSet();
+        return obj.EnumerateObject()
+            .Select(p => p.Name)
+            .Where(k => !JsonData.IsMetaKey(k) && !known.Contains(k))
+            .Select(k => prefix + k);
     }
 
     /// <summary>필수 키 누락을 보기 위한 시험용 DTO. 게임 데이터가 아니다.</summary>

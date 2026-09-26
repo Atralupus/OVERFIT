@@ -45,10 +45,6 @@
     "attack_ring_to": 150,
 
     "tell_lead_seconds": 0.9,
-    "tell_ring_from": 560,
-    "tell_ring_to": 110,
-    "boss_ring_offset_y": 150,
-    "boss_ring_to": 450,
 
     "death_hold_seconds": 1.3
   }

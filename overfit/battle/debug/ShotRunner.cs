@@ -171,7 +171,7 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
         GetTree().Paused = false;
 
-        // ── 보스 선딜: 예고 링이 조여 드는 중 ─────────────────────────────
+        // ── 보스 선딜: 예고 자세에 서서 틴트가 무르익는 중 (링은 없다 · #81) ──
         await Until(() => _battle?.BossWindingUp == true, _pollTimeout);
         await Frames(12);
         await Screenshot.CaptureAsync(this, "battle-6-windup");
@@ -442,7 +442,7 @@ public partial class ShotRunner : Node
         // 오른쪽을 향한 채 그려진다.
         //
         // **판정까지 0.6초 넘게 남은 선딜만 고른다.** 그냥 "선딜인가" 만 보면 끝자락에 걸리고,
-        // 그때 지나가면 잠긴 몸 대신 판정 충격파가 찍힌다 — 실제로 그렇게 찍혔다.
+        // 그때 지나가면 잠긴 몸 대신 판정이 선 순간이 찍힌다 — 실제로 그렇게 찍혔다(그때는 판정 충격파가 덮었다 · 링은 #81 로 걷었다).
         //
         // **걸음이 아니라 대시로 넘는다.** 보스 몸이 반폭 85 라 걸음(420px/s)으로는 선딜 하나 안에
         // 몸 밖으로 확실히 못 나간다 — 겹친 채 찍히면 어느 쪽에 섰는지가 그림에서 안 읽힌다.

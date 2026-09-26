@@ -42,7 +42,7 @@ public enum BossPhase
     /// <summary>패턴이 안 돈다. 다가오는 중이다.</summary>
     Idle,
 
-    /// <summary>선딜. 아직 올 판정이 남았다 — 남은 시간이 예고 링의 반지름이 된다.</summary>
+    /// <summary>선딜. 아직 올 판정이 남았다 — 남은 시간이 선딜 틴트의 무르익음이 된다(<c>BossView</c>).</summary>
     Windup,
 
     /// <summary>후딜. 이 패턴에 더 올 판정이 없다.</summary>
