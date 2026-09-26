@@ -25,31 +25,18 @@ public sealed class BossConfig
     public required double PatternGap { get; init; }
 
     /// <summary>
-    /// 패턴의 <b>마무리</b>를 패리로 받아쳤을 때 굳는 시간(초) — 이 게임에 <b>하나뿐인</b> 경직이다
-    /// (이슈 #53).
+    /// <b>탈진</b>의 길이(초) — 받아치면 어느 타든 보스가 탈진한다 (#72 · 설계 §4.3). 틱으로는 <c>BattleSim</c> 이 바꿔 넘긴다
+    /// (1.5초 = 90틱 · 보스는 <c>BattleSim</c> 을 모른다).
     ///
     /// <para>
-    /// 전에는 경직이 둘이었다: 평범한 패리의 0.5초와 가드 불가를 받아친 1.6초. 평범한 쪽을 없앤
-    /// 것이 이 이슈의 절반이다 — 1·2타를 패리하면 패턴 타임라인이 0.5초 서고 뷰의 히트스톱까지
-    /// 겹쳐, <b>같은 패턴인데 3타가 올 때까지의 시간이 매번 달랐다</b>(0.90초 → 1.52초).
-    /// 그게 유저가 말한 "딜레이가 매번 다르다" 이고, 리듬이 흔들리면 외울 것이 없어진다.
-    /// 이제 앞의 연타를 받아친 상은 <b>피해 0 · 기 +1 · 공중 대시 회복</b>이고 박자는 고정이다.
-    /// </para>
-    ///
-    /// <para>
-    /// 남은 하나는 <b>마무리</b>(<see cref="HitBox.Finisher"/>)에 걸린다. 마무리는 아홉 변종 전부
-    /// 빨간 가드 불가라 1단계부터 이 상이 서고, 마무리에 거는 것이 안전하기도 하다: 그 뒤에는 올
-    /// 판정이 없어서 타임라인이 서도 미룰 것이 없다. 손으로 단 깃발(guard_break)이 아니라 타임라인의
-    /// 자리에 거는 이유는 <see cref="HitBox.Finisher"/> 에 적어 두었다.
-    /// </para>
-    ///
-    /// <para>
-    /// 길이는 <b>2연격 한 번이 이 경직 안에 들어가는가</b>로 정해진다(이슈 #59 — 전에는 최대 차지였다). 전에는
-    /// 경직 + <see cref="PatternGap"/> 을 합쳐서 쟀는데, 그러면 패턴 간격을 고치는 날
-    /// 이 상이 조용히 사라진다. <c>BossDataTests</c> 가 그 산수를 <c>fighters.json</c> 과 대조한다.
+    /// 길이는 <b>반격 2연격이 확실히 들어가는가</b>로 잰다. 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타라(되받아치기)
+    /// 가장 이른 J 는 받아친 다음 틱이고, 그 2연격의 2타가 창의 끝 틱에 닿기까지 0.0167 + 0.25 + 0.6667 + 0.1667 = 1.1001초다.
+    /// 1.5 에서 0.3999 가 남는다 — <c>BossDataTests</c> 가 사람의 반응 여유 0.15 를 넣어 <c>fighters.json</c> 과 대조한다.
+    /// 전에는 마무리를 받아쳤을 때만 굳었고(<c>finisher_parry_stagger</c> 2.3 · 이슈 #53) 앞의 연타를 받아친 상은 피해 0 뿐이었다 —
+    /// 스펙이 "어느 타든 끊고 탈진" 으로 바꿨다.
     /// </para>
     /// </summary>
-    public required double FinisherParryStagger { get; init; }
+    public required double ExhaustSeconds { get; init; }
 
     public required string Sprite { get; init; }
 }
@@ -62,7 +49,9 @@ public sealed class Boss
 {
     private readonly BossConfig _config;
     private readonly Arena _arena;
-    private double _staggerLeft;
+
+    /// <summary>남은 탈진 틱. 0 이면 탈진이 아니다.</summary>
+    private int _exhaustLeft;
 
     public Boss(BossConfig config, Arena arena, double x)
     {
@@ -77,10 +66,11 @@ public sealed class Boss
     public double X { get; private set; }
 
     /// <summary>
-    /// 발바닥 높이 (바닥 0). <b>지금은 늘 0 이다</b> — 뛰어오르는 패턴(설계 §4.2)이 들어올 때 움직인다.
-    /// 판정은 이것을 모양을 놓는 자리로 쓴다(<see cref="Placement"/>).
+    /// 발바닥 높이 (바닥 0). 도약(설계 §4.2)이 움직이고(<see cref="Move"/>), 판정 창 동안에는 늘 땅이다 —
+    /// 움직임은 창 밖에서만 돈다(설계 §3.5 6). 판정은 이것을 모양을 놓는 자리로 쓰고(<see cref="Placement"/>),
+    /// 몸통도 발과 같이 올라간다(<see cref="Body"/>).
     /// </summary>
-    public double Y { get; }
+    public double Y { get; private set; }
 
     /// <summary>몸통 — 중심 ± 반폭, 발바닥에서 키만큼 (월드). 파이터의 칼이 이것에 대 본다 (이슈 #59).</summary>
     public HitRect Body => new(X - _config.HalfWidth, X + _config.HalfWidth, Y, Y + _config.Height);
@@ -91,9 +81,9 @@ public sealed class Boss
     /// 하기 위해서다(0 이면 뷰가 어느 쪽도 못 그린다).
     ///
     /// <para>
-    /// <b>판정이 이것으로 모양을 놓는다</b> (이슈 #59 · <see cref="Placement"/>). 지금 패턴은 전부 좌우 대칭 띠라
-    /// (<see cref="HitShape.Band"/>) 어느 쪽을 보든 결과가 같지만, 앞으로만 치는 모양이 들어오면 이 값이 판정을
-    /// 가른다. 뷰가 아니라 규칙이 정하는 이유는, 뷰가 스스로 좌표를 보고 정하면
+    /// <b>판정이 이것으로 모양을 놓는다</b> (이슈 #59 · <see cref="Placement"/>). 3연격의 세 칼은 그림에서 뽑은 한쪽 모양이라
+    /// (<c>attack/2</c> · <c>attack2/2</c> · <c>attack3/2</c>) 이 값이 맞고 안 맞고를 가른다. 좌우가 같은 것은 점프 공격의
+    /// 착지 띠(<see cref="HitShape.Band"/>)뿐이다. 뷰가 아니라 규칙이 정하는 이유는, 뷰가 스스로 좌표를 보고 정하면
     /// "같은 시드면 같은 결과" 가 그림까지 덮지 못하기 때문이다(이슈 #36).
     /// </para>
     /// </summary>
@@ -111,23 +101,25 @@ public sealed class Boss
     public double PatternGap => _config.PatternGap;
 
     /// <summary>
-    /// 굳었나. <b>패턴을 취소하지 않고 세운다</b> — 취소로 하면 연속타 패턴이 첫 대만 받아내도
-    /// 통째로 지워져, 조작을 맞추는 이슈(#27)가 밸런스를 통째로 바꾸게 된다.
+    /// 탈진했나 (#72 · 설계 §4.3). 탈진한 보스는 아무것도 안 한다 — 패턴은 무너질 때 끊겼고(<c>BattleSim</c> 의 탈진 루틴),
+    /// 다가가지도 돌아서지도 않는다. 맞으면 피해만 들어간다.
     /// </summary>
-    public bool Staggered => _staggerLeft > 0;
+    public bool Exhausted => _exhaustLeft > 0;
 
     /// <summary>
-    /// <b>패턴의 마무리를 받아쳤다</b> (이슈 #53). 굳는 길이는 데이터(bosses.json)가 정한다.
-    ///
-    /// <para>
-    /// 부르는 자리가 하나뿐인 것이 계약이다 — 앞의 연타를 패리해도 보스는 <b>안 굳는다.</b>
-    /// 굳으면 패턴 타임라인이 서고, 그 순간 같은 패턴의 박자가 플레이어마다 · 시도마다 달라진다.
-    /// </para>
+    /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(패리 · 4번 PR 의 경직 게이지)이 몇이든
+    /// 같은 상태 · 같은 그림에 닿아야 한다(설계 §4.3). 길이는 틱이다 — 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
     /// </summary>
-    public void Stagger() => _staggerLeft = _config.FinisherParryStagger;
+    public void Exhaust(int ticks) => _exhaustLeft = Math.Max(0, ticks);
 
-    /// <summary>경직 시계를 민다. <b>굳어 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
-    public void Tick(double dt) => _staggerLeft = Math.Max(0, _staggerLeft - dt);
+    /// <summary>탈진 시계를 한 틱 민다. <b>탈진해 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
+    public void Tick()
+    {
+        if (_exhaustLeft > 0)
+        {
+            _exhaustLeft--;
+        }
+    }
 
     public void TakeDamage(int amount) => Health = Math.Max(0, Health - amount);
 
@@ -137,8 +129,8 @@ public sealed class Boss
     /// <para>
     /// 그 잠금이 이 메서드의 존재 이유다. 스윙 도중에 따라 돌면 <b>예고가 거짓말이 된다</b> —
     /// 예고를 보고 왼쪽으로 피했는데 보스가 휙 돌아 따라오면, 이 게임에서 패리를 가르치는
-    /// 유일한 수단이 무너진다. 백장의 <c>이단 올려베기</c> 는 "칼이 땅에 있나 떠 있나" 가
-    /// 설계 전부라 특히 그렇다.
+    /// 유일한 수단이 무너진다. 3연격은 세 칼이 모두 한쪽을 쳐서 특히 그렇다 — 선딜을 보고 등 뒤로 돌아간 판단이
+    /// 헛것이 되면 안 된다. 예외는 점프 공격의 도약 한 틱뿐이다(착지할 자리로 돌아선다 · 스펙 §4.2).
     /// </para>
     ///
     /// <para>
@@ -160,6 +152,24 @@ public sealed class Boss
         if (toward != 0)
         {
             Facing = toward;
+        }
+    }
+
+    /// <summary>
+    /// 움직임(설계 §8.1)이 정한 자리로 옮긴다. <b>패턴 중에도 돌아선다</b> — 방향 잠금(<see cref="Face"/>)의
+    /// <b>유일한</b> 예외가 이것이다: 도약은 뛰는 틱에 착지 자리 쪽으로 돌아선다(설계 §4.2). 잠금을 푸는 길을
+    /// 여기 하나로 두어야, 예고를 거짓말로 만드는 돌아서기가 어디서 나는지를 한 자리에서 본다.
+    /// </summary>
+    /// <param name="x">발 중심 x. 아레나 안으로 자른다.</param>
+    /// <param name="y">발바닥 높이. 바닥 아래로는 안 간다.</param>
+    /// <param name="facing">볼 쪽. 0 이면 그대로 둔다.</param>
+    public void Move(double x, double y, int facing)
+    {
+        X = Math.Clamp(x, _config.HalfWidth, _arena.Width - _config.HalfWidth);
+        Y = Math.Max(0, y);
+        if (facing != 0)
+        {
+            Facing = Math.Sign(facing);
         }
     }
 

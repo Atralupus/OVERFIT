@@ -289,8 +289,7 @@ public class FighterDataTests
     public void 가장_센_판정_하나는_가득_찬_스태미나로_받아낸다()
     {
         // 값이 피해에 비례하므로(guard_stamina_per_damage) 한 방이 스태미나를 통째로 넘으면
-        // 가드는 **언제나 깨지는** 기술이 되고, 그러면 guard_break 라는 성질도 뜻을 잃는다 —
-        // 깰 것이 이미 없다.
+        // 가드는 **언제나 깨지는** 기술이 된다 — 가드가 깨지는 길은 스태미나 하나라(#72) 버티는 것에 뜻이 없어진다.
         double heaviest = TestConfigs.Patterns().Values
             .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
             .Max(s => (double)s.Damage);

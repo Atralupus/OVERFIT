@@ -63,6 +63,34 @@ public class HitShapeTests
     }
 
     [Fact]
+    public void 몸_높이에서_모양의_끝_너머는_외곽_상자_안이어도_TooFar_다()
+    {
+        // #72 — 그림에서 뽑은 모양은 높이마다 끝이 다르다. 외곽 상자만 보면 몸 높이에서 모양이 뻗은 끝 **너머**가 틈이 되고,
+        // 거리 축이 틈을 음수(안쪽)로 싣는다 — 사거리 밖에 선 사람이 보스에 붙은 사람으로 읽힌다. 이 모양은 몸 높이(0 ~ 120)에서
+        // −300 ~ +400 만 치고 위(200 ~ 300)에서는 −450 ~ +500 을 친다.
+        var ragged = new HitShape(new[]
+        {
+            new HitRect(-300, 400, 0, 100),
+            new HitRect(-450, 500, 200, 300),
+        });
+
+        ShapeHit.Test(ragged, _right, Body(1460)).ShouldBe(ShapeContact.TooFar, "몸 높이의 앞끝(1400) 너머가 틈이다");
+        ShapeHit.Test(ragged, _right, Body(640)).ShouldBe(ShapeContact.TooFar, "몸 높이의 뒤끝(700) 너머가 틈이다");
+        ShapeHit.Test(ragged, _left, Body(540)).ShouldBe(ShapeContact.TooFar, "왼쪽을 볼 때 몸 높이의 앞끝(600) 너머가 틈이다");
+
+        // 앞으로만 치는 초승달 — 몸 높이에서는 +80 부터 앞만 치고, 등 뒤는 머리 위(300 ~ 400)로만 지나간다. 보스 중심과 앞 궤적
+        // 사이는 품 안이라 틈이고, 보스 중심 뒤는 보스를 돌아 나간 것이라 멀어서다(설계 §3.6 ②).
+        var crescent = new HitShape(new[]
+        {
+            new HitRect(80, 400, 0, 100),
+            new HitRect(-300, 400, 300, 400),
+        });
+
+        ShapeHit.Test(crescent, _right, Body(1040)).ShouldBe(ShapeContact.ByGap, "품 안(보스 중심과 앞 궤적 사이)이 틈이 아니다");
+        ShapeHit.Test(crescent, _right, Body(850)).ShouldBe(ShapeContact.TooFar, "궤적이 머리 위로만 지나가는 등 뒤가 틈이다");
+    }
+
+    [Fact]
     public void 가장자리가_닿아도_겹친_것이다()
     {
         // 판정 앞끝 1300 · 몸 왼끝 1300. 옛 거리 띠가 경계값을 맞은 것으로 쳤던 것을 그대로 잇는다.

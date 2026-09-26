@@ -29,13 +29,16 @@ public enum ShapeContact
     /// <summary>사각형 하나 이상이 몸과 겹친다.</summary>
     Overlap,
 
-    /// <summary>몸이 모양 전체의 <b>가로 범위 밖</b>이다 — 멀어서.</summary>
+    /// <summary>
+    /// 몸이 모양의 <b>끝 너머</b>다 — 멀어서. 모양 전체의 가로 범위 밖이거나, 몸 높이에서 모양이 뻗은 앞끝 너머 · 보스 등 뒤로
+    /// 뒤끝 너머다(<see cref="ShapeHit.Test"/>).
+    /// </summary>
     TooFar,
 
     /// <summary>가로로는 안인데 <b>세로 범위 밖</b>이다 — 넘었거나 아래에 섰다.</summary>
     ByHeight,
 
-    /// <summary>외곽 상자 안인데 <b>빈 칸</b>이다 — 초승달 안쪽 같은 곳. 옛 "안쪽 주머니" 도 여기다.</summary>
+    /// <summary>모양 <b>안쪽의 빈 칸</b>이다 — 초승달 안쪽 같은 곳. 옛 "안쪽 주머니" 도 여기다.</summary>
     ByGap,
 }
 
@@ -137,6 +140,15 @@ public static class ShapeHit
     /// 세로 범위 밖이면 넘어서, 둘 다 안인데 안 닿았으면 틈에 서서다. 가로를 먼저 보는 것은 옛 판정의
     /// 순서(거리 → 높이)를 잇기 위해서다.
     /// </para>
+    ///
+    /// <para>
+    /// 외곽 상자 안에서도 <b>몸 높이에서 모양이 뻗은 끝 너머</b>는 멀어서다 (#72). 그림에서 뽑은 모양은 높이마다 끝이 다르다 —
+    /// <c>attack2/2</c>(설계 §4.1 의 3연격 2타)는 땅에 선 몸 높이에서 앞으로 +396 까지만 치고 그 위에서는 +440 까지 친다. 외곽
+    /// 상자만 보면 그 사거리 바로 밖(+437)에 선 사람이 "틈" 이 되고, 거리 축(<c>PlayerAxes.DistanceBias</c>)이 틈을 음수로 실어 간격을 둔 사람을 보스에 붙은 사람으로
+    /// 읽는다. 뒤도 같다: 몸 높이에 등 뒤를 치는 사각형이 없는데 몸이 보스 중심 뒤에 있으면 보스를 돌아 나간 것이지 품에 든 것이
+    /// 아니다(설계 §3.6 ② — "등 뒤를 틈으로 치면 '초승달을 끌어안았다' 와 '보스를 돌아 나갔다' 가 한 점이 된다"). 남는 틈은
+    /// 몸 높이의 궤적 사이와, 보스 중심과 앞 궤적 사이(품 안)다 — 몸 높이에 사각형이 하나도 없으면 모양 안의 구멍이라 틈이다.
+    /// </para>
     /// </summary>
     public static ShapeContact Test(HitShape shape, Placement at, HitRect body)
     {
@@ -162,6 +174,31 @@ public static class ShapeHit
             return ShapeContact.ByHeight;
         }
 
-        return ShapeContact.ByGap;
+        return BeyondAtHeight(local, at, body) ? ShapeContact.TooFar : ShapeContact.ByGap;
+    }
+
+    /// <summary>
+    /// 몸이 <b>몸 높이에서</b> 모양이 뻗은 끝 너머인가 — 앞끝 너머이거나, 보스 중심 뒤로 뒤끝 너머다(<see cref="Test"/> 의 둘째 문단).
+    /// 공격자 기준(보는 쪽이 +)으로 옮겨 잰다. 몸 높이에 사각형이 없으면 가를 끝이 없어 거짓이다.
+    /// </summary>
+    private static bool BeyondAtHeight(IReadOnlyList<HitRect> local, Placement at, HitRect body)
+    {
+        double x0 = at.Facing >= 0 ? body.X0 - at.X : at.X - body.X1;
+        double x1 = at.Facing >= 0 ? body.X1 - at.X : at.X - body.X0;
+        double y0 = body.Y0 - at.Y;
+        double y1 = body.Y1 - at.Y;
+
+        double near = double.PositiveInfinity, far = double.NegativeInfinity;
+        for (int i = 0; i < local.Count; i++)
+        {
+            HitRect r = local[i];
+            if (r.Y0 <= y1 && y0 <= r.Y1)
+            {
+                near = Math.Min(near, r.X0);
+                far = Math.Max(far, r.X1);
+            }
+        }
+
+        return far >= near && (x0 > far || x1 < Math.Min(near, 0));
     }
 }

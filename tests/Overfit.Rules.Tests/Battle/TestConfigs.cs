@@ -91,7 +91,7 @@ public static class TestConfigs
 
     /// <summary>
     /// 2연격의 마지막 칼이 닿기까지(초) — 앞 칼질 전부 + 마지막 칼질의 선딜 + 판정. 2타는 1타가 끝나는 틱에
-    /// 이어진다(설계 §5.1). 마무리를 받아친 경직이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
+    /// 이어진다(설계 §5.1). 받아친 뒤의 탈진이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
     /// </summary>
     public static double ComboLead(FighterConfig c)
     {
@@ -105,26 +105,13 @@ public static class TestConfigs
     }
 
     /// <summary>
-    /// 마무리를 받아친 틱부터 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
+    /// 받아친 틱부터 되받아치기 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
     /// (<c>Fighter.Begin</c> 의 되받아치기 · 판정 13) — 커밋이 끝나기를 안 기다린다. 가장 이른 J 는 받아친
-    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 경직)을 파이터의 틱
+    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 탈진)을 파이터의 틱
     /// 뒤에 내므로 받아친 그 틱의 J 는 이미 지나갔다. <see cref="ComboLead"/> 만 쓰면 받아친 그 틱에 누른 J 를 세는
     /// 셈이고, 그 J 는 규칙이 못 받는다. 사람의 반응은 여기 안 넣는다 — 그 여유는 BossDataTests 가 따로 잰다.
     /// </summary>
-    public static double FinisherPunishLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
-
-    /// <summary>
-    /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
-    /// 그리는 것은 뷰다. 여기 있는 이유는 <c>PatternDef.Tell</c> 이 required 이기 때문뿐이다.
-    /// </summary>
-    public static PatternTell Tell() => new()
-    {
-        Id = "test_mark",
-        Anim = "attack",
-        X = 0,
-        Y = 0,
-        Length = 100,
-    };
+    public static double CounterLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
 
     /// <summary>시험 패턴 <see cref="Sweep"/> 의 id.</summary>
     public const string SweepId = "쓸기";
@@ -136,7 +123,6 @@ public static class TestConfigs
     /// </summary>
     public static PatternDef Sweep(double maxDistance, double activeSeconds, double endAt = 2.0) => new()
     {
-        Tell = Tell(),
         Tags = new PatternTags
         {
             DashWindow = 1.0,
@@ -147,35 +133,37 @@ public static class TestConfigs
             ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
-            Feint = false,
             MultiHit = 1,
             Tracking = false,
-            HasGuardBreak = false,
         },
         Timeline = new List<PatternStep>
         {
             new() { T = 0.0, Kind = "windup" },
             new()
             {
-                T = 0.5, Kind = "active", Distance = new[] { 0.0, maxDistance }, Height = new[] { 0.0, 5000.0 },
+                T = 0.5, Kind = "active", Band = new[] { 0.0, maxDistance, 0.0, 5000.0 },
                 Damage = 7, ActiveSeconds = activeSeconds,
             },
             new() { T = endAt, Kind = "end" },
         },
     };
 
-    /// <summary>보스가 서서 <see cref="Sweep"/> 만 휘두르는 판. 보스는 안 움직이고 안 죽는다.</summary>
-    public static BattleSim SweepSim(double maxDistance, double activeSeconds, double endAt = 2.0) => new(new BattleSetup
-    {
-        Arena = Arena(),
-        Fighter = Fighter(),
-        HitShapes = HitShapes(),
-        Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-        PatternIds = new[] { SweepId },
-        Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
-        Seed = 1,
-        MaxTicks = 60 * 30,
-    });
+    /// <summary>
+    /// 보스가 서서 <see cref="Sweep"/> 만 휘두르는 판. 보스는 안 움직이고 안 죽는다. 간격 0.2초(12틱)라 첫 판정은 판의
+    /// 12 + 30 = 42틱에 선다. <paramref name="maxTicks"/> 는 판을 창 한가운데서 끝내 보는 테스트만 준다.
+    /// </summary>
+    public static BattleSim SweepSim(double maxDistance, double activeSeconds, double endAt = 2.0, int maxTicks = 60 * 30) =>
+        new(new BattleSetup
+        {
+            Arena = Arena(),
+            Fighter = Fighter(),
+            HitShapes = HitShapes(),
+            Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            PatternIds = new[] { SweepId },
+            Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
+            Seed = 1,
+            MaxTicks = maxTicks,
+        });
 
     /// <summary>패턴이 설 때까지(선딜이 시작될 때까지) 민다 — <c>NextActiveIn</c> 이 null 이 아니게 되는 틱이다.</summary>
     public static void UntilWindup(BattleSim sim)
@@ -189,12 +177,11 @@ public static class TestConfigs
     }
 
     /// <summary>
-    /// 판정이 두 틱 안으로 다가올 때까지 민다 — 판정은 다음 틱이나 그다음 틱에 선다.
+    /// 판정이 두 틱 앞으로 다가올 때까지 민다 — 이 호출이 끝나면 두 번째 틱에 판정이 선다.
     ///
     /// <para>
-    /// "바로 전 틱" 을 <c>NextActiveIn</c> 으로 맞히려 하지 않는다. 러너의 시계는 틱마다 1/60 을 더해 가므로
-    /// 30번 더한 값이 0.49999999999999994 라 0.5초 판정은 31번째 틱에 선다 — "남은 시간이 한 틱 이하면 다음
-    /// 틱에 선다" 고 가정하면 한 틱 어긋난다 (이슈 #59 계획을 실행하기 전에 실제로 재 봤다).
+    /// 러너가 틱을 세므로(설계 §3.6 ⑤) <c>NextActiveIn</c> 은 남은 틱 × 1/60 그대로다. 1/60 을 더해 가던 때는
+    /// 30번 더한 값이 0.49999999999999994 라 0.5초 판정이 31번째 틱에 서서, 남은 시간으로 선 틱을 못 맞혔다.
     /// </para>
     /// </summary>
     public static void UntilNear(BattleSim sim)
@@ -257,7 +244,7 @@ public static class TestConfigs
             HalfWidth = data.HalfWidth,
             Height = data.Height,
             PatternGap = patternGap ?? data.PatternGap,
-            FinisherParryStagger = data.FinisherParryStagger,
+            ExhaustSeconds = data.ExhaustSeconds,
             Sprite = data.Sprite,
         };
     }

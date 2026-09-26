@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using Godot;
 using Overfit.Battle.Rules;
 using Overfit.Core;
@@ -18,14 +18,15 @@ public partial class BattleDemo : Node
     public override void _Ready()
     {
         string[] args = OS.GetCmdlineUserArgs();
-        ulong seed = (ulong)(CmdArgs.Double(args, "--seed=") ?? 51);
+
+        // 시드는 **시도 시드 그 자체**다 — 게임을 안 타므로 세션도 번호도 없다. 64비트 그대로 읽는다 (#72 · 설계 §4.4): 게임
+        // 로그의 [run][I] attempt=… seed=X 를 --seed=X 로 넘기면 그 시도의 보스 순서가 되살아난다. 전에는 Double 로 읽어
+        // 2^53 을 넘는 시드(시도 시드는 거의 다 그렇다)가 다른 판을 돌렸다.
+        ulong seed = CmdArgs.UInt64(args, "--seed=") ?? 51;
         int stage = (int)(CmdArgs.Double(args, "--stage=") ?? 1);
 
-        Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
-        Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
-        Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
-        Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
-        Dictionary<string, HitShape> shapes = LoadShapes("res://data/hitboxes.json");
+        // 게임과 같은 자리에서 읽는다 — 둘이 다른 판을 세우지 않게 (BattleTables).
+        BattleTables data = BattleTables.Load();
 
         BattleBalance battle = Balance.Data.Battle;
 
@@ -34,7 +35,7 @@ public partial class BattleDemo : Node
         // --fighter= 는 남긴다: 다른 캐릭터로 돌려보는 것은 데모의 일이다.
         string fighterId = CmdArgs.Text(args, "--fighter=") ?? battle.Fighter;
 
-        if (!fighters.TryGetValue(fighterId, out FighterConfig? fighter))
+        if (!data.Fighters.TryGetValue(fighterId, out FighterConfig? fighter))
         {
             Log.Error("battle-demo", $"fighter_missing id={fighterId}");
             GetTree().Quit(1);
@@ -43,28 +44,33 @@ public partial class BattleDemo : Node
 
         // 보스도 데이터다. 전에는 여기서 BossConfig 를 손으로 만들었고, 그 사본이 게임 쪽과
         // 갈려 있었다 — 데모는 boss_test 를, 게임은 boss_grym 을 그렸다.
-        if (!bosses.TryGetValue(battle.Boss, out BossConfig? boss))
+        if (!data.Bosses.TryGetValue(battle.Boss, out BossConfig? boss))
         {
             Log.Error("battle-demo", $"boss_missing id={battle.Boss}");
             GetTree().Quit(1);
             return;
         }
 
-        // 단계 명부는 data/stages.json 이 정한다. patterns.json 의 키 순서에서 앞 N 개를 자르던
-        // 옛 방식은 패턴을 파일 맨 위에 끼워 넣는 것만으로 같은 단계를 다른 전투로 바꿨다.
-        IReadOnlyList<string> ids = StageRoster.For(stages, stage);
+        // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup). 기록은 비어 있다 —
+        // uniform 은 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 순서가 선다.
+        if (StageRoster.Setup(data.Stages, stage, seed, Array.Empty<AttemptRecord>()) is not { } setup)
+        {
+            GetTree().Quit(1);
+            return;
+        }
 
-        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={stage} patterns={ids.Count}");
+        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}");
 
         var sim = new BattleSim(new BattleSetup
         {
             Arena = new Arena(battle.ArenaWidth),
             Fighter = fighter,
-            HitShapes = shapes,
+            HitShapes = data.Shapes,
             Boss = boss,
-            PatternIds = ids,
-            Patterns = patterns,
+            PatternIds = setup.PatternIds,
+            Patterns = data.Patterns,
             Seed = seed,
+            Picker = setup.Picker,
             MaxTicks = battle.MaxTicks,
         });
 
@@ -98,19 +104,5 @@ public partial class BattleDemo : Node
 
         Log.Marker("battle-demo", $"battle-demo=done outcome={outcome} ticks={sim.Ticks} events={sim.Events.Count}");
         GetTree().Quit();
-    }
-
-    /// <summary>res:// 파일을 표로. Godot 과 순수 C# 의 경계라 여기서만 FileAccess 를 쓴다.</summary>
-    private static Dictionary<string, T> Load<T>(string path)
-    {
-        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        return JsonData<T>.ParseTable(file.GetAsText(), path);
-    }
-
-    /// <summary><c>hitboxes.json</c> → 판정 모양. 문제는 <c>HitShapeTable</c> 이 전부 모아 한 번에 던진다.</summary>
-    private static Dictionary<string, HitShape> LoadShapes(string path)
-    {
-        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        return HitShapeTable.Parse(file.GetAsText(), path);
     }
 }

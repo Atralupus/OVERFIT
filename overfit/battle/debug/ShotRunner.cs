@@ -10,7 +10,7 @@ namespace Overfit.Battle.Debug;
 ///
 /// <para>
 /// 전에는 벽시계로만 기다렸다 — 정해진 초에 셔터를 눌렀다. 그러면 <b>무엇이 찍힐지 아무도 모른다</b>:
-/// 패턴 주기(간격 0.8초 + 패턴 1.65~1.90초)와 어긋나 실행할 때마다 다른 순간이 나오고,
+/// 패턴 주기(간격 0.8초 + 3연격 3.25초 또는 점프 공격 1.5초)와 어긋나 실행할 때마다 다른 순간이 나오고,
 /// 플레이어는 아무것도 안 하므로 대시·패리·공격은 한 번도 안 찍힌다.
 /// </para>
 ///
@@ -30,11 +30,32 @@ public partial class ShotRunner : Node
     private const double _pollTimeout = 8.0;
 
     /// <summary>
-    /// <b>아직 안 찍은</b> 패턴의 선딜을 기다리는 상한(초). 기본 상한보다 길다 — 패턴은 무작위로
-    /// 뽑히므로 특정 하나를 기다리는 것은 한 주기가 아니라 여러 주기다(주기 ≈ 간격 0.8 + 패턴 1.7~1.9초).
+    /// 붙든 가드가 <b>깨지기를</b> 기다리는 상한(초) — <c>battle-10b-guard-break</c> 하나가 쓴다. 기본 상한보다 길다 — 가드는
+    /// 두세 패턴에 걸쳐 깨지므로 한 주기가 아니라 여러 주기다(주기 = 간격 0.8 + 3연격 3.25 또는 점프 공격 1.5초).
     /// 넘기면 경고만 남기고 그냥 찍는다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다.
+    /// 정해진 패턴 하나를 기다리는 것은 이것이 아니라 <see cref="_patternTimeout"/> 이다.
     /// </summary>
-    private const double _tellTimeout = 16.0;
+    private const double _guardBreakTimeout = 16.0;
+
+    /// <summary>
+    /// 두 패턴 중 <b>정해진 하나</b>를 기다리는 상한(초) (#72). 1단계는 uniform 이라 한 주기(간격 0.8 + 3.25 또는 1.5초)마다
+    /// 반반이다 — 30초면 예닐곱 번 뽑아 못 볼 확률이 1% 밑이다. 넘기면 위와 같이 경고만 남기고 그냥 찍는다.
+    /// ⚠ 세션 시드가 51 로 고정이라 그 1% 에 든 판은 <b>실행마다</b> 빗나간다 — 실제로 밟았다(<see cref="_openingTries"/>).
+    /// </summary>
+    private const double _patternTimeout = 30.0;
+
+    /// <summary>
+    /// 첫 패턴이 정해진 하나인 판을 찾아 새 판을 세우는 상한(판) (#72 · <see cref="NewBattleOpening"/>). 판마다 시도 시드가 새로
+    /// 나와 첫 뽑기가 반반이므로 여덟 판이 다 빗나갈 확률은 1/256 이고, 한 판은 첫 뽑기(틱 48)까지 1초 남짓이라 다 써도 10초 안이다.
+    ///
+    /// <para>
+    /// <b>왜 한 판에서 기다리지 않나.</b> 시도마다 시드가 달라진 뒤(#72 Task 9) 공중 사진의 판은 세션 시드 51 의 시도 5 가 됐고,
+    /// 그 판은 3연격만 여덟 번 뽑아 첫 점프 공격이 아홉째(틱 ≈ 1992)다 — <see cref="_patternTimeout"/>(1800틱)을 넘겨 땅의 3연격이
+    /// 찍혔고, 그때 가만히 선 파이터는 체력 12 라 상한을 늘려도 먼저 죽는다. 새 판의 <b>첫</b> 패턴으로 잡으면 앞 판의 순서와 무관하다.
+    /// 패턴을 대본으로 고정하는 길(<c>script</c> 고르기)은 5번 PR 이다 — 그때 이 되풀이를 걷는다.
+    /// </para>
+    /// </summary>
+    private const int _openingTries = 8;
 
     private Overfit.Battle.Battle? _battle;
 
@@ -54,9 +75,8 @@ public partial class ShotRunner : Node
         await Frames(6);
         await Screenshot.CaptureAsync(this, "credits");
 
-        // **2단계로 간다.** 1단계 명부는 패턴이 둘뿐이라(stages.json) 셋째 예고가 영원히 안 오고,
-        // 그러면 "패턴마다 예고가 다른가" 를 찍어서 증명할 수가 없다.
-        Game.Instance.SetStage(2);
+        // 1단계에서 찍는다 — 유저가 처음 만나는 판이다(#72 · 두 단계의 명부는 5번 PR 까지 같다).
+        Game.Instance.SetStage(1);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
@@ -105,21 +125,44 @@ public partial class ShotRunner : Node
         // 그리고 실제로 어긋나 있었다(이슈 #38): 공격 액션이 애니메이션보다 짧아 칼이 나가는
         // 프레임까지 가지도 못했고, 이 스크린샷은 내내 **칼을 뒤로 뺀 자세**를 찍고 있었다.
         // 판정이 서는 틱이 곧 그 프레임이므로 규칙에게 물어보고 셔터를 누른다.
+        // **그 틱에 멈춰 찍는다**(CaptureOn · #72). 이 칼은 걸어 들어오는 보스와 겹친 채 창의 첫 틱에 닿고(실제로 gap=-82 ·
+        // tick 213), 닿은 칼질은 그 틱에 끝난다 — 판정이 선 것을 보고 나서 찍으면 두 프레임 늦어, 판정 보기(HITBOXES)에
+        // 채운 사각형 없이 흰 궤적만 찍혔다.
         Tap("attack");
-        await Until(() => _battle?.FighterAttackActive == true, _pollTimeout);
-        await Screenshot.CaptureAsync(this, "battle-5-attack");
+        await CaptureOn("battle-5-attack", () => _battle is { FighterSwingTested: true }, _pollTimeout);
 
         // ── 보스 피격: 작가가 그린 흰 실루엣 (이슈 #28) ───────────────────
         // 0.2초(12프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다 —
         // 때린 것이 닿았는지가 안 보이면 공격에 값이 안 붙는다는 것이 이 연출의 이유이고,
         // 그 증명은 "흰가" 가 아니라 "맞은 그 프레임에 흰가" 다.
-        await Wait(0.4);
+        //
+        // **닿을 때까지 0.4초마다 다시 누른다** (#72). 첫 판은 시도 1 의 순서라 점프 공격으로 열고, 이 칼은 착지하는 보스와
+        // 겹친다 — 1타의 판정 창(5틱)이 착지 틱(246)에 걸려야 닿는데 벽시계로 기다린 0.4초가 몇 틱 이르면 공중의 보스를 긋고
+        // 끝난다. 한 번만 누르던 때 실제로 다섯 번에 한 번 그랬다: 8초를 기다리다 흰 번쩍임 없이 찍혔다([shots][W] timeout).
+        // 다시 누르는 간격 0.4초는 1타 한 바퀴(0.25초)보다 길어 2타로 이어지지 않는다.
+        const double strikeEvery = 0.4;
+        await Wait(strikeEvery);
         int bossBefore = _battle?.BossHealth ?? 0;
-        Tap("attack");
+        bool BossHit() => (_battle?.BossHealth ?? 0) < bossBefore;
+        int every = (int)(strikeEvery * Engine.PhysicsTicksPerSecond);
+        for (int f = 0; !BossHit() && f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
+        {
+            if (f % every == 0)
+            {
+                Tap("attack");
+            }
+
+            await Frames(1);
+        }
+
+        if (!BossHit())
+        {
+            Log.Warn("shots", "boss_hit_not_seen");
+        }
+
         // **7프레임 뒤다(≈0.117초).** 팩의 take-hit-white 는 4프레임 10fps 이고 흰 프레임은
         // 그중 두 번째라, 맞은 그 프레임을 찍으면 흰색이 아니라 평범한 피격 자세가 나온다 —
         // 실제로 그렇게 찍혔고 "흰 플래시가 없다" 로 잘못 읽힐 뻔했다.
-        await Until(() => (_battle?.BossHealth ?? 0) < bossBefore, _pollTimeout);
         await Frames(7);
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
 
@@ -128,42 +171,11 @@ public partial class ShotRunner : Node
         await Frames(12);
         await Screenshot.CaptureAsync(this, "battle-6-windup");
 
-        // ── 패리 불가 선딜(크림슨)은 **여기 없다** ────────────────────────
-        // 이슈 #48 이 유일한 패리 불가 패턴(점프 강타)을 뺐다. 조건이 영영 참이 안 되는 기다림은
-        // 16초를 버리고 경고 한 줄을 남긴 뒤 **아무 순간이나** 찍는다 — 그렇게 찍힌 장은
-        // 파일 이름이 거짓말을 하므로, 기다림을 지운다. 그 붉은색은 이제 **가드 불가**의 것이고
-        // (이슈 #53) 그 장은 battle-6b(1단계) · battle-10c(3단계)가 찍는다 — 패리 불가가 돌아오면
-        // 다른 신호를 줘야 한다.
-
         // ── 피격: 체력이 줄어든 바로 다음 프레임 ──────────────────────────
         int before = _battle?.FighterHealth ?? 0;
         await Until(() => (_battle?.FighterHealth ?? 0) < before, _pollTimeout);
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-7-hit");
-
-        // ── 변종마다 다른 예고 (이슈 #28 · #48) ───────────────────────────
-        // **맨 뒤다.** 서로 다른 변종 셋을 기다리는 것은 여러 주기가 걸리는데, 내려찍기 계열은
-        // 전부 연속타라 그 사이에 파이터가 죽는다 — 앞에 두면 예고와 피격 순간이
-        // 통째로 결과 화면으로 찍힌다(실제로 그렇게 찍혔다).
-        // 계열이 하나가 된 뒤로 이 세 장이 **더** 중요해졌다: 2단계의 변종 셋은 같은 기술이라
-        // 링도 모션도 같고, 갈리는 것은 표지 하나뿐이다(끌기의 띠 · 쇄도의 갈매기표 · 쐐기의 눈금).
-        // 그 하나가 화면에서 실제로 갈리는지는 나란히 놓고 보는 수밖에 없고, 그래서 id 를 보고
-        // 셔터를 누른다 — 같은 변종을 세 번 찍으면 세 장이 똑같고 그건 우연이지 증명이 아니다.
-        var shot = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
-        for (int i = 1; i <= 3; i++)
-        {
-            await Until(
-                () => _battle is { BossWindingUp: true } && _battle.BossPattern is string id && !shot.Contains(id),
-                _tellTimeout);
-            if (_battle?.BossPattern is string now)
-            {
-                shot.Add(now);
-                Log.Info("shots", $"tell pattern={now} n={i}");
-            }
-
-            await Frames(8);
-            await Screenshot.CaptureAsync(this, $"battle-6a-tell-{i}");
-        }
 
         // ── 결과 화면: 아무것도 안 하고 맞아 죽는다 ───────────────────────
         await Until(() => _battle?.ResultVisible == true, _battleTimeout);
@@ -171,9 +183,16 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-8-result");
 
         await Combo();
-        await FirstStageFinisher();
         await Guarding();
         await Facing();
+        await Leap();
+        await StageTwo();
+
+        // 판정이 그려진 사진은 판정 보기로 띄웠을 때만 뜻이 있다 — 안 켰으면 흰 궤적 위에 아무것도 없다(설계 §6.1 · §9).
+        if (GetTree().DebugCollisionsHint)
+        {
+            await Hitboxes();
+        }
 
         Log.Marker("shots", "shots=done");
         GetTree().Quit();
@@ -217,52 +236,18 @@ public partial class ShotRunner : Node
         await Frames(20);
         await Screenshot.CaptureAsync(this, "battle-5c-combo-windup");
 
-        // 칼이 지나가는 그 프레임 (battle-5-attack 과 같은 규약).
-        await Until(() => _battle is { FighterAttackActive: true, FighterComboStep: 1 }, _pollTimeout);
-        await Screenshot.CaptureAsync(this, "battle-5d-combo-blade");
+        // 칼이 지나가는 그 프레임 (battle-5-attack 과 같은 규약 — 칼을 대 본 그 틱에 멈춰 찍는다).
+        await CaptureOn("battle-5d-combo-blade", () => _battle is { FighterSwingTested: true, FighterComboStep: 1 }, _pollTimeout);
     }
 
     /// <summary>
-    /// 1단계의 빨간 마무리 한 장 (이슈 #53). <b>유저가 실제로 하고 있는 단계</b>에서 빨강이 뜨는지를
-    /// 눈으로 본다 — 규칙 테스트는 "다음 판정이 가드 불가다" 까지만 말하고, 그게 화면에서 빨강인지는
-    /// 여기서만 보인다.
+    /// 방어 네 장 (이슈 #47 · #53 · #72). <b>버티는 자세 · 스태미나로 깨지는 순간 · 받아친 순간 · 받아쳐 무너진 보스.</b>
     ///
     /// <para>
-    /// <b>따로 판을 연다.</b> 위의 판은 2단계라(예고 세 장이 변종 셋을 찍는다) 1단계의 `내려찍기 I` 이
-    /// 안 나오고, 아래 방어 시퀀스는 3단계다. 이 장이 있어야 "빨강은 3단계 전용이 아니다" 가 PNG 로 선다.
-    /// </para>
-    /// </summary>
-    private async Task FirstStageFinisher()
-    {
-        Game.Instance.SetStage(1);
-        Game.Instance.GoTo(Game.Scene.Battle);
-        await Frames(4);
-        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
-
-        // 붙는다 — 떨어져 있어도 예고는 뜨지만, 보스가 걸어오는 도중이면 몸과 링이 화면 가장자리에 걸린다.
-        Hold("move_right", true);
-        await Wait(1.1);
-        Hold("move_right", false);
-
-        // 빨강은 **마무리 앞에서만** 뜬다 — 다음 판정이 가드 불가인지를 규칙에게 묻는다.
-        // 그 순간은 2타가 막 선 직후라 2타의 충격파(호박 원 + 살)가 아직 퍼지고 있다(battle-10c 가
-        // 그렇게 찍혔다). 24프레임(0.4초)을 기다리면 충격파가 걷히고 링이 반쯤 조여 있다 —
-        // 3타는 1.10초 뒤라(이슈 #54) 아직 안 온다.
-        await Until(() => _battle is { BossWindingUp: true, BossGuardBreak: true }, _tellTimeout);
-        await Frames(24);
-        await Screenshot.CaptureAsync(this, "battle-6b-finisher-tell");
-    }
-
-    /// <summary>
-    /// 방어 네 장 (이슈 #47 · #53). <b>危 예고(빨강) · 버티는 자세 · 깨지는 순간 · 받아친 순간.</b>
-    ///
-    /// <para>
-    /// 증명할 것이 둘이다. ① <b>빨강이 호박과 확실히 갈리는가</b> — 1·2타는 막을 수 있고 3타는
-    /// 못 막으므로, 그 차이가 선딜에서 안 읽히면 "버티면 된다" 를 그대로 믿다 무너진다.
-    /// ② <b>받아친 연출이 정말 약한가</b> — 요청(이슈 #53)이 "약한 흔들림 + 작은 표시" 였다. 받아친 고리는 가드가
-    /// 받아낸 고리와 크기가 같고 색만 따뜻하다(<c>FighterView.ParrySuccess</c>). 몸의 그림은 이제 <b>갈린다</b> —
-    /// 패리는 <c>attack2</c> 의 f0~f3 으로 칼을 세우고 가드는 <c>idle</c> 에 서 있다(설계 §5.3). 그래서
-    /// battle-10(가드) · battle-10d(받아침)를 나란히 놓으면 고리는 같은 크기 · 몸은 다른 그림이어야 한다.
+    /// 증명할 것이 둘이다. ① <b>가드가 깨지는 길은 스태미나 하나다</b>(설계 §5.2) — ↓ 를 붙든 채 맞기만 하면 가드는 Idle 이
+    /// 아니라 스태미나가 안 차고, 바닥나는 대에서 깨진다. 옛 빨간 가드 불가 마무리는 걷었다. ② <b>받아친 연출은 약하고, 대신 보스가
+    /// 무너진다</b>(설계 §4.3) — 받아친 고리는 가드가 받아낸 고리와 크기가 같고 색만 따뜻하다. 무너진 보스는 take-hit 를 한 번 돌고
+    /// 마지막 장에 선 채 푸른 톤이다. battle-10(가드) · battle-10d(받아침)를 나란히 놓으면 고리는 같은 크기 · 몸은 다른 그림이어야 한다.
     /// </para>
     ///
     /// <para>
@@ -272,25 +257,10 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Guarding()
     {
-        // **3단계로 간다** (이슈 #48). 가드 불가는 이제 아홉 변종 전부의 마무리에 있어서(이슈 #53)
-        // 붕괴와 받아침은 어느 단계에서나 찍히지만, 이 시퀀스의 마지막 장(헛스윙)은 3단계의
-        // `III-역린` 에만 있다. 그리고 1단계의 빨강은 바로 앞(FirstStageFinisher)이 따로 찍으므로,
-        // 여기 battle-10c 는 **3단계에서도 같은 빨강 + 危** 인지를 보이는 짝이 된다.
-        Game.Instance.SetStage(3);
+        Game.Instance.SetStage(1);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
-
-        // ── 危 예고: 가드 불가 판정을 가진 패턴의 선딜 (빨강 · 이슈 #53) ──
-        // **맨 앞이다.** 아래 두 장은 맞아 가며 찍으므로 체력이 줄고, 뒤로 미루면 결과 화면이 찍힌다
-        // (이 파일의 다른 주석들이 이미 밟은 실패다). 평소 예고(battle-6-windup)와 **나란히 놓고**
-        // 봐야 이 연출이 일한다 — 한 장만으로는 "글자가 있다" 까지만 알 수 있다.
-        // 24프레임을 기다리는 이유는 battle-6b 와 같다: 6프레임이면 2타의 충격파(호박 원 + 살)가 아직
-        // 퍼지고 있어서 **빨간 예고 위에 호박 원이 겹쳐 찍혔다** — 그 원이 예고 링으로 읽혀 "3단계는
-        // 링이 호박이냐" 를 한 번 되물어야 했다. 충격파가 걷힌 뒤라야 두 단계의 빨강을 나란히 볼 수 있다.
-        await Until(() => _battle is { BossWindingUp: true, BossGuardBreak: true }, _tellTimeout);
-        await Frames(24);
-        await Screenshot.CaptureAsync(this, "battle-10c-guard-break-tell");
 
         // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
         Hold("move_right", true);
@@ -305,21 +275,19 @@ public partial class ShotRunner : Node
         await Frames(2);
         await Screenshot.CaptureAsync(this, "battle-10-guard");
 
-        // ── 붕괴: 가드 불가를 가드로 받은 그 순간 ─────────────────────────
-        // 깨지는 것은 **사건**이라 상태로는 못 노린다. 그래서 횟수가 늘어난 것을 보고 셔터를
-        // 누른다 — 피격 스크린샷과 같은 규약이다.
+        // ── 붕괴: 스태미나가 바닥난 그 대 ─────────────────────────────────
+        // 붙든 가드는 3연격 한 바퀴에 54(8 · 8 · 14 의 1.8배)를, 점프 공격의 착지에 21.6 을 문다 — 두세 패턴이면 깨진다.
+        // 깨지는 것은 **사건**이라 상태로는 못 노린다. 그래서 횟수가 늘어난 것을 보고 셔터를 누른다.
         int broke = _battle?.FighterGuardBreaks ?? 0;
-        await Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _tellTimeout);
+        await Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _guardBreakTimeout);
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
 
         // ── 받아친 순간 (이슈 #53) ────────────────────────────────────────
         // **↓ 로는 못 받아친다.** 받아치는 것은 K 다 — 판정 <b>직전에</b> 눌러야 창(0.133초) 안에 선다.
-        // 프레임을 세지 않고 남은 시간을 보고 누른다(봇이 쓰는 것과 같은 규칙이다):
-        // 세어 두면 parry_precise_window 를 고치는 순간 이 장이 조용히 가드 사진이 된다.
-        //
-        // 붕괴(크게 터진다) 바로 다음 장인 것이 요점이다 — 두 장이 붙어 있어야
-        // "받아친 연출이 약하다" 가 비교로 읽힌다.
+        // 프레임을 세지 않고 남은 시간을 보고 누른다(봇이 쓰는 것과 같은 규칙이다): 세어 두면
+        // parry_precise_window 를 고치는 순간 이 장이 조용히 맞는 사진이 된다. 점프 공격의 착지는 패리를 못 받으므로
+        // 거기 누른 것은 맞고 지나간다 — 받아칠 때까지 누른다.
         Hold("guard", false);
         int parried = _battle?.FighterParries ?? 0;
         for (int i = 0; i < 60 * 12 && (_battle?.FighterParries ?? 0) == parried; i++)
@@ -340,48 +308,15 @@ public partial class ShotRunner : Node
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10d-parry");
 
-        // ── 헛스윙: 칼은 지나갔는데 아무것도 안 나온 그 순간 (이슈 #48) ───
-        // 3단계에만 있는 III-역린 의 박자다. **판정과 다른 그림이어야** 이 변종이 배울 수 있는
-        // 함정이 된다 — 판정은 섬광 + 스파크 + 흔들림이고 헛스윙은 **빈 고리** 하나다.
-        // 0.34초짜리 사건이라 벽시계로는 못 노린다: 개수가 는 것을 보고 셔터를 누른다.
-        // 못 만나도 경고 한 줄이다 — 변종 다섯 중 하나라 여러 주기가 걸릴 수 있다.
-        //
-        // ⚠ **아래 지친 보스 장보다 먼저여야 한다** (이슈 #53 에서 밟았다). 그 장은 "굳을 때까지
-        // 받아친다" 인데, 시드 51 의 이 판에서 보스를 굳히는 것은 `III-역린` 의 마무리이고 그 바로 앞에
-        // 이 헛스윙이 지나간다 — 순서가 뒤집히면 헛스윙은 그 루프 안에서 이미 지나가 버리고, 여기는
-        // 다음 `III-역린` 을 기다리다 파이터가 먼저 죽는다. 실제로 그렇게 **패배 화면이 이 이름으로**
-        // 한 번 커밋됐다. 헛스윙을 먼저 찍으면 그 뒤에 오는 마무리가 곧 받아칠 대가 된다.
-        int feints = _battle?.BossFeints ?? 0;
-        await Until(() => (_battle?.BossFeints ?? 0) > feints, _tellTimeout);
-        await Frames(3);
-        await Screenshot.CaptureAsync(this, "battle-11-feint");
-
-        // ── 지친 보스: 마무리를 받아쳐 굳은 동안 (이슈 #53) ──────────────
-        // **Medieval King Pack 2 에는 지친 모션이 없다.** 시트는 열뿐이고(idle · run · jump · fall ·
-        // attack1~3 · take-hit · take-hit-white · death) 그중 "숨이 차 서 있다" 인 것이 하나도 없다.
-        // 없는 이름으로 Play 하면 뷰가 [W] 한 줄만 남기고 아무것도 안 바꿔, 칼을 든 공격 자세가
-        // 2.3초 동안 그대로 선다 — 상을 받은 장면이 상을 안 받은 장면과 똑같아진다.
-        // 그래서 지어내지 않고 **있는 것을 느리게** 돌린다: idle × stagger_anim_speed + 식은 몸 색.
-        // 이 장은 그 둘이 실제로 "지쳤다" 로 읽히는지를 눈으로 확인하는 자리다.
-        //
-        // 받아친 것(battle-10d)이 마무리가 아니었으면 보스는 안 굳으므로, 굳을 때까지 계속 받아친다 —
-        // 바로 앞에서 헛스윙을 찍었으니 다음으로 오는 판정이 곧 그 `III-역린` 의 마무리다.
-        for (int i = 0; i < 60 * 14 && _battle is { BossStaggered: false }; i++)
+        // ── 받아쳐 무너진 보스 (#72 · 설계 §4.3) ──────────────────────────
+        // 어느 타를 받아쳐도 무너진다. take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야 마지막 장에 선 자세가 찍힌다 —
+        // 받아친 뒤 30프레임이다(위의 3 + 27). 탈진은 1.5초(90틱)라 아직 한참 남았다.
+        if (_battle is { BossExhausted: false })
         {
-            if (_battle is { BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08)
-            {
-                Tap("parry");
-            }
-
-            await Frames(1);
+            Log.Warn("shots", "exhaust_not_seen");
         }
 
-        if (_battle is { BossStaggered: false })
-        {
-            Log.Warn("shots", "stagger_not_seen");
-        }
-
-        await Frames(6);
+        await Frames(27);
         await Screenshot.CaptureAsync(this, "battle-10e-boss-exhausted");
     }
 
@@ -416,7 +351,8 @@ public partial class ShotRunner : Node
 
         // ── 잠금: 선딜 도중에 반대편으로 지나간다 ─────────────────────────
         // 방금 자리(보스의 오른쪽)에서 기다렸다가 **선딜 도중에** 왼쪽으로 빠져나간다.
-        // 보스는 그 선딜이 끝날 때까지 오른쪽을 본 채여야 한다 — 예고(칼)도 오른쪽에 그대로 있다.
+        // 보스는 그 선딜이 끝날 때까지 오른쪽을 본 채여야 한다 — 단계가 붙든 3연격의 선딜 자세(칼을 치켜든 attack 의 앞 장)도
+        // 오른쪽을 향한 채 그려진다.
         //
         // **판정까지 0.6초 넘게 남은 선딜만 고른다.** 그냥 "선딜인가" 만 보면 끝자락에 걸리고,
         // 그때 지나가면 잠긴 몸 대신 판정 충격파가 찍힌다 — 실제로 그렇게 찍혔다.
@@ -424,15 +360,143 @@ public partial class ShotRunner : Node
         // **걸음이 아니라 대시로 넘는다.** 보스 몸이 반폭 85 라 걸음(420px/s)으로는 선딜 하나 안에
         // 몸 밖으로 확실히 못 나간다 — 겹친 채 찍히면 어느 쪽에 섰는지가 그림에서 안 읽힌다.
         // 대시는 0.18초에 396px 이라 한 번에 넘기고, 남은 프레임은 이어지는 걸음이 더 벌린다.
+        // **3연격만 고른다** — 점프 공격은 도약하는 틱(0.40초)에 착지 자리 쪽으로 돌아선다(설계 §4.2 · 잠금의 유일한 예외).
         await Until(
-            () => _battle is { BossWindingUp: true } && _battle.BossNextActiveIn >= 0.6,
-            _tellTimeout);
+            () => _battle is { BossWindingUp: true, BossPattern: "3연격" } && _battle.BossNextActiveIn >= 0.6,
+            _patternTimeout);
         Hold("move_left", true);
         await Frames(2);   // 왼쪽을 보게 세운다 — 대시는 **바라보는 쪽으로만** 간다
         Tap("dash");
         await Frames(26);
         Hold("move_left", false);
         await Screenshot.CaptureAsync(this, "battle-9c-facing-locked");
+    }
+
+    /// <summary>
+    /// 공중의 점프 공격 한 장 (#72 · 설계 §4.2 · §9). <b>정점 근처</b>에서 찍는다 — 궤적은 4H·s(1−s)(H = 280)라 발이 250 위인 것은
+    /// 36틱 중 가운데 11틱 남짓이다. 규칙의 Y 를 그린 몸이 땅에서 떠 있어야 한다(설계 §6 「보스 높이」).
+    /// <b>첫 패턴이 점프 공격인 새 판에서</b> 찍는다(<see cref="NewBattleOpening"/>) — 한 판에서 기다리면 그 판의 순서에 달린다.
+    /// </summary>
+    private async Task Leap()
+    {
+        await NewBattleOpening(1, "점프 공격");
+        await Until(() => _battle is { BossPattern: "점프 공격" } && _battle.BossY >= 250, _patternTimeout);
+        await Screenshot.CaptureAsync(this, "battle-6a-leap");
+    }
+
+    /// <summary>
+    /// 2단계 전투 한 장 (#72 · 설계 §9). 두 단계의 명부가 5번 PR 까지 같아 싸우는 그림은 1단계와 같다 — 그래서 그 판의
+    /// <b>결과 화면</b>을 찍는다: "2단계 · 보스 체력 …" 이 그 판이 2단계였다는 것을 글로 말한다. 아무것도 안 하고 맞아 죽는다
+    /// (<c>battle-8-result</c> 와 같은 길).
+    /// </summary>
+    private async Task StageTwo()
+    {
+        await NewBattle(2);
+        await Until(() => _battle?.ResultVisible == true, _battleTimeout);
+        await Frames(2);
+        await Screenshot.CaptureAsync(this, "battle-11-stage-2");
+    }
+
+    /// <summary>
+    /// 판정 보기 다섯 장 (설계 §9) — <c>HITBOXES=1 tools/build.sh shots</c> 에서만 찍고 <c>out/shots</c> 에만 남는다.
+    ///
+    /// <para>
+    /// ① <b>3연격의 세 장</b> — 판정마다 규칙이 대 본 틱에 한 장. 채운 사각형(규칙이 대 본 모양)이 그림의 흰 궤적과 겹쳐야 한다.
+    /// ② <b>착지 띠</b> — 바닥 전체 · 높이 0 ~ 60. ③ <b>착지 앞의 패리</b> — 착지 창이 열리기 직전에 K 를 눌러 패리 창 안에서
+    /// 착지를 맞는다. 파이터 몸통이 "패리 창" 색이 아니어야 한다: 착지는 패리를 안 받아 실효 방어가 없다(설계 §6.1).
+    /// ② · ③ 의 착지 띠는 땅에 선 몸에 창의 첫 틱에 닿고 그 판정은 그 틱에 끝난다 — 그래서 대 본 그 틱에 판을 세우고 찍는다
+    /// (<see cref="CaptureTested"/>). ① 은 빗나갈 수 있다: 기록된 판(세션 시드 51)은 첫 패턴이 3연격이라 보스가 다가오는 도중
+    /// (틱 48 · 832 떨어져)에 서고, 가만히 선 파이터에게 셋 다 사거리 밖(<c>MissedTooFar</c>)이라 창 8틱을 다 산다. 그래도 같은 길로
+    /// 찍는다 — 닿든 안 닿든 대 본 첫 틱이다.
+    /// </para>
+    ///
+    /// <para>
+    /// ③ 은 <b>첫 패턴이 점프 공격인 새 판</b>에서 찍는다(<see cref="NewBattleOpening"/>). 같은 판에서 두 번째를 기다리면 그새
+    /// 착지 자리(파이터 115 앞)에 선 보스의 3연격을 서너 번 맞아 죽을 수 있다 — 새 판은 보스가 960 떨어져 선다. 그냥 새 판이면
+    /// 모자란다: 시도마다 시드가 달라 첫 점프 공격이 다섯째 뽑기일 수도 있다(<see cref="_openingTries"/>).
+    /// </para>
+    /// </summary>
+    private async Task Hitboxes()
+    {
+        await NewBattle(1);
+
+        // ① 3연격의 선딜을 기다려 셋을 차례로 — 대 본 틱을 찍고, 대 보기가 그친 것을 보고 다음 판정을 기다린다.
+        await Until(() => _battle is { BossPattern: "3연격", BossWindingUp: true }, _patternTimeout);
+        for (int hit = 1; hit <= 3; hit++)
+        {
+            await CaptureTested($"hitbox-1-triple-{hit}", _pollTimeout);
+            await Until(() => _battle is { BossSwingTested: false }, _pollTimeout);
+        }
+
+        // ②
+        await Until(() => _battle is { BossPattern: "점프 공격", BossWindingUp: true }, _patternTimeout);
+        await CaptureTested("hitbox-2-landing", _pollTimeout);
+
+        // ③ 판정까지 5틱(0.08초) 안이면 누른다 — 패리 창(0.133초 = 8틱)이 착지 창의 첫 틱을 덮는다(battle-10d 와 같은 규칙).
+        await NewBattleOpening(1, "점프 공격");
+        await Until(
+            () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08,
+            _patternTimeout);
+        Tap("parry");
+        await CaptureTested("hitbox-3-landing-parry", _pollTimeout);
+    }
+
+    /// <summary>
+    /// 규칙이 판정을 대 본 <b>그 틱</b>의 화면을 찍는다 (설계 §6.1 · §9). 셔터가 한 틱만 늦어도 첫 틱에 닿아 끝난 판정의 사각형이 없고
+    /// 몸통 색도 파이터 쪽 상태로 돌아간 그림이 찍힌다. 그래서 조건이 참인 그 자리에서 트리를 멈춘다 — <see cref="Until"/> 의 조건은
+    /// 물리 틱 신호 안에서, <c>Battle</c> 이 다음 틱을 밀기 <b>전에</b> 돈다. 멈춘 동안 화면은 방금 그린 그 틱이고, 찍은 뒤 푼다.
+    /// <paramref name="tested"/> 가 "대 봤나" 다 — 보스 칼은 <see cref="CaptureTested"/>, 파이터 칼은 <c>FighterSwingTested</c>.
+    /// 판정 보기가 아닐 때 멈춰도 해가 없다: 찍히는 것은 같은 틱의 그림이다.
+    /// </summary>
+    private async Task CaptureOn(string name, Func<bool> tested, double timeout)
+    {
+        await Until(() => tested() && Pause(), timeout);
+        await Screenshot.CaptureAsync(this, name);
+        GetTree().Paused = false;
+    }
+
+    /// <summary>보스 판정을 대 본 그 틱에 찍는다 — <see cref="CaptureOn"/> 의 보스 쪽.</summary>
+    private Task CaptureTested(string name, double timeout) =>
+        CaptureOn(name, () => _battle is { BossSwingTested: true }, timeout);
+
+    /// <summary>트리를 멈춘다. <see cref="CaptureOn"/> 의 조건 안에서 부르려고 참을 돌려준다.</summary>
+    private bool Pause()
+    {
+        GetTree().Paused = true;
+        return true;
+    }
+
+    /// <summary>그 단계의 새 판을 세우고 씬이 설 때까지 기다린다.</summary>
+    private async Task NewBattle(int stage)
+    {
+        Game.Instance.SetStage(stage);
+        Game.Instance.GoTo(Game.Scene.Battle);
+        await Frames(4);
+        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+    }
+
+    /// <summary>
+    /// 첫 패턴이 <paramref name="pattern"/> 인 판이 설 때까지 그 단계의 새 판을 세운다 — 상한은 <see cref="_openingTries"/> 판.
+    /// 판마다 시도가 하나 열리므로 세션 시드가 같으면 몇째 판에서 잡는지도 매번 같다. 다 빗나가면 경고만 남기고 마지막 판에
+    /// 선다 — 부르는 쪽이 제 상한으로 그 판에서 한 번 더 기다린다.
+    /// </summary>
+    private async Task NewBattleOpening(int stage, string pattern)
+    {
+        for (int tries = 1; tries <= _openingTries; tries++)
+        {
+            await NewBattle(stage);
+            await Until(() => _battle is { BossPattern: not null }, _pollTimeout);
+            string first = _battle?.BossPattern ?? "-";
+            if (first == pattern)
+            {
+                Log.Debug("shots", $"opening pattern={pattern} tries={tries}");
+                return;
+            }
+
+            Log.Debug("shots", $"opening_retry want={pattern} got={first} try={tries}");
+        }
+
+        Log.Warn("shots", $"opening_not_seen pattern={pattern} tries={_openingTries} — 마지막 판에서 그냥 기다린다");
     }
 
     /// <summary>

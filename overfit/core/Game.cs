@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using Godot;
+using Overfit.Battle.Rules;
 
 namespace Overfit.Core;
 
@@ -37,13 +38,16 @@ public partial class Game : Node
     private const double _tourStepSeconds = 0.3;
 
     /// <summary>
-    /// 단계 점프 디버그 액션의 접두어 (이슈 #54). <c>project.godot</c> 의 <c>debug_stage_1..3</c> 이고
+    /// 단계 점프 디버그 액션의 접두어 (이슈 #54). <c>project.godot</c> 의 <c>debug_stage_1..2</c> 이고
     /// 끝의 숫자가 곧 단계다. 타이틀의 조작 안내는 <c>debug_</c> 로 시작하는 액션을 안 싣는다(Title).
     /// </summary>
     private const string _stageJumpPrefix = "debug_stage_";
 
-    /// <summary>순회가 전투에서 눌러 보는 단계 점프 — 가장 먼 단계라 1 에서 옮겨 간 것이 로그에서 갈린다.</summary>
-    private const string _tourStageJump = "debug_stage_3";
+    /// <summary>
+    /// 순회가 전투에서 눌러 보는 단계 점프 — 마지막 단계(2)라 1 에서 옮겨 간 것이 로그에서 갈린다. 3단계가 없어져(#72)
+    /// 3 을 누르면 전투가 2단계로 잘려 서고 <c>[W]</c> 를 남기므로 smoke 가 "3단계 전투가 섰다" 를 못 본다.
+    /// </summary>
+    private const string _tourStageJump = "debug_stage_2";
 
     public static Game Instance { get; private set; } = null!;
 
@@ -54,8 +58,8 @@ public partial class Game : Node
     ///
     /// <para>
     /// <b>이것이 남은 유일한 진행 상태다.</b> 캐릭터 3택과 스탯 강화는 만들지 않는다(이슈 #22) —
-    /// 단계 진행은 성장 루프가 아니라 보스 설계의 축이라 남긴다: 단계가 오를수록 보스가 쓰는
-    /// 패턴이 늘고(2·3·5·7·10), 그 "패턴이 늘어난다" 가 게임 자체다.
+    /// 단계 진행은 성장 루프가 아니라 보스 설계의 축이라 남긴다: 보스는 두 단계이고(#72 · 설계 §4),
+    /// 2단계가 1단계에서 쓴 답을 겨냥하게 된다(5번 PR — 지금은 두 단계가 같은 명부다). 그 "나를 보고 바뀐다" 가 게임 자체다.
     /// </para>
     ///
     /// <para>
@@ -64,6 +68,12 @@ public partial class Game : Node
     /// </para>
     /// </summary>
     public int Stage { get; private set; } = 1;
+
+    /// <summary>
+    /// 세션의 시도 번호와 기록 (#72 · 설계 §4.4). 단계처럼 여기(Autoload)에 둔다 — 전투 씬은 설 때마다 새로 만들어진다.
+    /// 로직은 <see cref="RunHistory"/>(규칙 층 · 테스트 안)에 있다.
+    /// </summary>
+    public RunHistory History { get; private set; } = null!;
 
     public override void _Ready()
     {
@@ -79,9 +89,12 @@ public partial class Game : Node
         Log.Info("scene", $"start={Current} log_level={Log.Level}");
         Log.Debug("boot", $"user_args=[{string.Join(" ", OS.GetCmdlineUserArgs())}] user_dir={OS.GetUserDataDir()}");
 
+        string[] args = OS.GetCmdlineUserArgs();
+        History = new RunHistory(SessionSeed(args));
+        Log.Info("run", $"session_seed={History.SessionSeed}");
+
         // 검증용. tools/build.sh smoke 가 `-- --tour` 로 띄운다.
         // 규칙 자체 테스트는 여기 없다 — Godot 을 안 띄우는 `tools/build.sh test` 가 전부 돌린다.
-        string[] args = OS.GetCmdlineUserArgs();
         if (OS.IsDebugBuild() && CmdArgs.Has(args, "--tour"))
         {
             _ = TourAsync();
@@ -109,8 +122,24 @@ public partial class Game : Node
         Log.Info("run", $"stage={Stage}");
     }
 
-    /// <summary>판을 처음으로. 타이틀로 나갈 때 부른다 — 안 부르면 다음 판이 5단계에서 시작한다.</summary>
-    public void ResetRun() => SetStage(1);
+    /// <summary>
+    /// 판을 처음으로 — 1단계로 돌아가고 시도 기록을 비운다(새 런은 1단계에서 다시 잰다 · 설계 §4.4). 타이틀로 나갈 때와
+    /// 클리어 뒤 [처음부터] 에 부른다 — 안 부르면 다음 판이 2단계에서 시작한다. 세션 시드와 시도 번호는 안 돌아간다.
+    /// </summary>
+    public void ResetRun()
+    {
+        SetStage(1);
+        History.Clear();
+        Log.Debug("run", $"history_cleared attempts={History.Attempts}");
+    }
+
+    /// <summary>
+    /// 세션 시드 (#72 · 설계 §4.4). <c>--session-seed=N</c> 이 있으면 그것이고(스모크 · 스크린샷은 <c>tools/build.sh</c> 가
+    /// 51 을 넘긴다 — 실행마다 같은 판을 찍으려고), 없으면 벽시계의 마이크로초를 <see cref="Det.Mix64"/> 로 섞는다.
+    /// <b>벽시계는 규칙 층에서만 금지다</b>(CLAUDE.md §4) — 여기는 Godot 쪽이고, 규칙은 뽑힌 수를 받기만 한다.
+    /// </summary>
+    private static ulong SessionSeed(string[] args) =>
+        CmdArgs.UInt64(args, "--session-seed=") ?? Det.Mix64((ulong)(DateTime.UtcNow.Ticks / TimeSpan.TicksPerMicrosecond));
 
     public void GoTo(Scene scene)
     {
@@ -139,7 +168,7 @@ public partial class Game : Node
             return;
         }
 
-        // 전투 중 1 · 2 · 3 → 그 단계를 바로 시작한다 (이슈 #54). 유저가 3단계를 보려고 두 판을
+        // 전투 중 1 · 2 → 그 단계를 바로 시작한다 (이슈 #54). 유저가 2단계를 보려고 한 판을
         // 이기고 올라가지 않게 하는 디버그 키다. **위의 IsDebugBuild 가드가 릴리즈 빌드를 이미 걸렀다** —
         // 그 한 줄이 이 키를 릴리즈에서 죽이는 전부라, 이 갈래를 그 가드 위로 올리지 않는다.
         if (Current == Scene.Battle && StageJump(e) is (string action, int stage))
@@ -157,7 +186,7 @@ public partial class Game : Node
     /// <para>
     /// 단계 번호를 여기 표로 적지 않고 <b>액션 이름에서 읽는다</b> — 키와 단계의 짝이 <c>project.godot</c>
     /// 한 곳에만 있어야 한다. 몇 단계까지 있는지는 여기서 안 자른다: <c>data/stages.json</c> 이 알고,
-    /// 없는 단계는 전투 씬이 가장 가까운 단계로 잘라 [W] 를 남긴다(<c>StageRoster.For</c>).
+    /// 없는 단계는 전투 씬이 가장 가까운 단계로 잘라 [W] 를 남긴다(<c>StageRoster.Resolve</c>).
     /// </para>
     /// </summary>
     private static (string Action, int Stage)? StageJump(InputEvent e)

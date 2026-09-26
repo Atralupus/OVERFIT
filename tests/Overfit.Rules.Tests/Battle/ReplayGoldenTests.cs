@@ -75,11 +75,9 @@ public class ReplayGoldenTests
             // 태그를 고치면 id 는 그대로인 채 의존도 축의 분모가 통째로 달라진다 —
             // 다이제스트에서 빼면 그 변화가 골든 밖이 된다.
             text.Append(CultureInfo.InvariantCulture, $"{e.DashAvailable}|{e.JumpAvailable}|{e.ParryAvailable}|");
-            // 가드 가능 · 마무리도 넣는다 (이슈 #53). 둘 다 이 이슈가 관측에 더한 칸인데 **더할 때
-            // 여기를 빠뜨렸다** — 그래서 마무리 판정을 통째로 옮기거나 guard_break 를 한 변종에서
-            // 빼도 골든은 초록이었다. 둘은 패턴 id 로 다시 셈할 수 있어 보여도 판정 단위라
-            // (같은 패턴 안에서 대마다 값이 다르다) id 가 대신 못 한다.
-            text.Append(CultureInfo.InvariantCulture, $"{e.GuardAvailable}|{e.Finisher}\n");
+            // 가드 가능도 넣는다 (이슈 #53). 관측에 칸을 더할 때 **여기를 빠뜨린 적이 있다** — 그동안은 그 칸을 통째로
+            // 바꿔도 골든이 초록이었다. 마무리 칸(Finisher)은 #72 에서 관측과 같이 걷었다(설계 §7.2).
+            text.Append(CultureInfo.InvariantCulture, $"{e.GuardAvailable}\n");
         }
 
         ulong hash = 14695981039346656037UL;
@@ -105,6 +103,11 @@ public class ReplayGoldenTests
         Dictionary<string, StageDef> stages = JsonData<StageDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "stages.json")), "stages.json");
 
+        // 게임처럼 **그 단계의 명부와 고르기**로 선다 (#72 · 설계 §4.4) — 1단계의 picker 를 바꾸면 여기가 움직인다.
+        // 기록은 비어 있다: 골든의 시드는 시도 시드 그 자체이고(데모의 --seed 와 같다), uniform 은 기록을 안 읽는다.
+        StageSetup stage = StageRoster.Setup(stages, 1, seed, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException("stages.json 에 1단계가 안 선다");
+
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -113,12 +116,13 @@ public class ReplayGoldenTests
             Boss = TestConfigs.Boss(),
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
-            // **마지막 단계로 돈다** — 명부가 가장 길어 관측이 가장 두껍다. 숫자가 5 에서 3 이 된 것은
-            // 이슈 #48 이 단계를 셋으로 줄였기 때문이다(전에는 없는 단계를 물어 잘려 쓰이고 있었다).
-            PatternIds = StageRoster.For(stages, 3),
+            // **1단계로 돈다** (#72 · 설계 §9) — 2단계 명부는 5번 PR 이 통째로 바꾸므로, 거기 걸면 그 PR 이 결정론과 무관하게
+            // 골든을 움직인다. 1단계는 망이 들어와도 uniform 이라(설계 §4.4) 이 판의 순서도 시드만으로 선다.
+            PatternIds = stage.PatternIds,
             Patterns = JsonData<PatternDef>.ParseTable(
                 File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
             Seed = seed,
+            Picker = stage.Picker,
             MaxTicks = TestConfigs.MaxTicks(),
         });
 

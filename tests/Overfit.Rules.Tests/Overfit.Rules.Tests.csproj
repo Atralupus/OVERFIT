@@ -62,10 +62,16 @@
     <Compile Include="../../overfit/battle/rules/HitShapeTable.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PatternDef.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PatternRunner.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossHits.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossMotions.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/LeapMotion.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/StageRoster.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PatternPickers.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/RunHistory.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/HitResolver.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/Boss.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BattleSim.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossSwings.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/DodgeEvent.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/DodgeCredit.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
@@ -76,6 +82,8 @@
        덕분에 테스트가 저장소 경로를 몰라도 되고, 값을 고치면 다음 빌드가 복사한다. -->
   <ItemGroup>
     <None Include="../../overfit/data/*.json" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 그림 팩의 SpriteFrames — 텍스트라 저장소에 있다(PNG 는 없다). 타임라인의 anim · frame 이 팩에 있는 이름과 장인지 대 본다. -->
+    <None Include="../../overfit/assets/spriteframes/*.tres" LinkBase="spriteframes" CopyToOutputDirectory="PreserveNewest" />
     <!-- 리플레이 골든. 테스트가 출력 폴더에서 읽는다 — 저장소 경로를 몰라도 되고, 고치면 다음 빌드가 복사한다. -->
     <None Include="../../tools/replay_golden.txt" Link="replay_golden.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

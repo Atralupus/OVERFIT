@@ -5,14 +5,12 @@ using Xunit;
 namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
-/// 보스가 <b>어디를 보는가</b>. 판정은 좌우 대칭이라(<c>HitResolver</c> 가 <c>Math.Abs</c> 로 잰다)
-/// 이 값은 맞고 틀림을 하나도 안 바꾼다 — 그런데도 규칙 층에 두는 이유는, 뷰가 좌표를 보고
-/// 스스로 정하면 "같은 시드면 같은 결과" 가 그림까지 덮지 못하기 때문이다(이슈 #36).
+/// 보스가 <b>어디를 보는가</b>. 3연격의 궤적은 앞으로 휘두르는 모양이라(설계 §2) 이 값이 판정을 가른다 — 규칙이
+/// 정하는 이유는 뷰가 좌표를 보고 스스로 정하면 "같은 시드면 같은 결과" 가 그림까지 덮지 못하기 때문이다(이슈 #36).
 ///
 /// <para>
 /// 여기서 지켜야 하는 것은 <b>잠금</b>이다. 패턴이 도는 동안 보스가 따라 돌면 예고가 거짓말이 된다 —
-/// 이 게임에서 예고는 패리를 가르치는 유일한 수단이고, 내려찍기 계열은 <b>변종 아홉이 같은 칼</b>이라
-/// (이슈 #48) 표지 하나로만 갈린다 — 스윙 도중에 방향이 바뀌면 그 표지가 등 뒤로 가서 통째로 무의미해진다.
+/// 링이 없으면 예고는 보스의 모션이다(설계 §6) — 스윙 도중에 방향이 바뀌면 칼을 든 자세가 등 뒤를 향해 통째로 무의미해진다.
 /// </para>
 /// </summary>
 public class BossFacingTests
@@ -27,7 +25,9 @@ public class BossFacingTests
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(),
-        PatternIds = new[] { "내려찍기 I", "내려찍기 II-쐐기" },
+        // **3연격만 돈다** — 점프 공격은 도약하는 틱에 착지 자리 쪽으로 돌아선다(설계 §4.2 · 잠금의 유일한 예외 ·
+        // 움직임만은_패턴_중에도_돌아서게_한다). 잠금을 재는 판에 그 예외를 섞지 않는다.
+        PatternIds = new[] { "3연격" },
         Patterns = TestConfigs.Patterns(),
         Seed = 51,
         MaxTicks = 60 * 120,
@@ -64,7 +64,7 @@ public class BossFacingTests
         Boss boss = Spawn();
         boss.Face(500);
 
-        boss.CurrentPattern = "내려찍기 I";
+        boss.CurrentPattern = "3연격";
         boss.Face(1500);
         boss.Facing.ShouldBe(-1, "휘두르는 중에 돌아서면 예고가 거짓말이 된다");
 
@@ -72,6 +72,21 @@ public class BossFacingTests
         boss.CurrentPattern = null;
         boss.Face(1500);
         boss.Facing.ShouldBe(1);
+    }
+
+    [Fact]
+    public void 움직임만은_패턴_중에도_돌아서게_한다()
+    {
+        // 잠금의 **유일한** 예외다 (설계 §4.2) — 도약은 뛰는 틱에 착지 자리 쪽으로 돌아선다. 그 길을 Boss.Move 하나로 둔다.
+        Boss boss = Spawn();
+        boss.Face(500);
+        boss.CurrentPattern = "점프 공격";
+
+        boss.Face(1500);
+        boss.Facing.ShouldBe(-1, "잠금이 풀렸다");
+
+        boss.Move(boss.X, 0, 1);
+        boss.Facing.ShouldBe(1, "움직임이 방향을 못 바꿨다");
     }
 
     [Fact]
@@ -101,9 +116,9 @@ public class BossFacingTests
         sim.Fighter.X.ShouldBeGreaterThan(sim.Boss.X, "파이터가 보스를 지나가지 못했다 — 이 테스트의 전제가 깨졌다");
 
         // ② 쉬는 틱을 기다린다. 지나간 순간 보스가 패턴 중이면 그 패턴이 끝날 때까지는
-        //    일부러 안 돈다 — 잠금이 그렇게 생겼다. 상한(4초)은 간격 0.8 + 가장 긴 패턴 1.9 보다 넉넉하다.
+        //    일부러 안 돈다 — 잠금이 그렇게 생겼다. 상한(5초)은 간격 0.8 + 3연격 3.25 보다 넉넉하다.
         ticks = 0;
-        while (sim.Boss.Facing < 0 && ticks++ < 240)
+        while (sim.Boss.Facing < 0 && ticks++ < 300)
         {
             sim.Tick(_right);
         }

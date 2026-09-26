@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -16,7 +17,7 @@ public class BotPolicyTests
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(),
-        PatternIds = StageRoster.For(TestConfigs.Stages(), 3),
+        PatternIds = StageRoster.For(TestConfigs.Stages(), 1),
         Patterns = JsonData<PatternDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
         Seed = seed,
@@ -44,6 +45,38 @@ public class BotPolicyTests
 
         outcome.ShouldBeOneOf(BattleOutcome.Win, BattleOutcome.Lose);
         sim.Ticks.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void 데모의_봇이_실제_1단계를_이긴다()
+    {
+        // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 1단계 명부와 고르기 · 시드 51 (#72 · 설계 §9).
+        // "봇이 1단계를 이길 수 있다" 가 데모의 전제인데 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 —
+        // 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이 실제 데이터다. 명부와 고르기는 데모처럼
+        // StageRoster.Setup 에서 받는다 — 따로 세우면 1단계의 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
+        BalanceData balance = TestConfigs.Balance();
+        StageSetup stage = StageRoster.Setup(TestConfigs.Stages(), 1, 51, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException("stages.json 에 1단계가 안 선다");
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
+            PatternIds = stage.PatternIds,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Picker = stage.Picker,
+            MaxTicks = balance.Battle.MaxTicks,
+        });
+        var bot = new BotPolicy(51);
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(bot.Next(sim));
+        }
+
+        outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 1단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
     }
 
     [Fact]
@@ -222,4 +255,47 @@ public class BotPolicyTests
         verdicts.ShouldContain(HitVerdict.GuardBroken, "봇의 가드가 한 번도 안 깨졌다");
     }
 
+    [Fact]
+    public void 산_창이_있는_동안_봇은_가드를_놓지_않고_칼질을_새로_누르지_않는다()
+    {
+        // 설계 §3.6 ④ — 봇은 창이 살아 있는 동안을 "판정이 지금" 으로 본다. NextActiveIn 만 보던 때는 판정이 서는 틱에 그 값이
+        // null 이 되어 봇이 창의 첫 틱에 가드를 풀고 칼을 눌렀다 — 창이 8틱이면 남은 틱에 맞는다. 여기 판정은 멀리(사거리 50)
+        // 서서 파이터에게 안 닿은 채 창 30틱을 다 산다. 1타 도중에 2타를 잇는 누름은 새 칼질이 아니다.
+        int live = 0, guardedLive = 0;
+        foreach (ulong seed in _seeds.Take(4))
+        {
+            BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
+            var bot = new BotPolicy(seed);
+            bool guarding = false;
+            for (int t = 0; t < 60 * 20; t++)
+            {
+                bool swingLive = sim.SwingLive;
+                bool attacking = sim.Fighter.Action == FighterAction.Attack;
+                InputFrame input = bot.Next(sim);
+                if (swingLive)
+                {
+                    live++;
+                    if (!attacking)
+                    {
+                        input.Attack.ShouldBeFalse("산 창 안에서 칼질을 새로 눌렀다");
+                    }
+
+                    if (guarding)
+                    {
+                        input.GuardHeld.ShouldBeTrue("가드로 받기로 한 창 안에서 가드를 놓았다");
+                        guardedLive++;
+                    }
+                }
+                else
+                {
+                    guarding = input.GuardHeld;
+                }
+
+                sim.Tick(input);
+            }
+        }
+
+        live.ShouldBeGreaterThan(0, "산 창이 한 번도 없었다 — 이 테스트가 아무것도 안 본다");
+        guardedLive.ShouldBeGreaterThan(0, "가드로 받기로 한 창이 한 번도 없었다 — 이 테스트가 가드를 안 본다");
+    }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using Godot;
 using Overfit.Battle.Rules;
@@ -41,12 +40,13 @@ public partial class Battle : Node2D
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
 
-    /// <summary>패턴 표. 뷰가 <b>태그</b>(지금은 has_guard_break)와 예고를 그리는 데만 쓴다 — 규칙은 시뮬레이션이 본다.</summary>
-    private Dictionary<string, PatternDef> _patterns = null!;
     private FeelBalance _feel = null!;
 
     private int _stage;
     private bool _hasNextStage;
+
+    /// <summary>이 전투의 시도 — 번호와 시드 (#72 · 설계 §4.4). 설 때 열고, 끝나면 그 판의 관측과 함께 기록에 붙인다.</summary>
+    private (int Number, ulong Seed) _attempt;
 
     private bool _over;
     private BattleOutcome _outcome;
@@ -66,8 +66,8 @@ public partial class Battle : Node2D
     /// 지나가는 상태의 열은 걸든 안 걸든 한 칸도 안 다르다 — 헤드리스 봇과 사람이 <b>같은 판</b>을
     /// 살고, 그래서 학습 데이터에 sim-to-real 간극이 안 생긴다. 규칙으로 옮기면 반대로 이 숫자가
     /// 리플레이의 일부가 되어, 손맛을 눈으로 고칠 때마다 지금까지의 리플레이가 못 쓰게 된다.
-    /// 남는 차이는 사람이 벽시계로 <c>hitstop_frames</c> 만큼 더 쉰다는 것 하나이고, 이제 그것이
-    /// 걸리는 자리는 <b>3타를 받아친 순간</b> 하나뿐이다 — 2.3초짜리 경직 안이라 아무 판단도 안 민다.
+    /// 남는 차이는 사람이 벽시계로 <c>hitstop_frames</c> 만큼 더 쉰다는 것 하나이고, 그것이 걸리는 자리는
+    /// <b>보스가 무너지는 순간</b>이다(#72) — 1.5초짜리 탈진 안이라 아무 판단도 안 민다.
     /// </para>
     /// </summary>
     private int _hitstopLeft;
@@ -80,9 +80,6 @@ public partial class Battle : Node2D
     private int _lastBossHealth;
     private int _lastEventCount;
 
-    /// <summary>지난 프레임까지 지나간 헛스윙 수 (이슈 #48). 관측 수와 <b>같은 규약</b>이다 —
-    /// 규칙 층은 뷰를 모르므로 사건을 값의 차이로 읽는다.</summary>
-    private int _lastFeintCount;
     private bool _lastAttackActive;
 
     /// <summary>지난 틱에 칼질 중이었나. 꺼졌다 켜진 틱이 새 칼질이다 (이슈 #54).</summary>
@@ -93,6 +90,9 @@ public partial class Battle : Node2D
 
     /// <summary>지난 틱에 패리 중이었나. 꺼졌다 켜진 틱이 새 패리다 — 칼질과 같은 규약이다.</summary>
     private bool _lastParrying;
+
+    /// <summary>지난 틱에 보스가 탈진해 있었나. 꺼졌다 켜진 틱이 <b>무너지는 순간</b>이다 — 히트스톱이 거기 걸린다.</summary>
+    private bool _lastBossExhausted;
     private bool _walking;
 
     /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
@@ -103,7 +103,7 @@ public partial class Battle : Node2D
 
     /// <summary>
     /// 판이 끝났나. <b>디버그 전용 읽기</b> — <c>tools/build.sh shots</c> 의 <c>ShotRunner</c> 가
-    /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 1.65~1.90초 패턴)와
+    /// 셔터를 누를 때를 보는 데만 쓴다. 벽시계로 기다리면 패턴 주기(0.8초 간격 + 3연격 3.25초 또는 점프 공격 1.5초)와
     /// 어긋나 매번 다른 순간이 찍힌다 — 그러면 스크린샷이 "무엇이 보이는가" 를 증명하지 못한다.
     /// </summary>
     public bool Over => _over;
@@ -118,12 +118,18 @@ public partial class Battle : Node2D
     public int FighterHealth => _broken ? 0 : _sim.Fighter.Health;
 
     /// <summary>
-    /// 공격 판정이 선 틱인가. 위와 같이 디버그 전용 읽기다 — 이 순간이 곧 <b>칼이 지나가는
-    /// 프레임</b>이라(fighters.json 의 combo 한 칸의 blade_frame), 스크린샷이 "칼이 보이는가" 를
-    /// 증명하려면 프레임 수를 세는 대신 이것을 보고 셔터를 눌러야 한다. 세어 두면 공격 타이밍을
-    /// 고치는 순간 조용히 어긋나 선딜 자세만 찍힌다 — 이슈 #38 전의 스크린샷이 그랬다.
+    /// 이 틱에 규칙이 보스에게 파이터 칼을 <b>대 봤나</b> (설계 §6.1 · §9) — <see cref="BossSwingTested"/> 의 파이터 쪽이다. 위와 같이
+    /// 디버그 전용 읽기다. 대 본 틱은 곧 <b>칼이 지나가는 프레임</b>이라(fighters.json 의 combo 한 칸의 blade_frame), 스크린샷이
+    /// "칼이 보이는가" 를 증명하려면 <b>프레임 수를 세지 않고 규칙에게 묻는다</b> — 세어 두면 공격 타이밍을 고치는 순간 조용히 어긋나
+    /// 선딜 자세만 찍힌다. 이슈 #38 전의 스크린샷이 그랬다.
+    ///
+    /// <para>
+    /// 칼의 창이 살아 있나(<c>Fighter.AttackActive</c>)로 물으면 모자라다: 칼은 한 번 닿으면 그 틱에 끝나(<c>BattleSim.Strike</c>) 다음
+    /// 틱부터 채운 사각형이 없는데 창은 계속 산다. 그렇게 물어 찍던 때, 걸어 들어오는 보스에게 첫 칼이 창의 첫 틱에 닿아
+    /// (gap=-82 · tick 213) 판정 보기의 <c>battle-5-attack</c> 이 흰 궤적만 찍혔다 (#72).
+    /// </para>
     /// </summary>
-    public bool FighterAttackActive => !_broken && !_over && _sim.Fighter.AttackActive;
+    public bool FighterSwingTested => !_broken && !_over && _sim.FighterTestedRects.Count > 0;
 
     /// <summary>
     /// 지금 칼질이 몇 번째인가 (0 = 1타). 디버그 전용 읽기다 — 스크린샷이 2타를 노리려면 규칙에게 물어야 한다.
@@ -156,24 +162,11 @@ public partial class Battle : Node2D
     public int FighterParries => _parries;
 
     /// <summary>
-    /// <b>다음 판정</b>이 가드 불가인가. 위와 같이 디버그 전용 읽기다 — 빨강 · 危 예고가 화면에서
-    /// 구별되는지를 증명하려면 그것이 실제로 떠 있는 순간을 기다려야 한다.
-    ///
-    /// <para>
-    /// <b>패턴 태그가 아니라 다음 판정을 본다</b> (이슈 #53). 태그(<c>has_guard_break</c>)로 기다리면
-    /// 이제 아홉 변종 전부의 선딜 어디서나 참이라 1·2타 앞에서 셔터가 눌리고, 그 장은 "빨간 3타
-    /// 예고" 라는 이름으로 호박색 1타를 찍는다.
-    /// </para>
+    /// 보스가 <b>탈진했나</b> (#72 · 설계 §4.3). 위와 같이 디버그 전용 읽기다 — 받아친 상이 화면에서 "무너졌다" 로
+    /// 읽히는지를 증명하려면 그 1.5초 안에서 셔터를 눌러야 한다. 프레임을 세지 않는 이유는 늘 같다: 탈진 길이는
+    /// 데이터라 세어 두면 그 값을 고치는 날 이 장이 조용히 다른 순간을 찍는다.
     /// </summary>
-    public bool BossGuardBreak => !_broken && !_over && _sim.NextActiveGuardBreak;
-
-    /// <summary>
-    /// 보스가 <b>굳어 있나</b> (이슈 #53). 위와 같이 디버그 전용 읽기다 — 마무리를 받아친 상이
-    /// 화면에서 "지쳤다" 로 읽히는지를 증명하려면 그 2.3초 안에서 셔터를 눌러야 한다.
-    /// 프레임을 세지 않는 이유는 늘 같다: 경직 길이는 데이터라 세어 두면 그 값을 고치는 날
-    /// 이 장이 조용히 다른 순간을 찍는다.
-    /// </summary>
-    public bool BossStaggered => !_broken && !_over && _sim.Boss.Staggered;
+    public bool BossExhausted => !_broken && !_over && _sim.Boss.Exhausted;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
@@ -182,17 +175,24 @@ public partial class Battle : Node2D
     public int BossHealth => _broken ? 0 : _sim.Boss.Health;
 
     /// <summary>
-    /// 지금까지 지나간 <b>헛스윙</b> 수 (이슈 #48). 위와 같이 디버그 전용 읽기다 — 헛스윙은
-    /// 0.34초짜리 <b>사건</b>이라 상태로는 못 노린다. 늘어난 그 순간이 셔터를 누를 때다.
-    /// </summary>
-    public int BossFeints => _sim.Feints;
-
-    /// <summary>
-    /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 예고</b>를
-    /// 증명하려면 "지금 어느 패턴인가" 를 보고 셔터를 눌러야 한다. 같은 패턴을 세 번 찍으면
-    /// 세 장이 똑같고, 그건 증명이 아니라 우연이다.
+    /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 그림</b>(3연격의 칼 · 점프 공격의
+    /// 도약)을 증명하려면 "지금 어느 패턴인가" 를 보고 셔터를 눌러야 한다. 패턴은 무작위로 뽑힌다.
     /// </summary>
     public string? BossPattern => _broken || _over ? null : _sim.Boss.CurrentPattern;
+
+    /// <summary>
+    /// 보스의 발바닥 높이 (#72 · 설계 §4.2). 위와 같이 디버그 전용 읽기다 — 공중의 점프 공격을 찍으려면 정점 근처에서
+    /// 셔터를 눌러야 하고, 도약 시각은 데이터(<c>motion.air</c>)라 프레임을 세면 그 값을 고치는 날 땅이 찍힌다.
+    /// </summary>
+    public double BossY => _broken || _over ? 0 : _sim.Boss.Y;
+
+    /// <summary>
+    /// 이 틱에 규칙이 파이터에게 보스 판정을 <b>대 봤나</b> (설계 §6.1). 위와 같이 디버그 전용 읽기다 — 판정 보기(<c>HITBOXES=1</c>)의
+    /// 사진이 흰 궤적 위의 채운 사각형과 실효 몸통 색을 보이려면 사각형을 그리는 그 틱에 셔터를 눌러야 한다. 창이 산 동안
+    /// (<c>SwingLive</c>)으로는 모자라다: 땅에 선 몸은 3연격과 착지 띠에 창의 첫 틱에 닿고, 닿은 판정은 그 틱에 끝나 틱 사이에
+    /// 한 번도 "살아 있다" 로 안 읽힌다.
+    /// </summary>
+    public bool BossSwingTested => !_broken && !_over && _sim.BossTestedRects.Count > 0;
 
     /// <summary>
     /// 다음 판정까지 남은 시간(초). 더 올 판정이 없으면 0. 위와 같이 디버그 전용 읽기다 —
@@ -213,27 +213,22 @@ public partial class Battle : Node2D
         _feel = Balance.Data.Feel;
         _result.Bind(OnAgain, OnTitle);
 
-        Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
-        Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
-        Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
-        Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
-
-        // 판정 모양도 데이터다 (이슈 #59). 칼질이 id 로 가리키는 모양을 여기서 읽어 규칙에 넘긴다 — 규칙은 파일을 모른다.
-        Dictionary<string, HitShape> shapes = LoadShapes("res://data/hitboxes.json");
+        // 데이터 다섯은 데모와 같은 자리에서 읽는다(BattleTables). 판정 모양도 데이터다 (이슈 #59) — 규칙은 파일을 모른다.
+        BattleTables data = BattleTables.Load();
 
         // 아레나 폭 · 한 판의 상한 · 기본 보스 · 고정 캐릭터는 balance.json 이 정한다. 전에는 그 값들이
         // 게임 · 데모 · 테스트 다섯 곳에 리터럴로 흩어져 있었고 이미 갈려 있었다.
         BattleBalance battle = Balance.Data.Battle;
 
         // 캐릭터 하나로 계속 간다 (이슈 #22 — 3택을 만들지 않는다). 누구인지는 데이터가 정한다.
-        if (!fighters.TryGetValue(battle.Fighter, out FighterConfig? fighter))
+        if (!data.Fighters.TryGetValue(battle.Fighter, out FighterConfig? fighter))
         {
             Log.Error("battle", $"fighter_missing id={battle.Fighter}");
             _broken = true;
             return;
         }
 
-        if (!bosses.TryGetValue(battle.Boss, out BossConfig? boss))
+        if (!data.Bosses.TryGetValue(battle.Boss, out BossConfig? boss))
         {
             Log.Error("battle", $"boss_missing id={battle.Boss}");
             _broken = true;
@@ -242,25 +237,33 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
-        _patterns = patterns;
 
         // 단계는 Autoload 가 들고 있다 — 씬은 다시 시작할 때마다 새로 만들어지므로 여기 두면 사라진다.
         _stage = Game.Instance.Stage;
-        _hasNextStage = stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
+        _hasNextStage = data.Stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
 
-        // 단계 명부는 data/stages.json 이 정한다 — patterns.json 의 키 순서를 쓰면 패턴을
-        // 파일 맨 위에 끼워 넣는 것만으로 1단계가 다른 전투가 된다.
-        IReadOnlyList<string> ids = StageRoster.For(stages, _stage);
+        // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
+        // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup).
+        RunHistory history = Game.Instance.History;
+        _attempt = history.Open();
+        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records) is not { } stage)
+        {
+            _broken = true; // [E] 는 StageRoster 가 남겼다
+            return;
+        }
+
+        Log.Info("run", $"attempt={_attempt.Number} stage={_stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
 
         _sim = new BattleSim(new BattleSetup
         {
             Arena = new Arena(battle.ArenaWidth),
             Fighter = _fighterConfig,
-            HitShapes = shapes,
+            HitShapes = data.Shapes,
             Boss = _bossConfig,
-            PatternIds = ids,
-            Patterns = patterns,
-            Seed = 51,
+            PatternIds = stage.PatternIds,
+            Patterns = data.Patterns,
+            Seed = _attempt.Seed,
+            Picker = stage.Picker,
             MaxTicks = battle.MaxTicks,
         });
 
@@ -280,7 +283,7 @@ public partial class Battle : Node2D
             _world.AddChild(_hitboxDebug);
         }
 
-        Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={ids.Count}");
+        Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={stage.PatternIds.Count}");
     }
 
     /// <summary>
@@ -392,8 +395,9 @@ public partial class Battle : Node2D
     {
         _walking = input.Move != 0 && _sim.Fighter.Action == FighterAction.Idle;
 
-        // 회피 관측은 보스 판정 하나마다 정확히 한 건 는다 — 늘었다는 것은 판정이 섰다는 뜻이다.
-        // 맞았든 빗나갔든 칼은 휘둘러졌으므로 충격파는 나와야 한다.
+        // 회피 관측은 끝까지 간 보스 판정 하나마다 한 건 는다 — 닿으면 닿은 틱에, 빗나가거나 무적으로 흘렸으면 창이 닫히는
+        // 틱에(스펙 §3.6 ①). 탈진이나 판 끝으로 끊긴 창은 관측이 없다(§3.5). 그래서 빗나간 칼의 충격파는 창이 닫힐 때 난다 —
+        // 칼이 선 순간과 어긋나는 것은 링을 걷는 6번 PR 이 다시 본다. 맞았든 빗나갔든 칼은 휘둘러졌으므로 충격파는 나와야 한다.
         if (_sim.Events.Count > _lastEventCount)
         {
             _bossView.ActiveNow();
@@ -404,10 +408,13 @@ public partial class Battle : Node2D
                 DodgeEvent e = _sim.Events[i];
                 switch (e.Verdict)
                 {
+                    // 받아쳤다 — 작은 고리와 약한 흔들림이다(요청이 "화면이 약간 흔들리고 작은 성공 표시" · 이슈 #53). 0.7 은
+                    // 판정마다 도는 것(0.45)보다 조금 세고 피격(1.0)보다 훨씬 약하다. 받아치면 보스가 무너지는데(#72) 그 히트스톱과
+                    // 큰 흔들림은 여기가 아니라 탈진에 드는 틱이 건다(아래) — 원인이 무엇이든 같은 탈진에 같이 걸리게.
                     case HitVerdict.Parried:
-                        // **마무리를 받아쳤나**가 연출의 크기를 정한다 (이슈 #53) — 보스가 굳는
-                        // 조건과 같은 칸이다. 규칙 층에 뷰용 콜백이 없으므로 그 사실은 관측에 실려 온다.
-                        ParryLanded(finisher: e.Finisher);
+                        _parries++;
+                        _fighterView.ParrySuccess();
+                        ShakeFor(0.7);
                         break;
 
                     // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
@@ -429,15 +436,6 @@ public partial class Battle : Node2D
             _lastEventCount = _sim.Events.Count;
         }
 
-        // 헛스윙은 관측을 안 남기므로 위 갈래에 안 걸린다 (이슈 #48) — 그런데 **화면에는 있어야 한다.**
-        // 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이고, 그러면 III-역린 은 아무도 안 무는 함정이다.
-        // 그림은 판정과 **다르다**: 빈 고리만 퍼지고 섬광도 흔들림도 없다(BossView.FeintNow).
-        if (_sim.Feints > _lastFeintCount)
-        {
-            _bossView.FeintNow();
-            _lastFeintCount = _sim.Feints;
-        }
-
         if (_sim.Fighter.Health < _lastFighterHealth)
         {
             _fighterView.Hit();
@@ -448,6 +446,17 @@ public partial class Battle : Node2D
         {
             _bossView.Hit();
         }
+
+        // **보스가 무너지는 틱** (#72 · 설계 §4.3 · §7.2) — 히트스톱과 흔들림이 여기 걸린다. 관측(받아친 판정)이 아니라
+        // 탈진에 드는 것을 앞 틱과 견줘 잡는다: 4번 PR 의 경직 게이지 탈진에는 받아친 관측이 없다.
+        if (_sim.Boss.Exhausted && !_lastBossExhausted)
+        {
+            ShakeFor(1.0);
+            _hitstopLeft = _feel.HitstopFrames;
+            Freeze(true);
+        }
+
+        _lastBossExhausted = _sim.Boss.Exhausted;
 
         // 새 칼질이 시작된 **그 틱** (이슈 #54) — 1타든, 1타가 끝나는 틱에 이어진 2타든(설계 §5.1). 2타는 행동이
         // Attack 그대로라 "행동이 바뀌었나" 로는 못 본다: 몇 번째 칼질인지가 바뀐 것을 본다. 렌더 프레임이 아니라
@@ -482,40 +491,6 @@ public partial class Battle : Node2D
         _lastAttackActive = _sim.Fighter.AttackActive;
     }
 
-    /// <summary>
-    /// 받아쳤다 (이슈 #53). <b>1·2타에는 작은 고리와 약한 흔들림뿐</b>이고, <b>가드 불가인 3타에만</b>
-    /// 히트스톱이 붙는다.
-    ///
-    /// <para>
-    /// 전에는 모든 패리가 섬광 + 스파크 + 히트스톱 7프레임을 받았다. 그 히트스톱이 경직 0.5초와
-    /// 겹쳐 <b>같은 패턴의 3타가 0.90초 뒤에 오기도 1.52초 뒤에 오기도 했다</b> — 유저가
-    /// "딜레이가 매번 다르다" 고 말한 것이 이것이다. 시간을 세우는 것은 "이건 특별하다" 는 말이라,
-    /// 매번 일어나는 일에 걸면 그 말이 박자를 먹는다.
-    /// </para>
-    ///
-    /// <para>
-    /// 흔들림은 <b>판정마다 도는 것(0.45)보다 조금 세고 피격(1.0)보다 훨씬 약하다.</b>
-    /// 요청이 "화면이 약간 흔들리고 작은 성공 표시" 였고, 받아친 것은 맞은 것이 아니다.
-    /// </para>
-    /// </summary>
-    /// <param name="finisher">그 판정이 패턴의 <b>마무리</b>였나. 규칙 층이 보스를 굳히는 조건과
-    /// 같은 칸이다 — 화면이 서는 것과 보스가 굳는 것이 다른 조건으로 갈리면 히트스톱이 경직 없는
-    /// 자리에 걸려 박자만 먹는다.</param>
-    private void ParryLanded(bool finisher)
-    {
-        _parries++;
-        _fighterView.ParrySuccess();
-        ShakeFor(0.7);
-
-        if (!finisher)
-        {
-            return;
-        }
-
-        _hitstopLeft = _feel.HitstopFrames;
-        Freeze(true);
-    }
-
     private void Freeze(bool frozen)
     {
         _fighterView.Freeze(frozen);
@@ -542,6 +517,11 @@ public partial class Battle : Node2D
         }
 
         Log.Info("scene", $"battle over outcome={outcome} stage={_stage} ticks={_sim.Ticks}");
+
+        // 끝까지 간 시도만 기록에 붙는다 — 이긴 판도(1단계를 이긴 판이 곧 1단계 기록이다 · 설계 §4.4). 판마다 한 번이고,
+        // 관측이 살아 있는 마지막 자리가 여기다.
+        Game.Instance.History.Record(new AttemptRecord(_attempt.Number, _stage, _attempt.Seed, outcome, [.. _sim.Events]));
+        Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
     }
 
     /// <summary>
@@ -549,7 +529,8 @@ public partial class Battle : Node2D
     ///
     /// <para>
     /// 단계 진행만 남기고 캐릭터 3택 · 스탯 강화는 만들지 않는다(이슈 #22). 단계는 성장 루프가 아니라
-    /// 보스 설계의 축이다 — 단계가 오를수록 보스가 쓰는 패턴이 늘고, 그것이 게임 자체다.
+    /// 보스 설계의 축이다 — 보스는 두 단계이고(#72 · 설계 §4) 2단계를 이기면 클리어다. 다음 단계가
+    /// <c>stages.json</c> 에 없으면 클리어라, 단계 수를 여기 적지 않는다.
     /// </para>
     /// </summary>
     private void Reveal()
@@ -567,7 +548,7 @@ public partial class Battle : Node2D
         string detail = cleared
             ? $"{_stage}단계까지 전부 넘었다"
             : won
-                ? $"{_stage}단계 돌파 — 다음 단계는 패턴이 늘어난다"
+                ? $"{_stage}단계 돌파 — 다음은 {_stage + 1}단계"
                 : $"{_stage}단계 · 보스 체력 {_sim.Boss.Health}/{_bossConfig.MaxHealth} 남음";
 
         // 이긴 판에서 [다시] 는 거짓말이다 — 단계가 이미 올랐으므로 같은 판이 아니다.
@@ -578,7 +559,7 @@ public partial class Battle : Node2D
 
     private void OnAgain()
     {
-        // 클리어했으면 판을 처음으로 되돌린다 — 안 그러면 없는 6단계를 달라고 하게 된다.
+        // 클리어했으면 판을 처음으로 되돌린다 — 안 그러면 없는 3단계를 달라고 하게 된다.
         if (_outcome == BattleOutcome.Win && !_hasNextStage)
         {
             Game.Instance.ResetRun();
@@ -641,12 +622,13 @@ public partial class Battle : Node2D
 
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
+            _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
             _sim.NextActiveIn,
-            _sim.Boss.Staggered,
-            CurrentAnim(),
-            CurrentTell()));
+            _sim.Boss.Exhausted,
+            _sim.BossStep?.Anim,
+            _sim.BossStep?.Frame));
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
@@ -657,7 +639,7 @@ public partial class Battle : Node2D
             _sim.FighterTestedRects,
             _sim.Fighter.Body,
             _sim.Boss.Body,
-            HitboxDebug.FighterColor(_sim.Fighter.Invulnerable, _sim.Fighter.Parrying, _sim.Fighter.Guarding));
+            HitboxDebug.FighterColor(_sim.FighterDefense));
     }
 
     /// <summary>규칙의 행동 → 뷰의 자세. 이 변환을 아는 것은 둘 다 아는 여기뿐이다.</summary>
@@ -678,46 +660,6 @@ public partial class Battle : Node2D
         };
     }
 
-    /// <summary>지금 도는 패턴의 선딜 모션 이름. 패턴이 안 돌면 null.</summary>
-    private string? CurrentAnim() => Current()?.Tell.Anim;
-
-    /// <summary>
-    /// 지금 도는 패턴의 예고 표지를 <b>화면 좌표로</b> 옮긴다.
-    ///
-    /// <para>
-    /// 데이터의 <c>x</c> 는 "보스의 앞(+) 인가 뒤(-) 인가" 다. 화면의 왼/오른쪽으로 옮기려면
-    /// 보스가 <b>어디를 보는지</b>를 알아야 하고, 그 답은 <see cref="Boss.Facing"/> 하나다.
-    /// 안 뒤집으면 파이터가 보스 왼쪽에 설 때 "앞에 끌리는 칼" 이 등 뒤에 그려진다.
-    /// </para>
-    ///
-    /// <para>
-    /// ⚠ <b>두 x 를 견줘 여기서 다시 계산하면 안 된다</b>(이슈 #36 전에는 그랬다). 그러면 파이터가
-    /// 스윙 도중에 보스를 지나가는 순간 <b>표지가 한 프레임에 반대쪽으로 튄다</b> — 몸은 잠겨 그대로인데
-    /// 칼만 등 뒤로 간다. 방향을 아는 곳은 규칙 한 곳이어야 한다.
-    /// </para>
-    /// </summary>
-    private BossTell? CurrentTell()
-    {
-        if (Current() is not PatternDef def)
-        {
-            return null;
-        }
-
-        // **다음 판정**에서 온다 (이슈 #53). 가드 불가면 예고가 호박에서 **빨강**이 되고 그 위에
-        // 危 가 뜬다 — 둘은 같은 뜻("가드로 못 막는다")을 색과 모양 두 통로로 나른다(BossTell).
-        //
-        // ⚠ 이슈 #47 은 여기서 패턴 태그(has_guard_break)를 읽었다. 그때는 그 요약이 "무엇이
-        // 오는가" 를 말하는 유일한 값이었지만, 계열이 연속타뿐인 지금 그 요약은 **선딜 내내 참**이라
-        // 1·2타까지 빨갛게 칠한다 — 막을 수 있는 판정을 "못 막는다" 고 말하는 예고다.
-        // 다음 판정 하나만 보면 색이 1·2타에 호박 · 3타에 빨강으로 제때 갈린다.
-        return new BossTell(
-            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length, _sim.NextActiveGuardBreak);
-    }
-
-    /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>
-    private PatternDef? Current() =>
-        _sim.Boss.CurrentPattern is string id && _patterns.TryGetValue(id, out PatternDef? def) ? def : null;
-
     /// <summary>
     /// 보스가 패턴의 어디쯤인가. 더 올 판정이 있으면 선딜, 없으면 후딜이다 —
     /// <c>CurrentPattern</c> 하나로는 그 둘이 같은 그림이 된다.
@@ -730,19 +672,6 @@ public partial class Battle : Node2D
         }
 
         return _sim.NextActiveIn is null ? BossPhase.Recover : BossPhase.Windup;
-    }
-
-    private static Dictionary<string, T> Load<T>(string path)
-    {
-        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        return JsonData<T>.ParseTable(file.GetAsText(), path);
-    }
-
-    /// <summary><c>hitboxes.json</c> → 판정 모양. 문제는 <c>HitShapeTable</c> 이 전부 모아 한 번에 던진다.</summary>
-    private static Dictionary<string, HitShape> LoadShapes(string path)
-    {
-        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        return HitShapeTable.Parse(file.GetAsText(), path);
     }
 
     /// <summary>규칙의 칼질 칸 → 뷰의 시트. 뷰가 fighters.json 을 직접 안 읽게 여기서 옮겨 준다.</summary>
