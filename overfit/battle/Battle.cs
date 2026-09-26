@@ -124,6 +124,14 @@ public partial class Battle : Node2D
     public bool FighterAttackActive => !_broken && !_over && _sim.Fighter.AttackActive;
 
     /// <summary>
+    /// 이 틱에 규칙이 보스에게 파이터 칼을 <b>대 봤나</b> (설계 §6.1 · §9) — <see cref="BossSwingTested"/> 의 파이터 쪽이다. 위와 같이
+    /// 디버그 전용 읽기다. <see cref="FighterAttackActive"/> 로는 모자라다: 칼은 한 번 닿으면 그 틱에 끝나(<c>BattleSim.Strike</c>)
+    /// 다음 틱부터 채운 사각형이 없다. 걸어 들어오는 보스에게 첫 칼이 창의 첫 틱에 닿아(gap=-82 · tick 213) 판정 보기의
+    /// <c>battle-5-attack</c> 이 흰 궤적만 찍혔다 (#72).
+    /// </summary>
+    public bool FighterSwingTested => !_broken && !_over && _sim.FighterTestedRects.Count > 0;
+
+    /// <summary>
     /// 지금 칼질이 몇 번째인가 (0 = 1타). 디버그 전용 읽기다 — 스크린샷이 2타를 노리려면 규칙에게 물어야 한다.
     /// 프레임을 세면 2타의 선딜을 데이터에서 고치는 날 조용히 다른 순간이 찍힌다.
     /// </summary>

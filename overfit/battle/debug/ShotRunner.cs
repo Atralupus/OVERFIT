@@ -110,9 +110,11 @@ public partial class ShotRunner : Node
         // 그리고 실제로 어긋나 있었다(이슈 #38): 공격 액션이 애니메이션보다 짧아 칼이 나가는
         // 프레임까지 가지도 못했고, 이 스크린샷은 내내 **칼을 뒤로 뺀 자세**를 찍고 있었다.
         // 판정이 서는 틱이 곧 그 프레임이므로 규칙에게 물어보고 셔터를 누른다.
+        // **그 틱에 멈춰 찍는다**(CaptureOn · #72). 이 칼은 걸어 들어오는 보스와 겹친 채 창의 첫 틱에 닿고(실제로 gap=-82 ·
+        // tick 213), 닿은 칼질은 그 틱에 끝난다 — 판정이 선 것을 보고 나서 찍으면 두 프레임 늦어, 판정 보기(HITBOXES)에
+        // 채운 사각형 없이 흰 궤적만 찍혔다.
         Tap("attack");
-        await Until(() => _battle?.FighterAttackActive == true, _pollTimeout);
-        await Screenshot.CaptureAsync(this, "battle-5-attack");
+        await CaptureOn("battle-5-attack", () => _battle is { FighterSwingTested: true }, _pollTimeout);
 
         // ── 보스 피격: 작가가 그린 흰 실루엣 (이슈 #28) ───────────────────
         // 0.2초(12프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다 —
@@ -198,9 +200,8 @@ public partial class ShotRunner : Node
         await Frames(20);
         await Screenshot.CaptureAsync(this, "battle-5c-combo-windup");
 
-        // 칼이 지나가는 그 프레임 (battle-5-attack 과 같은 규약).
-        await Until(() => _battle is { FighterAttackActive: true, FighterComboStep: 1 }, _pollTimeout);
-        await Screenshot.CaptureAsync(this, "battle-5d-combo-blade");
+        // 칼이 지나가는 그 프레임 (battle-5-attack 과 같은 규약 — 칼을 대 본 그 틱에 멈춰 찍는다).
+        await CaptureOn("battle-5d-combo-blade", () => _battle is { FighterSwingTested: true, FighterComboStep: 1 }, _pollTimeout);
     }
 
     /// <summary>
@@ -401,18 +402,24 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 보스 판정을 대 본 <b>그 틱</b>의 화면을 찍는다 (설계 §6.1 · §9). 셔터가 한 틱만 늦어도 첫 틱에 닿아 끝난 판정의 사각형이 없고
+    /// 규칙이 판정을 대 본 <b>그 틱</b>의 화면을 찍는다 (설계 §6.1 · §9). 셔터가 한 틱만 늦어도 첫 틱에 닿아 끝난 판정의 사각형이 없고
     /// 몸통 색도 파이터 쪽 상태로 돌아간 그림이 찍힌다. 그래서 조건이 참인 그 자리에서 트리를 멈춘다 — <see cref="Until"/> 의 조건은
     /// 물리 틱 신호 안에서, <c>Battle</c> 이 다음 틱을 밀기 <b>전에</b> 돈다. 멈춘 동안 화면은 방금 그린 그 틱이고, 찍은 뒤 푼다.
+    /// <paramref name="tested"/> 가 "대 봤나" 다 — 보스 칼은 <see cref="CaptureTested"/>, 파이터 칼은 <c>FighterSwingTested</c>.
+    /// 판정 보기가 아닐 때 멈춰도 해가 없다: 찍히는 것은 같은 틱의 그림이다.
     /// </summary>
-    private async Task CaptureTested(string name, double timeout)
+    private async Task CaptureOn(string name, Func<bool> tested, double timeout)
     {
-        await Until(() => _battle is { BossSwingTested: true } && Pause(), timeout);
+        await Until(() => tested() && Pause(), timeout);
         await Screenshot.CaptureAsync(this, name);
         GetTree().Paused = false;
     }
 
-    /// <summary>트리를 멈춘다. <see cref="CaptureTested"/> 의 조건 안에서 부르려고 참을 돌려준다.</summary>
+    /// <summary>보스 판정을 대 본 그 틱에 찍는다 — <see cref="CaptureOn"/> 의 보스 쪽.</summary>
+    private Task CaptureTested(string name, double timeout) =>
+        CaptureOn(name, () => _battle is { BossSwingTested: true }, timeout);
+
+    /// <summary>트리를 멈춘다. <see cref="CaptureOn"/> 의 조건 안에서 부르려고 참을 돌려준다.</summary>
     private bool Pause()
     {
         GetTree().Paused = true;
