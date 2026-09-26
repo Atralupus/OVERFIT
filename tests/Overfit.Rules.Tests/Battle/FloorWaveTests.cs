@@ -37,6 +37,30 @@ public class FloorWaveTests
         FloorWave.Find(BandAt(960, 0, _floor, 0, 45), 960, _floor).ShouldNotBeNull().Height.ShouldBe(45);
     }
 
+    [Theory]
+    [InlineData(60, 120)]
+    [InlineData(120, 60)]
+    public void 윗끝이_다른_두_장이_이어지면_낮은_쪽이_충격파의_높이다(double leftTop, double rightTop)
+    {
+        // 맞닿은 두 장이 함께 바닥을 다 덮는데 윗끝이 60 과 120 이다. 띠 안의 모든 자리가 실제로 맞으려면 낮은 쪽(60)을 그린다 — 높은
+        // 쪽을 그리면 발이 60 ~ 120 에 뜬 사람이 한쪽 절반에서는 안 맞는데 띠 안에 그려진다. 목록은 일부러 오른쪽 장이 먼저다(정렬도 잰다).
+        double mid = _floor / 2;
+        var rects = new List<HitRect> { new(mid, _floor, 0, rightTop), new(0, mid, 0, leftTop) };
+
+        FloorWave.Find(rects, mid, _floor).ShouldNotBeNull().Height.ShouldBe(60, "이어진 판정 중 높은 윗끝을 띠의 높이로 읽었다");
+    }
+
+    [Fact]
+    public void 발이_이어진_판정_밖이면_출발점은_판정의_끝으로_당긴다()
+    {
+        // 바닥을 꼭 맞게 덮는 띠 [0, 폭] — 발 중심이 그 밖이면 충격파는 가까운 끝에서 출발한다. 판정 밖에서 출발하면 그 쪽 앞머리가
+        // 바깥에서 안으로 거꾸로 달린다.
+        IReadOnlyList<HitRect> exact = BandAt(_floor / 2, 0, _floor / 2, 0, 60);
+
+        FloorWave.Find(exact, _floor + 300, _floor).ShouldNotBeNull().Origin.ShouldBe(_floor, "오른끝 밖의 발에서 출발한다");
+        FloorWave.Find(exact, -300, _floor).ShouldNotBeNull().Origin.ShouldBe(0, "왼끝 밖의 발에서 출발한다");
+    }
+
     [Fact]
     public void 바닥을_다_덮지_못하는_판정은_충격파가_아니다()
     {

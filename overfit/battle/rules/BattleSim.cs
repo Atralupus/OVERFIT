@@ -244,8 +244,9 @@ public sealed class BattleSim
     public PatternStep? BossStep => _runner?.Step;
 
     /// <summary>
-    /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드) — 디버그 표시용 (이슈 #59 · 설계 §6.1).
-    /// 표시가 이것을 받아 그리기만 하므로, 판정이 틀린 자리에 서면 화면도 그 틀린 자리를 보여 준다.
+    /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드). 뷰 둘이 읽는다 — 판정 보기(<c>HitboxDebug</c> · 이슈 #59 ·
+    /// 설계 §6.1)와 착지 충격파(<c>FloorWave</c> · #83: 높이와 끝을 여기서 읽는다). 둘 다 이것을 받아 그리기만 하므로, 판정이 틀린 자리에
+    /// 서면 화면도 그 틀린 자리를 보여 준다. 규칙은 이것을 안 읽는다.
     /// </summary>
     public IReadOnlyList<HitRect> BossTestedRects => _swings.TestedRects;
 

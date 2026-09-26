@@ -106,7 +106,7 @@ public sealed class HitShape
 
     /// <summary>
     /// 공격자 기준 사각형 하나를 월드로 놓는다. <b>놓는 계산은 여기 하나다</b> — 판정(<see cref="ShapeHit"/>)과
-    /// 디버그 표시(<see cref="Place"/>)가 같은 함수를 부르므로 둘이 다른 자리를 가리킬 수 없다.
+    /// 뷰가 읽는 사각형(<see cref="Place"/>)이 같은 함수를 부르므로 둘이 다른 자리를 가리킬 수 없다.
     /// </summary>
     public static HitRect ToWorld(HitRect local, Placement at) =>
         at.Facing >= 0
@@ -114,7 +114,8 @@ public sealed class HitShape
             : new HitRect(at.X - local.X1, at.X - local.X0, at.Y + local.Y0, at.Y + local.Y1);
 
     /// <summary>
-    /// 월드에 놓은 사각형 전부. <b>디버그 표시용이다</b> — 판정은 이것을 안 부른다
+    /// 월드에 놓은 사각형 전부. <b>뷰가 읽는다</b> — 판정 보기(<c>HitboxDebug</c>)가 대 본 판정과 다음 판정의 사각형으로, 착지
+    /// 충격파(<c>FloorWave</c> · #83)가 <c>BattleSim.BossTestedRects</c> 로 받는다. 판정은 이것을 안 부른다
     /// (<see cref="ShapeHit.Test"/> 는 매 틱 목록을 만들지 않고 한 장씩 놓아 본다).
     /// </summary>
     public IReadOnlyList<HitRect> Place(Placement at)
