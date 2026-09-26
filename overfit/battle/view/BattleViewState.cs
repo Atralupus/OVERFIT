@@ -30,6 +30,13 @@ public enum FighterPose
     /// (반복하지 않는 애니메이션이다). 보스의 탈진과 같은 말이다: take-hit 에 선 채 굳어 있다.
     /// </summary>
     Exhausted,
+
+    /// <summary>
+    /// 붙들림 (#78 · 설계 §4.7 · §6 「잡힌 파이터」) — 잡기에 잡혔다. 탈진과 같은 <c>hit</c> 의 마지막 장이고 흰 구가 감싼다. 탈진 색은 안 칠한다 —
+    /// 붙들림과 탈진이 겹치면 붙들림이 먼저 그려지고, 흰 구가 흩어진 뒤 남은 탈진이 탈진 색으로 넘어간다(같은 <c>hit</c> 라 처음부터 다시 안 돈다).
+    /// <c>Battle</c> 이 그 동안 <see cref="FighterFrame.Exhausted"/> 를 거짓으로 싣는다.
+    /// </summary>
+    Held,
     Death,
 }
 
@@ -61,7 +68,8 @@ public enum BossPhase
 /// <param name="Invulnerable">대시 <b>무적 창</b> 안인가. 잔상이 이것에 묶인다 —
 /// 대시(0.18초)보다 무적(0.14초)이 짧은 것은 일부러고, 그 차이가 보여야 대시 타이밍이 의미를 갖는다.</param>
 /// <param name="Exhausted">탈진했나 (#71 · 설계 §5.5) — 가드 붕괴든 스태미나 0 이든. <c>exhaust_seconds</c> 동안 아무것도 못 한다 —
-/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다(자세는 <see cref="FighterPose.Exhausted"/>).</param>
+/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다(자세는 <see cref="FighterPose.Exhausted"/>).
+/// 붙들린 동안(#78)은 탈진이 겹쳐도 거짓이다 — 흰 구가 감싸는 동안 탈진 색을 안 칠한다(설계 §4.7).</param>
 /// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.
 /// 가드 링의 굵기가 아니라 <b>밝기</b>가 이것이라, 바닥에 가까울수록 링이 꺼져 간다.
 /// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다.</param>
@@ -136,6 +144,7 @@ public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame
 /// 그 단계가 붙드는 장(0부터). 뷰가 그 장에 세우고 멈춘다 — 장을 제 속도로 흘려 보내면 그림이 규칙의 창보다 먼저
 /// 지나간다(파이터의 <c>HoldWindup</c> 과 같은 이유). null 이면 그 애니메이션을 제 속도로 돈다.
 /// </param>
+/// <param name="AnimSpeed">그 애니메이션을 도는 배속 — 보통 1 이고, 돌진(#78) 동안 <c>feel.rush_anim_speed</c> 다. <c>Battle</c> 이 단계의 움직임을 보고 싣는다.</param>
 public readonly record struct BossFrame(
     double X,
     double Y,
@@ -143,4 +152,29 @@ public readonly record struct BossFrame(
     BossPhase Phase,
     bool Exhausted,
     string? Anim,
-    int? Frame);
+    int? Frame,
+    double AnimSpeed);
+
+/// <summary>
+/// 한 렌더 프레임에 잡기의 흰 구(<c>GrabOrb</c> · #78 · 설계 §4.7)를 그리는 데 필요한 전부. 규칙은 흰 구를 모른다 — 날고 · 붙들고 · 기다리는 것은
+/// 규칙의 단계와 잡힘에서 <c>Battle</c> 이 옮겨 싣는다. 좌표는 규칙 좌표(위가 +)다.
+/// </summary>
+/// <param name="Flying">잡기 창 바로 앞 단계인가 — 보스에게서 파이터에게 난다.</param>
+/// <param name="Progress">그 단계가 지난 몫 0 ~ 1 — 창이 열리는 틱에 파이터에 닿는다.</param>
+/// <param name="Held">파이터가 붙들렸나 — 파이터를 감싼다.</param>
+/// <param name="GrabLive">잡기 창이 살아 있나 — 못 잡았으면 창이 닫힐 때까지 바닥에서 기다린다.</param>
+/// <param name="BossX">보스 발 중심 x.</param>
+/// <param name="BossY">보스 발바닥 높이.</param>
+/// <param name="BossBodyHeight">보스 몸 키 — 흰 구가 몸 가운데에서 떠난다.</param>
+/// <param name="FighterX">파이터 발 중심 x.</param>
+/// <param name="FighterY">파이터 발바닥 높이.</param>
+public readonly record struct OrbFrame(
+    bool Flying,
+    double Progress,
+    bool Held,
+    bool GrabLive,
+    double BossX,
+    double BossY,
+    double BossBodyHeight,
+    double FighterX,
+    double FighterY);

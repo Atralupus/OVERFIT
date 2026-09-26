@@ -196,6 +196,11 @@ public partial class ShotRunner : Node
             await Hitboxes();
         }
 
+        // 2단계의 그림 (#78). 판정 보기의 판들 **뒤에** 찍는다 — 판마다 시도가 하나 열려(세션 시드 51) 앞에 끼우면 판정 보기 판들의 시도 번호가
+        // 밀려 패턴 순서가 바뀐다.
+        await Rush();
+        await Grab();
+
         Log.Marker("shots", "shots=done");
         GetTree().Quit();
     }
@@ -526,6 +531,35 @@ public partial class ShotRunner : Node
         await _drive.Until(() => _battle?.ResultVisible == true, _battleTimeout);
         await _drive.Frames(2);
         await Screenshot.CaptureAsync(this, "battle-11-stage-2");
+    }
+
+    /// <summary>
+    /// 돌진 중 한 장 (#78 · 설계 §4.6 · §9). 1타 돌진만 도는 2단계 판(대본)에서 가만히 선 파이터(480)에게 보스가 달려오는 한가운데다 —
+    /// 앞쪽 거리 832 에서 멈출 자리(760)까지 10틱을 달리므로 <c>run</c> 에 든 뒤 5틱이다. 그림은 <c>run</c> 을 3배속(30fps)으로 돈다.
+    /// </summary>
+    private async Task Rush()
+    {
+        _battle = await _drive.NewBattle(2, "1타 돌진");
+        await _drive.Until(() => _battle is { BossStepAnim: "run" }, _patternTimeout);
+        await _drive.Frames(5);
+        await Screenshot.CaptureAsync(this, "battle-13-rush");
+    }
+
+    /// <summary>
+    /// 흰 구가 붙든 파이터 한 장 (#78 · 설계 §4.7 · §6 · §9). 1타 잡기만 도는 2단계 판에서 가만히 선 파이터는 1타가 멀리서 헛친 뒤 1.70초의 창에
+    /// 잡힌다. 붙들린 파이터는 take-hit(10fps · 4장 = 24프레임)를 다 돌고 마지막 장에 선다 — 붙들린 뒤 30프레임이다(붙드는 60틱의 한가운데).
+    /// </summary>
+    private async Task Grab()
+    {
+        _battle = await _drive.NewBattle(2, "1타 잡기");
+        await _drive.Until(() => _battle is { FighterHeld: true }, _patternTimeout);
+        if (_battle is { FighterHeld: false })
+        {
+            Log.Warn("shots", "grab_not_seen");
+        }
+
+        await _drive.Frames(30);
+        await Screenshot.CaptureAsync(this, "battle-13b-grab");
     }
 
     /// <summary>

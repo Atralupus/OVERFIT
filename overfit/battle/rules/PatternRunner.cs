@@ -121,6 +121,26 @@ public sealed class PatternRunner
     /// </summary>
     public HitBox? NextHit => NextActiveAt() is int k ? _hits[k] : null;
 
+    /// <summary>
+    /// 지금 단계 <b>바로 다음</b>이 판정이면 그 판정과, 지금 단계가 그 판정까지 얼마나 지났나(0 = 방금 들었다 · 판정 한 틱 앞에 1 에 가깝다)
+    /// — 아니면 null (#78). 뷰가 잡기의 흰 구를 날리는 자리다: 1.30초의 idle 에서 보스를 떠나 1.70초의 창에 파이터에 닿는다(설계 §4.7).
+    /// 흰 구가 나는 시각을 뷰가 따로 들지 않고 규칙의 단계가 정하게 하려는 것이다. 규칙은 이 값을 안 읽는다.
+    /// </summary>
+    public (HitBox Hit, double Progress)? HitAhead
+    {
+        get
+        {
+            if (Step is null || Finished || _hits[_next] is not { } hit)
+            {
+                return null;
+            }
+
+            int from = _at[_next - 1];
+            int to = _at[_next];
+            return (hit, to > from ? (double)(Ticks - from) / (to - from) : 1);
+        }
+    }
+
     /// <summary>다음 판정까지 남은 시간(초) — 그 단계의 틱에서 지금 시계를 뺀 것. 없으면 null.</summary>
     public double? NextActiveIn => NextActiveAt() is int k ? (_at[k] - Ticks) * BattleSim.Dt : null;
 

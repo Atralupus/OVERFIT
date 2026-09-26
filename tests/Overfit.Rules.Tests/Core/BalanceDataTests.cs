@@ -38,6 +38,9 @@ public class BalanceDataTests
         data.Feel.SparkCount.ShouldBeGreaterThan(0);
         data.Feel.DeathHoldSeconds.ShouldBeGreaterThan(0, "사망 애니메이션을 볼 시간이 없다");
         data.Feel.BossHitFlashSeconds.ShouldBeGreaterThan(0, "보스의 흰 플래시가 안 보인다 — 때린 것이 닿았는지가 화면에 안 남는다");
+        data.Feel.RushAnimSpeed.ShouldBeGreaterThan(0, "돌진의 run 이 멈춘다 — 미끄러지는 한 자세로 읽힌다");
+        data.Feel.GrabOrbRadius.ShouldBeGreaterThan(0, "흰 구가 안 보인다 — 잡혔는지가 화면에 안 남는다");
+        data.Feel.GrabOrbFadeSeconds.ShouldBeGreaterThan(0, "흰 구가 흩어지지 않고 한 프레임에 꺼진다");
     }
 
     [Fact]

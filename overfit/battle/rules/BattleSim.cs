@@ -280,6 +280,21 @@ public sealed class BattleSim
     /// </summary>
     public bool SwingLive => _swings.Live;
 
+    /// <summary>산 판정 중에 붙드는 판정(잡기)이 있나 (#78 · <see cref="BossSwings.LiveGrab"/>) — 뷰의 흰 구가 읽는다. 규칙은 안 읽는다.</summary>
+    public bool GrabLive => _swings.LiveGrab;
+
+    /// <summary>
+    /// 이 틱에 <b>대 본</b> 보스 판정이 붙드는 판정(잡기)인가 (#78 · #83) — 착지 충격파가 거른다: 잡기의 띠는 착지와 같은 바닥 전체 모양이지만
+    /// 그림은 흰 구다(<c>BattleCues</c>). <see cref="BossTestedRects"/> 와 같은 판정을 본다. 규칙은 안 읽는다.
+    /// </summary>
+    public bool BossTestedGrab => _swings.TestedBox is { GrabHoldSeconds: > 0 };
+
+    /// <summary>
+    /// 지금 단계 바로 다음이 판정이면 그 판정과 지난 몫 (#78 · <see cref="PatternRunner.HitAhead"/>) — 뷰가 잡기의 흰 구를 그 몫만큼 날린다.
+    /// 패턴이 안 돌면 null. 규칙은 안 읽는다.
+    /// </summary>
+    public (HitBox Hit, double Progress)? BossHitAhead => _runner?.HitAhead;
+
     /// <summary>
     /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 답(#78 · 대시 ·
     /// 가드 · 패리)에 견준 실효 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가

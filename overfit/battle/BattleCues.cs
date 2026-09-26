@@ -168,7 +168,11 @@ public sealed class BattleCues
         // **바닥 전체를 치는 판정이 서는 틱** (#83) — 착지의 흰 충격파. 패턴 id 가 아니라 규칙이 이 틱에 대 본 사각형으로 가른다
         // (FloorWave.Find): 높이와 끝을 그 사각형에서 읽으므로 띠가 판정과 다른 말을 할 수 없다. 창의 첫 틱이다 — 땅에 선 몸은 첫 틱에
         // 맞아 판정이 끝나므로 그 뒤 틱에는 대 본 사각형이 없다. 앞 틱과 견주는 것은 넘은 사람(창 8틱 내내 대 본다) 때문이다.
-        FloorWave? wave = FloorWave.Find(_sim.BossTestedRects, _sim.Boss.X, _floorWidth);
+        //
+        // **붙드는 판정(잡기 · #78)에는 안 건다.** 잡기의 띠는 착지와 같은 바닥 전체 모양이라 모양만 보면 선다 — 그런데 충격파는 보스가 바닥을
+        // 내리치는 그림이라, idle 로 선 보스 발밑에서 퍼지면 잡기가 착지로 읽힌다. 잡기의 그림은 흰 구다(유저: "흰색 구가 캐릭터를 잡도록" ·
+        // GrabOrb) — 못 잡았으면 흰 구가 창이 산 동안 바닥에서 기다려, 맞는 자리가 바닥이라는 것은 그 그림이 말한다(설계 §12 「잡기의 충격파」).
+        FloorWave? wave = _sim.BossTestedGrab ? null : FloorWave.Find(_sim.BossTestedRects, _sim.Boss.X, _floorWidth);
         if (wave is { } landed && !_lastFloorWave)
         {
             _landingWave.Start(landed);

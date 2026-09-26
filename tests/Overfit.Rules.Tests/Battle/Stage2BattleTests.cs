@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Overfit.Battle.Rules;
+using Overfit.Battle.View;
 using Overfit.Rules.Tests.Support;
 using Shouldly;
 using Xunit;
@@ -188,8 +189,8 @@ public class Stage2BattleTests
     [Fact]
     public void 일타를_받아치면_돌진도_잡기도_없다()
     {
-        // 설계 §4.6 · §4.7 · §4.3 — 받아치면(1타) 연격이 끊기고 보스가 탈진한다: 돌진은 안 서고 잡기도 없다. 1타 창(51틱)의 2틱 앞에 누른 K 가
-        // 받아친다. 탈진(90틱)과 간격(48틱) 뒤 대본이 같은 패턴을 다시 세우기 전(170틱)까지 본다.
+        // 설계 §4.6 · §4.7 · §4.3 — 받아치면(1타) 연격이 끊기고 보스가 탈진한다: 돌진은 안 서고 잡기도 없다 — 흰 구가 날 자리(BossHitAhead)도 잡기
+        // 창(GrabLive)도 없다. 1타 창(51틱)의 2틱 앞에 누른 K 가 받아친다. 탈진(90틱)과 간격(48틱) 뒤 대본이 같은 패턴을 다시 세우기 전(170틱)까지 본다.
         foreach (string pattern in new[] { "1타 돌진", "1타 잡기" })
         {
             BattleSim sim = Sim(null, pattern);
@@ -199,6 +200,7 @@ public class Stage2BattleTests
             {
                 int p = sim.Ticks + 1 - begun;
                 sim.Tick(p == 49 ? _parry : WalkIn(sim.Ticks + 1));
+                (sim.BossHitAhead is { Hit.GrabHoldSeconds: > 0 } || sim.GrabLive).ShouldBeFalse($"{pattern} · {p}틱: 받아쳤는데 잡기가 남았다");
             }
 
             sim.Events.Select(e => e.Verdict).ShouldBe(new[] { HitVerdict.Parried }, $"{pattern}: 받아친 뒤에 3타나 잡기가 섰다");
@@ -360,6 +362,108 @@ public class Stage2BattleTests
         sim.Events[^1].Verdict.ShouldBe(HitVerdict.Grabbed, "죽인 잡기가 관측으로 안 남았다");
         log.Lines.ShouldContain($"[result][I] lose reason=dead ticks={sim.Ticks} boss_hp={sim.Boss.Health}");
         log.Lines.ShouldNotContain(l => l.StartsWith("[boss][D] cut_swing ", StringComparison.Ordinal), "죽인 잡기를 끊긴 창으로 버렸다");
+    }
+
+    [Fact]
+    public void 흰_구가_나는_자리는_잡기_창_바로_앞_단계이고_창이_산_동안_기다린다()
+    {
+        // 설계 §4.7 · §6 「잡기」 — 흰 구가 날고 · 붙들고 · 흩어지는 시각은 규칙의 단계와 잡힘이 정한다(규칙은 흰 구를 모른다). 뷰가 읽는 두 자리를
+        // 못박는다. ① 지금 단계 바로 다음이 판정이면 그 판정과 지난 몫(BossHitAhead) — 1.30초(78틱)의 idle 에서 0 이고 창(102틱) 한 틱 앞에
+        // 23/24 다. 1타의 f1(44 ~ 50틱)도 판정 앞이지만 그 판정은 안 붙든다. ② 잡기 창이 산 동안(GrabLive) — 뛰어넘은 사람에게는 창 8틱
+        // (102 ~ 109)이 끝날 때까지 참이고, 흰 구는 그동안 바닥에서 기다렸다 흩어진다. 1타의 창(51 ~ 58틱)은 산 판정이어도 붙드는 판정이 아니라
+        // 거짓이다 — 멀리 선 사람이라 1타가 창 끝까지 산다.
+        BattleSim sim = Sim(null, "1타 잡기");
+        int begun = UntilBegins(sim, "1타 잡기");
+
+        UntilTick(sim, begun, 45);
+        sim.BossHitAhead.ShouldNotBeNull("1타의 f1 이 판정 바로 앞인데 비었다").Hit.GrabHoldSeconds.ShouldBe(0);
+        for (int p = 51; p <= 57; p++)
+        {
+            UntilTick(sim, begun, p);
+            sim.SwingLive.ShouldBeTrue($"{p}틱: 1타의 창이 안 살았다 — 이 테스트가 산 판정을 안 본다");
+            sim.GrabLive.ShouldBeFalse($"{p}틱: 1타의 창을 잡기 창이라고 한다");
+        }
+
+        UntilTick(sim, begun, 77);
+        sim.BossHitAhead.ShouldBeNull("1타의 후딜(f3) 다음은 판정이 아니다");
+
+        for (int p = 78; p <= 101; p++)
+        {
+            UntilTick(sim, begun, p, q => q == 90 ? _jump : default);
+            (HitBox hit, double progress) = sim.BossHitAhead.ShouldNotBeNull($"{p}틱: 흰 구가 날 자리가 비었다");
+            hit.GrabHoldSeconds.ShouldBeGreaterThan(0);
+            progress.ShouldBe((p - 78) / 24.0, 1e-9, $"{p}틱: 지난 몫이 idle 에서 창까지의 몫이 아니다");
+            sim.GrabLive.ShouldBeFalse();
+        }
+
+        for (int p = 102; p <= 109; p++)
+        {
+            UntilTick(sim, begun, p);
+            sim.BossHitAhead.ShouldBeNull($"{p}틱: 창이 열렸는데 아직 날고 있다");
+            sim.GrabLive.ShouldBe(p < 109, $"{p}틱: 뛰어넘은 사람 앞의 잡기 창");
+        }
+
+        sim.Fighter.Held.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 흰_구가_나는_동안_보스가_무너지면_날_자리도_잡기_창도_없다()
+    {
+        // Review Focus 5 — 설계 §4.3: 게이지는 보스가 무엇을 하고 있었든 무너뜨린다. 흰 구가 나는 1.30초의 idle 동안 보스를 무너뜨리면 패턴이
+        // 끊겨 날 자리(BossHitAhead)가 그 틱에 사라지고 잡기 창은 안 선다 — 뷰의 흰 구는 그 자리에서 흩어진다(GrabOrb). 뷰가 앞 틱의 값을 붙들면
+        // 무너진 보스 앞에 흰 구가 날아와 파이터를 감싼다. 칼 한 번에 게이지가 차는 기준 파이터가 보스(1312) 앞 150 까지 걸어가 1타를 맞고 서
+        // 있다가, idle 에 들면 칼을 넣는다.
+        BattleSim sim = Sim(Breaker(), "1타 잡기");
+        int begun = UntilBegins(sim, "1타 잡기", _ => sim.Boss.X - sim.Fighter.X > 150 ? _right : default);
+        UntilTick(sim, begun, 78, _ => sim.Boss.X - sim.Fighter.X > 150 ? _right : default);
+        sim.BossHitAhead.ShouldNotBeNull("idle 에 들었는데 날 자리가 없다 — 이 테스트가 나는 동안을 안 본다");
+
+        for (int i = 0; i < 24 && !sim.Boss.Exhausted; i++)
+        {
+            sim.Tick(sim.Fighter.Action == FighterAction.Idle ? new InputFrame(0, false, false, false, Attack: true) : default);
+        }
+
+        sim.Boss.Exhausted.ShouldBeTrue("흰 구가 나는 동안 못 무너뜨렸다");
+        (sim.Ticks - begun).ShouldBeLessThan(102, "잡기 창이 열린 뒤에 무너졌다");
+        sim.BossHitAhead.ShouldBeNull("무너졌는데 흰 구가 날 자리가 남았다");
+        UntilTick(sim, begun, 120);
+        sim.GrabLive.ShouldBeFalse();
+        sim.Fighter.Held.ShouldBeFalse("무너진 보스의 잡기가 섰다");
+    }
+
+    [Fact]
+    public void 잡히면_그_틱에_잡기_창이_닫힌다()
+    {
+        // 한 번 휘두르면 한 번만 맞는다(설계 §3.5) — 잡은 창은 그 틱에 끝난다. 흰 구는 그때부터 창이 아니라 붙들림(Fighter.Held)을 따라간다.
+        BattleSim sim = Sim(null, "1타 잡기");
+        int begun = UntilBegins(sim, "1타 잡기");
+        UntilTick(sim, begun, 102);
+
+        sim.Fighter.Held.ShouldBeTrue();
+        sim.GrabLive.ShouldBeFalse("잡은 창이 살아 있다");
+    }
+
+    [Fact]
+    public void 잡기의_띠는_착지와_같은_모양이지만_대_본_판정이_붙드는_판정이라고_말한다()
+    {
+        // #83 · 설계 §4.7 — 착지의 흰 충격파는 "바닥에 닿은 사각형을 이으면 바닥 [0, 폭] 을 다 덮는 판정" 에 선다(FloorWave.Find · 패턴 이름으로 안
+        // 가른다). 잡기의 띠 [0, 1920, 0, 60] 은 착지 띠와 모양이 같아 그 규칙만으로는 잡기에도 선다 — 그런데 잡기의 그림은 흰 구다(유저: "흰색 구가
+        // 캐릭터를 잡도록"). 충격파는 보스가 바닥을 내리치는 그림이라 idle 로 선 보스 발밑에서 퍼지면 착지로 읽힌다. 그래서 뷰(BattleCues)가 이 틱에 대
+        // 본 판정이 붙드는 판정이면(BossTestedGrab) 충격파를 안 건다 — 판정의 깃발로 가른다(CLAUDE.md §2). 뛰어넘은 사람 앞에서 창 8틱 내내 본다.
+        BattleSim grab = Sim(null, "1타 잡기");
+        int begun = UntilBegins(grab, "1타 잡기");
+        for (int p = 102; p <= 109; p++)
+        {
+            UntilTick(grab, begun, p, q => q == 90 ? _jump : default);
+            FloorWave.Find(grab.BossTestedRects, grab.Boss.X, TestConfigs.Arena().Width).ShouldNotBeNull($"{p}틱: 잡기의 띠가 바닥 전체가 아니다");
+            grab.BossTestedGrab.ShouldBeTrue($"{p}틱: 잡기 창인데 붙드는 판정이라고 안 한다");
+        }
+
+        BattleSim leaps = Sim(null, "점프 3연속");
+        begun = UntilBegins(leaps, "점프 3연속");
+        UntilTick(leaps, begun, 60);
+        FloorWave.Find(leaps.BossTestedRects, leaps.Boss.X, TestConfigs.Arena().Width).ShouldNotBeNull("착지가 바닥 전체가 아니다");
+        leaps.BossTestedGrab.ShouldBeFalse("착지를 붙드는 판정이라고 한다 — 충격파가 안 선다");
     }
 
     /// <summary>칼 한 번에 게이지가 끝까지 차는 기준 파이터 — 공중에서 무너지는 순간을 한 틱으로 만든다(<c>BossExhaustTests.Breaker</c> 와 같다).</summary>

@@ -226,6 +226,22 @@ public sealed class FeelBalance
 
     /// <summary>사망 애니메이션을 보여주고 결과 화면을 띄우기까지의 시간(초).</summary>
     public required double DeathHoldSeconds { get; init; }
+
+    /// <summary>
+    /// 돌진의 <c>run</c> 배속 (#78 · 설계 §4.6). 3 이면 10fps × 3 = 30fps — 한 장이 화면 두 프레임이고, 돌진(0 ~ 0.433초) 동안 0 ~ 13장(한 바퀴 8장의
+    /// 1.6바퀴)이 보인다. 제 속도(10fps)면 0 ~ 5장이라 다리가 반 바퀴도 안 돌고 미끄러지는 한 자세로 읽힌다. 6배(60fps)부터는 장이 화면
+    /// 프레임마다 바뀌어 다리가 번진다. 발은 어느 배속에서도 미끄러진다(30fps 에서 한 장에 120px) — 배속은 "달린다" 가 읽히는 만큼만 준다.
+    /// </summary>
+    public required double RushAnimSpeed { get; init; }
+
+    /// <summary>잡기의 흰 구 반지름(px · #78 · 설계 §6) — 파이터 키 120 의 3/4, 몸을 감쌀 만큼.</summary>
+    public required double GrabOrbRadius { get; init; }
+
+    /// <summary>
+    /// 흰 구가 흩어지는 시간(초 · #78). 붙들림이 풀리거나 창이 닫히면 그 자리에서 부풀며 사라진다. 0.3 은 잡기 GIF 가 풀린 뒤 더 보여 주는
+    /// 길이(설계 §6.2 — 풀리는 틱 + 18)다.
+    /// </summary>
+    public required double GrabOrbFadeSeconds { get; init; }
 }
 
 /// <summary>모든 수치의 진실 원천. <c>data/balance.json</c> 하나가 이 모양이다.</summary>

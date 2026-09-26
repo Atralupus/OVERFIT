@@ -44,9 +44,20 @@ public sealed class SceneDriver
     /// 한 자리다 (#78 · #59 의 3/6 넘김). 전에는 대본의 네 곳이 같은 네 줄(단계 · 씬 전환 · 네 프레임 · 씬 읽기)을 따로 들고 있었고, 그중
     /// 둘은 단계를 안 적어 앞 판의 단계를 이어 썼다.
     /// </para>
+    ///
+    /// <para>
+    /// <paramref name="script"/> 를 주면 그 판 하나를 대본(패턴 id 의 순서)으로 세운다 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」) — <c>Game</c> 의
+    /// 다음 전투 한 칸에 넣고 전투로 가면 <c>Battle</c> 이 가져간다. 무엇이 올지 알아야 "그 패턴이 왔을 때" 를 찍는다. <c>params</c> 인 까닭:
+    /// 부르는 자리가 <c>new[] { "1타 잡기" }</c> 를 적으면 분석기(CA1861 · 상수 배열 인수)가 그 줄마다 경고한다.
+    /// </para>
     /// </summary>
-    public async Task<Overfit.Battle.Battle?> NewBattle(int stage)
+    public async Task<Overfit.Battle.Battle?> NewBattle(int stage, params string[] script)
     {
+        if (script.Length > 0)
+        {
+            Game.Instance.SetNextScript(script);
+        }
+
         Game.Instance.SetStage(stage);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);

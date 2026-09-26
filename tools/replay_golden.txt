@@ -466,4 +466,9 @@
 # 2026-09-27 **안 움직였다** (#78 · 선딜 틴트의 무르익음을 걷는다): 51 2024 12 0 19 2d5b1d281a8f35bb 그대로다.
 # 이 커밋이 csproj 가 링크하는 파일에서 바꾼 것은 BalanceData.cs 의 연출 키 하나(feel.tell_lead_seconds)를 걷은 것뿐이다 — 보스 뷰의
 # 무르익음만 읽었고 규칙은 안 읽었다. 여기가 움직였다면 연출 수치가 판에 샜다.
+# 2026-09-27 **안 움직였다** (#78 · 돌진 · 잡기 · 붙들린 파이터의 그림): 51 2024 12 0 19 2d5b1d281a8f35bb 그대로다.
+# 규칙 층에 더한 것은 뷰가 읽는 자리 셋뿐이다 — PatternRunner.HitAhead(→ BattleSim.BossHitAhead · 흰 구가 날 자리) · BossSwings.LiveGrab
+# (→ BattleSim.GrabLive · 흰 구가 기다리는 창) · BattleSim.BossTestedGrab(착지 충격파가 잡기를 거른다) — 규칙은 셋 다 안 읽는다. BalanceData.cs 에는
+# 연출 키 셋(feel.rush_anim_speed · grab_orb_radius · grab_orb_fade_seconds)이 들었다. 새로 링크한 뷰의 순수 절반 BossStepDraw.cs(보스 그림의 장
+# 고르기)는 규칙이 안 부른다. 여기가 움직였다면 읽기가 상태를 바꿨다.
 51 2024 12 0 19 2d5b1d281a8f35bb

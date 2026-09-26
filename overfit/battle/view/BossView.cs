@@ -88,6 +88,16 @@ public partial class BossView : Node2D
     /// <summary>맞은 뒤 첫 <see cref="Show"/> 가 그린 장을 로그로 남길 차례인가 — <see cref="Hit"/> 가 세우고 그 Show 가 지운다.</summary>
     private bool _flashLogPending;
 
+    /// <summary>
+    /// 단계가 붙든 장의 애니메이션 — 안 붙들었으면 null (<see cref="HoldAt"/> 이 세우고 <see cref="Animate"/> 가 새 이름을 틀 때 지운다 · #78). 같은
+    /// 애니메이션의 붙든 장 뒤에 이름 없는 장(제 속도로 돌라는 단계)이 오면 이름이 같아 <see cref="Animate"/> 가 아무것도 안 해, 멈춘 장이 그대로
+    /// 남았다(#59 의 3/6 넘김) — 이것을 보고 다시 돌린다(<see cref="BossStepDraw"/>).
+    /// </summary>
+    private string? _heldAnim;
+
+    /// <summary>지금 도는 배속 — 단계가 정한다(돌진 동안 <c>feel.rush_anim_speed</c> · #78). 히트스톱이 풀리면 이 배속으로 돌아온다.</summary>
+    private float _speed = 1.0f;
+
     public override void _Ready()
     {
         _sprite = GetNode<AnimatedSprite2D>("Sprite");
@@ -140,16 +150,27 @@ public partial class BossView : Node2D
         HoldLastFrameWhenDead();
 
         string anim = AnimationFor(frame.Anim, frame.Exhausted);
-        if (anim == frame.Anim && frame.Frame is int held)
+        switch (BossStepDraw.Next(_heldAnim, anim, frame.Anim, frame.Frame))
         {
-            HoldAt(anim, held);
-        }
-        else
-        {
-            Animate(anim);
+            case StepDraw.Hold:
+                HoldAt(anim, frame.Frame ?? 0);
+                break;
+
+            // 붙든 장과 같은 애니메이션을 제 속도로 그린다 — 이름이 같아 Animate 는 아무것도 안 하므로 멈춘 그 장에서 다시 돌린다.
+            case StepDraw.Resume:
+                _heldAnim = null;
+                _sprite.Play();
+                Log.Debug("view", $"boss_resume anim={anim} frame={_sprite.Frame}");
+                break;
+
+            default:
+                Animate(anim);
+                break;
         }
 
-        _sprite.SpeedScale = _frozen ? 0.0f : 1.0f;
+        // 돌진의 run 만 빠르다(설계 §4.6 · 규칙은 모른다) — 나머지는 제 속도다. 탈진의 take-hit 도 제 속도다.
+        _speed = anim == frame.Anim ? (float)frame.AnimSpeed : 1.0f;
+        _sprite.SpeedScale = _frozen ? 0.0f : _speed;
         _sprite.Modulate = Tint(phase, frame.Exhausted);
 
         // 흰 플래시는 틴트 위에 셰이더가 민다 — COLOR 에 modulate 가 이미 곱해져 있어 선딜 · 탈진 틴트 위에서도 희다.
@@ -214,7 +235,7 @@ public partial class BossView : Node2D
     public void Freeze(bool frozen)
     {
         _frozen = frozen;
-        _sprite.SpeedScale = frozen ? 0.0f : 1.0f;
+        _sprite.SpeedScale = frozen ? 0.0f : _speed;
     }
 
     private string AnimationFor(string? anim, bool exhausted)
@@ -294,6 +315,7 @@ public partial class BossView : Node2D
 
         _sprite.Frame = frame;
         _sprite.Pause();
+        _heldAnim = name;
     }
 
     /// <summary>
@@ -317,6 +339,7 @@ public partial class BossView : Node2D
         }
 
         _sprite.Play(name);
+        _heldAnim = null;
         AlignToGround(name);
     }
 

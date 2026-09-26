@@ -88,6 +88,26 @@ public sealed class BossSwings
     public bool Live => _live.Count > 0;
 
     /// <summary>
+    /// 산 판정 중에 붙드는 판정(잡기)이 있나 (#78 · 설계 §4.7) — 뷰의 흰 구가 창이 산 동안 바닥에서 기다리다 창이 닫히면 흩어진다. 잡으면 그
+    /// 틱에 창이 끝나므로(한 번 휘두르면 한 번만) 잡힌 뒤에는 거짓이다 — 흰 구는 그때부터 붙들림을 따라간다.
+    /// </summary>
+    public bool LiveGrab
+    {
+        get
+        {
+            foreach (LiveSwing swing in _live)
+            {
+                if (swing.Box.GrabHoldSeconds > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// 이 틱에 <b>대 본</b> 판정의 태그 — 판정 보기의 실효 몸통 색이 읽는다(설계 §6.1). 대 본 판정이 없으면 null. 둘 이상이면
     /// 먼저 선 것이다 — 지금 데이터에서 창은 겹치지 않는다(<c>PatternDataTests</c>: 다음 단계는 창이 닫힌 뒤다).
     ///
