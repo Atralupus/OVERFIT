@@ -411,6 +411,19 @@ public class HitResolverTests
     }
 
     [Fact]
+    public void 붙드는_판정이_맨몸에_닿으면_잡힘이다()
+    {
+        // 설계 §4.7 — 붙드는 판정(grab_hold_seconds > 0)이 닿은 결과는 맞음이 아니라 잡힘이다: 뷰가 흰 구를 붙이고 로그와 계측이 "잡혔다" 를
+        // 따로 센다. 가르는 것은 판정의 깃발과 결과다 — 패턴 이름이 아니다(CLAUDE.md §2). 안 닿으면 전처럼 빗나감이고, 답이 받는 수단
+        // (여기서는 대시)이면 전처럼 그 수단이 먹는다.
+        HitBox grab = Mid() with { GrabHoldSeconds = 1.0 };
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, grab, Tags(false)).ShouldBe(HitVerdict.Grabbed);
+        HitResolver.Resolve(Spawn(_bossX + 400), _at, grab, Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
+        HitResolver.Resolve(Acting(new InputFrame(0, false, true, false, false), 2), _at, grab, Tags(false))
+            .ShouldBe(HitVerdict.Dodged, "대시를 받는 붙드는 판정에 무적이 안 먹었다");
+    }
+
+    [Fact]
     public void 실효_방어는_판정의_답도_본다()
     {
         // 설계 §6.1 — 5번 PR 부터 몸통 색은 판정 단위의 답으로 칠한다. 잡기 앞의 무적 · 가드가 "무적" · "가드" 색이면 그 색이 거짓말한다.

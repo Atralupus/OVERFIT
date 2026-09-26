@@ -18,10 +18,13 @@ namespace Overfit.Battle.Rules;
 /// 한다: 참이어도 태그의 대시 창(<c>dash_window</c>)이 0 이면 못 흘린다. 규칙(<see cref="HitResolver.Effective"/>)과 관측이 같이 읽는다.</param>
 /// <param name="Guardable">판정의 답 — 가드로 막나. 단계의 <c>guard</c> 이고 없으면 참이다. 거짓이면 가드 중이어도 맨몸이다.</param>
 /// <param name="Parryable">판정의 답 — 패리로 받아치나. 단계의 <c>parry</c> 이고 없으면 참이다. 태그의 <c>parryable</c> 을 좁히기만 한다.</param>
+/// <param name="GrabHoldSeconds">붙드는 시간(초 · #78 · 설계 §4.7) — 0 보다 크면 맨몸에 닿은 결과가 잡힘이고 파이터가 이만큼 붙들린다.
+/// 단계의 <c>grab_hold_seconds</c> 이고 없으면 0 이다. 틱으로는 <c>BattleSim.TicksFor</c> 가 바꾼다.</param>
 public readonly record struct HitBox(
     HitShape Shape,
     int Damage,
     double ActiveSeconds = 0,
     bool Dashable = true,
     bool Guardable = true,
-    bool Parryable = true);
+    bool Parryable = true,
+    double GrabHoldSeconds = 0);

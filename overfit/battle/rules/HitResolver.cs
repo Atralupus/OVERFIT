@@ -56,6 +56,13 @@ public enum HitVerdict
     /// <c>guard_break</c> 판정은 #72 에서 걷었다). <b>전액</b>이고 파이터가 <b>탈진</b>한다(<c>exhaust_seconds</c> · #71 · 설계 §5.5).
     /// </summary>
     GuardBroken,
+
+    /// <summary>
+    /// <b>잡혔다</b> (#78 · 설계 §4.7) — 붙드는 판정(<see cref="HitBox.GrabHoldSeconds"/> &gt; 0)이 맨몸에 닿았다. 피해를 받고 붙들린다
+    /// (<c>Fighter.Held</c>). 맞음(<see cref="Hit"/>)과 가르는 이유: 뷰가 흰 구를 붙이고, 로그와 계측이 "잡혔다" 를 "맞았다" 와 따로
+    /// 센다. 계측에서는 맞음과 같이 실패다 — 아무 축도 성공으로 안 센다(설계 §7.3). 열거의 맨 뒤에 둔다 — 옛 값들의 정수가 그대로다.
+    /// </summary>
+    Grabbed,
 }
 
 /// <summary>
@@ -124,7 +131,8 @@ public static class HitResolver
                     : HitVerdict.Guarded;
 
             default:
-                return HitVerdict.Hit;
+                // 맨몸이다 — 붙드는 판정이면 잡힘, 아니면 맞음 (#78 · 설계 §4.7). 가르는 것은 판정의 깃발이다(패턴 이름이 아니다).
+                return box.GrabHoldSeconds > 0 ? HitVerdict.Grabbed : HitVerdict.Hit;
         }
     }
 

@@ -183,7 +183,7 @@ public sealed class DodgeCredit
             // **그 자리를 대시가 만들었으면 대시다** (이슈 #46) — **그 몸을 점프가 띄웠으면 점프다** (#85).
             HitVerdict.MissedTooFar or HitVerdict.MissedByGap => CreditDistance(box, boss, fighter),
 
-            // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
+            // 맞았다 · 잡혔다(#78) — 무엇을 시도했다 실패했는지를 남긴다.
             _ => MostRecentAction(),
         };
     }
@@ -258,10 +258,15 @@ public sealed class DodgeCredit
     }
 
     /// <summary>
-    /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 판정에만 쓴다 —
+    /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 · 잡힌 판정에만 쓴다 —
     /// 겹쳐 있으면 그 판정을 겨냥한 쪽이 더 나중이다.
-    /// 동시 시작은 대시 → 패리 → 점프 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
+    /// 동시 시작은 대시 → 패리 → 점프 → 가드 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
     /// 다른 라벨을 내 학습 데이터가 재현되지 않는다.
+    ///
+    /// <para>
+    /// <b>가드도 든다</b> (#78 · 설계 §4.7 · §12 「잡힘」). 가드를 받는 판정은 가드 중이면 맞음이 아니라 막음 · 붕괴라 여기 안 온다 —
+    /// 가드 중에 여기 오는 것은 가드를 안 받는 판정(잡기)뿐이다. 빼면 가드로 버티다 잡힌 기록이 "아무것도 안 함" 이 된다.
+    /// </para>
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) MostRecentAction()
     {
@@ -284,6 +289,12 @@ public sealed class DodgeCredit
         {
             verb = DodgeVerb.Jump;
             at = _jumpStartedAt;
+        }
+
+        if (!double.IsNaN(_guardStartedAt) && (double.IsNaN(at) || _guardStartedAt > at))
+        {
+            verb = DodgeVerb.Guard;
+            at = _guardStartedAt;
         }
 
         return (verb, at);

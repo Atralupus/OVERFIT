@@ -289,8 +289,9 @@ public sealed class BattleSim
         // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
         double wasX = Fighter.X;
         double wasY = Fighter.Y;
-        // 탈진에 드는 틱을 잡으려고 틱 시작의 탈진을 잡아 둔다 — 로그가 무엇이 바닥냈는지를 말한다(LogFighterExhaust).
+        // 탈진 · 붙들림에 드는 틱을 잡으려고 틱 시작의 둘을 잡아 둔다 — 로그가 무엇이 바닥냈는지 · 잡혔는지를 말한다(LogFighterExhaust · LogFighterHeld).
         bool wasExhausted = Fighter.Exhausted;
+        bool wasHeld = Fighter.Held;
         Fighter.Tick(input, Dt);
 
         // 보스 판정이 볼 가드 — 파이터를 민 **뒤**의 값이다. 막다가 든 탈진(딱 0 · 붕괴)은 판정이 이 가드를 봤을 때만 난다. 틱 시작에서
@@ -311,6 +312,11 @@ public sealed class BattleSim
         else if (broken)
         {
             Exhaust("poise");
+        }
+
+        if (Fighter.Held && !wasHeld)
+        {
+            LogFighterHeld();
         }
 
         if (Fighter.Exhausted && !wasExhausted)
@@ -549,6 +555,13 @@ public sealed class BattleSim
     private void LogFighterExhaust(bool guarding) =>
         Log.Debug("fighter", () => $"exhaust cause={(guarding ? "guard" : "action")} tick={Ticks}");
 
+    /// <summary>
+    /// 파이터가 붙들린 틱 (#78 · 설계 §4.7) — 그 틱에 탈진이 겹쳤나를 같이 남긴다. 겹치는 길은 둘이다: 탈진한 채 잡혔거나(이미 탈진),
+    /// 잡기가 마지막 스태미나의 행동을 끊었다(이 줄 다음에 <c>exhaust cause=action</c> 이 같은 틱으로 이어진다). 관측 줄(<c>[dodge]</c>)이
+    /// 결과 <c>Grabbed</c> 와 수단을 싣는다.
+    /// </summary>
+    private void LogFighterHeld() => Log.Debug("fighter", () => $"held exhausted={Fighter.Exhausted} tick={Ticks}");
+
     /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>
     private void Begin()
     {
@@ -583,9 +596,10 @@ public sealed class BattleSim
 
     /// <summary>
     /// 초를 틱으로. <b>규칙의 초→틱 반올림은 여기 한 곳이다</b> (설계 §3.5 · §3.6 ⑤) — 반 틱은 0 에서 먼 쪽으로 간다.
-    /// 쓰는 곳은 여덟이다: 판정 창의 길이(<see cref="BossSwings.Open"/> — 점프 가능도 그 창의 틱 수로 잰다 · #85), 타임라인 단계의
+    /// 쓰는 곳은 아홉이다: 판정 창의 길이(<see cref="BossSwings.Open"/> — 점프 가능도 그 창의 틱 수로 잰다 · #85), 타임라인 단계의
     /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 보스의 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>),
-    /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>).
+    /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>),
+    /// 잡기가 붙드는 시간(1.0초 = 60틱 · #78 · <see cref="BossSwings"/> 가 <see cref="Fighter.Grab"/> 에 넘긴다).
     /// 8fps 한 장은 0.125초 = 7.5틱이라, 이 중 둘이 각자 반올림하면 반 틱씩 어긋난다.
     ///
     /// <para>

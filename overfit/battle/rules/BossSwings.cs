@@ -178,7 +178,7 @@ public sealed class BossSwings
     /// 살아 있는 판정 하나를 이 틱에 대 본다. 끝났으면 true.
     ///
     /// <para>
-    /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
+    /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴 · 잡힘) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
     /// 무적이 먹은 틱은 넘어가고 창은 계속 산다: 무적이 창보다 먼저 풀리면 그 뒤 틱에 맞는다(다크소울과 같다).
     /// 창이 닫힐 때까지 안 닿았으면 관측을 <b>하나</b> 남긴다 — 무적이 먹었으면 <b>처음 먹은 틱에 지어 둔</b>
     /// 관측(<see cref="LiveSwing.DodgeSnapshot"/>), 아니면 <b>창이 열린 틱에 지어 둔</b> 빗나감(<see cref="LiveSwing.MissSnapshot"/>)이다.
@@ -207,7 +207,7 @@ public sealed class BossSwings
 
         switch (verdict)
         {
-            case HitVerdict.Hit or HitVerdict.Parried or HitVerdict.Guarded or HitVerdict.GuardBroken:
+            case HitVerdict.Hit or HitVerdict.Parried or HitVerdict.Guarded or HitVerdict.GuardBroken or HitVerdict.Grabbed:
                 Land(swing, verdict);
                 return true;
 
@@ -240,7 +240,7 @@ public sealed class BossSwings
     }
 
     /// <summary>
-    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
+    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴 · 잡힘의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
     /// <b>닿은</b> 결과로만 부른다. 무적(Dodged)과 빗나감에는 부작용이 없어 <see cref="Step"/> 이 관측만 지어 두므로
     /// <c>default</c> 갈래는 지금 안 온다. <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔 것은 그래서다 — 무적 · 빗나감의
     /// 관측은 부작용 없이 지어야 한다.
@@ -266,6 +266,11 @@ public sealed class BossSwings
 
             case HitVerdict.GuardBroken:
                 _fighter.GuardBreak(box.Damage);
+                break;
+
+            // 잡혔다 (#78 · 설계 §4.7) — 피해를 받고 붙들린다. 하던 행동이 그 자리에서 끝난다(Fighter.Grab).
+            case HitVerdict.Grabbed:
+                _fighter.Grab(box.Damage, BattleSim.TicksFor(box.GrabHoldSeconds));
                 break;
 
             default:
@@ -341,11 +346,17 @@ public sealed class BossSwings
             + $" stam={_fighter.Stamina:0}");
     }
 
-    /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
+    /// <summary>
+    /// 판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다. 관측은 싣기 <b>전</b>의 몸으로 짓는다 (#78): 잡힘은 하던 행동을 끝내므로
+    /// (<c>Fighter.Grab</c>) 실은 뒤에 지으면 칼질 중에 잡힌 사람의 욕심(<c>GreedWindow</c>)이 지워진다. 다른 결과는 행동도 자리도 안
+    /// 바꾸거나(맞음 · 받아침 · 막음) 가드를 끝낼 뿐이라(붕괴 — 가드는 욕심이 아니다) 순서가 관측을 안 바꾼다. 로그의 잔량(hp · stam)은
+    /// 실은 뒤다(<see cref="Commit"/>).
+    /// </summary>
     private void Land(LiveSwing swing, HitVerdict verdict)
     {
+        DodgeEvent evt = BuildEvent(swing, swing.Box, verdict);
         ApplyVerdict(swing.Box, verdict);
-        Commit(BuildEvent(swing, swing.Box, verdict));
+        Commit(evt);
     }
 
     /// <summary>

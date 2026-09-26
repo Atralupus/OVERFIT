@@ -50,7 +50,8 @@ public sealed class PatternTags
 /// <para>
 /// <b>옛 판정 종류는 걷었다</b> (#72 · 설계 §8 「지우는 것」): 가드 불가(<c>guard_break</c>) · 헛스윙(<c>kind: "feint"</c>) ·
 /// 마무리 · 예고 표지. 옛 변종 아홉과 같이 없어졌다 — 새 두 단계에는 헛스윙도 빨간 마무리도 없고, 남겨 두면 아무도 안 쓰는
-/// 갈래가 규칙 층에서 테스트만 붙든 채 산다. 잡기(5번 PR)의 가드 불가는 붕괴가 아니라 잡힘이라 옛 깃발로 흉내 내지 않는다.
+/// 갈래가 규칙 층에서 테스트만 붙든 채 산다. 잡기(#78)의 가드 불가는 붕괴가 아니라 잡힘이라 옛 깃발로 흉내 내지 않는다 — 판정의 답
+/// (<see cref="Guard"/>)과 붙드는 시간(<see cref="GrabHoldSeconds"/>)이 대신한다.
 /// </para>
 /// </summary>
 public sealed class PatternStep
@@ -99,6 +100,12 @@ public sealed class PatternStep
 
     /// <summary>판정의 답 — <b>패리</b>로 받아칠 수 있나 (<see cref="Dash"/> 와 같은 규약). 태그(<c>parryable</c>)가 되는 패턴 안에서 이 판정만 막는다.</summary>
     public bool? Parry { get; init; }
+
+    /// <summary>
+    /// 붙드는 시간(초) — 0 보다 크면 <b>붙드는 판정</b>이다 (#78 · 설계 §4.7). 맨몸에 닿은 결과가 맞음이 아니라 잡힘(<see cref="HitVerdict.Grabbed"/>)이고,
+    /// 파이터는 피해를 받고 이만큼 붙들린다(<c>Fighter.Held</c>). 없으면 0 — 붙들지 않는다. 가르는 것은 이 깃발과 결과다 — 패턴 이름이 아니다(CLAUDE.md §2).
+    /// </summary>
+    public double GrabHoldSeconds { get; init; }
 
     /// <summary>
     /// active 가 <b>몇 초 동안</b> 살아 있나 (이슈 #59 · 설계 §3.5). 0 이면 한 틱이다.

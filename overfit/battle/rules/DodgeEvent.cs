@@ -31,9 +31,9 @@ public enum DodgeVerb
     Spacing,
 
     /// <summary>
-    /// <b>가드로 버텼다</b> (이슈 #47). 막아냈는지 깨졌는지는 verb 가 아니라
-    /// <c>Verdict</c>(<see cref="HitVerdict.Guarded"/> · <see cref="HitVerdict.GuardBroken"/>)가 나른다 —
-    /// 고른 것은 같고 결과가 다르다.
+    /// <b>가드로 버텼다</b> (이슈 #47). 막아냈는지 깨졌는지 · 가드를 안 받는 판정에 잡혔는지(#78 · 설계 §4.7)는 verb 가 아니라
+    /// <c>Verdict</c>(<see cref="HitVerdict.Guarded"/> · <see cref="HitVerdict.GuardBroken"/> · <see cref="HitVerdict.Grabbed"/>)가
+    /// 나른다 — 고른 것은 같고 결과가 다르다.
     ///
     /// <para>
     /// <see cref="Parry"/> 와 다시 다른 키 · 다른 행동이다 (설계 §5.2 · §5.3) — 셋(패리 · 가드 · 무반응)이 갈려야
