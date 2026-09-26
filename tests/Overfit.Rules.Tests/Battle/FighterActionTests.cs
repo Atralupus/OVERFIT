@@ -291,7 +291,7 @@ public class FighterActionTests
             f.Tick(default, _dt);
         }
 
-        f.ComboStep.ShouldBe(0, "칼질이 끝났는데 다음 칼이 2타로 시작한다");
+        f.ComboStep.ShouldBe(0, "칼질이 끝났는데 ComboStep 이 끝난 2타를 말한다");
     }
 
     [Fact]
