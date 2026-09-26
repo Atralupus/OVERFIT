@@ -250,6 +250,21 @@ public sealed class BattleSim
             ? PatternRunner.ShapeOf(step).Place(new Placement(Boss.X, Boss.Y, Boss.Facing))
             : Array.Empty<HitRect>();
 
+    /// <summary>
+    /// 산 보스 판정이 있나 — 창이 열려 있는 동안 참이다 (#72 · 설계 §3.6 ④). 봇은 이 동안을 "판정이 지금" 으로 본다:
+    /// <see cref="NextActiveIn"/> 은 판정이 서는 틱에 "다음 판정" 이기를 그쳐, 그것만 보던 봇이 8틱 창의 첫 틱에 가드를 풀고
+    /// 남은 틱에 맞았다.
+    /// </summary>
+    public bool SwingLive => _swings.Live;
+
+    /// <summary>
+    /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 견준 실효
+    /// 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가
+    /// "패리 창" 색으로 칠해지면 그 색이 거짓말을 한다. 같은 틱의 사각형(<see cref="BossTestedRects"/>)과 같은 판정을 본다 —
+    /// 닿아서 그 틱에 끝난 판정도 그 틱에는 이 색을 정한다. 대 본 판정이 없으면 파이터 쪽 상태 그대로다.
+    /// </summary>
+    public Defense FighterDefense => HitResolver.Effective(Fighter, _swings.TestedTags);
+
     /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
     public IReadOnlyList<HitRect> FighterTestedRects =>
         _attackTested is { } tested ? tested.Shape.Place(tested.At) : Array.Empty<HitRect>();
@@ -271,13 +286,27 @@ public sealed class BattleSim
 
         // 같은 틱의 순서는 보스 판정 → 파이터의 칼 → 끊기다 (설계 §3.5 5). 받아친 틱에 파이터의 칼이 먼저 돌고,
         // 그 뒤에 보스가 무너져 남은 창을 버린다.
-        bool parried = _swings.Resolve(Ticks);
+        bool parried = _swings.Resolve();
         Strike();
         if (parried)
         {
             Exhaust("parry");
         }
 
+        BattleOutcome? outcome = Outcome();
+        if (outcome is not null)
+        {
+            // 판이 끝날 때 열린 창은 버린다 (#72 · 설계 §3.6 ③). 판을 끝낸 그 한 대는 닿은 것이라 관측이 있고, 남은 창에는
+            // 결과가 없다 — 지어낸 한 줄이 시도 기록으로 가 망의 입력이 된다.
+            _swings.Cut(Ticks, "end");
+        }
+
+        return outcome;
+    }
+
+    /// <summary>판이 끝났으면 그 결과. 보스가 먼저 죽었는지를 먼저 본다 — 같은 틱이면 이긴 것이다.</summary>
+    private BattleOutcome? Outcome()
+    {
         if (!Boss.Alive)
         {
             Log.Info("result", $"win ticks={Ticks} fighter_hp={Fighter.Health}");
@@ -354,7 +383,7 @@ public sealed class BattleSim
         foreach (HitBox box in _runner.Tick(_holdClock))
         {
             // 판정은 여기서 대지 않고 **살려 둔다** (이슈 #59) — 대는 곳은 BossSwings.Resolve 하나다.
-            _swings.Open(box, _current!.Tags, Boss.CurrentPattern ?? "?");
+            _swings.Open(box, _current!.Tags, Boss.CurrentPattern ?? "?", Ticks);
         }
 
         if (_runner.StartedMotion is { } motion)

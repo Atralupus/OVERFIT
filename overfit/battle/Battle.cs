@@ -634,7 +634,7 @@ public partial class Battle : Node2D
             _sim.FighterTestedRects,
             _sim.Fighter.Body,
             _sim.Boss.Body,
-            HitboxDebug.FighterColor(_sim.Fighter.Invulnerable, _sim.Fighter.Parrying, _sim.Fighter.Guarding));
+            HitboxDebug.FighterColor(_sim.FighterDefense));
     }
 
     /// <summary>규칙의 행동 → 뷰의 자세. 이 변환을 아는 것은 둘 다 아는 여기뿐이다.</summary>

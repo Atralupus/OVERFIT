@@ -164,18 +164,22 @@ public static class TestConfigs
         },
     };
 
-    /// <summary>보스가 서서 <see cref="Sweep"/> 만 휘두르는 판. 보스는 안 움직이고 안 죽는다.</summary>
-    public static BattleSim SweepSim(double maxDistance, double activeSeconds, double endAt = 2.0) => new(new BattleSetup
-    {
-        Arena = Arena(),
-        Fighter = Fighter(),
-        HitShapes = HitShapes(),
-        Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-        PatternIds = new[] { SweepId },
-        Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
-        Seed = 1,
-        MaxTicks = 60 * 30,
-    });
+    /// <summary>
+    /// 보스가 서서 <see cref="Sweep"/> 만 휘두르는 판. 보스는 안 움직이고 안 죽는다. 간격 0.2초(12틱)라 첫 판정은 판의
+    /// 12 + 30 = 42틱에 선다. <paramref name="maxTicks"/> 는 판을 창 한가운데서 끝내 보는 테스트만 준다.
+    /// </summary>
+    public static BattleSim SweepSim(double maxDistance, double activeSeconds, double endAt = 2.0, int maxTicks = 60 * 30) =>
+        new(new BattleSetup
+        {
+            Arena = Arena(),
+            Fighter = Fighter(),
+            HitShapes = HitShapes(),
+            Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            PatternIds = new[] { SweepId },
+            Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
+            Seed = 1,
+            MaxTicks = maxTicks,
+        });
 
     /// <summary>패턴이 설 때까지(선딜이 시작될 때까지) 민다 — <c>NextActiveIn</c> 이 null 이 아니게 되는 틱이다.</summary>
     public static void UntilWindup(BattleSim sim)

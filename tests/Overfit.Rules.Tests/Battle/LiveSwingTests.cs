@@ -163,4 +163,136 @@ public class LiveSwingTests
         line.ShouldContain($" air={seen.Airborne} ", Case.Sensitive, "공중이 관측이 아니라 창이 닫힌 틱의 값이다");
         line.ShouldContain($" dist={seen.Distance:0} ", Case.Sensitive, "거리가 관측이 아니라 창이 닫힌 틱의 값이다");
     }
+
+    [Fact]
+    public void 빗나감은_창이_열린_틱에서_재어_창_안에서_끝난_대시의_공으로_남는다()
+    {
+        // 설계 §3.6 ① — 빗나감은 창이 **열린 틱**의 이유와 수단이다. 닫히는 틱에 재던 때는 창(30틱) 안에서 대시(11틱)가 끝난
+        // 사람이 Spacing 으로 적혔다 — #46 이 고친 편향이 창이 길어지며 돌아온 것이다. 사거리 1000 · 파이터는 보스에서 967 이라
+        // 대시 전 몸(안끝 937)은 띠 안이고, 보스를 등지고 뛴 대시가 창이 열리기 전에 띠 밖으로 데려간다.
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 1000, activeSeconds: 0.5);
+        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스를 등진다
+        TestConfigs.UntilWindup(sim);
+        while (sim.NextActiveIn is > 5 * BattleSim.Dt)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Tick(new InputFrame(0, false, Dash: true, false, false));   // 칼이 서기 4틱 전의 대시
+        for (int i = 0; i < 60 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Fighter.Action.ShouldNotBe(FighterAction.Dash, "창이 닫힐 때 대시가 아직 돈다 — 이 테스트가 끝난 대시를 안 본다");
+        DodgeEvent e = sim.Events.Single();
+        e.Verdict.ShouldBe(HitVerdict.MissedTooFar);
+        e.Verb.ShouldBe(DodgeVerb.Dash, "창 안에서 끝난 대시가 간격의 공이 됐다 — 빗나감을 닫히는 틱에 쟀다");
+        e.Direction.ShouldBe(-1);
+        e.TimingError.ShouldBe(-4 * BattleSim.Dt, 1e-9, "오차의 기준이 칼이 선 틱이 아니다");
+    }
+
+    [Fact]
+    public void 칼이_선_뒤에_시작한_수단은_양의_오차로_남는다()
+    {
+        // 설계 §3.6 ① — 오차의 기준은 결과와 무관하게 창이 열린 틱이다. 창이 여러 틱을 살므로 칼이 선 **뒤에** 시작한 수단이 생기고,
+        // 그것은 양수로 남는다(창이 한 틱이던 때는 구조상 양수가 없었다). 창이 열릴 때 파이터는 사거리(900) 밖이고, 다음 틱에
+        // 뛰며 걸어 들어가 창 안에서 맞는다 — 맞은 판정은 그때 돌던 수단(점프)을 싣는다.
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 900, activeSeconds: 0.5);
+        TestConfigs.UntilFired(sim);
+        sim.Events.Count.ShouldBe(0, "창이 열린 틱에 닿았다 — 이 테스트가 창 안의 뒤 틱을 안 본다");
+
+        sim.Tick(new InputFrame(1, Jump: true, false, false, false));
+        for (int i = 0; i < 20 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(new InputFrame(1, false, false, false, false));
+        }
+
+        DodgeEvent e = sim.Events.Single();
+        e.Verdict.ShouldBe(HitVerdict.Hit);
+        e.Verb.ShouldBe(DodgeVerb.Jump);
+        e.TimingError.ShouldBe(BattleSim.Dt, 1e-9, "칼이 선 다음 틱에 뛴 것이 양수로 안 남았다");
+    }
+
+    [Fact]
+    public void 산_창은_닫힐_때까지_살아_있다고_말한다()
+    {
+        // 설계 §3.6 ④ — BattleSim.SwingLive. 판정이 선 틱에 NextActiveIn 은 null 이 되지만 창은 30틱을 산다 — 마지막(30번째)
+        // 틱에 대 보고 닫힌다. 그래서 창의 1 ~ 29틱째 뒤에는 살아 있고 30틱째 뒤에는 없다.
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
+        sim.SwingLive.ShouldBeFalse();
+        TestConfigs.UntilFired(sim);
+        sim.NextActiveIn.ShouldBeNull("판정이 선 틱인데 아직 다음 판정이라고 한다");
+
+        for (int i = 1; i < 30; i++)
+        {
+            sim.SwingLive.ShouldBeTrue($"창 {i}틱째 뒤인데 산 창이 없다고 한다");
+            sim.Tick(default);
+        }
+
+        sim.SwingLive.ShouldBeFalse("창이 닫혔는데 산 창이 있다고 한다");
+    }
+
+    [Fact]
+    public void 판이_끝날_때_열린_창은_관측을_안_남기고_로그만_남긴다()
+    {
+        // 설계 §3.6 ③ — 판을 끝낸 그 한 대는 닿은 것이라 관측이 있고, 남은 창에는 결과가 없다. 지어내면 그 한 줄이 시도 기록으로 간다.
+        // 판정은 42틱에 서고 창은 30틱인데 판은 50틱에 시간이 다 된다.
+        using var log = new LogCapture();
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5, maxTicks: 50);
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(default);
+        }
+
+        outcome.ShouldBe(BattleOutcome.Lose);
+        sim.Ticks.ShouldBe(50);
+        sim.Events.ShouldBeEmpty("판이 끝날 때 열린 창이 관측을 지어냈다");
+        log.Lines.ShouldContain($"[boss][D] cut_swing id={TestConfigs.SweepId} tick=50 reason=end");
+    }
+
+    [Fact]
+    public void 패리를_못_받는_산_판정_앞의_패리는_실효_방어가_아니다()
+    {
+        // 설계 §6.1 — 판정 보기의 몸통 색은 산 판정에 대한 **실효** 상태다. 산 판정이 없으면 파이터 쪽 상태 그대로다.
+        // Sweep 은 패리를 못 받는다 — 점프 공격의 착지(설계 §4.2)가 이 모양이다.
+        BattleSim idle = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
+        idle.Tick(new InputFrame(0, false, false, Parry: true, false));
+        idle.SwingLive.ShouldBeFalse();
+        idle.FighterDefense.ShouldBe(Defense.Parrying, "산 판정이 없는데 파이터의 패리 창을 안 칠한다");
+
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
+        TestConfigs.UntilFired(sim);
+        sim.Tick(new InputFrame(0, false, false, Parry: true, false));
+        sim.SwingLive.ShouldBeTrue();
+        sim.Fighter.Parrying.ShouldBeTrue("파이터 쪽 창이 안 열렸다 — 이 테스트가 실효를 못 가른다");
+        sim.FighterDefense.ShouldBe(Defense.None, "패리를 못 받는 판정 앞에서 패리 창이라고 칠한다");
+    }
+
+    [Fact]
+    public void 닿아서_끝난_판정의_틱에도_몸통_색은_그_판정에_대한_실효_방어다()
+    {
+        // 설계 §6.1 · Review Focus 1 — 착지 띠(패리 불가)는 땅에 선 몸에 **첫 틱에** 닿아 그 틱에 끝난다. 판정 보기는 그 틱에 대 본
+        // 사각형을 그리므로 몸통 색도 같은 판정을 봐야 한다: 산 판정만 보면 닿아 끝난 바로 그 틱에 색이 파이터 쪽 패리 창(노랑)으로
+        // 돌아간다. 사거리 2000 의 Sweep(패리 불가)이 판정 3틱 전에 K 를 누른 파이터에게 첫 틱에 닿는다.
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 2000, activeSeconds: 0.5);
+        TestConfigs.UntilWindup(sim);
+        while (sim.NextActiveIn is > 3 * BattleSim.Dt)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Tick(new InputFrame(0, false, false, Parry: true, false));
+        for (int i = 0; i < 10 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Hit, "패리를 못 받는 판정을 받아쳤다");
+        sim.SwingLive.ShouldBeFalse("닿은 판정이 아직 산다 — 이 테스트가 닿아 끝난 틱을 안 본다");
+        sim.BossTestedRects.ShouldNotBeEmpty("닿은 틱에 대 본 사각형이 없다 — 판정 보기가 그 틱에 아무것도 안 그린다");
+        sim.Fighter.Parrying.ShouldBeTrue("파이터 쪽 창이 닫혔다 — 이 테스트가 실효를 못 가른다");
+        sim.FighterDefense.ShouldBe(Defense.None, "닿아 끝난 판정의 틱에 패리 창이라고 칠한다 — 그 틱에 그린 띠와 다른 말을 한다");
+    }
 }

@@ -375,4 +375,37 @@ public class HitResolverTests
         HitResolver.Resolve(Spawn(_bossX + 280), _at, Mid(), Tags(false)).ShouldBe(HitVerdict.Hit);
     }
 
+    [Fact]
+    public void 모양_안의_구멍에_뜬_몸은_높이가_아니라_틈으로_빗나간다()
+    {
+        // 설계 §3.6 ② — 가로 → 세로 → 틈 순서이고, 세로가 틈보다 먼저인 것은 몸이 모양 **전체**의 위나 아래일 때뿐이다.
+        // 초승달 구멍 안에 뜬 몸은 틈이다. 두 장 사이(높이 50 ~ 200)가 빈 모양이고, 네 틱 뛴 몸(56 ~ 176)이 그 사이에 든다.
+        var hollow = new HitBox(new HitShape(new[] { new HitRect(0, 300, 0, 50), new HitRect(0, 300, 200, 400) }), 18);
+        Fighter f = Spawn(_bossX + 100);
+        f.Tick(new InputFrame(0, true, false, false, false), _dt);
+        for (int i = 0; i < 3; i++)
+        {
+            f.Tick(default, _dt);
+        }
+
+        f.Y.ShouldBeGreaterThan(50, "몸이 아래 장에 닿는다 — 이 테스트가 구멍을 안 본다");
+        (f.Y + f.BodyHeight).ShouldBeLessThan(200, "몸이 위 장에 닿는다 — 이 테스트가 구멍을 안 본다");
+        HitResolver.Resolve(f, _at, hollow, Tags(false)).ShouldBe(HitVerdict.MissedByGap);
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, hollow, Tags(false)).ShouldBe(HitVerdict.Hit, "땅의 몸이 아래 장에 안 닿았다");
+    }
+
+    [Fact]
+    public void 실효_방어는_판정의_태그와_파이터의_창을_같이_본다()
+    {
+        // 설계 §6.1 — 판정 보기가 칠하는 색이 곧 판정이 고르는 갈래다(한 함수). 태그가 없으면(산 판정이 없으면) 파이터 쪽 그대로다.
+        Fighter dashing = Acting(new InputFrame(0, false, true, false, false), 1);
+        HitResolver.Effective(dashing, null).ShouldBe(Defense.Invulnerable);
+        HitResolver.Effective(dashing, Tags(false, dashWindow: 0)).ShouldBe(Defense.None, "대시 불가 판정 앞의 무적을 칠한다");
+
+        Fighter parrying = Acting(new InputFrame(0, false, false, true, false), 1);
+        HitResolver.Effective(parrying, null).ShouldBe(Defense.Parrying);
+        HitResolver.Effective(parrying, Tags(parryable: false)).ShouldBe(Defense.None, "패리 불가 판정 앞의 패리 창을 칠한다");
+
+        HitResolver.Effective(Guarding(), Tags(parryable: false)).ShouldBe(Defense.Guarding, "패리를 못 받는 판정도 가드로는 막는다");
+    }
 }

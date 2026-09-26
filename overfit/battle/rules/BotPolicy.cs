@@ -97,10 +97,14 @@ public sealed class BotPolicy
         // 둘을 빼낸다.
         // ① 탈진한 보스 (#72 · 설계 §4.3) — 패턴이 끊겨 아무것도 안 온다. 받아낸 뒤가 내 차례라는 것이
         //    패리의 상이고(나인 솔즈), 그 상을 쓰는 곳은 회피가 아니라 공격이다(설계 §5.4 — 지금의 "굳은 보스" 규칙 그대로).
-        // ② 후딜 — 남은 판정이 없으면(NextActiveIn == null) 패턴은 돌지만 빈 시간이다.
+        // ② 후딜 — 남은 판정도 산 창도 없으면(NextActiveIn == null · SwingLive 거짓) 패턴은 돌지만 빈 시간이다.
         //    사람은 마지막 판정이 지나간 그 순간부터 칼을 넣는다 — 봇이 패턴이 끝나기를 기다리면
         //    그 빈 시간을 문 앞에서 버린다.
-        if (sim.Boss.CurrentPattern is not null && !sim.Boss.Exhausted && sim.NextActiveIn is not null)
+        //
+        // **창이 살아 있는 동안은 "판정이 지금" 이다** (#72 · 설계 §3.6 ④). NextActiveIn 은 판정이 서는 틱에 "다음 판정" 이기를
+        // 그쳐 null 이 되는데, 창은 8틱을 산다 — 그것만 보던 봇은 창의 첫 틱에 가드를 풀고 칼을 눌러 남은 틱에 맞았다.
+        double? remaining = sim.SwingLive ? 0 : sim.NextActiveIn;
+        if (sim.Boss.CurrentPattern is not null && !sim.Boss.Exhausted && remaining is not null)
         {
             // **행동 갈래보다 먼저 본다.** 아래에 맡기면 가드(Idle 이 아니다) 동안 default(누름 없음)가
             // 나가 레벨이 꺼지고, 가드는 서자마자 풀린다 — 차지가 같은 자리에서 같은 이유로 깨졌다.
@@ -119,7 +123,7 @@ public sealed class BotPolicy
 
             _decisions++;
             int pick = Det.RollInt(_seed, Det.Domain.BotChoice, 3, k1: _decisions);
-            if (pick != 1 && (sim.NextActiveIn is not double remaining || remaining > _lateReact))
+            if (pick != 1 && remaining > _lateReact)
             {
                 // 아직 이르다 — 대시·패리를 지금 걸면 판정 전에 창이 닫힌다. 다음 틱에 다시 본다.
                 return default;

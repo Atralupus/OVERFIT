@@ -52,22 +52,22 @@ public partial class HitboxDebug : Node2D
     }
 
     /// <summary>
-    /// 파이터 몸통의 색 — <b>파이터 쪽</b> 상태만 칠한다: 대시 무적 창(회색) · 패리 창(노랑) · 가드(보라),
-    /// 셋 다 아니면 초록이다.
+    /// 파이터 몸통의 색 — 규칙이 내놓은 <b>실효</b> 상태를 칠한다 (#72 · 설계 §6.1): 대시 무적(회색) · 패리 창(노랑) ·
+    /// 가드(보라), 셋 다 아니면 초록이다. 이 틱에 대 본 보스 판정이 있으면 그 판정의 태그와 견준 값이다
+    /// (<see cref="HitResolver.Effective"/>) — 패리를 못 받는 착지 띠 앞에서 누른 패리는 노랑이 아니라 초록이다.
     ///
     /// <para>
-    /// ⚠ 이 색은 "왜 안 맞았나" 의 답이 <b>아니다</b>. 규칙(<see cref="HitResolver"/>)은 패턴 쪽도 본다 — 대시는
-    /// 파이터의 무적과 패턴의 <c>dash_window</c> 중 좁은 쪽 안이어야 피하고, 패리는 패턴이 <c>parryable</c> 이고
-    /// 창도 좁은 쪽으로 재며, 가드는 <c>guard_break</c> 판정이나 모자란 스태미나에 깨진다. 그래서
-    /// <c>dash_window</c> 가 0 인 III-끌기 앞에서는 몸통이 회색인데 규칙은 맞음(Hit)을 낸다. 두 쪽을 합친 실제
-    /// 상태를 칠하는 것은 계획 3(보스 칼이 모양으로 맞는 단계 — 설계 §10)의 몫이다.
+    /// 전에는 파이터 쪽 상태만 칠해서 <c>dash_window</c> 가 0 인 판정 앞에서도 몸통이 회색인데 규칙은 맞음을 냈다 —
+    /// 판정 보기가 가장 필요한 순간에 거짓말을 했다. 뷰가 다시 계산하지 않고 규칙이 판정에 쓰는 바로 그 함수의 값을 받는다.
     /// </para>
     /// </summary>
-    public static Color FighterColor(bool invulnerable, bool parrying, bool guarding) =>
-        invulnerable ? _invulnerable
-        : parrying ? _parrying
-        : guarding ? _guarding
-        : _fighterBody;
+    public static Color FighterColor(Defense defense) => defense switch
+    {
+        Defense.Invulnerable => _invulnerable,
+        Defense.Parrying => _parrying,
+        Defense.Guarding => _guarding,
+        _ => _fighterBody,
+    };
 
     /// <summary>이 프레임에 보일 사각형들을 놓는다. <b>규칙 좌표(위가 +)</b>로 받는다.</summary>
     public void Show(

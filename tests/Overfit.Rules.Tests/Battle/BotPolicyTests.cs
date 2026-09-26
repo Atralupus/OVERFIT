@@ -222,4 +222,47 @@ public class BotPolicyTests
         verdicts.ShouldContain(HitVerdict.GuardBroken, "봇의 가드가 한 번도 안 깨졌다");
     }
 
+    [Fact]
+    public void 산_창이_있는_동안_봇은_가드를_놓지_않고_칼질을_새로_누르지_않는다()
+    {
+        // 설계 §3.6 ④ — 봇은 창이 살아 있는 동안을 "판정이 지금" 으로 본다. NextActiveIn 만 보던 때는 판정이 서는 틱에 그 값이
+        // null 이 되어 봇이 창의 첫 틱에 가드를 풀고 칼을 눌렀다 — 창이 8틱이면 남은 틱에 맞는다. 여기 판정은 멀리(사거리 50)
+        // 서서 파이터에게 안 닿은 채 창 30틱을 다 산다. 1타 도중에 2타를 잇는 누름은 새 칼질이 아니다.
+        int live = 0, guardedLive = 0;
+        foreach (ulong seed in _seeds.Take(4))
+        {
+            BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
+            var bot = new BotPolicy(seed);
+            bool guarding = false;
+            for (int t = 0; t < 60 * 20; t++)
+            {
+                bool swingLive = sim.SwingLive;
+                bool attacking = sim.Fighter.Action == FighterAction.Attack;
+                InputFrame input = bot.Next(sim);
+                if (swingLive)
+                {
+                    live++;
+                    if (!attacking)
+                    {
+                        input.Attack.ShouldBeFalse("산 창 안에서 칼질을 새로 눌렀다");
+                    }
+
+                    if (guarding)
+                    {
+                        input.GuardHeld.ShouldBeTrue("가드로 받기로 한 창 안에서 가드를 놓았다");
+                        guardedLive++;
+                    }
+                }
+                else
+                {
+                    guarding = input.GuardHeld;
+                }
+
+                sim.Tick(input);
+            }
+        }
+
+        live.ShouldBeGreaterThan(0, "산 창이 한 번도 없었다 — 이 테스트가 아무것도 안 본다");
+        guardedLive.ShouldBeGreaterThan(0, "가드로 받기로 한 창이 한 번도 없었다 — 이 테스트가 가드를 안 본다");
+    }
 }
