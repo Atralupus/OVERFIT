@@ -117,6 +117,11 @@ public partial class Game : Node
             // Autoload 의 자식이라 씬이 바뀌어도 살아남는다. 뷰를 안 만들고 규칙만 돌린다.
             AddChild(new Battle.Debug.BattleDemo());
         }
+        else if (OS.IsDebugBuild() && CmdArgs.Text(args, "--gif=") is { } gif)
+        {
+            // README 의 패턴별 GIF (#78 · 설계 §6.2) — tools/build.sh gifs 가 창과 Movie Maker 로 띄운다. 스크린샷처럼 창이 있어야 그린 것이 있다.
+            AddChild(new Battle.Debug.GifRunner { ScriptId = gif });
+        }
     }
 
     /// <summary>

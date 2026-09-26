@@ -181,6 +181,12 @@ public partial class Battle : Node2D
     /// <summary>파이터가 탈진했나 (#71 · 설계 §5.5). 위와 같이 디버그 전용 읽기다 — 탈진한 장은 규칙에게 물어 찍는다.</summary>
     public bool FighterExhausted => !_broken && !_over && _sim.Fighter.Exhausted;
 
+    /// <summary>
+    /// 지금까지 민 규칙의 틱 (#78). 위와 같이 디버그 전용 읽기다 — GIF 러너가 겨냥한 패턴의 틱을 세고(패턴이 선 틱에서) 그 틱에 누른다. 벽시계로
+    /// 기다리면 히트스톱과 프레임의 흔들림이 박자를 민다(설계 §6.2 — "규칙의 틱을 보고").
+    /// </summary>
+    public int SimTicks => _broken ? 0 : _sim.Ticks;
+
     /// <summary>파이터가 붙들렸나 (#78 · 설계 §4.7). 위와 같이 디버그 전용 읽기다 — 흰 구가 붙든 장은 규칙에게 물어 찍는다.</summary>
     public bool FighterHeld => !_broken && !_over && _sim.Fighter.Held;
 
