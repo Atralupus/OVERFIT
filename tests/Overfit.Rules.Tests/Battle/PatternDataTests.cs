@@ -317,6 +317,26 @@ public class PatternDataTests
         leaps.ShouldBeGreaterThan(0, "도약이 하나도 없다 — 이 가드가 아무것도 안 본다");
     }
 
+    [Fact]
+    public void 도약은_탈진보다_짧아_공중에서_무너진_보스가_탈진_안에_내린다()
+    {
+        // 설계 §4.2 · #71 — 공중에서 게이지로 무너진 보스는 끊긴 도약의 높이만 따라 내리고, 그 내림은 탈진 갈래에서만 돈다
+        // (BattleSim.Fall). 뜬 시간이 탈진보다 길면 풀린 보스가 공중에 선 채 쉬는 갈래로 가 떠 있는다. 지금은 0.60 < 1.5 다.
+        int exhaust = BattleSim.TicksFor(TestConfigs.Boss().ExhaustSeconds);
+        int leaps = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            foreach (PatternStep step in def.Timeline.Where(s => s.Motion is { Id: "leap" }))
+            {
+                leaps++;
+                BattleSim.TicksFor(step.Motion!.Air).ShouldBeLessThan(exhaust,
+                    $"{id}: 도약(t={step.T})이 {step.Motion.Air}초 떠 있다 — 탈진({exhaust}틱) 안에 못 내린다");
+            }
+        }
+
+        leaps.ShouldBeGreaterThan(0, "도약이 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
     /// <summary>
     /// 팩 <c>.tres</c> 의 애니메이션 → 장 수. 장은 <c>AtlasTexture</c> sub_resource 의 id(<c>이름_번호</c>)로 센다 —
     /// <c>tools/install_assets.py</c> 가 그렇게 짓는다. 이름은 애니메이션 목록의 <c>"name": &amp;"…"</c> 에서 온다.
@@ -394,18 +414,18 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 붕괴_고정은_3연격의_2타에서_3타까지를_덮는다()
+    public void 파이터_탈진은_3연격의_2타에서_3타까지를_덮는다()
     {
-        // 설계 §5.5 — 붕괴(파이터가 굳는) 1.1초의 근거는 3연격의 2타 → 3타 간격이다: 93틱 → 159틱 = 66틱. 2타에 깨진 가드는
-        // 3타가 서는 틱까지 못 선다 — "남은 타격을 그대로 맞는 값" 이라는 뜻이 새 패턴 위에서 선다. 전에는 옛 변종들의 미끼
-        // 간격(1.10 · 이슈 #54)이 근거였다. 한쪽만 고치는 날 여기서 빨개진다.
+        // 설계 §5.5 — 파이터 탈진(가드 붕괴 · 스태미나 0) 1.1초의 근거는 3연격의 2타 → 3타 간격이다: 93틱 → 159틱 = 66틱. 2타에 깨진
+        // 가드는 3타가 서는 틱까지 못 선다 — "남은 타격을 그대로 맞는 값" 이라는 뜻이 새 패턴 위에서 선다. 전에는 옛 변종들의 미끼
+        // 간격(1.10 · 이슈 #54)이 근거였고, 키는 guard_break_lock 이었다(#71 에서 exhaust_seconds). 한쪽만 고치는 날 여기서 빨개진다.
         List<int> hits = Load()["3연격"].Timeline.Where(s => s.Kind == "active").Select(TickOf).ToList();
         hits.Count.ShouldBe(3);
 
         foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
         {
-            BattleSim.TicksFor(c.GuardBreakLock).ShouldBeGreaterThanOrEqualTo(hits[2] - hits[1],
-                $"{who}: 붕괴 고정 {c.GuardBreakLock}초가 3연격의 2타 → 3타({hits[2] - hits[1]}틱)보다 짧다 — 깨진 사람이 3타 앞에서 다시 선다");
+            BattleSim.TicksFor(c.ExhaustSeconds).ShouldBeGreaterThanOrEqualTo(hits[2] - hits[1],
+                $"{who}: 탈진 {c.ExhaustSeconds}초가 3연격의 2타 → 3타({hits[2] - hits[1]}틱)보다 짧다 — 깨진 사람이 3타 앞에서 다시 선다");
         }
     }
 }

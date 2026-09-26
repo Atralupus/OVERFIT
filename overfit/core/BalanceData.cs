@@ -67,7 +67,8 @@ public sealed class FeelBalance
     ///
     /// <para>
     /// <b>보스가 탈진에 드는 틱에 건다</b> (#72 · 설계 §4.3) — 뷰가 앞 틱의 탈진 여부와 견줘 잡는다. 받아친 관측에 걸지 않는
-    /// 것은 4번 PR 의 경직 게이지 탈진에 받아친 관측이 없어서다: 원인이 무엇이든 같은 탈진에 같이 걸린다.
+    /// 것은 경직 게이지로 무너진 탈진(#71)에 받아친 관측이 없어서다: 원인이 무엇이든 같은 탈진에 같이 걸린다. 그동안 누른 키는
+    /// 버리지 않고 끝난 첫 틱에 넘긴다(<c>InputFrame.Carry</c> · #71).
     /// </para>
     ///
     /// <para>
@@ -114,8 +115,15 @@ public sealed class FeelBalance
     /// <summary>공격 판정 · 패리 성공 섬광의 길이(초).</summary>
     public required double FlashSeconds { get; init; }
 
-    /// <summary>피격 붉은 플래시의 길이(초).</summary>
+    /// <summary>파이터가 맞았을 때 붉은 플래시와 <c>hit</c> 자세의 길이(초).</summary>
     public required double HitFlashSeconds { get; init; }
+
+    /// <summary>
+    /// 보스가 맞았을 때 흰 플래시의 길이(초) (#71 · 설계 §6). 셰이더(<c>hit_flash.gdshader</c>)가 이 동안 1 에서 0 으로 희게 민다 —
+    /// 애니메이션은 안 바꾼다. 0.12초는 히트스톱 7프레임(0.117초)과 거의 같아, 보스가 무너지는 틱의 한 대는 희게 멈춘 한 장면이 된다.
+    /// 파이터의 붉은 플래시(<see cref="HitFlashSeconds"/>)와 따로 두는 이유: 그쪽은 <c>hit</c> 자세를 같이 세우는 길이라 짧게 못 줄인다.
+    /// </summary>
+    public required double BossHitFlashSeconds { get; init; }
 
     /// <summary>화면 흔들림의 길이(초).</summary>
     public required double ShakeSeconds { get; init; }
@@ -155,7 +163,7 @@ public sealed class FeelBalance
 
     /// <summary>
     /// 공격 섬광의 끝 반지름(px). ⚠ 칼이 그림의 모양이 되면서(이슈 #59) 사거리와 같은 눈금이라는
-    /// 뜻은 없어졌다 — 링은 4번 PR(연출)이 걷는다.
+    /// 뜻은 없어졌다 — 링은 6번 PR(연출)이 걷는다.
     /// </summary>
     public required double AttackRingTo { get; init; }
 

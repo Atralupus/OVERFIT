@@ -47,15 +47,17 @@ public static class TestConfigs
             new()
             {
                 Anim = "attack", Fps = 50, Frames = 14, StartFrame = 0, BladeFrame = 4,
-                Windup = 0.08, Active = 0.06, Recover = 0.14, Damage = 8, Hitbox = TestSwordId,
+                Windup = 0.08, Active = 0.06, Recover = 0.14, Damage = 8, Hitbox = TestSwordId, Poise = 10,
             },
             // 2타 — 기준값이라 짧다(실제는 1.0초). 여기서 진짜여야 하는 것은 **모양**이다: 1타보다 선딜이 길고 더 아프다.
             // 20fps · 12장이면 재생 0.6초로 셋의 합과 같고, 0번에서 시작해 6번 장(0.3초)이 선딜의 끝이다.
             // 칼은 1타와 같은 기준 사각형이다 — 기준 파이터는 그림이 없다.
+            // 경직도(10 · 45)는 **실제 값 그대로**다 (#71) — 보스의 게이지(실제 bosses.json)와 짝이라, 여기서 다르면 테스트가 말하는
+            // "두 번째 2타에 무너진다" 가 게임의 것이 아니게 된다.
             new()
             {
                 Anim = "attack2", Fps = 20, Frames = 12, StartFrame = 0, BladeFrame = 6,
-                Windup = 0.3, Active = 0.1, Recover = 0.2, Damage = 24, Hitbox = TestSwordId,
+                Windup = 0.3, Active = 0.1, Recover = 0.2, Damage = 24, Hitbox = TestSwordId, Poise = 45,
             },
         },
         AttackCost = 12,
@@ -63,7 +65,7 @@ public static class TestConfigs
         // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
         GuardChipRatio = 0.25,
         GuardStaminaPerDamage = 1.8,
-        GuardBreakLock = 1.1,
+        ExhaustSeconds = 1.1,
         StaminaRegen = 40,
         Sprite = "test_unit",
     };
@@ -228,12 +230,13 @@ public static class TestConfigs
     public static int MaxTicks() => Balance().Battle.MaxTicks;
 
     /// <summary>
-    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="patternGap"/> 은
-    /// <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
-    /// 속도 0 으로 보스를 세운다). 반폭은 절대 안 받는다 — 몸 충돌 간격이 그 값을 쓰므로
-    /// 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
+    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="patternGap"/> ·
+    /// <paramref name="exhaustSeconds"/> 는 <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
+    /// 속도 0 으로 보스를 세운다 · 탈진 길이를 바꿔 그 길이를 규칙에게서 읽는지 본다). 반폭은 절대 안 받는다 — 몸 충돌 간격이 그 값을
+    /// 쓰므로 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
     /// </summary>
-    public static BossConfig Boss(int? maxHealth = null, double? moveSpeed = null, double? patternGap = null)
+    public static BossConfig Boss(
+        int? maxHealth = null, double? moveSpeed = null, double? patternGap = null, double? exhaustSeconds = null)
     {
         BalanceData balance = Balance();
         BossConfig data = Bosses()[balance.Battle.Boss];
@@ -244,7 +247,10 @@ public static class TestConfigs
             HalfWidth = data.HalfWidth,
             Height = data.Height,
             PatternGap = patternGap ?? data.PatternGap,
-            ExhaustSeconds = data.ExhaustSeconds,
+            ExhaustSeconds = exhaustSeconds ?? data.ExhaustSeconds,
+            PoiseMax = data.PoiseMax,
+            PoiseDecayDelay = data.PoiseDecayDelay,
+            PoiseDecayPerSecond = data.PoiseDecayPerSecond,
             Sprite = data.Sprite,
         };
     }

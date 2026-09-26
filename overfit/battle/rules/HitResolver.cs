@@ -53,7 +53,7 @@ public enum HitVerdict
 
     /// <summary>
     /// 닿았고 가드가 <b>깨졌다</b> (이슈 #47). 스태미나가 모자랐다 — 가드가 깨지는 길은 그것 하나다(설계 §5.2 · 옛
-    /// <c>guard_break</c> 판정은 #72 에서 걷었다). <b>전액</b>이고 <c>guard_break_lock</c> 동안 굳는다.
+    /// <c>guard_break</c> 판정은 #72 에서 걷었다). <b>전액</b>이고 파이터가 <b>탈진</b>한다(<c>exhaust_seconds</c> · #71 · 설계 §5.5).
     /// </summary>
     GuardBroken,
 }

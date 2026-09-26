@@ -131,21 +131,22 @@ public partial class ShotRunner : Node
         Tap("attack");
         await CaptureOn("battle-5-attack", () => _battle is { FighterSwingTested: true }, _pollTimeout);
 
-        // ── 보스 피격: 작가가 그린 흰 실루엣 (이슈 #28) ───────────────────
-        // 0.2초(12프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다 —
-        // 때린 것이 닿았는지가 안 보이면 공격에 값이 안 붙는다는 것이 이 연출의 이유이고,
-        // 그 증명은 "흰가" 가 아니라 "맞은 그 프레임에 흰가" 다.
+        // ── 보스 피격: 선딜 도중에 맞아도 공격 자세 그대로 희게 번쩍인다 (#71 · 설계 §6 · §9) ────────
+        // 셰이더 흰 플래시는 0.12초(7프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다.
+        // 증명할 것은 "흰가" 가 아니라 "공격 자세 그대로 흰가" 다 — 그래서 3연격의 선딜(칼을 든 f0 를 0.725초 붙든다)에 칼을 넣는다.
+        // 판정까지 0.3초 넘게 남은 선딜만 고른다: 1타는 누른 뒤 5틱에 서므로 칼이 f0 에 선 보스에 닿는다. 번쩍인 장은
+        // [view][D] boss_flash anim=… frame=… flash=… 로도 남는다(맞은 뒤 첫 BossView.Show — 플래시 아래 그린 장이다).
         //
-        // **닿을 때까지 0.4초마다 다시 누른다** (#72). 첫 판은 시도 1 의 순서라 점프 공격으로 열고, 이 칼은 착지하는 보스와
-        // 겹친다 — 1타의 판정 창(5틱)이 착지 틱(246)에 걸려야 닿는데 벽시계로 기다린 0.4초가 몇 틱 이르면 공중의 보스를 긋고
-        // 끝난다. 한 번만 누르던 때 실제로 다섯 번에 한 번 그랬다: 8초를 기다리다 흰 번쩍임 없이 찍혔다([shots][W] timeout).
-        // 다시 누르는 간격 0.4초는 1타 한 바퀴(0.25초)보다 길어 2타로 이어지지 않는다.
+        // **닿을 때까지 0.4초마다 다시 누른다** (#72) — 보스와 겹친 채 서 있어도 첫 칼이 빗나갈 수 있다. 0.4초는 1타 한 바퀴(0.25초)보다
+        // 길어 2타로 이어지지 않는다.
         const double strikeEvery = 0.4;
-        await Wait(strikeEvery);
+        await Until(
+            () => _battle is { BossPattern: "3연격", BossWindingUp: true } && _battle.BossNextActiveIn > 0.3,
+            _patternTimeout);
         int bossBefore = _battle?.BossHealth ?? 0;
         bool BossHit() => (_battle?.BossHealth ?? 0) < bossBefore;
         int every = (int)(strikeEvery * Engine.PhysicsTicksPerSecond);
-        for (int f = 0; !BossHit() && f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
+        for (int f = 0; f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
         {
             if (f % every == 0)
             {
@@ -153,6 +154,10 @@ public partial class ShotRunner : Node
             }
 
             await Frames(1);
+            if (BossHit() && Pause())
+            {
+                break;
+            }
         }
 
         if (!BossHit())
@@ -160,11 +165,11 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "boss_hit_not_seen");
         }
 
-        // **7프레임 뒤다(≈0.117초).** 팩의 take-hit-white 는 4프레임 10fps 이고 흰 프레임은
-        // 그중 두 번째라, 맞은 그 프레임을 찍으면 흰색이 아니라 평범한 피격 자세가 나온다 —
-        // 실제로 그렇게 찍혔고 "흰 플래시가 없다" 로 잘못 읽힐 뻔했다.
-        await Frames(7);
+        // **맞은 틱 바로 뒤에 멈춰 찍는다** (CaptureOn 과 같은 자리). 플래시는 맞은 틱에 1 이고 0.12초(7프레임)에 0 이 된다 —
+        // 멈추면 그림(Battle._Process 의 BossView.Show)도 멈춰 맞은 뒤 첫 프레임의 세기(≈ 0.86)가 찍힌다. 멈추지 않고 두 프레임 뒤를 찍었더니
+        // 셔터가 그리기를 두 번 더 기다려 절반쯤 꺼진 흰색이 찍혔다. 옛 흰 실루엣은 4장 중 둘째가 흰 장이라 7프레임 뒤를 찍었다.
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
+        GetTree().Paused = false;
 
         // ── 보스 선딜: 예고 링이 조여 드는 중 ─────────────────────────────
         await Until(() => _battle?.BossWindingUp == true, _pollTimeout);
@@ -184,6 +189,8 @@ public partial class ShotRunner : Node
 
         await Combo();
         await Guarding();
+        await Poise();
+        await Exhaustion();
         await Facing();
         await Leap();
         await StageTwo();
@@ -305,6 +312,10 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "parry_not_seen");
         }
 
+        // **히트스톱 안에서 J 를 누른다** (#71 · 설계 §1). 받아친 틱에 보스가 무너져 7프레임 히트스톱이 걸렸다 — 그동안 누른 키는
+        // 버려지지 않고 끝난 첫 틱에 넘어가 되받아치기 1타가 선다(로그 [battle][D] hitstop_carry … attack=True). 사람이 받아친 것을
+        // 보고 곧장 누르는 자리가 여기다.
+        Tap("attack");
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10d-parry");
 
@@ -318,6 +329,82 @@ public partial class ShotRunner : Node
 
         await Frames(27);
         await Screenshot.CaptureAsync(this, "battle-10e-boss-exhausted");
+    }
+
+    /// <summary>
+    /// 경직 게이지 두 장 (#71 · 설계 §4.5 · §9). <b>반쯤 찬 게이지 · 패리 없이 게이지로 무너진 보스.</b> 붙어서 2연격(J 두 번)을 두 번
+    /// 넣는다 — 한 번은 55 로 안 무너지고, 연달아 두 번이면 두 번째 2타에 무너진다. 보스의 칼은 막지도 피하지도 않고 맞는다 —
+    /// 칼질은 맞아도 안 끊기고(끝까지 커밋) 보스는 맞아도 하던 것을 안 멈춘다(흰 플래시뿐이다).
+    ///
+    /// <para>
+    /// 셔터는 규칙에게 묻는다(<c>BossPoise</c> · <c>BossExhausted</c>) — 칼이 몇 번 닿았는지를 세면 경직도 데이터를 고치는 날 다른 장이
+    /// 찍힌다. 무너진 장은 take-hit(24프레임)를 다 돈 뒤다(<c>battle-10e</c> 와 같은 30프레임) — 보스는 마지막 장에 선 채 푸르고,
+    /// 게이지 자리는 파랗게 바뀌어 남은 탈진을 그린다.
+    /// </para>
+    /// </summary>
+    private async Task Poise()
+    {
+        await NewBattle(1);
+        Hold("move_right", true);
+        await Wait(1.1);
+        Hold("move_right", false);
+
+        bool half = false;
+        for (int round = 0; round < 12 && _battle is { BossExhausted: false }; round++)
+        {
+            // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다. 2연격 한 바퀴(0.25 + 1.0초) 뒤에 다시 누른다.
+            Tap("attack");
+            await Frames(2);
+            Tap("attack");
+            for (int f = 0; f < 80 && _battle is { BossExhausted: false }; f++)
+            {
+                await Frames(1);
+            }
+
+            if (!half && _battle is { BossExhausted: false, BossPoise: > 0.3 and < 0.9 })
+            {
+                half = true;
+                await Screenshot.CaptureAsync(this, "battle-12-poise");
+            }
+        }
+
+        if (_battle is { BossExhausted: false })
+        {
+            Log.Warn("shots", "poise_break_not_seen");
+        }
+
+        await Frames(30);
+        await Screenshot.CaptureAsync(this, "battle-12b-poise-break");
+    }
+
+    /// <summary>
+    /// 스태미나를 다 써 탈진한 파이터 한 장 (#71 · 설계 §5.5 · §9). 제자리에서 1타만 거듭 누른다 — 14 씩 일곱 번이면 한 자리 수가 남고,
+    /// 모자란 마지막 한 번도 나가 0 까지 쓴다. 그 칼질이 끝나는 틱에 탈진한다. take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야
+    /// 마지막 장에 선 자세가 찍힌다 — 30프레임 뒤다. 몸은 탈진 색이고 스태미나 바는 파랗다(보스 게이지의 탈진과 같은 파랑). 가드
+    /// 붕괴로 든 탈진과 같은 그림이다(<c>battle-10b</c> 는 붕괴의 순간 · 큰 고리).
+    ///
+    /// <para>
+    /// <b>첫 패턴이 3연격인 새 판에서</b> 찍는다(<see cref="NewBattleOpening"/>). 3연격은 보스가 선 자리(≈ 1312)에서 3.25초 동안 427px 까지만
+    /// 쳐 파이터가 선 자리(480)에 안 닿고, 여덟 번의 칼질(≈ 2.1초)과 셔터가 그 안에 든다. 점프 공격이면 도약이 파이터 앞에 내려 맞는
+    /// 자세가 섞인다. 대시로 바닥내 봤더니 네 번 만에 벽에 붙어 몸이 화면 왼쪽 끝에서 잘렸다.
+    /// </para>
+    /// </summary>
+    private async Task Exhaustion()
+    {
+        await NewBattleOpening(1, "3연격");
+        for (int i = 0; i < 12 && _battle is { FighterExhausted: false }; i++)
+        {
+            Tap("attack");
+            await Frames(16);
+        }
+
+        if (_battle is { FighterExhausted: false })
+        {
+            Log.Warn("shots", "fighter_exhaust_not_seen");
+        }
+
+        await Frames(30);
+        await Screenshot.CaptureAsync(this, "battle-10f-fighter-exhausted");
     }
 
     /// <summary>

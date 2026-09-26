@@ -46,9 +46,11 @@ public partial class FighterView : Node2D
     /// </summary>
     private static readonly Color _parryBurstColor = new(1.00f, 0.97f, 0.65f, 1.00f);
 
-    /// <summary>가드가 깨져 굳은 동안의 몸 색. 어둡고 채도가 죽는다 — 안 보이면
-    /// 그 동안 키가 안 먹는 것이 버그로 읽힌다.</summary>
-    private static readonly Color _lockedTint = new(0.50f, 0.46f, 0.58f);
+    /// <summary>
+    /// 탈진한 동안의 몸 색 (#71 · 설계 §5.5 · §6) — 가드 붕괴든 스태미나 0 이든. 어둡고 푸른 쪽으로 식는다 — 안 보이면
+    /// 그 동안 키가 안 먹는 것이 버그로 읽힌다. 옛 붕괴 고정의 색 그대로다(탈진이 그 고정을 넓힌 것이다).
+    /// </summary>
+    private static readonly Color _exhaustTint = new(0.50f, 0.46f, 0.58f);
 
     /// <summary>
     /// 공격 섬광. <b>일부러 약하다.</b> 전에는 (2.10, 2.10, 1.70) 이라 0.09초 동안 몸이 흰색으로
@@ -92,7 +94,7 @@ public partial class FighterView : Node2D
     private static readonly Color _guardChipColor = new(0.70f, 0.62f, 0.95f, 0.85f);
 
     /// <summary>
-    /// 가드가 <b>깨졌을</b> 때. 이것만은 크게 터진다 — <c>guard_break_lock</c> 동안 아무것도 못 하는데
+    /// 가드가 <b>깨졌을</b> 때. 이것만은 크게 터진다 — 그 뒤 탈진(<c>exhaust_seconds</c> · #71) 동안 아무것도 못 하는데
     /// 화면이 조용하면 그건 버그로 읽힌다.
     ///
     /// <para>
@@ -235,7 +237,7 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 새 칼질이 시작됐다 — 1타든, 1타가 끝나는 틱에 이어진 2타든 <b>그 틱</b>이다. <c>Battle</c> 이 물리 틱마다
+    /// 새 칼질이 시작됐다 — 1타든, 1타가 끝나는 틱에 이어진 2타든 <b>그 틱</b>이다. <c>BattleCues</c> 가 물리 틱마다
     /// 견줘 부른다. 렌더 프레임이 자세만 보고 알아내게 두면, 한 칼질이 끝난 틱과 다음 칼질이 시작한 틱이
     /// 한 렌더 프레임에 겹칠 때(60fps 아래 · 그리고 2타는 늘 그렇다) 새 칼질의 선딜이 지난 칼질의 잔상 장을 이어받는다.
     /// </summary>
@@ -248,7 +250,7 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 패리가 시작된 <b>그 틱</b> — 시트를 처음부터 다시 돌린다. <c>Battle</c> 이 물리 틱마다 견줘 부른다.
+    /// 패리가 시작된 <b>그 틱</b> — 시트를 처음부터 다시 돌린다. <c>BattleCues</c> 가 물리 틱마다 견줘 부른다.
     /// 이름만 보는 <see cref="Animate"/> 에 맡기면, 2타(같은 attack2 시트)가 끝나자마자 누른 패리가 2타의 잔상 장을
     /// 이어받는다.
     /// </summary>
@@ -363,8 +365,9 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 guard_break_lock 동안 굳는데
-    /// 화면이 조용하면 "키가 안 먹는다" 로 읽힌다. 그 뒤의 고정은 <see cref="_lockedTint"/> 가 말한다.
+    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 탈진(#71)해 굳는데
+    /// 화면이 조용하면 "키가 안 먹는다" 로 읽힌다. 그 뒤의 탈진은 자세(<c>hit</c> 의 마지막 장)와 <see cref="_exhaustTint"/> 가 말한다 —
+    /// 스태미나를 다 써 든 탈진과 같은 그림이고, 붕괴만 이 고리가 더 붙는다(6번 PR 까지).
     /// </summary>
     public void GuardBroken()
     {
@@ -540,8 +543,8 @@ public partial class FighterView : Node2D
 
     private Color Tint(FighterFrame frame)
     {
-        // 고정을 맨 앞에 본다. 굳은 동안에는 다른 무엇도 못 하므로 다른 색이 이길 수 없다.
-        Color baseTint = frame.Locked ? _lockedTint
+        // 탈진을 맨 앞에 본다. 굳은 동안에는 다른 무엇도 못 하므로 다른 색이 이길 수 없다.
+        Color baseTint = frame.Exhausted ? _exhaustTint
             : frame.Invulnerable ? _invulnerableTint
             : frame.Pose == FighterPose.Dash ? _dashTailTint
             // 가드는 색 하나다. 패리는 칠하지 않는다 — 칼을 세우는 움직임이 그 그림이다(설계 §5.3).
@@ -561,7 +564,7 @@ public partial class FighterView : Node2D
     /// 팩에 대시·가드 그림이 없다. 패리는 <c>attack2</c> 의 앞 네 장이다(설계 §5.3).
     ///
     /// <para>
-    /// <b>가드는 <c>idle</c> 이다</b> (이슈 #47 · 설계 §5.2 — attack2 f1 자세는 4번 PR 이다). 팩(Martial Hero)에 있는 것은
+    /// <b>가드는 <c>idle</c> 이다</b> (이슈 #47 · 설계 §5.2 — attack2 f1 자세는 6번 PR 이다). 팩(Martial Hero)에 있는 것은
     /// <c>idle · run · jump · fall · attack · attack2 · hit · hit_white · death</c> 뿐이고
     /// 막는 자세는 없다. 후보가 <c>fall</c>(웅크린 자세)과 <c>idle</c> 이었는데 <c>fall</c> 은
     /// 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽힌다. 그래서 <c>idle</c> 을 빌리고 갈라 보이게 하는 일은
@@ -589,6 +592,9 @@ public partial class FighterView : Node2D
             // 가드 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 가드를 가른다.
             FighterPose.Guard => "idle",
             FighterPose.Hit => "hit",
+            // 탈진은 take-hit 를 제 속도로 한 번 돌고 마지막 장에 선다(#71 · 설계 §6) — 반복하지 않는 애니메이션이라 엔진이 거기서
+            // 멈춘다. 이름이 바뀔 때만 틀므로(Animate) 탈진 동안 맞아도 처음부터 다시 돌지 않는다.
+            FighterPose.Exhausted => "hit",
             FighterPose.Death => "death",
             _ => "idle",
         };

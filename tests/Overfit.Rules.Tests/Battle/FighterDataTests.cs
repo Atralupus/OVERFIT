@@ -142,6 +142,30 @@ public class FighterDataTests
     }
 
     [Fact]
+    public void 연격_2타의_경직도가_1타보다_크다()
+    {
+        // 유저: "유저의 두번째 2타공격은 더 큰 경직도를 쌓도록 해주세요." (#71 · 설계 §4.5) — 1타 10 · 2타 45.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.Combo[0].Poise.ShouldBeGreaterThan(0, $"{id}: 1타가 게이지를 안 채운다");
+            c.Combo[1].Poise.ShouldBeGreaterThan(c.Combo[0].Poise, $"{id}: 2타의 경직도가 1타보다 크지 않다");
+        }
+    }
+
+    [Fact]
+    public void 스태미나_하나당_경직도는_이어_치는_쪽이_더_쌓는다()
+    {
+        // 설계 §4.5 — 2연격 55/28 = 1.96 · 1타만 10/14 = 0.71. 1타만 되풀이하는 쪽이 싸면 "2타가 더 큰 경직도" 가 게이지를
+        // 여는 길이 아니게 된다. 초당으로는 견주지 않는다: 1타만 쉬지 않고 치는 빠르기(초당 52)는 스태미나가 못 버틴다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            double chained = (c.Combo[0].Poise + c.Combo[1].Poise) / (2 * c.AttackCost);
+            double single = c.Combo[0].Poise / c.AttackCost;
+            chained.ShouldBeGreaterThan(single, $"{id}: 2연격이 스태미나 하나당 1타보다 덜 쌓는다");
+        }
+    }
+
+    [Fact]
     public void 칼질마다_액션이_그림_한_번과_같은_길이다()
     {
         // ← 공격_액션이_공격_애니메이션_한_번과_같은_길이다 의 주석 그대로
@@ -281,7 +305,7 @@ public class FighterDataTests
             c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 받아칠 이유가 없다");
             c.GuardChipRatio.ShouldBeLessThan(1, $"{id}: 가드가 전액을 흘린다 — 막는 것에 뜻이 없다");
             c.GuardStaminaPerDamage.ShouldBeGreaterThan(0, $"{id}: 가드 비용이 0 이다");
-            c.GuardBreakLock.ShouldBeGreaterThan(0, $"{id}: 가드가 깨져도 굳지 않는다 — 붕괴에 값이 없다");
+            c.ExhaustSeconds.ShouldBeGreaterThan(0, $"{id}: 탈진해도 안 굳는다 — 붕괴에도 스태미나를 다 쓴 것에도 값이 없다");
         }
     }
 

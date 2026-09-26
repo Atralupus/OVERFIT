@@ -53,7 +53,7 @@ public sealed class BattleSetup
 }
 
 /// <summary>
-/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 탈진 · 승패를 한 틱씩 민다.
+/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 경직 게이지 · 탈진 · 승패를 한 틱씩 민다.
 ///
 /// <para>
 /// 보스의 판정을 파이터 몸에 대고, 그 결과를 몸에 싣고, 관측을 짓는 것은 여기가 아니라 <see cref="BossSwings"/> 다
@@ -109,6 +109,13 @@ public sealed class BattleSim
     private bool _holdClock;
 
     /// <summary>
+    /// 공중에서 무너진 보스가 따라 내리는 움직임 (#71 · 설계 §4.2) — 끊긴 도약의 <b>높이만</b> 쓴다. 땅에서 무너졌으면 null 이다.
+    /// 패턴의 움직임(<see cref="_motion"/>)과 따로 두는 이유: 패턴은 무너질 때 끊겨 러너 · 움직임 · 시계가 다 걷히는데(<see cref="EndPattern"/>)
+    /// 이것만은 땅에 닿을 때까지 탈진 동안 돈다.
+    /// </summary>
+    private IBossMotion? _fall;
+
+    /// <summary>
     /// 회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 여기는 틱마다 <see cref="DodgeCredit.Remember"/> 로
     /// 먹이기만 한다 — 관측을 지으며 묻는 것은 <see cref="BossSwings"/> 이고, 같은 인스턴스를 세울 때 넘긴다.
     /// </summary>
@@ -116,6 +123,13 @@ public sealed class BattleSim
 
     /// <summary>보스의 산 판정과 그 관측 (<see cref="BossSwings"/>).</summary>
     private readonly BossSwings _swings;
+
+    /// <summary>
+    /// 보스의 경직 게이지 (#71 · 설계 §4.5). 파이터의 칼이 채우고(<see cref="Strike"/>) 틱마다 줄고(<see cref="AdvanceBoss"/>) 끝까지
+    /// 차면 탈진 루틴이 비운다(<see cref="Exhaust"/>). 언제 안 차고 안 주는지(결정타 · 탈진 동안)를 여기서 정한다 — 그것은 보스가
+    /// 탈진해 있나와 판의 승패에 달려 있고, 게이지는 모른다.
+    /// </summary>
+    private readonly PoiseGauge _poise;
 
     /// <summary>이 틱에 보스에게 대 본 파이터 칼 — (모양, 놓은 자리). 안 댔으면 null.</summary>
     private (HitShape Shape, Placement At)? _attackTested;
@@ -140,6 +154,7 @@ public sealed class BattleSim
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
         _swings = new BossSwings(Fighter, Boss, _credit);
+        _poise = PoiseGauge.For(setup.Boss);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
         // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
@@ -192,6 +207,12 @@ public sealed class BattleSim
     public Fighter Fighter { get; }
 
     public Boss Boss { get; }
+
+    /// <summary>
+    /// 보스의 경직 게이지 (#71 · 설계 §4.5) — HUD 가 보스 체력바 밑에 그린다. 규칙이 채우고 비우는 것은 이 판이다(<see cref="Strike"/> ·
+    /// <see cref="Exhaust"/>). 부르는 쪽은 <see cref="PoiseGauge.Value"/> · <see cref="PoiseGauge.Max"/> 만 읽는다.
+    /// </summary>
+    public PoiseGauge Poise => _poise;
 
     /// <summary>지금까지 진행한 틱 수.</summary>
     public int Ticks { get; private set; }
@@ -267,17 +288,33 @@ public sealed class BattleSim
         // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
         double wasX = Fighter.X;
         double wasY = Fighter.Y;
+        // 탈진에 드는 틱을 잡으려고 틱 시작의 탈진을 잡아 둔다 — 로그가 무엇이 바닥냈는지를 말한다(LogFighterExhaust).
+        bool wasExhausted = Fighter.Exhausted;
         Fighter.Tick(input, Dt);
+
+        // 보스 판정이 볼 가드 — 파이터를 민 **뒤**의 값이다. 막다가 든 탈진(딱 0 · 붕괴)은 판정이 이 가드를 봤을 때만 난다. 틱 시작에서
+        // 잡으면 이 틱에 ↓ 를 눌러 선 가드가 깨져도 action 으로 적혔다(#71 계획 리뷰가 밟았다).
+        bool guarding = Fighter.Guarding;
         _credit.Remember(Ticks * Dt, input, wasGrounded, wasX, wasY, Fighter, Boss);
         AdvanceBoss();
 
         // 같은 틱의 순서는 보스 판정 → 파이터의 칼 → 끊기다 (설계 §3.5 5). 받아친 틱에 파이터의 칼이 먼저 돌고,
-        // 그 뒤에 보스가 무너져 남은 창을 버린다.
+        // 그 뒤에 보스가 무너져 남은 창을 버린다. 파이터가 게이지로 무너뜨린 틱(#71)에 보스의 칼이 먼저 닿았으면 파이터는 맞는다.
+        // 원인이 둘이어도 탈진은 한 번이다 — 받아친 틱에는 파이터가 패리 커밋 중이라 칼이 안 서지만, 둘이 겹치면 패리를 원인으로 친다.
         bool parried = _swings.Resolve();
-        Strike();
+        bool broken = Strike();
         if (parried)
         {
             Exhaust("parry");
+        }
+        else if (broken)
+        {
+            Exhaust("poise");
+        }
+
+        if (Fighter.Exhausted && !wasExhausted)
+        {
+            LogFighterExhaust(guarding);
         }
 
         BattleOutcome? outcome = Outcome();
@@ -327,15 +364,24 @@ public sealed class BattleSim
     /// <summary>패턴과 패턴 사이의 쉬는 틱. 반올림은 <see cref="TicksFor"/> 한 곳이다.</summary>
     private int GapTicks => TicksFor(Boss.PatternGap);
 
-    /// <summary>보스: 탈진했으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
+    /// <summary>
+    /// 보스: 탈진했으면 아무것도 안 하고(공중에서 무너졌으면 내리기만 한다 · <see cref="Fall"/>), 쉬는 중이면 다가가고, 패턴 중이면
+    /// 타임라인을 민다.
+    /// </summary>
     private void AdvanceBoss()
     {
         // 탈진 시계만은 탈진해 있어도 돈다 — 아니면 안 풀린다. 풀리는 틱부터 쉬는 갈래로 간다.
         Boss.Tick();
         if (Boss.Exhausted)
         {
+            // 탈진한 보스는 다가가지도 돌아서지도 않는다(설계 §4.3) — 공중에서 무너졌으면 높이만 따라 내린다.
+            Fall();
             return;
         }
+
+        // 경직 게이지는 탈진 동안 줄지도 않는다(설계 §4.3) — 무너질 때 비었고, 풀리는 틱부터 다시 센다. 칼(Strike)보다 먼저 민다:
+        // 맞은 틱의 채움이 유예를 세우고, 유예는 다음 틱부터 준다(72틱 동안 그대로다).
+        _poise.Tick();
 
         if (_runner is null)
         {
@@ -380,12 +426,42 @@ public sealed class BattleSim
         if (_runner.Finished)
         {
             Log.Debug("boss", () => $"pattern_end id={Boss.CurrentPattern} tick={Ticks}");
-            _runner = null;
-            _current = null;
-            Boss.CurrentPattern = null;
-            _motion = null;
-            _holdClock = false;
-            _gapLeft = GapTicks;
+            EndPattern();
+        }
+    }
+
+    /// <summary>
+    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 여섯 줄이다 (#71 · #59 의 3/6 넘김 —
+    /// 둘이 따로 적혀 있으면 하나만 고치는 날 끊긴 패턴이 무언가를 남긴다). 다음 패턴은 간격을 처음부터 센 뒤에 고른다.
+    /// </summary>
+    private void EndPattern()
+    {
+        _runner = null;
+        _current = null;
+        Boss.CurrentPattern = null;
+        _motion = null;
+        _holdClock = false;
+        _gapLeft = GapTicks;
+    }
+
+    /// <summary>
+    /// 공중에서 무너진 보스를 한 틱 내린다 (#71 · 설계 §4.2). 끊긴 도약을 그대로 한 틱 더 밀어 <b>높이만</b> 쓴다 — 포물선의 높이를
+    /// 그대로 따라 그 자리에 내린다. 가로는 멈추고 돌아서지도 않는다(탈진한 보스는 아무것도 안 한다). 착지 판정은 패턴과 같이 끊겨
+    /// 안 선다. 땅에 닿으면 걷는다 — 도약이 탈진보다 짧아 늘 탈진 안에 닿는다(<c>PatternDataTests</c> 가 본다).
+    /// </summary>
+    private void Fall()
+    {
+        if (_fall is null)
+        {
+            return;
+        }
+
+        MotionStep step = _fall.Tick(new MotionContext(Boss.X, Boss.Y, Boss.Facing, Fighter.X, _motionTick++));
+        Boss.Move(Boss.X, step.Y, 0);
+        if (step.Finished || Boss.Y <= 0)
+        {
+            _fall = null;
+            Log.Debug("boss", () => $"exhaust_landed x={Boss.X:0} tick={Ticks}");
         }
     }
 
@@ -430,11 +506,13 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// <b>탈진 루틴 — 하나다</b> (#72 · 설계 §4.3). 원인이 패리든(3번 PR) 경직 게이지든(4번 PR) 같은 상태 · 같은 그림에 닿아야
-    /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격 · 움직임은 안 온다), 열린 창은
-    /// 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 탈진이 풀리면 간격을 처음부터 세어 다음 패턴을 고른다.
+    /// <b>탈진 루틴 — 하나다</b> (#72 · #71 · 설계 §4.3). 원인이 패리든 경직 게이지든 같은 상태 · 같은 그림에 닿아야
+    /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격은 안 온다 · 움직임은 공중이면 높이만
+    /// 따라 내리고 땅이면 멈춘다 — <see cref="Fall"/>), 열린 창은 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 게이지는 원인과
+    /// 무관하게 비운다 — 안 비우면 반쯤 찬 게이지가 탈진이 풀리자마자 한 대에 무너진다. 탈진이 풀리면 간격을 처음부터 세어 다음 패턴을
+    /// 고른다.
     /// </summary>
-    /// <param name="cause">무엇이 무너뜨렸나 — <c>parry</c>. 로그의 <c>cause=</c> 다.</param>
+    /// <param name="cause">무엇이 무너뜨렸나 — <c>parry</c> · <c>poise</c>. 로그의 <c>cause=</c> 다.</param>
     private void Exhaust(string cause)
     {
         // 탈진한 보스에게는 판정도 채움도 없어 다시 무너질 길이 없다 — 오면 규칙 위반이다.
@@ -446,15 +524,29 @@ public sealed class BattleSim
 
         string id = Boss.CurrentPattern ?? "-";
         _swings.Cut(Ticks, "exhaust");
-        _runner = null;
-        _current = null;
-        Boss.CurrentPattern = null;
-        _motion = null;
-        _holdClock = false;
-        _gapLeft = GapTicks;
+
+        // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
+        // 땅이면 남길 것이 없다: 돌진(5번 PR)처럼 땅을 가는 움직임은 그 자리에서 멈춘다.
+        _fall = Boss.Y > 0 ? _motion : null;
+        EndPattern();
+        _poise.Empty();
         Boss.Exhaust(TicksFor(_setup.Boss.ExhaustSeconds));
         Log.Debug("boss", () => $"exhaust cause={cause} id={id} tick={Ticks}");
+        if (_fall is not null)
+        {
+            Log.Debug("boss", () => $"exhaust_fall y={Boss.Y:0} x={Boss.X:0} tick={Ticks}");
+        }
     }
+
+    /// <summary>
+    /// 파이터가 탈진에 든 틱 (#71 · 설계 §5.5) — 무엇이 바닥냈나를 남긴다: 막다가(<c>guard</c> — 딱 0 이 된 칩 · 붕괴)냐, 끝난 행동의
+    /// 값(<c>action</c>)이냐. 보스 판정 앞(파이터를 민 뒤)에 가드였으면 막다가다 — 행동의 값으로 난 탈진은 파이터를 미는 동안(행동이 끝나는
+    /// 틱) 들고 그때 파이터는 선다(가드가 아니다). 가드의 칩과 붕괴는 판정이 가드를 봐야만 난다.
+    /// 관측 줄([dodge])은 막다가 난 탈진만 싣는다 — 행동의 값으로 난 탈진은 이 줄이 유일한 흔적이다. 따로 둔 메서드인 것은
+    /// 람다가 <see cref="Tick"/> 의 지역 값을 붙잡으면 클로저가 메서드 입구에서 매 틱 만들어지기 때문이다(<see cref="Strike"/> 의 주석).
+    /// </summary>
+    private void LogFighterExhaust(bool guarding) =>
+        Log.Debug("fighter", () => $"exhaust cause={(guarding ? "guard" : "action")} tick={Ticks}");
 
     /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>
     private void Begin()
@@ -508,19 +600,26 @@ public sealed class BattleSim
     /// 그 뒤 틱에 보스가 들어오면 맞고, <b>한 번 닿으면 그 칼질은 끝난다</b>(한 번 휘두르면 한 번만 맞는다).
     /// 보스의 휘두름(<see cref="BossSwings.Resolve"/>)과 같은 규칙이다. 전에는 창의 첫 틱에만 한 번 대 봤다 — 그 틱에
     /// 1px 모자라면 창이 남아 있어도 헛쳤고, 판정 보기에서는 칼이 한 프레임만 번쩍였다.
+    ///
+    /// <para>
+    /// 닿으면 보스의 경직 게이지가 그 칼질의 경직도만큼 찬다 (#71 · 설계 §4.5) — <b>결정타는 안 채우고</b>(이긴 판에 탈진은 뜻이 없다)
+    /// <b>탈진 동안에도 안 채운다</b>(풀리자마자 다시 무너지는 연속 탈진이 없다). 보스는 맞아도 하던 것을 안 멈춘다 — 규칙에서 바뀌는
+    /// 것은 체력과 게이지뿐이다.
+    /// </para>
     /// </summary>
-    private void Strike()
+    /// <returns>이 칼이 게이지를 끝까지 채웠나 — 참이면 <see cref="Tick"/> 이 끊기 자리에서 탈진시킨다.</returns>
+    private bool Strike()
     {
         _attackTested = null;
         if (!Fighter.AttackActive)
         {
             _struckThisSwing = false;
-            return;
+            return false;
         }
 
         if (_struckThisSwing)
         {
-            return;
+            return false;
         }
 
         HitShape sword = _swords[Fighter.ComboStep];
@@ -528,23 +627,29 @@ public sealed class BattleSim
         _attackTested = (sword, at);
         if (ShapeHit.Test(sword, at, Boss.Body) != ShapeContact.Overlap)
         {
-            return;
+            return false;
         }
 
         int damage = Fighter.AttackDamage;
         Boss.TakeDamage(damage);
         _struckThisSwing = true;
+        double filled = Boss.Alive && !Boss.Exhausted ? _poise.Fill(Fighter.AttackPoise) : 0;
 
         // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
         // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
         // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 옛 3단계 · 1840틱)의 규칙 쪽
         // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
         // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
+        //
+        // poise 는 **실제로 찬 양**이다(설계 §4.5) — 탈진 중이거나 결정타면 0, 끝에서 넘친 몫은 뺀다. gauge 는 찬 뒤의 값이다.
         if (Log.IsEnabled(LogLevel.Debug))
         {
             double gap = Math.Abs(Fighter.X - Boss.X) - Boss.HalfWidth;
-            Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} step={Fighter.ComboStep} gap={gap:0} tick={Ticks}");
+            Log.Debug("strike", $"hit boss_hp={Boss.Health} dmg={damage} step={Fighter.ComboStep} gap={gap:0}"
+                + $" poise={filled:0.##} gauge={_poise.Value:0.##} tick={Ticks}");
         }
+
+        return filled > 0 && _poise.Full;
     }
 
     /// <summary>이번 칼질이 이미 보스에 닿았나. 창이 닫히면(<c>AttackActive</c> 가 꺼지면) 풀린다.</summary>

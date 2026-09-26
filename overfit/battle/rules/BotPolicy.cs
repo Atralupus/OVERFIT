@@ -17,6 +17,13 @@ namespace Overfit.Battle.Rules;
 /// <para>
 /// 난수는 <see cref="Det"/> 로만 뽑는다. 벽시계도 <c>Random</c> 도 없으므로 같은 시드는 같은 판이다.
 /// </para>
+///
+/// <para>
+/// <b>스태미나가 값보다 많을 때만 누른다 — 스스로 탈진하지 않는다</b> (#71 · 설계 §5.4 · <see cref="Fighter.Affords"/>). 규칙은 남아 있으면
+/// 모자라도 마지막 한 번을 허락하고(§5.5) 값이 딱 맞는 한 번은 0 에 닿아 탈진하지만, 봇은 둘 다 안 쓴다. 뽑기(좌표)는 그대로 굴린다:
+/// 옛 규칙에서는 모자란 누름을 규칙이 버렸고, 이제 그 자리를 봇이 먼저 버린다. 재 본 16 시드(실제 캐릭터 · 1단계)에서 행동의 값으로
+/// 든 탈진은 없고, 31337 만 516틱부터 누름이 갈려 같은 끝(1414틱 · HP 62)에 닿는다. 데모의 시드 51 은 한 틱도 안 다르다.
+/// </para>
 /// </summary>
 public sealed class BotPolicy
 {
@@ -79,7 +86,8 @@ public sealed class BotPolicy
         // **패턴 갈래보다 먼저 본다**: 칼질은 끝까지 커밋이라 판정이 와도 할 수 있는 것이 없다.
         if (sim.Fighter.Action == FighterAction.Attack)
         {
-            bool press = _chainThis && sim.Fighter.ComboStep == 0 && !sim.Fighter.ComboQueued;
+            bool press = _chainThis && sim.Fighter.ComboStep == 0 && !sim.Fighter.ComboQueued
+                && sim.Fighter.Affords(FighterAction.Attack);
             return new InputFrame(0, false, false, false, Attack: press);
         }
 
@@ -131,10 +139,10 @@ public sealed class BotPolicy
 
             return pick switch
             {
-                0 => new InputFrame(0, false, Dash: true, false, false),
+                0 => sim.Fighter.Affords(FighterAction.Dash) ? new InputFrame(0, false, Dash: true, false, false) : default,
                 1 => new InputFrame(0, Jump: true, false, false, false),
                 // 패리는 누르는 것 한 번이다 — 0.333초 커밋 동안 앞 0.133초가 창이라 붙들 것이 없다 (설계 §5.3).
-                _ => new InputFrame(0, false, false, Parry: true, false),
+                _ => sim.Fighter.Affords(FighterAction.Parry) ? new InputFrame(0, false, false, Parry: true, false) : default,
             };
         }
 
@@ -144,10 +152,10 @@ public sealed class BotPolicy
             return new InputFrame(move, false, false, false, false);
         }
 
-        // 2타를 이을지는 **1타를 누를 때** 좌표 조회로 정한다 (_chainOdds).
+        // 2타를 이을지는 **1타를 누를 때** 좌표 조회로 정한다 (_chainOdds). 값이 모자라면 좌표만 쓰고 안 누른다(머리 주석).
         _swings++;
         _chainThis = Det.RollInt(_seed, Det.Domain.BotCombo, _chainOdds, k1: _swings) == 0;
-        return new InputFrame(0, false, false, false, Attack: true);
+        return sim.Fighter.Affords(FighterAction.Attack) ? new InputFrame(0, false, false, false, Attack: true) : default;
     }
 
     /// <summary>

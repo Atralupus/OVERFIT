@@ -32,4 +32,25 @@ public readonly record struct InputFrame(
     bool Dash,
     bool Parry,
     bool Attack,
-    bool GuardHeld = false);
+    bool GuardHeld = false)
+{
+    /// <summary>
+    /// 앞서 누른 엣지를 이번 입력에 싣는다 — 히트스톱 동안 누른 키를 끝난 첫 틱에 넘기는 자리다 (#71 · 설계 §1 「대화로 정한 것」).
+    /// 히트스톱은 틱을 세우므로(<c>Battle</c>) 그 프레임들에는 입력을 받을 틱이 없다. 버리면 받아친 것을 보고 곧장 누른 J(되받아치기)가
+    /// "눌렀는데 안 나간" 칼이 된다.
+    ///
+    /// <para>
+    /// 엣지 넷(점프 · 대시 · 패리 · 공격)은 <b>둘 중 하나라도</b> 눌렀으면 눌린 것이다. 레벨 둘(이동 · 가드)은 <b>지금</b> 값이다 —
+    /// 누르고 있는 동안이 전부라 앞의 값을 들고 오면 뗀 손이 가드를 든다. 누른 순서는 안 싣는다: 한 틱에 엣지가 여럿이면 규칙이 한
+    /// 틱에 고르는 순서(대시 → 패리 → 공격 · <c>Fighter.Begin</c>)가 고른다. 실을 것이 없으면(<paramref name="held"/> 가 기본값)
+    /// <paramref name="now"/> 그대로라, 히트스톱이 없는 틱의 판은 한 글자도 안 달라진다.
+    /// </para>
+    /// </summary>
+    public static InputFrame Carry(InputFrame held, InputFrame now) => new(
+        now.Move,
+        held.Jump || now.Jump,
+        held.Dash || now.Dash,
+        held.Parry || now.Parry,
+        held.Attack || now.Attack,
+        now.GuardHeld);
+}

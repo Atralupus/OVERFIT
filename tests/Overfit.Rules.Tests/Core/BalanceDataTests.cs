@@ -34,6 +34,7 @@ public class BalanceDataTests
         data.Feel.DashGhostInterval.ShouldBeGreaterThan(0, "잔상 간격이 0 이면 프레임마다 잔상이 쏟아진다");
         data.Feel.SparkCount.ShouldBeGreaterThan(0);
         data.Feel.DeathHoldSeconds.ShouldBeGreaterThan(0, "사망 애니메이션을 볼 시간이 없다");
+        data.Feel.BossHitFlashSeconds.ShouldBeGreaterThan(0, "보스의 흰 플래시가 안 보인다 — 때린 것이 닿았는지가 화면에 안 남는다");
     }
 
     [Fact]

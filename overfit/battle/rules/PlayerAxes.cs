@@ -176,7 +176,7 @@ public sealed class PlayerAxes
 
     /// <summary>
     /// 그중 <b>깨진</b> 가드의 수 (이슈 #47). 개수 하나가 없으면 "버텨냈다" 와 "버티다 무너졌다" 가
-    /// 한 점이 되는데, 그 둘은 결과가 정반대다 (흘린 피해 0.25 · 자세 유지 ↔ 전액 · guard_break_lock 고정). 깨지는 길은
+    /// 한 점이 되는데, 그 둘은 결과가 정반대다 (흘린 피해 0.25 · 자세 유지 ↔ 전액 · 탈진 1.1초 — #71). 깨지는 길은
     /// 이제 스태미나 고갈 하나다(#72).
     /// </summary>
     public int GuardBrokenSamples { get; private init; }

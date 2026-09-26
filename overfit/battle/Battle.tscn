@@ -151,6 +151,20 @@ theme_type_variation = &"BarNumber"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+; 경직 게이지 (#71 · 설계 §6). 보스 체력바 **바로 밑**, 같은 폭 · 얇게 · 숫자 없음. 색(흰색 계열 · 탈진의 파랑)은 테마가 정한다.
+; step 0 — 값이 0 ~ 1 비율이라 Range 의 기본 step 0.01 이면 1% 씩 끊겨 줄어든다(틱당 0.167% 라 1초에 열 번 뚝뚝). 유저가 말한
+; "서서히 줄어든다" 는 끊김 없는 줄어듦이다.
+[node name="Poise" type="ProgressBar" parent="HudLayer/Hud"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 460.0
+offset_top = 102.0
+offset_right = 1460.0
+offset_bottom = 116.0
+theme_type_variation = &"PoiseBar"
+step = 0.0
+show_percentage = false
+
 [node name="Health" type="ProgressBar" parent="HudLayer/Hud"]
 unique_name_in_owner = true
 layout_mode = 0

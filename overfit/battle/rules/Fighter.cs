@@ -37,7 +37,14 @@ public sealed class Fighter
     private readonly FighterConfig _config;
     private readonly Arena _arena;
 
-    private double _lockLeft;
+    /// <summary>탈진의 길이(틱) — <c>exhaust_seconds</c> 를 세울 때 한 번 바꾼다(반올림은 <see cref="BattleSim.TicksFor"/> 한 곳).</summary>
+    private readonly int _exhaustTicks;
+
+    /// <summary>
+    /// 남은 탈진 틱 (설계 §5.5). <b>틱으로 센다</b> — 1.1초 = 66틱 동안 정확히 아무것도 못 한다. 전에는 붕괴 고정을 초로 빼 가며
+    /// 셌다(1.1 − 66 × 1/60 이 −9.5e−16 이라 66틱이었던 것은 우연이다).
+    /// </summary>
+    private int _exhaustLeft;
 
     /// <summary>공중에서 대시를 이미 썼나. 착지하거나 패리를 성공하면 풀린다.</summary>
     private bool _airDashUsed;
@@ -71,6 +78,7 @@ public sealed class Fighter
         Health = config.MaxHealth;
         Stamina = config.MaxStamina;
         Facing = 1;
+        _exhaustTicks = BattleSim.TicksFor(config.ExhaustSeconds);
     }
 
     public double X { get; private set; }
@@ -136,8 +144,17 @@ public sealed class Fighter
     /// </summary>
     public double SinceParryPress => Action == FighterAction.Parry ? ActionElapsed : double.PositiveInfinity;
 
-    /// <summary>가드가 깨져 굳어 있나. 움직이지도 뛰지도 새 행동을 시작하지도 못한다.</summary>
-    public bool Locked => _lockLeft > 0;
+    /// <summary>
+    /// 탈진했나 (#71 · 설계 §5.5) — 스태미나를 다 썼거나(행동의 값 · 가드로 막다가) 가드가 깨졌다. 붕괴도 탈진이다.
+    /// <c>exhaust_seconds</c> 동안 굳는다(<see cref="Locked"/>). 뷰가 take-hit 와 탈진 색을 이것으로 그린다.
+    /// </summary>
+    public bool Exhausted => _exhaustLeft > 0;
+
+    /// <summary>
+    /// 굳어 있나 — 행동 · 이동 · 점프 · 가드가 전부 막힌다. 지금 굳는 길은 탈진 하나다(<see cref="Exhausted"/>): 이 둘을 가르는 것은
+    /// "왜 굳었나" 와 "무엇이 막히나" 가 다른 질문이라서다 — 규칙의 막음은 이것을 보고, 그림은 까닭(탈진)을 본다.
+    /// </summary>
+    public bool Locked => Exhausted;
 
     /// <summary>공중 대시를 이미 썼나. 착지 · 패리로 풀린다 (나인 솔즈의 보상 구조).</summary>
     public bool AirDashSpent => _airDashUsed;
@@ -153,6 +170,9 @@ public sealed class Fighter
     /// <summary>지금(또는 다음에 누르면) 휘두르는 칼질의 피해. 칸마다 데이터가 정한다 — 2타가 1타의 세 배다.</summary>
     public int AttackDamage => Step.Damage;
 
+    /// <summary>지금 칼질이 보스의 경직 게이지를 채우는 양 (#71) — 2타가 1타보다 크다. 게이지를 채우는 것은 <c>BattleSim</c> 이다.</summary>
+    public int AttackPoise => Step.Poise;
+
     /// <summary>
     /// 지금 도는 칼질이 몇 번째인가 (0 = 1타). 뷰가 어느 시트를 그릴지 · <see cref="BattleSim"/> 이 어느 칼 모양을
     /// 댈지를 이것으로 안다.
@@ -167,8 +187,15 @@ public sealed class Fighter
 
     public bool Alive => Health > 0;
 
-    /// <summary>스태미나를 깎는다. 0 아래로는 안 내려간다.</summary>
+    /// <summary>스태미나를 깎는다. 0 아래로는 안 내려간다. <b>탈진을 부르지 않는다</b> — 0 에 닿은 행동이 끝나는 틱과 가드가 부른다.</summary>
     public void Spend(double amount) => Stamina = Math.Max(0, Stamina - amount);
+
+    /// <summary>
+    /// 이 행동을 해도 스태미나가 0 에 안 닿나 — 값보다 <b>많이</b> 있나. 규칙은 모자라도 마지막 한 번을 허락하지만(설계 §5.5 ·
+    /// <see cref="CanStart"/>) 봇은 이것이 참일 때만 누른다(설계 §5.4) — 스스로 탈진하지 않는다. <c>≥</c> 가 아닌 이유: 값과 스태미나가
+    /// 딱 같으면 0 에 닿아 탈진한다(#71 의 "스스로 탈진하지 않는다" 가 이긴다). 값이 없는 행동(가드 · 서기)은 늘 참이다.
+    /// </summary>
+    public bool Affords(FighterAction action) => Cost(action) <= 0 || Stamina > Cost(action);
 
     /// <summary>
     /// 맞았다. <b>칼질은 안 끊긴다</b> — 끝까지 커밋이다(설계 §5.1). 맞으면 끊기던 것은 차지였고, 차지는 없어졌다.
@@ -184,7 +211,8 @@ public sealed class Fighter
 
     /// <summary>
     /// 가드가 받아냈다. 피해의 <c>guard_chip_ratio</c> 만 흘려 받고, 값은 <b>스태미나</b>로 낸다.
-    /// <b>자세는 안 풀린다</b> — 놓을 때까지 버티는 것이 이 기술이다.
+    /// <b>자세는 안 풀린다</b> — 놓을 때까지 버티는 것이 이 기술이다. 다만 값이 남은 스태미나와 <b>딱 같았으면</b> 막은 것이고
+    /// (칩을 받는다) 다 썼으니 곧장 탈진한다 (#71 · 설계 §5.2 · §5.5) — 행동이 아니라서 기다릴 끝이 없다.
     ///
     /// <para>
     /// 반올림을 <see cref="MidpointRounding.AwayFromZero"/> 로 고정한다. 기본 반올림(짝수로)은
@@ -198,28 +226,27 @@ public sealed class Fighter
 
         int chip = (int)Math.Round(fullDamage * _config.GuardChipRatio, MidpointRounding.AwayFromZero);
         Health = Math.Max(0, Health - chip);
+        if (Stamina <= 0)
+        {
+            Exhaust();
+        }
     }
 
     /// <summary>
     /// 가드가 <b>깨졌다</b> — 스태미나가 모자랐다(깨지는 길은 그것 하나다 · 설계 §5.2).
-    /// <b>전액</b>을 맞고 <c>guard_break_lock</c> 동안 굳는다.
-    /// 그 고정이 "남은 타격을 그대로 맞는 길이" 이고, 그게 가드를 고른 값이다.
+    /// <b>전액</b>을 맞고 <b>탈진</b>한다 (#71 · 설계 §5.5 — 옛 <c>guard_break_lock</c> 의 고정을 넓힌 것이 파이터 탈진이다).
+    /// 그 길이가 "남은 타격을 그대로 맞는 길이" 이고, 그게 가드를 고른 값이다.
     ///
     /// <para>
     /// <b>스태미나는 안 쓴다.</b> 값은 <b>막아낸 만큼</b>에 매기는 것인데 깨진 가드는 아무것도
-    /// 안 막았다 — 대신 전액과 <c>guard_break_lock</c> 을 낸다. 여기서 또 깎으면 고갈로 깨진
-    /// 사람이 값을 두 번 낸다.
+    /// 안 막았다 — 대신 전액과 탈진을 낸다. 여기서 또 깎으면 고갈로 깨진 사람이 값을 두 번 낸다.
     /// </para>
     /// </summary>
     /// <param name="fullDamage">막지 않았다면 받았을 피해. <b>그대로</b> 들어간다.</param>
     public void GuardBreak(int fullDamage)
     {
         Health = Math.Max(0, Health - fullDamage);
-        _lockLeft = _config.GuardBreakLock;
-        // 칼질 칸 · 눌러 둔 칼 · 받아친 표시를 여기서 안 지워도 된다: 붕괴는 가드 중에만 오고(HitResolver 의 GuardBroken 은
-        // Guarding 을 본다), 가드에 들어선 그 틱에 Start 가 셋을 이미 지웠다. 가드가 아닌 곳에서 부르게 되면 여기서 지워야 한다.
-        Action = FighterAction.Idle;
-        ActionElapsed = 0;
+        Exhaust();
     }
 
     /// <summary>
@@ -244,20 +271,32 @@ public sealed class Fighter
 
     public void Tick(InputFrame input, double dt)
     {
+        // 굳음은 틱 시작의 값으로 막는다 — Begin 이 그 값을 보고 Advance 가 그 뒤에 한 틱을 센다. Move · Fall 이 Advance 뒤의 값만
+        // 보면 굳음의 마지막 틱(66번째)에 행동과 가드는 막혔는데 걷고 뛰었다(#71 계획 리뷰가 밟았다 — 옛 붕괴 고정도 같은 순서였다).
+        // 이 틱에 든 굳음(끝나는 행동의 탈진)도 그 틱의 걸음부터 막는다.
+        bool lockedAtStart = Locked;
+
         // Begin 을 Advance 보다 먼저 불러 행동이 시작된 틱도 경과 시간에 들어가게 한다 —
         // 안 그러면 시작 틱이 공짜가 되어 무적 창 · 패리 창 · 선딜 경계가 테스트 값보다 한 틱 늦게 닫힌다.
         Begin(input);
         Advance(dt);
-        Move(input, dt);
-        Fall(input, dt);
+        bool locked = lockedAtStart || Locked;
+        Move(input, dt, locked);
+        Fall(input, dt, locked);
         Regen(dt);
     }
 
-    /// <summary>진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다 — 칼질이면 눌러 둔 다음 칼로 잇는다.</summary>
+    /// <summary>
+    /// 진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다 — 칼질이면 눌러 둔 다음 칼로 잇는다. 끝난 행동의 값으로 스태미나가
+    /// 0 이 됐으면 그 끝나는 틱에 탈진한다.
+    /// </summary>
     private void Advance(double dt)
     {
-        // 붕괴의 고정은 **Idle 이어도 돈다** — 고정은 아예 Idle 상태에서 흐르므로 여기서 같이 멈추면 영영 안 풀린다.
-        _lockLeft = Math.Max(0, _lockLeft - dt);
+        // 탈진의 시계는 **Idle 이어도 돈다** — 탈진은 아예 Idle 상태에서 흐르므로 여기서 같이 멈추면 영영 안 풀린다.
+        if (_exhaustLeft > 0)
+        {
+            _exhaustLeft--;
+        }
 
         if (Action == FighterAction.Idle)
         {
@@ -284,12 +323,36 @@ public sealed class Fighter
 
         Action = FighterAction.Idle;
         ActionElapsed = 0;
+
+        // 행동의 값으로 0 이 됐으면 그 행동을 **끝까지** 한 뒤 — 끝나는 이 틱에 — 탈진한다(설계 §5.5 · 마지막 칼은 들어간다).
+        // 끝나는 틱의 0 은 곧 그 행동의 값이 만든 0 이다: 행동 중에는 스태미나가 안 차고, 다른 값(가드의 칩)은 가드 중에만 나간다.
+        if (Stamina <= 0)
+        {
+            Exhaust();
+        }
+    }
+
+    /// <summary>
+    /// 탈진에 든다 (#71 · 설계 §5.5). 부르는 곳은 셋이다 — 행동의 값으로 0 이 된 행동이 끝나는 틱(<see cref="Advance"/>) · 가드로
+    /// 막다가 딱 0 이 된 칩(<see cref="GuardChip"/>) · 가드 붕괴(<see cref="GuardBreak"/>). 하던 것이 그 자리에서 끝나고 서서
+    /// <c>exhaust_seconds</c> 를 보낸다. 지난 행동의 칼질 칸 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다: 새 행동을 세울 때(<see cref="Start"/>)
+    /// 지우던 것인데, 탈진은 행동을 세우지 않고 끝내는 자리다.
+    /// </summary>
+    private void Exhaust()
+    {
+        _exhaustLeft = _exhaustTicks;
+        Action = FighterAction.Idle;
+        ActionElapsed = 0;
+        _step = 0;
+        _comboQueued = false;
+        _parryLanded = false;
     }
 
     /// <summary>
     /// 칼질이 끝나는 틱 — 눌러 둔 다음 칼이 있으면 <b>그 틱에</b> 잇는다 (설계 §5.1: "1타가 끝나는 틱에 2타가
     /// 이어진다"). 값(<c>attack_cost</c>)은 이을 때 낸다: 누를 때 내면 1타가 끝나기 전에 스태미나가 바닥나도 2타가
-    /// 선다. 모자라면 잇지 않고 선다. 이었으면 true 다.
+    /// 선다. 스태미나가 <b>남아 있으면</b> 모자라도 잇고(마지막 한 번 · #71 · 설계 §5.5) <b>0 이면</b> 잇지 않고 선다 —
+    /// 2번 PR 의 결정 4("모자라면 잇지 않는다")가 이것으로 바뀌었다. 이었으면 true 다.
     ///
     /// <para>
     /// 잇는 칼의 시계는 0 에서 시작한다. 이 틱은 앞 칼질의 마지막 틱이라 새 칼의 첫 틱은 다음 틱이다 —
@@ -298,7 +361,7 @@ public sealed class Fighter
     /// </summary>
     private bool Chain()
     {
-        bool chain = _comboQueued && _step + 1 < _config.Combo.Count && Stamina >= _config.AttackCost;
+        bool chain = _comboQueued && _step + 1 < _config.Combo.Count && Stamina > 0;
         _comboQueued = false;
         if (!chain)
         {
@@ -410,11 +473,20 @@ public sealed class Fighter
 
     /// <summary>
     /// 이 행동을 지금 시작할 수 있나 — 스태미나가 되고, 대시면 공중 대시가 남아 있나.
+    ///
+    /// <para>
+    /// <b>마지막 한 번은 할 수 있다</b> (#71 · 설계 §5.5 · 소울라이크). 값이 있는 행동은 스태미나가 <b>0 보다 많으면</b> 값보다 모자라도
+    /// 시작하고, 값은 0 에서 멈춘다(<see cref="Spend"/>) — 그 행동이 끝나는 틱에 탈진한다(<see cref="Advance"/>). 전에는 값이 모자라면
+    /// 안 나가 행동으로는 0 에 닿지 않았다(100 − 14 × 7 = 2). 가드를 드는 것은 여전히 공짜다(값 0).
+    /// </para>
+    ///
+    /// <para>
     /// 공중 대시는 착지하거나 패리를 성공할 때까지 한 번뿐이다 (나인 솔즈) — 몸 충돌이 없어져 공중이 안전지대가 됐으므로,
     /// 무제한 공중 대시는 "공중에 떠서 계속 무적" 이라는 답 하나로 모든 패턴을 지운다.
+    /// </para>
     /// </summary>
     private bool CanStart(FighterAction action) =>
-        Stamina >= Cost(action) && !(action == FighterAction.Dash && !Grounded && _airDashUsed);
+        (Cost(action) <= 0 || Stamina > 0) && !(action == FighterAction.Dash && !Grounded && _airDashUsed);
 
     /// <summary>행동 중에는 회복하지 않는다 — 그래야 연속 행동에 값이 붙는다.</summary>
     private void Regen(double dt)
@@ -425,9 +497,9 @@ public sealed class Fighter
         }
     }
 
-    private void Move(InputFrame input, double dt)
+    private void Move(InputFrame input, double dt, bool locked)
     {
-        if (Locked)
+        if (locked)
         {
             return;
         }
@@ -447,10 +519,10 @@ public sealed class Fighter
         X = Math.Clamp(X, _config.HalfWidth, _arena.Width - _config.HalfWidth);
     }
 
-    private void Fall(InputFrame input, double dt)
+    private void Fall(InputFrame input, double dt, bool locked)
     {
-        // 점프는 땅에 있을 때만. 공중에서 또 눌러도 안 솟는다.
-        if (input.Jump && Grounded && Action == FighterAction.Idle && !Locked)
+        // 점프는 땅에 있을 때만. 공중에서 또 눌러도 안 솟는다. 굳어 있어도 중력은 그대로다 — 막는 것은 뛰기뿐이다.
+        if (input.Jump && Grounded && Action == FighterAction.Idle && !locked)
         {
             VelocityY = _config.JumpVelocity;
         }

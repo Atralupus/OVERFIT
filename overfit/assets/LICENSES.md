@@ -52,11 +52,12 @@ tools/build.sh import                       # ⚠ 반드시 한 번
 하나씩 배정된다. 후보였던 Medieval Warrior Pack 은 공격이 둘뿐이고, zip 안에 라이선스 파일도 없었다
 (itch 페이지만 CC0 라고 적고 있는데, 그건 위의 규칙상 근거가 아니다).
 
-## 피격 흰 섬광은 에셋에 이미 있다
+## 피격 흰 섬광은 셰이더다
 
-두 팩 다 `Take Hit - white silhouette.png` 를 준다 — [#28](https://github.com/Atralupus/OVERFIT/issues/28) 이 요청한
-"보스가 피격 시 흰색으로 빛나는" 연출 그 자체다. 셰이더나 `modulate` 로 흉내 내지 않는다:
-작가가 그린 실루엣이라 몸 모양이 정확히 맞는다. `.tres` 에 `hit_white` 라는 이름으로 들어 있다.
+두 팩 다 `Take Hit - white silhouette.png` 를 준다 — `.tres` 에 `hit_white` 라는 이름으로 들어 있다.
+[#28](https://github.com/Atralupus/OVERFIT/issues/28) 에서는 이것을 보스의 피격 연출로 틀었다("셰이더도 `modulate` 도 아니다").
+[#71](https://github.com/Atralupus/OVERFIT/issues/71) 에서 유저가 뒤집었다 — 맞으면 **희게 번쩍이기만** 하고 공격 자세는 그대로다.
+애니메이션을 바꾸면 자세가 끊기므로 셰이더(`battle/view/hit_flash.gdshader`)가 색만 민다. 시트는 팩에 그대로 남아 있지만 뷰는 안 튼다.
 
 ## 없는 것
 

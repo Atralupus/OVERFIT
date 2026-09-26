@@ -21,6 +21,11 @@ namespace Overfit.Battle.View;
 /// </para>
 ///
 /// <para>
+/// <b>맞으면 희게 번쩍이기만 한다</b> (#71 · 설계 §6) — 셰이더(<c>hit_flash.gdshader</c>)가 색만 민다. 애니메이션도 장도 안
+/// 바꾸므로 선딜 도중에 맞아도 공격 자세가 이어진다. 전에는 팩의 흰 실루엣(<c>hit_white</c>)을 틀어 자세가 끊겼다.
+/// </para>
+///
+/// <para>
 /// <b>무엇이 오는지는 그림이 말한다</b> (#72 · 설계 §6). 규칙의 단계가 가리키는 장(<c>anim</c> · <c>frame</c>)을 그대로
 /// 붙든다 — 3연격은 칼을 든 f0, 점프 공격은 웅크린 <c>jump</c> f0 다. 옛 변종의 예고 표지(칼 · 끌기 · 도약 표지 아홉)와
 /// 빨간 가드 불가 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 새 두 패턴에는 가드 불가 판정이 없어 빨강이 말할
@@ -41,6 +46,9 @@ public partial class BossView : Node2D
     /// </summary>
     private static readonly Color _exhaustTint = new(0.56f, 0.70f, 1.35f);
 
+    /// <summary>흰 플래시 셰이더의 세기 — <c>hit_flash.gdshader</c> 의 <c>uniform float flash</c> 다.</summary>
+    private static readonly StringName _flashParam = "flash";
+
     private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
     private static readonly Color _shockRingColor = new(1.00f, 0.80f, 0.35f, 1.00f);
     private static readonly Color _activeFlash = new(2.60f, 2.30f, 1.60f);
@@ -52,23 +60,27 @@ public partial class BossView : Node2D
     private double _flashLeft;
     private double _flashTotal;
     private Color _flashColor;
-    private double _hitPoseLeft;
     private bool _dead;
+
+    /// <summary>맞은 흰 플래시의 셰이더 — 스프라이트의 재질이다. 세기만 매 프레임 넣는다.</summary>
+    private ShaderMaterial _hitFlash = null!;
+
+    /// <summary>남은 흰 플래시(초). <c>feel.boss_hit_flash_seconds</c> 에서 0 으로 내려가며 셰이더의 세기가 1 → 0 이다.</summary>
+    private double _hitFlashLeft;
 
     /// <summary>히트스톱으로 그림이 멈춰 있나.</summary>
     private bool _frozen;
 
-    /// <summary>
-    /// 이번 탈진에 <c>hit</c> 를 이미 틀었나. 틀었으면 돌아올 때(탈진한 보스를 때려 <c>hit_white</c> 가 끼었다 끝날 때) 처음부터
-    /// 다시 돌지 않고 마지막 장에 선다 — 탈진 자세로 돌아오는 것이다(설계 §4.3).
-    /// </summary>
-    private bool _exhaustShown;
+    /// <summary>맞은 뒤 첫 <see cref="Show"/> 가 그린 장을 로그로 남길 차례인가 — <see cref="Hit"/> 가 세우고 그 Show 가 지운다.</summary>
+    private bool _flashLogPending;
 
     public override void _Ready()
     {
         _sprite = GetNode<AnimatedSprite2D>("Sprite");
         _feel = Balance.Data.Feel;
         _sprite.Scale = new Vector2((float)_feel.BossSpriteScale, (float)_feel.BossSpriteScale);
+        _hitFlash = new ShaderMaterial { Shader = GD.Load<Shader>("res://battle/view/hit_flash.gdshader") };
+        _sprite.Material = _hitFlash;
         _ring = new RingBurst
         {
             Position = new Vector2(0, (float)-_feel.BossRingOffsetY),
@@ -116,7 +128,7 @@ public partial class BossView : Node2D
         BossPhase phase = frame.Phase;
 
         _flashLeft = System.Math.Max(0, _flashLeft - dt);
-        _hitPoseLeft = System.Math.Max(0, _hitPoseLeft - dt);
+        _hitFlashLeft = System.Math.Max(0, _hitFlashLeft - dt);
         HoldLastFrameWhenDead();
 
         // 탈진하면 패턴이 끊겨 Phase 가 Idle 이므로 링은 저절로 안 그려진다 (#72 · 설계 §4.3).
@@ -128,11 +140,7 @@ public partial class BossView : Node2D
         }
 
         string anim = AnimationFor(frame.Anim, frame.Exhausted);
-        if (anim == "hit" && _exhaustShown && _sprite.Animation != "hit")
-        {
-            HoldLastFrame("hit");
-        }
-        else if (anim == frame.Anim && frame.Frame is int held)
+        if (anim == frame.Anim && frame.Frame is int held)
         {
             HoldAt(anim, held);
         }
@@ -141,9 +149,19 @@ public partial class BossView : Node2D
             Animate(anim);
         }
 
-        _exhaustShown = frame.Exhausted && (_exhaustShown || anim == "hit");
         _sprite.SpeedScale = _frozen ? 0.0f : 1.0f;
         _sprite.Modulate = Tint(phase, ripeness, frame.Exhausted);
+
+        // 흰 플래시는 틴트 위에 셰이더가 민다 — COLOR 에 modulate 가 이미 곱해져 있어 선딜 · 탈진 틴트 위에서도 희다.
+        double flash = _feel.BossHitFlashSeconds <= 0 ? 0 : _hitFlashLeft / _feel.BossHitFlashSeconds;
+        _hitFlash.SetShaderParameter(_flashParam, (float)flash);
+
+        // 장을 고른 **뒤**에 찍어야 플래시 아래 실제로 그린 장이다(Hit 의 요약).
+        if (_flashLogPending)
+        {
+            _flashLogPending = false;
+            Log.Debug("view", $"boss_flash anim={_sprite.Animation} frame={_sprite.Frame} flash={flash:0.00}");
+        }
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -163,26 +181,33 @@ public partial class BossView : Node2D
     /// 플레이어의 칼이 닿았다. 때린 것이 닿았는지가 보여야 공격에 값이 붙는다.
     ///
     /// <para>
-    /// <b>흰색은 셰이더도 modulate 도 아니라 작가가 그린 그림이다</b> (이슈 #28). 두 팩 모두
-    /// <c>Take Hit - white silhouette</c> 를 포함하고 <c>hit_white</c> 로 잘려 있다 — 픽셀아트를
-    /// 코드로 하얗게 만들면 외곽선과 그림자까지 같이 날아가 실루엣이 뭉개진다. 그릴 것이 이미
-    /// 있는데 흉내 내지 않는다.
+    /// <b>희게 번쩍이기만 한다</b> (#71 · 설계 §6) — 유저: "맞으면 … 흰색으로 빛나게 플래쉬만 해주시고 공격을 멈추거나 다른
+    /// 애니메이션을 재생하진 않습니다." 셰이더(<c>hit_flash.gdshader</c>)가 <c>feel.boss_hit_flash_seconds</c>(0.12초) 동안 1 에서
+    /// 0 으로 희게 민다. 애니메이션도 장도 안 건드린다 — 선딜 도중에 맞으면 칼을 든 그 장이 그대로 번쩍인다.
     /// </para>
     ///
     /// <para>
-    /// ⚠ <b>흰 프레임은 애니메이션의 <u>두 번째</u>다.</b> 팩의 take-hit-white 는 4프레임이고
-    /// (피격 자세 → <b>전부 흰색</b> → 복귀 ×2) 10fps 라, 흰색은 0.10~0.20초 구간에 있다.
-    /// <c>hit_flash_seconds</c>(0.20)가 그 구간에서 정확히 끝나므로 "자세 → 번쩍 → 컷" 이 된다 —
-    /// 작가가 정한 타이밍이고, 앞당기려고 <c>Frame</c> 을 손으로 건드리면 그 자세가 사라진다.
-    /// 스크린샷이 이 연출을 증명하려면 <b>피격 7프레임 뒤</b>를 찍어야 한다(ShotRunner).
+    /// 전에는 작가가 그린 흰 실루엣(<c>hit_white</c> · 4장 10fps)을 애니메이션으로 틀었다(이슈 #28 — "셰이더도 modulate 도 아니다").
+    /// 그러면 맞는 순간 공격 자세가 피격 자세로 바뀌어, 규칙에서는 공격이 도는데 그림은 끊겼다. 유저가 그 결정을 뒤집었다.
+    /// 0.12초는 히트스톱 7프레임(0.117초)과 거의 같다 — 보스가 무너지는 틱의 한 대는 희게 멈춘 한 장면이 된다.
+    /// </para>
+    ///
+    /// <para>
+    /// 번쩍인 장을 로그로 남긴다 — "자세가 안 끊겼다" 를 스크린샷 한 장이 아니라 줄로도 본다(<c>[view][D] boss_flash</c>). 찍는 것은
+    /// 여기가 아니라 <b>맞은 뒤 첫 <see cref="Show"/></b> 다. 이것은 <c>_PhysicsProcess</c> 의 <c>BattleCues.Observe</c> 가 불러 이 자리의
+    /// 장은 맞기 <b>전</b>에 그린 것이다 — 여기서 찍던 때는 옛 hit_white 였어도 같은 <c>anim=attack frame=0</c> 이 나와 줄이 끊김을 못
+    /// 봤다(#71 최종 리뷰 F-I4). Show 가 장을 고른 뒤에 찍으면 흰 플래시 아래 그린 장이라, 맞은 자세로 바꾸는 손질이 다시 들면 anim 이 바뀐다.
     /// </para>
     /// </summary>
-    public void Hit() => _hitPoseLeft = _feel.HitFlashSeconds;
+    public void Hit()
+    {
+        _hitFlashLeft = _feel.BossHitFlashSeconds;
+        _flashLogPending = true;
+    }
 
     public void Die()
     {
         _dead = true;
-        _hitPoseLeft = 0;
         Animate("death");
     }
 
@@ -214,14 +239,9 @@ public partial class BossView : Node2D
             return "death";
         }
 
-        if (_hitPoseLeft > 0)
-        {
-            return "hit_white";
-        }
-
-        // **탈진은 take-hit 다** (#72 · 설계 §4.3 · §6) — 흰 실루엣(hit_white)이 아니다. 제 속도(10fps · 0.4초)로 한 번 돌고
-        // 마지막 장에 선다: 반복하지 않는 애니메이션이라 엔진이 마지막 장에서 멈춘다. 패리로든 경직 게이지로든(4번 PR)
-        // 같은 그림이다.
+        // **탈진은 take-hit 다** (#72 · 설계 §4.3 · §6). 제 속도(10fps · 0.4초)로 한 번 돌고 마지막 장에 선다: 반복하지 않는
+        // 애니메이션이라 엔진이 마지막 장에서 멈춘다. 패리로든 경직 게이지로든(#71) 같은 그림이다. 탈진한 보스를 때려도 흰 플래시만
+        // 얹혀 이 장이 안 끊긴다(Hit).
         if (exhausted)
         {
             return "hit";
@@ -242,15 +262,8 @@ public partial class BossView : Node2D
 
     private Color Tint(BossPhase phase, float ripeness, bool exhausted)
     {
-        // 흰 피격 실루엣은 **작가가 그린 픽셀 그대로** 나가야 한다. 선딜 틴트를 그 위에 얹으면
-        // 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 되어, 정작 흰색이라는 것이 안 보인다 —
-        // 화면에서 그 둘을 나란히 보고 알았다(docs/shots/battle-5b-boss-hit.png).
-        // 셰이더로 흰색을 만드는 대신 그림을 쓰기로 한 이상, 그 그림을 덧칠하지도 않는다.
-        if (_hitPoseLeft > 0)
-        {
-            return Colors.White;
-        }
-
+        // 맞은 흰 플래시는 틴트가 아니라 셰이더다(Hit) — 그 위에 얹히므로 여기서 틴트를 걷을 필요가 없다. 옛 흰 실루엣(hit_white)은
+        // 작가의 픽셀을 덧칠하지 않으려고 틴트를 하양으로 걷었다: 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 됐다(이슈 #28).
         if (exhausted)
         {
             return _exhaustTint;
@@ -276,20 +289,6 @@ public partial class BossView : Node2D
         if (_dead && _sprite.SpriteFrames is { } frames && frames.HasAnimation(_sprite.Animation)
             && _sprite.Frame >= frames.GetFrameCount(_sprite.Animation) - 1)
         {
-            _sprite.Pause();
-        }
-    }
-
-    /// <summary>
-    /// 그 애니메이션의 <b>마지막 장에 세운다</b> — 탈진한 보스를 때려 <c>hit_white</c> 가 끼었다 끝나면 take-hit 를 처음부터
-    /// 다시 돌지 않고 서 있던 자세로 돌아온다.
-    /// </summary>
-    private void HoldLastFrame(string name)
-    {
-        Animate(name);
-        if (_sprite.SpriteFrames is { } frames && frames.HasAnimation(name))
-        {
-            _sprite.Frame = frames.GetFrameCount(name) - 1;
             _sprite.Pause();
         }
     }

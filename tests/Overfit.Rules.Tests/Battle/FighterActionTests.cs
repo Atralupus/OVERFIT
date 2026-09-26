@@ -60,10 +60,11 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 스태미나가_모자라면_대시가_안_된다()
+    public void 스태미나가_0_이면_대시가_안_된다()
     {
+        // 스태미나가 남아 있으면 값(25)보다 모자라도 마지막 한 번은 나간다(#71 · 설계 §5.5 · FighterExhaustTests). 0 이면 안 나간다.
         Fighter f = Spawn();
-        f.Spend(90);   // 10 남는다. 대시는 25
+        f.Spend(100);
 
         f.Tick(_dash, _dt);
 
@@ -300,9 +301,10 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 연격_2타_값이_모자라면_잇지_않고_선다()
+    public void 연격_2타는_스태미나가_0_이면_잇지_않고_선다()
     {
-        // Review Focus 2 — 1타 도중 스태미나가 바닥났으면 2타는 안 서고 1타로 끝난다. 음수로 가지 않는다.
+        // Review Focus 2 — 1타의 값으로 스태미나가 바닥났으면 2타는 안 서고 1타로 끝난다. 음수로 가지 않는다. 남아 있으면 모자라도
+        // 잇는다 — 마지막 한 번이다(#71 · 설계 §5.5 · FighterExhaustTests). 2번 PR 의 결정 4 는 "모자라면 잇지 않는다" 였다.
         //
         // ⚠ 칼질이 **끝난 뒤**의 값은 증인이 못 된다: 끝나면 ComboStep 은 언제나 0 으로 돌아오고, Spend 는 0 에서
         // 멈춰 스태미나가 음수가 될 수도 없다 — 그 둘을 끝에서 보던 이 테스트는 값 검사를 통째로 지워도 초록이었다
@@ -319,21 +321,21 @@ public class FighterActionTests
         }
 
         Fighter f = Spawn();
-        f.Spend(c.MaxStamina - c.AttackCost - 1);   // 1타 값 + 1 만 남긴다
+        f.Spend(c.MaxStamina - c.AttackCost);   // 1타 값만 남긴다 — 1타가 0 으로 깎는다
         f.Tick(_attack, _dt);
-        f.Tick(_attack, _dt);                        // 1타 도중 — 2타를 눌러 둔다
-        f.ComboQueued.ShouldBeTrue("눌러 두지도 않았다 — 이 테스트가 모자란 값을 안 본다");
+        f.Tick(_attack, _dt);                   // 1타 도중 — 2타를 눌러 둔다
+        f.ComboQueued.ShouldBeTrue("눌러 두지도 않았다 — 이 테스트가 0 에서 잇는지를 안 본다");
 
         int stood = 2;
         while (f.Action == FighterAction.Attack)
         {
-            // 이었다면 잇는 틱에 값을 한 번 더 내 0 으로 깎이고(Spend 가 0 에서 멈춘다) 칼질은 2타로 계속 돈다.
-            f.Stamina.ShouldBe(1, 1e-9, "이을 수 없는 2타가 값을 냈다");
+            f.ComboStep.ShouldBe(0, "스태미나 0 에서 2타를 이었다");
+            f.Stamina.ShouldBe(0, 1e-9, "도는 칼질 중에 스태미나가 움직였다");
             f.Tick(default, _dt);
             stood++;
         }
 
-        stood.ShouldBe(end, "값이 모자라는데 2타가 섰다 — 1타가 끝나는 틱에 안 섰다");
+        stood.ShouldBe(end, "스태미나 0 인데 2타가 섰다 — 1타가 끝나는 틱에 안 섰다");
     }
 
     [Fact]
@@ -532,23 +534,21 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 받아친_패리라도_1타_값이_모자라면_J_를_버리고_커밋을_끝까지_간다()
+    public void 받아친_패리라도_스태미나가_0_이면_J_를_버리고_커밋을_끝까지_간다()
     {
-        // 못 하는 행동은 안 누른 것과 같다(CanStart) — 되받아치기도 같은 규칙이다. 값이 모자라 못 나간 J 가
-        // 커밋을 풀거나 음수 값으로 1타를 세우면 받아친 사람이 공짜로 칼을 얻는다.
-        FighterConfig c = TestConfigs.Fighter();
+        // 못 하는 행동은 안 누른 것과 같다(CanStart) — 되받아치기도 같은 규칙이다. 스태미나가 남아 있으면 모자라도 마지막 한 번은
+        // 나가고(#71 · FighterExhaustTests), 0 이면 못 나간다. 못 나간 J 가 커밋을 풀면 받아친 사람이 공짜로 칼을 얻는다.
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
         f.ParryPrecise();
-        f.Spend(f.Stamina - (c.AttackCost - 1));   // 1타 값에 1 모자라게 남긴다
-        double stamina = f.Stamina;
+        f.Spend(f.Stamina);
 
         for (int tick = 2; tick <= 19; tick++)
         {
             f.Tick(_attack, _dt);
 
-            f.Action.ShouldBe(FighterAction.Parry, $"{tick}틱: 값이 모자란 되받아치기가 섰다");
-            f.Stamina.ShouldBe(stamina, 1e-9, $"{tick}틱: 버린 J 가 값을 냈다");
+            f.Action.ShouldBe(FighterAction.Parry, $"{tick}틱: 스태미나 0 에서 되받아치기가 섰다");
+            f.Stamina.ShouldBe(0, 1e-9, $"{tick}틱: 버린 J 가 값을 냈다");
         }
 
         f.Tick(_attack, _dt);   // 20틱 — 커밋이 끝나는 틱이다
@@ -670,19 +670,20 @@ public class FighterActionTests
 
         f.Health.ShouldBe(100 - 20, "깨진 가드는 전액이다");
         f.Stamina.ShouldBe(stamina, 1e-9, "막은 것이 없는데 값을 냈다");
+        f.Exhausted.ShouldBeTrue("붕괴도 탈진이다(#71 · 설계 §5.5)");
         f.Locked.ShouldBeTrue();
         f.Action.ShouldBe(FighterAction.Idle);
         f.Guarding.ShouldBeFalse();
 
         // 굳은 동안에는 아무것도 못 한다 — 그게 붕괴의 값이다. (부정확 패리가 지던 이 검사가
-        // 이슈 #53 으로 여기 왔다: 이제 굳는 길은 가드 붕괴 하나뿐이다.)
+        // 이슈 #53 으로 여기 왔다. 굳는 길은 탈진 하나다 — 붕괴도 탈진이다(#71).)
         f.Tick(_dash, _dt);
         f.Action.ShouldBe(FighterAction.Idle, "굳었는데 대시가 나갔다");
         double x = f.X;
         f.Tick(new InputFrame(1, false, false, false, false), _dt);
         f.X.ShouldBe(x, 1e-9, "굳었는데 걸었다");
 
-        Idle(f, 63);   // 합쳐 1.083초 — 붕괴 고정(1.1 · 이슈 #54 전에는 0.9)이 아직 안 풀렸다
+        Idle(f, 63);   // 합쳐 65틱 — 탈진(1.1초 = 66틱 · 옛 붕괴 고정 · 이슈 #54 전에는 0.9)이 아직 안 풀렸다
         f.Locked.ShouldBeTrue();
         Idle(f, 2);
         f.Locked.ShouldBeFalse();
@@ -827,9 +828,10 @@ public class FighterActionTests
     [Fact]
     public void 못_하는_행동은_가드를_안_내린다()
     {
-        // 스태미나가 모자라 대시가 안 나가면 대시를 누른 것은 없던 일이다 — 가드는 그 틱에도 그대로 막고 있어야 한다.
+        // 스태미나가 0 이라 대시가 안 나가면 대시를 누른 것은 없던 일이다 — 가드는 그 틱에도 그대로 막고 있어야 한다.
+        // (남아 있으면 모자라도 마지막 한 번은 나간다 — #71 · 설계 §5.5.)
         Fighter f = Guarding();
-        f.Spend(90);   // 10 남는다. 대시는 25
+        f.Spend(100);
 
         f.Tick(new InputFrame(0, false, Dash: true, false, false, GuardHeld: true), _dt);
 
@@ -839,7 +841,7 @@ public class FighterActionTests
     [Fact]
     public void 굳음이_풀리면_누르고_있던_가드가_선다()
     {
-        // 가드는 누르고 있는 동안이라(이 계획이 정한 것 2) 붕괴 고정이 풀리는 틱부터 다시 선다 — 고정(1.1초)이
+        // 가드는 누르고 있는 동안이라(이 계획이 정한 것 2) 탈진(붕괴도 탈진이다)이 풀리는 틱부터 다시 선다 — 고정(1.1초)이
         // 붕괴의 값이고, 그 뒤까지 손을 떼고 다시 누르게 하는 것은 값이 아니라 조작의 마찰이다.
         // (이슈 #53 은 반대를 못박았다 — 그때 가드는 K 의 엣지로 섰다.)
         Fighter f = Guarding();
