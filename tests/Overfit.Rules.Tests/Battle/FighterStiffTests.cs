@@ -448,6 +448,30 @@ public class FighterStiffTests
     /// </summary>
     private static (BattleSim Sim, int Lead, FighterAction AtOpen) StiffWhenOpened(InputFrame press, double reach, int intoStiff)
     {
+        (BattleSim sim, int lead) = Pressed(press, reach, intoStiff);
+        for (int i = 0; i < 120 && sim.NextActiveIn is not null; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.NextActiveIn.ShouldBeNull("창이 안 열렸다");
+        sim.Fighter.Stiff.ShouldBeTrue("창이 경직 밖에서 열렸다 — 셋업이 움직였다");
+        FighterAction atOpen = sim.Fighter.Action;
+        for (int i = 0; i < 120 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Events.ShouldNotBeEmpty("판정의 관측이 안 났다");
+        return (sim, lead, atOpen);
+    }
+
+    /// <summary>
+    /// <see cref="StiffWhenOpened"/> 의 판을 <paramref name="press"/> 를 누른 틱까지만 민다 — 판정 창은 그 행동이 경직에 든 뒤
+    /// <paramref name="intoStiff"/> 틱째에 열린다. 맞은 판과 대조군이 이것을 같이 써서 <b>판정 거리 하나만</b> 다르다.
+    /// </summary>
+    private static (BattleSim Sim, int Lead) Pressed(InputFrame press, double reach, int intoStiff)
+    {
         // 누른 틱에서 경직에 드는 틱까지 — 같은 파이터를 따로 돌려 잰다(부동소수 누산을 손으로 옮겨 적지 않는다).
         Fighter probe = Spawn();
         probe.Tick(press, _dt);
@@ -468,21 +492,19 @@ public class FighterStiffTests
         }
 
         sim.Tick(press);   // 창이 열리기 lead 틱 전
-        for (int i = 0; i < 120 && sim.NextActiveIn is not null; i++)
+        return (sim, lead);
+    }
+
+    /// <summary>행동이 경직까지 끝나 Idle 이 되는 틱까지 민다 — 그 틱의 <see cref="BattleSim.Ticks"/>.</summary>
+    private static int UntilIdle(BattleSim sim)
+    {
+        for (int i = 0; i < 240 && sim.Fighter.Action != FighterAction.Idle; i++)
         {
             sim.Tick(default);
         }
 
-        sim.NextActiveIn.ShouldBeNull("창이 안 열렸다");
-        sim.Fighter.Stiff.ShouldBeTrue("창이 경직 밖에서 열렸다 — 셋업이 움직였다");
-        FighterAction atOpen = sim.Fighter.Action;
-        for (int i = 0; i < 120 && sim.Events.Count == 0; i++)
-        {
-            sim.Tick(default);
-        }
-
-        sim.Events.ShouldNotBeEmpty("판정의 관측이 안 났다");
-        return (sim, lead, atOpen);
+        sim.Fighter.Action.ShouldBe(FighterAction.Idle, "4초가 지나도 행동이 안 끝났다");
+        return sim.Ticks;
     }
 
     [Theory]
@@ -513,5 +535,35 @@ public class FighterStiffTests
         DodgeEvent e = sim.Events.Single();
         e.Verdict.ShouldBe(HitVerdict.Hit);
         e.GreedWindow.ShouldBeTrue("칼질 뒤 경직 중에 맞은 것이 욕심으로 안 실렸다");
+    }
+
+    [Fact]
+    public void 칼질_뒤_경직은_맞아도_안_끊기고_안_맞은_판과_같은_틱에_끝난다()
+    {
+        // 맞아도 안 끊긴다(설계 §5.1 — 끝까지 커밋, 경직까지 · #82). 맞는 것은 체력만 깎는다. 위 판(경직 12틱째에 창이 열려 맞는다)에서 맞은
+        // 틱에 칼질이 이어지고 경직이 참인지, 그리고 경직이 **판정이 빗나가는 같은 판**(거리 10 — 누른 틱 · 창이 열린 틱이 한 틱도 안
+        // 다르다)과 같은 틱에 끝나는지 본다. 맞자 경직을 끝내면 앞쪽이, 맞자 경직을 다시 세우거나 늘이면 뒤쪽이 빨개진다(변이로 확인했다 —
+        // 뒤쪽 변이는 이 테스트 전에는 골든만 잡거나 아무것도 못 잡았다). 맞는 틱을 이 테스트가 직접 민다: 위 판의 셋업 확인(창이 열린 틱의
+        // 경직)은 맞은 뒤에 보므로, 맞자 경직이 끝나는 규칙을 "셋업이 움직였다" 로 잘못 말한다.
+        int max = TestConfigs.Fighter().MaxHealth;
+        (BattleSim hit, _) = Pressed(_attack, reach: 2000, intoStiff: 12);
+        bool stiffBefore = false;
+        for (int i = 0; i < 120 && hit.Fighter.Health == max; i++)
+        {
+            stiffBefore = hit.Fighter.Stiff;
+            hit.Tick(default);
+        }
+
+        hit.Fighter.Health.ShouldBeLessThan(max, "맞지 않았다 — 이 테스트가 아무것도 안 본다");
+        stiffBefore.ShouldBeTrue("경직 밖에서 맞았다 — 셋업이 움직였다");
+        hit.Fighter.Action.ShouldBe(FighterAction.Attack, "맞자 칼질이 끝났다 — 경직이 맞아서 끊겼다");
+        hit.Fighter.Stiff.ShouldBeTrue("맞자 경직이 풀렸다");
+        int hitEnd = UntilIdle(hit);
+
+        (BattleSim miss, _) = Pressed(_attack, reach: 10, intoStiff: 12);
+        int missEnd = UntilIdle(miss);
+        miss.Fighter.Health.ShouldBe(max, "대조군이 맞았다 — 대조가 무너졌다");
+
+        hitEnd.ShouldBe(missEnd, "맞은 경직이 안 맞은 경직과 다른 틱에 끝났다 — 맞아서 경직이 늘거나 줄었다");
     }
 }
