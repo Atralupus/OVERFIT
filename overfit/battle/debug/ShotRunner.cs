@@ -39,8 +39,22 @@ public partial class ShotRunner : Node
     /// <summary>
     /// 두 패턴 중 <b>정해진 하나</b>를 기다리는 상한(초) (#72). 1단계는 uniform 이라 한 주기(간격 0.8 + 3.25 또는 1.5초)마다
     /// 반반이다 — 30초면 예닐곱 번 뽑아 못 볼 확률이 1% 밑이다. 넘기면 위와 같이 경고만 남기고 그냥 찍는다.
+    /// ⚠ 세션 시드가 51 로 고정이라 그 1% 에 든 판은 <b>실행마다</b> 빗나간다 — 실제로 밟았다(<see cref="_openingTries"/>).
     /// </summary>
     private const double _patternTimeout = 30.0;
+
+    /// <summary>
+    /// 첫 패턴이 정해진 하나인 판을 찾아 새 판을 세우는 상한(판) (#72 · <see cref="NewBattleOpening"/>). 판마다 시도 시드가 새로
+    /// 나와 첫 뽑기가 반반이므로 여덟 판이 다 빗나갈 확률은 1/256 이고, 한 판은 첫 뽑기(틱 48)까지 1초 남짓이라 다 써도 10초 안이다.
+    ///
+    /// <para>
+    /// <b>왜 한 판에서 기다리지 않나.</b> 시도마다 시드가 달라진 뒤(#72 Task 9) 공중 사진의 판은 세션 시드 51 의 시도 5 가 됐고,
+    /// 그 판은 3연격만 여덟 번 뽑아 첫 점프 공격이 아홉째(틱 ≈ 1992)다 — <see cref="_patternTimeout"/>(1800틱)을 넘겨 땅의 3연격이
+    /// 찍혔고, 그때 가만히 선 파이터는 체력 12 라 상한을 늘려도 먼저 죽는다. 새 판의 <b>첫</b> 패턴으로 잡으면 앞 판의 순서와 무관하다.
+    /// 패턴을 대본으로 고정하는 길(<c>script</c> 고르기)은 5번 PR 이다 — 그때 이 되풀이를 걷는다.
+    /// </para>
+    /// </summary>
+    private const int _openingTries = 8;
 
     private Overfit.Battle.Battle? _battle;
 
@@ -120,13 +134,34 @@ public partial class ShotRunner : Node
         // 0.2초(12프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다 —
         // 때린 것이 닿았는지가 안 보이면 공격에 값이 안 붙는다는 것이 이 연출의 이유이고,
         // 그 증명은 "흰가" 가 아니라 "맞은 그 프레임에 흰가" 다.
-        await Wait(0.4);
+        //
+        // **닿을 때까지 0.4초마다 다시 누른다** (#72). 첫 판은 시도 1 의 순서라 점프 공격으로 열고, 이 칼은 착지하는 보스와
+        // 겹친다 — 1타의 판정 창(5틱)이 착지 틱(246)에 걸려야 닿는데 벽시계로 기다린 0.4초가 몇 틱 이르면 공중의 보스를 긋고
+        // 끝난다. 한 번만 누르던 때 실제로 다섯 번에 한 번 그랬다: 8초를 기다리다 흰 번쩍임 없이 찍혔다([shots][W] timeout).
+        // 다시 누르는 간격 0.4초는 1타 한 바퀴(0.25초)보다 길어 2타로 이어지지 않는다.
+        const double strikeEvery = 0.4;
+        await Wait(strikeEvery);
         int bossBefore = _battle?.BossHealth ?? 0;
-        Tap("attack");
+        bool BossHit() => (_battle?.BossHealth ?? 0) < bossBefore;
+        int every = (int)(strikeEvery * Engine.PhysicsTicksPerSecond);
+        for (int f = 0; !BossHit() && f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
+        {
+            if (f % every == 0)
+            {
+                Tap("attack");
+            }
+
+            await Frames(1);
+        }
+
+        if (!BossHit())
+        {
+            Log.Warn("shots", "boss_hit_not_seen");
+        }
+
         // **7프레임 뒤다(≈0.117초).** 팩의 take-hit-white 는 4프레임 10fps 이고 흰 프레임은
         // 그중 두 번째라, 맞은 그 프레임을 찍으면 흰색이 아니라 평범한 피격 자세가 나온다 —
         // 실제로 그렇게 찍혔고 "흰 플래시가 없다" 로 잘못 읽힐 뻔했다.
-        await Until(() => (_battle?.BossHealth ?? 0) < bossBefore, _pollTimeout);
         await Frames(7);
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
 
@@ -338,11 +373,11 @@ public partial class ShotRunner : Node
     /// <summary>
     /// 공중의 점프 공격 한 장 (#72 · 설계 §4.2 · §9). <b>정점 근처</b>에서 찍는다 — 궤적은 4H·s(1−s)(H = 280)라 발이 250 위인 것은
     /// 36틱 중 가운데 11틱 남짓이다. 규칙의 Y 를 그린 몸이 땅에서 떠 있어야 한다(설계 §6 「보스 높이」).
-    /// <b>새 판에서</b> 점프 공격을 기다린다 — 패턴은 무작위라 몇 주기일 수 있다.
+    /// <b>첫 패턴이 점프 공격인 새 판에서</b> 찍는다(<see cref="NewBattleOpening"/>) — 한 판에서 기다리면 그 판의 순서에 달린다.
     /// </summary>
     private async Task Leap()
     {
-        await NewBattle(1);
+        await NewBattleOpening(1, "점프 공격");
         await Until(() => _battle is { BossPattern: "점프 공격" } && _battle.BossY >= 250, _patternTimeout);
         await Screenshot.CaptureAsync(this, "battle-6a-leap");
     }
@@ -372,8 +407,9 @@ public partial class ShotRunner : Node
     /// </para>
     ///
     /// <para>
-    /// ③ 은 <b>새 판의 첫 점프 공격</b>에서 찍는다. 같은 판에서 두 번째를 기다리면 그새 착지 자리(파이터 115 앞)에 선 보스의
-    /// 3연격을 서너 번 맞아 죽을 수 있다 — 새 판은 보스가 960 떨어져 선다.
+    /// ③ 은 <b>첫 패턴이 점프 공격인 새 판</b>에서 찍는다(<see cref="NewBattleOpening"/>). 같은 판에서 두 번째를 기다리면 그새
+    /// 착지 자리(파이터 115 앞)에 선 보스의 3연격을 서너 번 맞아 죽을 수 있다 — 새 판은 보스가 960 떨어져 선다. 그냥 새 판이면
+    /// 모자란다: 시도마다 시드가 달라 첫 점프 공격이 다섯째 뽑기일 수도 있다(<see cref="_openingTries"/>).
     /// </para>
     /// </summary>
     private async Task Hitboxes()
@@ -393,7 +429,7 @@ public partial class ShotRunner : Node
         await CaptureTested("hitbox-2-landing", _pollTimeout);
 
         // ③ 판정까지 5틱(0.08초) 안이면 누른다 — 패리 창(0.133초 = 8틱)이 착지 창의 첫 틱을 덮는다(battle-10d 와 같은 규칙).
-        await NewBattle(1);
+        await NewBattleOpening(1, "점프 공격");
         await Until(
             () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08,
             _patternTimeout);
@@ -433,6 +469,30 @@ public partial class ShotRunner : Node
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
+    }
+
+    /// <summary>
+    /// 첫 패턴이 <paramref name="pattern"/> 인 판이 설 때까지 그 단계의 새 판을 세운다 — 상한은 <see cref="_openingTries"/> 판.
+    /// 판마다 시도가 하나 열리므로 세션 시드가 같으면 몇째 판에서 잡는지도 매번 같다. 다 빗나가면 경고만 남기고 마지막 판에
+    /// 선다 — 부르는 쪽이 제 상한으로 그 판에서 한 번 더 기다린다.
+    /// </summary>
+    private async Task NewBattleOpening(int stage, string pattern)
+    {
+        for (int tries = 1; tries <= _openingTries; tries++)
+        {
+            await NewBattle(stage);
+            await Until(() => _battle is { BossPattern: not null }, _pollTimeout);
+            string first = _battle?.BossPattern ?? "-";
+            if (first == pattern)
+            {
+                Log.Debug("shots", $"opening pattern={pattern} tries={tries}");
+                return;
+            }
+
+            Log.Debug("shots", $"opening_retry want={pattern} got={first} try={tries}");
+        }
+
+        Log.Warn("shots", $"opening_not_seen pattern={pattern} tries={_openingTries} — 마지막 판에서 그냥 기다린다");
     }
 
     /// <summary>
