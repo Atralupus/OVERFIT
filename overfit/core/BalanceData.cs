@@ -190,8 +190,14 @@ public sealed class FeelBalance
     /// </para>
     ///
     /// <para>
+    /// <b>창 내내 고르게 퍼진다</b> (리뷰 m4) — 창보다 한참 짧으면 앞머리가 창의 앞 몇 틱에 끝까지 가 버려 퍼지는 것이 안 보인다. 앞머리는
+    /// 발밑에서 아레나로 자른 판정의 끝까지 지난 몫만큼 간다(<c>FloorWave.Fronts</c>): 발 595 에서 착지하면 오른쪽은 한 프레임에 177px ·
+    /// 왼쪽은 79px 남짓이다. 전에는 처음이 빠른 곡선으로 ±1920(화면 밖)을 향해 가서 두세 프레임 만에 화면을 벗어나 번쩍임으로 읽혔다.
+    /// </para>
+    ///
+    /// <para>
     /// ⚠ 규칙의 띠는 창의 <b>첫 틱부터</b> 바닥 전체를 친다. 퍼지는 것은 그림이라 멀리 선 사람은 앞머리가 닿기 몇 틱 전에 맞는다 —
-    /// 그래서 짧게 두고, 처음이 빠르고 끝이 느리게 퍼진다(<c>FloorWave.Fronts</c>): 한 프레임 만에 양쪽 480px 까지 간다.
+    /// 그것은 밑깔개(<see cref="LandingWaveUnderlayAlpha"/>)가 말한다: 첫 프레임부터 판정 전체가 옅게 깔린다.
     /// </para>
     /// </summary>
     public required double LandingWaveSpreadSeconds { get; init; }
@@ -210,6 +216,13 @@ public sealed class FeelBalance
 
     /// <summary>충격파 앞머리의 불투명도 0~1 (#83). 띠(<see cref="LandingWaveAlpha"/>)보다 밝아야 퍼지는 쪽이 읽힌다.</summary>
     public required double LandingWaveEdgeAlpha { get; init; }
+
+    /// <summary>
+    /// 충격파 <b>밑깔개</b>의 불투명도 0~1 (#83 · 리뷰 m4) — 판정 전체(아레나로 자른 것)를 충격파가 선 첫 프레임부터 옅게 깐다. 규칙은
+    /// 창의 첫 틱에 바닥 전체를 치므로, 앞머리가 아직 발밑에 있을 때도 "낮은 곳이 다 지금 맞는다" 가 화면에 있어야 한다. 앞머리는 퍼지는
+    /// 것을, 밑깔개는 맞는 자리 전체를 말한다. 띠(<see cref="LandingWaveAlpha"/>)보다 옅어야 앞머리가 지나간 곳이 갈린다.
+    /// </summary>
+    public required double LandingWaveUnderlayAlpha { get; init; }
 
     /// <summary>
     /// 충격파 앞머리의 폭(px) (#83) — 앞끝에서 안쪽으로 이만큼이 띠의 밝기에서 앞머리의 밝기로 올라간다. 앞머리는 한 프레임에 수백 px 를
