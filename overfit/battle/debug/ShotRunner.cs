@@ -189,6 +189,8 @@ public partial class ShotRunner : Node
 
         await Combo();
         await Guarding();
+        await Poise();
+        await Exhaustion();
         await Facing();
         await Leap();
         await StageTwo();
@@ -310,6 +312,10 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "parry_not_seen");
         }
 
+        // **히트스톱 안에서 J 를 누른다** (#71 · 설계 §1). 받아친 틱에 보스가 무너져 7프레임 히트스톱이 걸렸다 — 그동안 누른 키는
+        // 버려지지 않고 끝난 첫 틱에 넘어가 되받아치기 1타가 선다(로그 [battle][D] hitstop_carry … attack=True). 사람이 받아친 것을
+        // 보고 곧장 누르는 자리가 여기다.
+        Tap("attack");
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10d-parry");
 
@@ -323,6 +329,82 @@ public partial class ShotRunner : Node
 
         await Frames(27);
         await Screenshot.CaptureAsync(this, "battle-10e-boss-exhausted");
+    }
+
+    /// <summary>
+    /// 경직 게이지 두 장 (#71 · 설계 §4.5 · §9). <b>반쯤 찬 게이지 · 패리 없이 게이지로 무너진 보스.</b> 붙어서 2연격(J 두 번)을 두 번
+    /// 넣는다 — 한 번은 55 로 안 무너지고, 연달아 두 번이면 두 번째 2타에 무너진다. 보스의 칼은 막지도 피하지도 않고 맞는다 —
+    /// 칼질은 맞아도 안 끊기고(끝까지 커밋) 보스는 맞아도 하던 것을 안 멈춘다(흰 플래시뿐이다).
+    ///
+    /// <para>
+    /// 셔터는 규칙에게 묻는다(<c>BossPoise</c> · <c>BossExhausted</c>) — 칼이 몇 번 닿았는지를 세면 경직도 데이터를 고치는 날 다른 장이
+    /// 찍힌다. 무너진 장은 take-hit(24프레임)를 다 돈 뒤다(<c>battle-10e</c> 와 같은 30프레임) — 보스는 마지막 장에 선 채 푸르고,
+    /// 게이지 자리는 파랗게 바뀌어 남은 탈진을 그린다.
+    /// </para>
+    /// </summary>
+    private async Task Poise()
+    {
+        await NewBattle(1);
+        Hold("move_right", true);
+        await Wait(1.1);
+        Hold("move_right", false);
+
+        bool half = false;
+        for (int round = 0; round < 12 && _battle is { BossExhausted: false }; round++)
+        {
+            // 1타를 누르고 1타 도중에 한 번 더 — 2타는 1타가 끝나는 틱에 이어진다. 2연격 한 바퀴(0.25 + 1.0초) 뒤에 다시 누른다.
+            Tap("attack");
+            await Frames(2);
+            Tap("attack");
+            for (int f = 0; f < 80 && _battle is { BossExhausted: false }; f++)
+            {
+                await Frames(1);
+            }
+
+            if (!half && _battle is { BossExhausted: false, BossPoise: > 0.3 and < 0.9 })
+            {
+                half = true;
+                await Screenshot.CaptureAsync(this, "battle-12-poise");
+            }
+        }
+
+        if (_battle is { BossExhausted: false })
+        {
+            Log.Warn("shots", "poise_break_not_seen");
+        }
+
+        await Frames(30);
+        await Screenshot.CaptureAsync(this, "battle-12b-poise-break");
+    }
+
+    /// <summary>
+    /// 스태미나를 다 써 탈진한 파이터 한 장 (#71 · 설계 §5.5 · §9). 제자리에서 1타만 거듭 누른다 — 14 씩 일곱 번이면 한 자리 수가 남고,
+    /// 모자란 마지막 한 번도 나가 0 까지 쓴다. 그 칼질이 끝나는 틱에 탈진한다. take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야
+    /// 마지막 장에 선 자세가 찍힌다 — 30프레임 뒤다. 몸은 탈진 색이고 스태미나 바는 파랗다(보스 게이지의 탈진과 같은 파랑). 가드
+    /// 붕괴로 든 탈진과 같은 그림이다(<c>battle-10b</c> 는 붕괴의 순간 · 큰 고리).
+    ///
+    /// <para>
+    /// <b>첫 패턴이 3연격인 새 판에서</b> 찍는다(<see cref="NewBattleOpening"/>). 3연격은 보스가 선 자리(≈ 1312)에서 3.25초 동안 427px 까지만
+    /// 쳐 파이터가 선 자리(480)에 안 닿고, 여덟 번의 칼질(≈ 2.1초)과 셔터가 그 안에 든다. 점프 공격이면 도약이 파이터 앞에 내려 맞는
+    /// 자세가 섞인다. 대시로 바닥내 봤더니 네 번 만에 벽에 붙어 몸이 화면 왼쪽 끝에서 잘렸다.
+    /// </para>
+    /// </summary>
+    private async Task Exhaustion()
+    {
+        await NewBattleOpening(1, "3연격");
+        for (int i = 0; i < 12 && _battle is { FighterExhausted: false }; i++)
+        {
+            Tap("attack");
+            await Frames(16);
+        }
+
+        if (_battle is { FighterExhausted: false })
+        {
+            Log.Warn("shots", "fighter_exhaust_not_seen");
+        }
+
+        await Frames(30);
+        await Screenshot.CaptureAsync(this, "battle-10f-fighter-exhausted");
     }
 
     /// <summary>

@@ -154,6 +154,15 @@ public partial class Battle : Node2D
     public bool BossExhausted => !_broken && !_over && _sim.Boss.Exhausted;
 
     /// <summary>
+    /// 보스의 경직 게이지가 얼마나 찼나 0~1 (#71 · 설계 §4.5). 위와 같이 디버그 전용 읽기다 — "게이지가 반쯤 찬 장" 은 칼이 몇 번
+    /// 닿았는지가 아니라 게이지를 보고 찍는다: 칼질마다의 경직도는 데이터라 세어 두면 그 값을 고치는 날 다른 장이 찍힌다.
+    /// </summary>
+    public double BossPoise => _broken || _over || _sim.Poise.Max <= 0 ? 0 : _sim.Poise.Value / _sim.Poise.Max;
+
+    /// <summary>파이터가 탈진했나 (#71 · 설계 §5.5). 위와 같이 디버그 전용 읽기다 — 탈진한 장은 규칙에게 물어 찍는다.</summary>
+    public bool FighterExhausted => !_broken && !_over && _sim.Fighter.Exhausted;
+
+    /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 보스가 <b>희게 번쩍이는</b> 순간이고(#71 ·
     /// <c>hit_flash.gdshader</c>), 그건 <c>feel.boss_hit_flash_seconds</c>(0.12초)뿐이라 벽시계로 노리면 대부분 놓친다.
     /// </summary>
@@ -516,7 +525,7 @@ public partial class Battle : Node2D
             _sim.Fighter.Facing,
             Pose(),
             _sim.Fighter.Invulnerable,
-            _sim.Fighter.Locked,
+            _sim.Fighter.Exhausted,
             // 남은 스태미나를 **비율로** 넘긴다 (이슈 #47) — 최대값의 사본을 뷰에 두면
             // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다.
             _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina));
@@ -531,8 +540,16 @@ public partial class Battle : Node2D
             _sim.BossStep?.Anim,
             _sim.BossStep?.Frame));
 
-        _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
-            _sim.Boss.Health, _bossConfig.MaxHealth);
+        _hud.Show(new HudFrame(
+            _sim.Fighter.Health,
+            _fighterConfig.MaxHealth,
+            _sim.Fighter.Stamina,
+            _fighterConfig.MaxStamina,
+            _sim.Fighter.Exhausted,
+            _sim.Boss.Health,
+            _bossConfig.MaxHealth,
+            _sim.Poise.Max <= 0 ? 0 : _sim.Poise.Value / _sim.Poise.Max,
+            _sim.Boss.ExhaustLeft));
 
         _hitboxDebug?.Show(
             _sim.BossTestedRects,
@@ -549,6 +566,12 @@ public partial class Battle : Node2D
         if (_over && _outcome == BattleOutcome.Lose)
         {
             return FighterPose.Death;
+        }
+
+        // 탈진은 행동보다 먼저다(#71) — 탈진한 파이터는 Idle 이지만 서 있는 것이 아니라 굳어 있다.
+        if (_sim.Fighter.Exhausted)
+        {
+            return FighterPose.Exhausted;
         }
 
         return _sim.Fighter.Action switch

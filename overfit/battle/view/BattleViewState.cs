@@ -20,10 +20,16 @@ public enum FighterPose
 
     /// <summary>
     /// ↓ 를 누르고 있는 동안의 가드다 (설계 §5.2). 팩에 가드 그림이 없어 <c>idle</c> 을 빌리고, 갈라 보이게 하는 것은
-    /// <b>색과 멈춘 링</b>이다 — <c>attack2</c> 의 f1 자세로 바꾸는 것은 4번 PR(연출)이다.
+    /// <b>색과 멈춘 링</b>이다 — <c>attack2</c> 의 f1 자세로 바꾸는 것은 6번 PR(연출)이다.
     /// </summary>
     Guard,
     Hit,
+
+    /// <summary>
+    /// 탈진 (#71 · 설계 §5.5 · §6) — 스태미나를 다 썼거나 가드가 깨졌다. <c>hit</c> 를 제 속도로 한 번 돌고 마지막 장에 선다
+    /// (반복하지 않는 애니메이션이다). 보스의 탈진과 같은 말이다: take-hit 에 선 채 굳어 있다.
+    /// </summary>
+    Exhausted,
     Death,
 }
 
@@ -54,9 +60,8 @@ public enum BossPhase
 /// <param name="Pose">그릴 자세.</param>
 /// <param name="Invulnerable">대시 <b>무적 창</b> 안인가. 잔상이 이것에 묶인다 —
 /// 대시(0.18초)보다 무적(0.14초)이 짧은 것은 일부러고, 그 차이가 보여야 대시 타이밍이 의미를 갖는다.</param>
-/// <param name="Locked">굳었나 — 파이터가 탈진했다(가드 붕괴 · 스태미나 0 · #71). <c>exhaust_seconds</c> 동안 아무것도 못 한다 —
-/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.
-/// 부정확 패리의 고정이 없어져(이슈 #53) 이 색은 이제 한 가지 뜻뿐이다.</param>
+/// <param name="Exhausted">탈진했나 (#71 · 설계 §5.5) — 가드 붕괴든 스태미나 0 이든. <c>exhaust_seconds</c> 동안 아무것도 못 한다 —
+/// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다(자세는 <see cref="FighterPose.Exhausted"/>).</param>
 /// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.
 /// 가드 링의 굵기가 아니라 <b>밝기</b>가 이것이라, 바닥에 가까울수록 링이 꺼져 간다.
 /// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다.</param>
@@ -66,8 +71,32 @@ public readonly record struct FighterFrame(
     int Facing,
     FighterPose Pose,
     bool Invulnerable,
-    bool Locked,
+    bool Exhausted,
     double GuardStamina);
+
+/// <summary>
+/// 한 렌더 프레임에 HUD 를 그리는 데 필요한 전부 — <see cref="FighterFrame"/> 과 같은 규약이다. 비율과 몫은 <c>Battle</c> 이 규칙의
+/// 값에서 내어 싣는다: 뷰가 최대값이나 탈진 길이의 사본을 들면 데이터를 고치는 날 바가 거짓말한다.
+/// </summary>
+/// <param name="Health">파이터 체력.</param>
+/// <param name="MaxHealth">파이터 최대 체력.</param>
+/// <param name="Stamina">파이터 스태미나.</param>
+/// <param name="MaxStamina">파이터 최대 스태미나.</param>
+/// <param name="FighterExhausted">파이터가 탈진했나 (#71 · 설계 §6) — 스태미나 바가 탈진 모양(보스 게이지의 탈진과 같은 파랑)이 된다.</param>
+/// <param name="BossHealth">보스 체력.</param>
+/// <param name="BossMaxHealth">보스 최대 체력.</param>
+/// <param name="Poise">보스의 경직 게이지 0~1 (#71 · 설계 §4.5).</param>
+/// <param name="BossExhaustLeft">보스의 남은 탈진 0~1 — 0 이면 탈진이 아니다. 탈진 동안 게이지 자리가 이것을 푸르게 그린다.</param>
+public readonly record struct HudFrame(
+    int Health,
+    int MaxHealth,
+    double Stamina,
+    double MaxStamina,
+    bool FighterExhausted,
+    int BossHealth,
+    int BossMaxHealth,
+    double Poise,
+    double BossExhaustLeft);
 
 /// <summary>
 /// 칼질 한 칸을 <b>그리는 데</b> 필요한 것 — 어느 시트를 몇 fps 로, 몇 번 장부터 돌리고 몇 번 장에서 칼이 나가나.

@@ -68,6 +68,9 @@ public sealed class Boss
     /// <summary>남은 탈진 틱. 0 이면 탈진이 아니다.</summary>
     private int _exhaustLeft;
 
+    /// <summary>이번 탈진의 길이(틱) — <see cref="ExhaustLeft"/> 의 분모다. 탈진에 들 때 받는다.</summary>
+    private int _exhaustTotal;
+
     public Boss(BossConfig config, Arena arena, double x)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -122,10 +125,20 @@ public sealed class Boss
     public bool Exhausted => _exhaustLeft > 0;
 
     /// <summary>
+    /// 남은 탈진의 몫 (#71 · 설계 §6) — 무너진 틱에 1 이고 풀리는 틱에 0 이다. HUD 의 경직 게이지가 탈진 동안 이것을 푸르게 그린다:
+    /// 규칙의 게이지는 무너질 때 비므로 그것을 그리면 "꽉 찼다" 가 한 프레임도 안 보인다. 뷰가 틱을 따로 세지 않게 여기서 낸다.
+    /// </summary>
+    public double ExhaustLeft => _exhaustTotal <= 0 ? 0 : (double)_exhaustLeft / _exhaustTotal;
+
+    /// <summary>
     /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(패리 · 경직 게이지 — #71)이 몇이든
     /// 같은 상태 · 같은 그림에 닿아야 한다(설계 §4.3). 길이는 틱이다 — 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
     /// </summary>
-    public void Exhaust(int ticks) => _exhaustLeft = Math.Max(0, ticks);
+    public void Exhaust(int ticks)
+    {
+        _exhaustLeft = Math.Max(0, ticks);
+        _exhaustTotal = _exhaustLeft;
+    }
 
     /// <summary>탈진 시계를 한 틱 민다. <b>탈진해 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
     public void Tick()

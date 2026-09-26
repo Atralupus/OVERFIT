@@ -230,12 +230,13 @@ public static class TestConfigs
     public static int MaxTicks() => Balance().Battle.MaxTicks;
 
     /// <summary>
-    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="patternGap"/> 은
-    /// <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
-    /// 속도 0 으로 보스를 세운다). 반폭은 절대 안 받는다 — 몸 충돌 간격이 그 값을 쓰므로
-    /// 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
+    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="patternGap"/> ·
+    /// <paramref name="exhaustSeconds"/> 는 <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
+    /// 속도 0 으로 보스를 세운다 · 탈진 길이를 바꿔 그 길이를 규칙에게서 읽는지 본다). 반폭은 절대 안 받는다 — 몸 충돌 간격이 그 값을
+    /// 쓰므로 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
     /// </summary>
-    public static BossConfig Boss(int? maxHealth = null, double? moveSpeed = null, double? patternGap = null)
+    public static BossConfig Boss(
+        int? maxHealth = null, double? moveSpeed = null, double? patternGap = null, double? exhaustSeconds = null)
     {
         BalanceData balance = Balance();
         BossConfig data = Bosses()[balance.Battle.Boss];
@@ -246,7 +247,7 @@ public static class TestConfigs
             HalfWidth = data.HalfWidth,
             Height = data.Height,
             PatternGap = patternGap ?? data.PatternGap,
-            ExhaustSeconds = data.ExhaustSeconds,
+            ExhaustSeconds = exhaustSeconds ?? data.ExhaustSeconds,
             PoiseMax = data.PoiseMax,
             PoiseDecayDelay = data.PoiseDecayDelay,
             PoiseDecayPerSecond = data.PoiseDecayPerSecond,

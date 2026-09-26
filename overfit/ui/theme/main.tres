@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=7 format=3]
+[gd_resource type="Theme" load_steps=9 format=3]
 
 ; 이 저장소의 유일한 시각 기준. 색·폰트 크기·여백은 여기서만 정의한다.
 ; 씬에서 theme_override_* 로 덮는 것은 "그 씬에서만 다를 이유"가 있을 때뿐이다.
@@ -79,6 +79,24 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
+; 경직 게이지 = 흰색 계열 (#71 · 설계 §6). 빨간 체력바 바로 밑이라 색상이 아니라 **밝기**로 갈린다 — 호박은 "막아도 되는
+; 연타" 라 안 쓴다(보스의 선딜 링과 틴트가 호박이다).
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_poise"]
+bg_color = Color(0.905882, 0.921569, 0.960784, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+; 탈진 = 파랑 (#71). 보스의 탈진 틴트(푸른 톤)와 같은 쪽이다 — 보스 게이지의 탈진과 파이터 스태미나 바의 탈진이 같은 색이다:
+; "지금은 아무것도 못 한다" 가 누구의 것이든 한 색으로 읽힌다.
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_exhaust"]
+bg_color = Color(0.4, 0.580392, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
 [resource]
 default_font_size = 28
 Button/colors/font_color = Color(0.878431, 0.901961, 0.941176, 1)
@@ -94,6 +112,12 @@ ProgressBar/styles/fill = SubResource("StyleBoxFlat_bar_health")
 StaminaBar/base_type = &"ProgressBar"
 StaminaBar/styles/background = SubResource("StyleBoxFlat_bar_track")
 StaminaBar/styles/fill = SubResource("StyleBoxFlat_bar_stamina")
+PoiseBar/base_type = &"ProgressBar"
+PoiseBar/styles/background = SubResource("StyleBoxFlat_bar_track")
+PoiseBar/styles/fill = SubResource("StyleBoxFlat_bar_poise")
+ExhaustBar/base_type = &"ProgressBar"
+ExhaustBar/styles/background = SubResource("StyleBoxFlat_bar_track")
+ExhaustBar/styles/fill = SubResource("StyleBoxFlat_bar_exhaust")
 BarNumber/base_type = &"Label"
 BarNumber/colors/font_color = Color(1, 1, 1, 1)
 BarNumber/colors/font_outline_color = Color(0.027451, 0.031373, 0.047059, 1)

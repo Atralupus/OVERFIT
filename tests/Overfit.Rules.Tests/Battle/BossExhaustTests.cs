@@ -102,6 +102,44 @@ public class BossExhaustTests
     }
 
     [Fact]
+    public void 탈진의_남은_몫은_무너진_틱에_1_이고_풀리는_틱에_0_이다()
+    {
+        // 설계 §6 — HUD 의 경직 게이지는 탈진 동안 푸른 모양으로 바뀌어 **남은 탈진**을 그린다: 무너지는 순간 가득 찬 채 푸르게 바뀌어
+        // 준다. 규칙의 게이지는 무너질 때 0 이라 그것을 그리면 "꽉 찼다" 가 한 프레임도 안 보인다. 몫은 규칙이 낸다 — 탈진의 틱 수를
+        // 뷰가 따로 세면 탈진 길이를 고치는 날 바가 거짓말한다. 그래서 실제 보스(1.5초 = 90틱)가 아닌 길이(1.0초 = 60틱)로 잰다 — 90 을
+        // 박은 몫도 실제 보스로는 초록이다.
+        BattleSim sim = Sim(Breaker(), TestConfigs.Boss(maxHealth: 999_999, patternGap: 1000, exhaustSeconds: 1.0), "3연격");
+        int total = BattleSim.TicksFor(1.0);
+        total.ShouldNotBe(BattleSim.TicksFor(TestConfigs.Boss().ExhaustSeconds), "실제 보스와 같은 길이다 — 이 테스트가 분모를 어디서 읽는지 못 가른다");
+        double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
+        for (int i = 0; i < 600 && Math.Abs(sim.Boss.X - sim.Fighter.X) > standoff; i++)
+        {
+            sim.Tick(_right);
+        }
+
+        Math.Abs(sim.Boss.X - sim.Fighter.X).ShouldBeLessThanOrEqualTo(standoff, "파이터가 칼이 닿는 자리까지 못 걸어갔다");
+        sim.Boss.ExhaustLeft.ShouldBe(0, "무너지지도 않았는데 남은 탈진이 있다");
+        sim.Tick(_attack);
+        for (int i = 0; i < 30 && !sim.Boss.Exhausted; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Boss.ExhaustLeft.ShouldBe(1, "무너진 틱에 남은 탈진이 가득이 아니다");
+        sim.Tick(default);
+        sim.Boss.ExhaustLeft.ShouldBe((total - 1) / (double)total, 1e-9, "탈진이 한 틱에 한 몫씩 안 줄었다 — 분모가 이 탈진의 길이가 아니다");
+
+        int ticks = 1;
+        for (; ticks < 600 && sim.Boss.Exhausted; ticks++)
+        {
+            sim.Tick(default);
+        }
+
+        ticks.ShouldBe(total, "탈진이 받은 길이만큼 안 갔다");
+        sim.Boss.ExhaustLeft.ShouldBe(0);
+    }
+
+    [Fact]
     public void 공중에서_무너지면_착지_판정_없이_포물선의_높이를_따라_그_자리에_내린다()
     {
         // 설계 §4.2 · §12 「공중 탈진」 — 게이지가 공중에서 차면 하던 패턴(착지 판정)은 끊기고, 보스는 포물선의 높이를 그대로 따라
