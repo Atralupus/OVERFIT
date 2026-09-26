@@ -273,7 +273,8 @@ public partial class Battle : Node2D
         _fighterView.Load(
             _fighterConfig.Sprite,
             Swings(_fighterConfig),
-            new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0));
+            new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
+            _fighterConfig.ParryAnimFrames);
         _bossView.Load(_bossConfig.Sprite);
 
         if (GetTree().DebugCollisionsHint)

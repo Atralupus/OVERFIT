@@ -464,9 +464,19 @@ public class FighterActionTests
 
         Idle(f, 11);   // 19틱 = 0.3167초 — 커밋(0.3333)의 마지막 틱
         f.Action.ShouldBe(FighterAction.Parry, "커밋이 한 틱 일찍 끝났다");
+        f.Stiff.ShouldBeFalse("커밋이 한 틱 일찍 끝나 경직에 들었다");
 
-        Idle(f, 1);   // 20틱 = 0.3333초 — 커밋이 끝났다
-        f.Action.ShouldBe(FighterAction.Idle);
+        // 20틱 = 0.3333초 — 커밋이 끝났다. (#82) 곧장 Idle 이 아니라 **패리 뒤 경직**에 든다 — 행동은 여전히 Parry 다.
+        Idle(f, 1);
+        f.Action.ShouldBe(FighterAction.Parry, "커밋이 끝나며 패리 뒤 경직 없이 풀렸다");
+        f.Stiff.ShouldBeTrue("커밋이 끝났는데 패리 뒤 경직에 안 들었다");
+
+        int n = BattleSim.TicksFor(TestConfigs.Fighter().ParryStiff);
+        Idle(f, n - 1);   // 경직의 마지막 틱
+        f.Action.ShouldBe(FighterAction.Parry, "패리 뒤 경직이 한 틱 일찍 끝났다");
+
+        Idle(f, 1);   // 20 + n 틱 — 경직까지 끝났다
+        f.Action.ShouldBe(FighterAction.Idle, "패리 뒤 경직이 데이터보다 길다");
     }
 
     [Fact]
@@ -541,16 +551,18 @@ public class FighterActionTests
     }
 
     [Fact]
-    public void 받아친_패리라도_스태미나가_0_이면_J_를_버리고_커밋을_끝까지_간다()
+    public void 받아친_패리라도_스태미나가_0_이면_J_를_버리고_커밋과_경직을_끝까지_간다()
     {
         // 못 하는 행동은 안 누른 것과 같다(CanStart) — 되받아치기도 같은 규칙이다. 스태미나가 남아 있으면 모자라도 마지막 한 번은
         // 나가고(#71 · FighterExhaustTests), 0 이면 못 나간다. 못 나간 J 가 커밋을 풀면 받아친 사람이 공짜로 칼을 얻는다.
+        // (#82) 패리 행동은 커밋(20틱) 뒤 패리 경직까지다 — 경직 안의 J 도 같은 규칙으로 버려지고, 버린 J 가 그 길이를 안 바꾼다.
+        int end = 20 + BattleSim.TicksFor(TestConfigs.Fighter().ParryStiff);
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
         f.ParryPrecise();
         f.Spend(f.Stamina);
 
-        for (int tick = 2; tick <= 19; tick++)
+        for (int tick = 2; tick < end; tick++)
         {
             f.Tick(_attack, _dt);
 
@@ -558,8 +570,8 @@ public class FighterActionTests
             f.Stamina.ShouldBe(0, 1e-9, $"{tick}틱: 버린 J 가 값을 냈다");
         }
 
-        f.Tick(_attack, _dt);   // 20틱 — 커밋이 끝나는 틱이다
-        f.Action.ShouldBe(FighterAction.Idle, "버린 J 가 커밋의 길이를 바꿨다");
+        f.Tick(_attack, _dt);   // 커밋과 경직이 끝나는 틱이다 — 스태미나 0 이라 이 틱에 탈진한다(FighterStiffTests)
+        f.Action.ShouldBe(FighterAction.Idle, "버린 J 가 패리의 길이를 바꿨다");
     }
 
     [Fact]
@@ -570,8 +582,12 @@ public class FighterActionTests
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
         f.ParryPrecise();
-        Idle(f, 19);   // 받아친 채 J 없이 커밋이 끝난다
-        f.Action.ShouldBe(FighterAction.Idle, "커밋이 안 끝났다 — 이 테스트가 다음 패리를 못 누른다");
+        for (int i = 0; i < 120 && f.Action == FighterAction.Parry; i++)
+        {
+            f.Tick(default, _dt);   // 받아친 채 J 없이 커밋과 패리 뒤 경직(#82)이 끝난다
+        }
+
+        f.Action.ShouldBe(FighterAction.Idle, "패리가 안 끝났다 — 이 테스트가 다음 패리를 못 누른다");
 
         f.Tick(_parry, _dt);   // 새 패리 — 이번에는 아무것도 안 받아친다
         f.Tick(_attack, _dt);
@@ -593,10 +609,15 @@ public class FighterActionTests
     {
         // 연타 징벌은 걷었다 (설계 §5.3). 난사는 커밋이 이미 벌한다 — 여기서 보는 것은 **벌이 두 번 오지 않는** 것이다:
         // 커밋이 끝나자마자 다시 누른 패리도 온전한 창을 가진다.
+        // 커밋 뒤의 패리 경직(#82)까지 끝나기를 기다린다 — 틱 수를 적지 않는다(경직을 고치는 날 기다림만 조용히 모자란다).
         Fighter f = Spawn();
         f.Tick(_parry, _dt);
-        Idle(f, 19);
-        f.Action.ShouldBe(FighterAction.Idle, "커밋이 안 끝났다 — 이 테스트가 두 번째 누름을 못 한다");
+        for (int i = 0; i < 120 && f.Action == FighterAction.Parry; i++)
+        {
+            f.Tick(default, _dt);
+        }
+
+        f.Action.ShouldBe(FighterAction.Idle, "패리가 안 끝났다 — 이 테스트가 두 번째 누름을 못 한다");
 
         f.Tick(_parry, _dt);
         Idle(f, 6);   // 7틱 = 0.117초 — 창 안

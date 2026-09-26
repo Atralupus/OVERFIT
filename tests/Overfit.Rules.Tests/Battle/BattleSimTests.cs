@@ -994,31 +994,34 @@ public class BattleSimTests
 
     // ── 방어 하나와 계측 (이슈 #27 · #53) ────────────────────────────────────
 
-    /// <summary>패리 가능한 판정 하나를 <paramref name="pressAt"/> 틱에 K 로 받아 본다. 관측과 <b>판정이 선 틱</b>을 돌려준다.</summary>
-    private static (DodgeEvent Event, int Tick) ParryAt(int? pressAt) =>
-        OneAt(i => new InputFrame(0, false, false, Parry: i == pressAt, false));
+    /// <summary>
+    /// 패리 가능한 판정 하나를 <paramref name="pressAt"/> 틱에 K 로 받아 본다. 관측과 <b>판정이 선 틱</b>을 돌려준다.
+    /// <paramref name="at"/> 은 판정이 서는 패턴 틱이다(기본 24 — <see cref="OneAt"/>).
+    /// </summary>
+    private static (DodgeEvent Event, int Tick) ParryAt(int? pressAt, int at = 24) =>
+        OneAt(i => new InputFrame(0, false, false, Parry: i == pressAt, false), at);
 
     /// <summary>같은 판정을 <paramref name="from"/> 틱부터 ↓ 를 붙들어 가드로 받아 본다 (설계 §5.2).</summary>
     private static (DodgeEvent Event, int Tick) GuardFrom(int from) =>
         OneAt(i => new InputFrame(0, false, false, false, false, GuardHeld: i >= from));
 
     /// <summary>
-    /// 패리 가능한 판정 하나(24틱째)를 틱마다 <paramref name="input"/> 으로 받아 본다.
+    /// 패리 가능한 판정 하나(패턴의 <paramref name="at"/> 틱째 · 기본 24)를 틱마다 <paramref name="input"/> 으로 받아 본다.
     ///
     /// <para>
     /// 판정 틱을 손으로 안 적는 이유는 간격과 시각이 바뀔 때마다 그 숫자가 같이 움직이기 때문이다 —
     /// 박아 두면 타임라인을 건드릴 때마다 무관한 실패가 난다.
     /// </para>
     /// </summary>
-    private static (DodgeEvent Event, int Tick) OneAt(Func<int, InputFrame> input)
+    private static (DodgeEvent Event, int Tick) OneAt(Func<int, InputFrame> input, int at = 24)
     {
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
             height: new double[] { 0, 300 },
             parryable: true,
-            at: 24 * BattleSim.Dt));
+            at: at * BattleSim.Dt));
 
-        for (int i = 1; i <= 30 && sim.Events.Count == 0; i++)
+        for (int i = 1; i <= at + 6 && sim.Events.Count == 0; i++)
         {
             sim.Tick(input(i));
         }
@@ -1083,20 +1086,40 @@ public class BattleSimTests
     }
 
     [Fact]
-    public void 커밋이_끝난_뒤에_맞은_판정은_패리의_공이_아니다()
+    public void 경직까지_끝난_뒤에_맞은_판정은_패리의_공이_아니다()
     {
-        // 이 계획이 정한 것 6 — 패리 시도의 공은 **커밋이 도는 동안만** 산다(대시의 공이 대시 행동이 도는 동안인 것과
-        // 같은 경계). 커밋이 끝난 뒤에 선 판정까지 그 누름의 시도로 세면 사람이 한 적 없는 -0.4초짜리 표본이
-        // parry 축에 섞이고, "아무것도 안 하고 맞았다" 가 "늦게 누르고 맞았다" 로 기록된다.
-        // 위 테스트(12틱에 누른 것)와 짝이다: 거기는 커밋 안에서 맞아 Parry, 여기는 커밋 밖에서 맞아 None.
+        // 이 계획이 정한 것 6 — 패리 시도의 공은 **패리 행동이 도는 동안만** 산다(대시의 공이 대시 행동이 도는 동안인 것과
+        // 같은 경계). 행동이 끝난 뒤에 선 판정까지 그 누름의 시도로 세면 사람이 한 적 없는 표본이 parry 축에 섞이고,
+        // "아무것도 안 하고 맞았다" 가 "일찍 누르고 맞았다" 로 기록된다. (#82) 패리 행동은 이제 **커밋 뒤 경직까지**다 — 경직 중에 맞은 판정은
+        // 아래 짝 테스트가 본다. 그래서 여기는 경직까지 끝난 뒤(누른 뒤 44틱)에 판정을 세운다: 전에는 24틱짜리 판(커밋 20틱 뒤)이었다.
+        FighterConfig c = TestConfigs.Fighter();
+        const int press = 3;
+        (DodgeEvent e, int hitTick) = ParryAt(press, at: 44);
+
+        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(c.ParryDuration + (BattleSim.TicksFor(c.ParryStiff) * BattleSim.Dt),
+            "판정이 패리 행동 안에 섰다 — 이 테스트가 경직까지 끝난 뒤를 안 본다");
+        e.Verdict.ShouldBe(HitVerdict.Hit);
+        e.Verb.ShouldBe(DodgeVerb.None, "경직까지 끝난 누름이 이 판정의 공을 가져갔다");
+        e.TimingError.ShouldBe(0);
+    }
+
+    [Fact]
+    public void 커밋_뒤_경직_중에_맞은_판정은_그_패리의_시도다()
+    {
+        // (#82) 위 테스트의 짝 — 커밋(0.333초)은 끝났지만 패리 뒤 경직(parry_stiff) 안에 선 판정이다. 경직 동안 파이터는 서 있기로 한 것이
+        // 아니라 **못 움직이는** 것이라 그 맨몸은 그 패리가 만든 것이다 — 대시 경직 중의 판정이 대시의 것인 것과 같은 규칙이다
+        // (FighterStiffTests). 공의 시각은 누른 틱이라 오차가 크게 음수다: "너무 일찍 눌러 커밋에 묶였다" 가 그대로 실린다.
+        // 경직이 없던 때는 이 판정이 None 이었다(아무것도 안 하고 맞은 것과 같은 점).
+        FighterConfig c = TestConfigs.Fighter();
         const int press = 3;
         (DodgeEvent e, int hitTick) = ParryAt(press);
 
-        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(TestConfigs.Fighter().ParryDuration,
-            "판정이 커밋 안에 섰다 — 이 테스트가 커밋이 끝난 뒤를 안 본다");
+        double since = (hitTick - press) * BattleSim.Dt;
+        since.ShouldBeGreaterThan(c.ParryDuration, "판정이 커밋 안에 섰다 — 이 테스트가 경직을 안 본다");
+        since.ShouldBeLessThan(c.ParryDuration + (BattleSim.TicksFor(c.ParryStiff) * BattleSim.Dt), "판정이 경직 밖에 섰다");
         e.Verdict.ShouldBe(HitVerdict.Hit);
-        e.Verb.ShouldBe(DodgeVerb.None, "커밋이 끝난 누름이 이 판정의 공을 가져갔다");
-        e.TimingError.ShouldBe(0);
+        e.Verb.ShouldBe(DodgeVerb.Parry, "패리 뒤 경직 중의 판정이 그 패리의 시도로 안 실렸다");
+        e.TimingError.ShouldBeLessThan(-c.ParryDuration, "공의 시각이 누른 틱이 아니다");
     }
 
     [Fact]

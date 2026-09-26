@@ -23,6 +23,7 @@ public enum FighterAction
     /// <summary>
     /// 패리 — 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 커밋 동안 가드 · 패리 · 대시 · 이동이 안 된다 —
     /// <b>받아쳤으면</b> 그 뒤의 J 만은 곧장 1타가 된다(되받아치기). 창 밖에서 맞으면 <b>그냥 맞는다</b> — 가드가 아니다.
+    /// 받아쳤든 헛쳤든 커밋 뒤의 <b>패리 뒤 경직</b>(<c>parry_stiff</c> · #82)까지가 패리다 — 되받아치기의 J 는 경직 안에서도 선다.
     /// </summary>
     Parry,
 
@@ -62,10 +63,14 @@ public sealed class Fighter
     /// <summary>대시 뒤 경직의 길이(틱) — <c>dash_recover</c> 를 세울 때 한 번 바꾼다 (#82).</summary>
     private readonly int _dashRecoverTicks;
 
+    /// <summary>패리 뒤 경직의 길이(틱) — <c>parry_stiff</c> 를 세울 때 한 번 바꾼다 (#82). 받아쳤든 헛쳤든 같다.</summary>
+    private readonly int _parryStiffTicks;
+
     /// <summary>
-    /// 남은 행동 뒤 경직 틱 (#82). 0 이 아니면 지금 행동(칼질 · 대시)은 제 시간을 다 돌았고 경직만 남았다. <b>행동은 그대로다</b> —
-    /// <see cref="Action"/> 이 Attack · Dash 인 채라 커밋이 막던 것(행동 · 이동 · 점프 · 가드)이 그대로 막히고, 스태미나도 안 찬다
-    /// (Idle 이 아니다). 경직의 마지막 틱에 행동이 끝난다(<see cref="End"/>).
+    /// 남은 행동 뒤 경직 틱 (#82). 0 이 아니면 지금 행동(칼질 · 대시 · 패리)은 제 시간을 다 돌았고 경직만 남았다. <b>행동은 그대로다</b> —
+    /// <see cref="Action"/> 이 Attack · Dash · Parry 인 채라 커밋이 막던 것(행동 · 이동 · 점프 · 가드)이 그대로 막히고, 커밋이 풀어 주던 것
+    /// (1타의 경직 중 J → 2타 · 받아친 패리의 J → 되받아치기)도 그대로 풀리고, 스태미나도 안 찬다(Idle 이 아니다). 경직의 마지막 틱에 행동이
+    /// 끝난다(<see cref="End"/>).
     /// </summary>
     private int _stiffLeft;
 
@@ -109,6 +114,7 @@ public sealed class Fighter
         }
 
         _dashRecoverTicks = StiffTicks(config.DashRecover);
+        _parryStiffTicks = StiffTicks(config.ParryStiff);
     }
 
     /// <summary>
@@ -194,8 +200,9 @@ public sealed class Fighter
     public bool Locked => Exhausted;
 
     /// <summary>
-    /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>)이나 대시(<c>dash_recover</c>)가 제 시간을 다 돌고 경직만 남았다. 행동은
-    /// 그대로라(<see cref="Action"/>) 막는 것은 이것을 안 본다. 뷰가 칼질의 마지막 장 · 대시의 마지막 자세를 붙드는 데 쓴다.
+    /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>) · 대시(<c>dash_recover</c>) · 패리(<c>parry_stiff</c>)가 제 시간을 다 돌고
+    /// 경직만 남았다. 행동은 그대로라(<see cref="Action"/>) 막는 것은 이것을 안 본다. 뷰가 칼질의 마지막 장 · 대시의 마지막 자세 · 패리의
+    /// 마지막 장을 붙드는 데 쓴다.
     /// </summary>
     public bool Stiff => _stiffLeft > 0;
 
@@ -299,7 +306,7 @@ public sealed class Fighter
     /// (<c>BattleSim.Exhaust</c> · 하나다)을 부르는 것은 <see cref="BattleSim"/> 이다(#72 · 설계 §4.3).
     ///
     /// <para>
-    /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
+    /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋과 패리 뒤 경직(#82)이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
     /// 이 뒤의 틱에 누른 J 는 곧장 1타가 된다(<see cref="Begin"/> — 되받아치기). 이것은 <see cref="BattleSim"/> 의 틱에서
     /// 파이터의 틱 <b>뒤</b>에 도는 보스 판정(<see cref="BossSwings.Resolve"/>)에서 불리므로, 받아친 그 틱의 J 는 이미 지나갔고
     /// 되받아치기는 다음 틱부터다.
@@ -378,7 +385,7 @@ public sealed class Fighter
             return;
         }
 
-        // 제 시간을 다 돌았다 — 이을 것이 없으면 경직에 든다. 경직이 없는 행동(패리)이나 0 인 경직은 이 틱에 끝난다.
+        // 제 시간을 다 돌았다 — 이을 것이 없으면 경직에 든다. 0 인 경직(데이터에서 끈 경직)은 이 틱에 끝난다 — 경직이 없던 때와 같다.
         _comboQueued = false;
         _stiffLeft = StiffOf(Action);
         if (_stiffLeft == 0)
@@ -409,11 +416,15 @@ public sealed class Fighter
         }
     }
 
-    /// <summary>행동이 제 시간을 다 돈 뒤의 경직(틱) — 칼질은 그 칸의 것, 대시는 대시의 것, 패리는 없다(#82).</summary>
+    /// <summary>
+    /// 행동이 제 시간을 다 돈 뒤의 경직(틱) — 칼질은 그 칸의 것, 대시는 대시의 것, 패리는 패리의 것(#82). 패리는 받아쳤든 헛쳤든 붙는다:
+    /// 받아친 사람은 경직 안에서도 J 로 되받아치므로(<see cref="Begin"/>) 서는 것은 헛친 사람뿐이다.
+    /// </summary>
     private int StiffOf(FighterAction action) => action switch
     {
         FighterAction.Attack => _stiffTicks[_step],
         FighterAction.Dash => _dashRecoverTicks,
+        FighterAction.Parry => _parryStiffTicks,
         _ => 0,
     };
 
@@ -480,7 +491,7 @@ public sealed class Fighter
 
     /// <summary>
     /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리 — 행동 뒤 경직까지) 중이거나 굳었으면 입력을 버린다 — 공격 셋만 예외다:
-    /// 칼질 중의 공격은 다음 칼로 기억하고, 1타의 경직 중의 공격은 곧장 2타를 세우고(#82), <b>받아친</b> 패리의 커밋 중의 공격은
+    /// 칼질 중의 공격은 다음 칼로 기억하고, 1타의 경직 중의 공격은 곧장 2타를 세우고(#82), <b>받아친</b> 패리의 커밋 · 경직 중의 공격은
     /// 곧장 1타를 세운다(되받아치기). 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
     /// </summary>
     private void Begin(InputFrame input)
@@ -510,6 +521,10 @@ public sealed class Fighter
         // 누른 J 가 아무 표시 없이 사라졌고, 데모(시드 51)의 봇은 마무리를 받아친 다음 틱부터 누른 J 를 커밋이 끝날 때까지
         // 14틱 내내 버렸다(최종 리뷰 I1). 받는 J 는 Idle 에서 누른 J 와 같다(Start · CanStart). 못 받아친 패리는 J 까지
         // 버린다 — 헛친 난사의 값은 커밋 전체다.
+        //
+        // **패리 뒤 경직(#82)도 여기다** — 경직은 패리 행동의 끝자락이라 Action 이 Parry 인 채 이 갈래를 탄다. 그래서 받아친 사람의 J 는 경직
+        // 안에서도 곧장 1타고(반격 산수 약 1.1초가 그대로다), 헛친 사람은 커밋 20틱 + 경직 15틱 내내 J 까지 버린다. 경직에서 J 를 따로 막거나
+        // 풀지 않는 것이 규칙이다: 받아쳤는지만이 가른다.
         if (Action == FighterAction.Parry)
         {
             if (_parryLanded && input.Attack && CanStart(FighterAction.Attack))

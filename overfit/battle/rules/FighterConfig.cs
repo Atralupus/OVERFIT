@@ -114,6 +114,13 @@ public sealed class FighterConfig
     /// </summary>
     public required double ParryDuration { get; init; }
 
+    /// <summary>
+    /// 패리 뒤의 <b>경직</b>(초) (#82 · 설계 §5.3) — 커밋(<see cref="ParryDuration"/>)이 끝난 뒤 이만큼 더 커밋한다. <b>받아쳤든 헛쳤든</b>
+    /// 붙고, 그동안 가드 · 패리 · 대시 · 이동 · 점프가 막히고 스태미나도 안 찬다. 받아친 패리의 되받아치기(J → 곧장 1타)는 경직 안에서도
+    /// 그대로 선다 — 헛친 패리는 경직 내내 J 까지 버린다. 유저: "패리도 후경직이 좀 커야합니다". 틱으로 센다(0 이면 경직이 없다).
+    /// </summary>
+    public required double ParryStiff { get; init; }
+
     /// <summary>패리가 도는 시트(<c>.tres</c> 의 이름). <b>규칙은 안 읽는다</b> — 뷰가 그리고 테스트가 커밋과 맞대어 본다.</summary>
     public required string ParryAnim { get; init; }
 

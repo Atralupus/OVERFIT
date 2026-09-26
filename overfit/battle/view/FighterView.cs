@@ -129,6 +129,12 @@ public partial class FighterView : Node2D
     /// <summary>패리가 도는 시트 — <c>attack2</c> 의 f0~f3 (설계 §5.3). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
     private SwingSheet _parry;
 
+    /// <summary>
+    /// 패리가 도는 장 수(<c>parry_anim_frames</c> — f0~f3 이면 4). 패리의 마지막 장이 어디인지를 이것으로 안다(<see cref="HoldParry"/>) —
+    /// 시트(<c>attack2</c>)는 그 뒤에 칼이 나가는 f4 · f5 가 더 있다.
+    /// </summary>
+    private int _parryFrames;
+
     /// <summary>지금 그리는 칼질이 몇 번째인가 (<see cref="SwingBegan"/> 이 정한다).</summary>
     private int _swing;
 
@@ -172,10 +178,12 @@ public partial class FighterView : Node2D
     /// <paramref name="swings"/> 는 칼질마다의 시트 — 부르는 쪽(<c>Battle</c>)이 데이터에서 옮겨 준다.
     /// 뷰가 fighters.json 을 직접 읽으면 규칙과 뷰가 같은 파일을 두 번 읽는다.
     /// <paramref name="parry"/> 는 패리가 도는 시트다 — 칼이 나가는 장은 없다(<c>BladeFrame</c> 은 안 쓴다).
+    /// <paramref name="parryFrames"/> 는 그 시트에서 패리가 도는 장 수다(<c>parry_anim_frames</c>).
     /// </summary>
-    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry)
+    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames)
     {
         _parry = parry;
+        _parryFrames = parryFrames;
         _swings = new SwingSheet[swings.Count];
         for (int i = 0; i < _swings.Length; i++)
         {
@@ -236,6 +244,7 @@ public partial class FighterView : Node2D
         {
             Animate(AnimationFor(frame.Pose));
             HoldDash(frame);
+            HoldParry(frame);
         }
 
         _sprite.Modulate = Tint(frame);
@@ -568,6 +577,29 @@ public partial class FighterView : Node2D
         else if (!_sprite.IsPlaying())
         {
             _sprite.Play();
+        }
+    }
+
+    /// <summary>
+    /// 패리 — 칼을 사선으로 세운 <b>마지막 장</b>(f3)에 닿으면 거기 선다 (#82). 패리는 <c>attack2</c> 의 앞 네 장만 쓰는데 시트는 그 뒤로
+    /// 칼이 나가는 f4 · f5 가 더 있어, 커밋(0.333초 = 네 장) 뒤의 <b>패리 뒤 경직</b>(0.25초) 동안 흘려 두면 휘두르지 않은 칼이 화면에서
+    /// 나간다 — 받아친 줄 알았던 사람에게 거짓 반격으로 읽힌다. idle 로 두면 키가 안 먹는데 풀린 것처럼 보인다(대시 경직과 같은 이유).
+    /// 그래서 세운 자세를 붙들어 "아직 패리에 묶였다" 를 말한다. 경직 중에 맞았다 돌아오면(<see cref="Animate"/> 가 시트를 처음부터 튼다)
+    /// 곧장 마지막 장으로 선다 — 패리를 다시 세우는 그림이 아니다. 새 패리는 <see cref="ParryBegan"/> 이 처음부터 돌린다.
+    /// </summary>
+    private void HoldParry(FighterFrame frame)
+    {
+        if (frame.Pose != FighterPose.Parry || _dead || _hitPoseLeft > 0 || _parryFrames <= 0 || !HasSheet(_parry)
+            || _sprite.Animation != _parry.Anim)
+        {
+            return;
+        }
+
+        int last = System.Math.Min(_parry.StartFrame + _parryFrames - 1, _sprite.SpriteFrames!.GetFrameCount(_parry.Anim) - 1);
+        if ((frame.Stiff || _sprite.Frame >= last) && (_sprite.Frame != last || _sprite.IsPlaying()))
+        {
+            _sprite.Frame = last;
+            _sprite.Pause();
         }
     }
 

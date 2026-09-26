@@ -36,7 +36,7 @@ public class ReplayGoldenTests
     /// 공격은 17틱마다 누르는데 1타(기준 17틱)가 끝나고 경직에 든 첫 틱이라 **그 틱에 2타를 잇는다**(#82 — 1타의 경직 중 J).
     /// 경직이 없던 때는 Idle 이라 새 1타였고, 이 대본은 2타를 한 번도 안 이었다.
     /// 가드의 회귀는 <c>FighterActionTests</c> · <c>HitResolverTests</c> · <c>BattleSimTests</c> ·
-    /// <c>BotPolicyTests</c> 가 본다. 29틱마다의 K 는 이제 0.333초 커밋의 패리다(설계 §5.3).
+    /// <c>BotPolicyTests</c> 가 본다. 29틱마다의 K 는 이제 0.333초 커밋의 패리다(설계 §5.3) — 커밋 뒤에 0.25초 패리 뒤 경직이 붙는다(#82).
     /// </para>
     /// </summary>
     private static InputFrame[] Script()

@@ -8,8 +8,8 @@ namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
 /// 행동 뒤 경직 (#82 · 설계 §5.1 · §5.6) — 유저(2026-09-26): "캐릭터에 공격 후 경직이 너무 없네요 대시 후 경직 살짝, 1타공격 후 경직,
-/// 2타는 2타까지 공격후에는 좀더 오래 경직이 있게 해주세요." 칼질이 제 시간을 다 돌고 이어지는 칼이 없으면 그 칼질의 <c>stiff</c> 만큼,
-/// 대시가 끝나면 <c>dash_recover</c> 만큼 더 커밋한다.
+/// 2타는 2타까지 공격후에는 좀더 오래 경직이 있게 해주세요." — 그리고 "패리도 후경직이 좀 커야합니다". 칼질이 제 시간을 다 돌고 이어지는
+/// 칼이 없으면 그 칼질의 <c>stiff</c> 만큼, 대시가 끝나면 <c>dash_recover</c> 만큼, 패리의 커밋이 끝나면 <c>parry_stiff</c> 만큼 더 커밋한다.
 ///
 /// <para>
 /// <b>경직의 틱 수를 숫자로 적지 않는다</b> — 늘 설정에서 <see cref="BattleSim.TicksFor"/> 로 센다. "정확히 그만큼" 은 경직이 0 인 같은
@@ -23,6 +23,7 @@ public class FighterStiffTests
 
     private static readonly InputFrame _attack = new(0, false, false, false, true);
     private static readonly InputFrame _dash = new(0, false, true, false, false);
+    private static readonly InputFrame _parry = new(0, false, false, Parry: true, false);
 
     /// <summary>경직 동안 막혀야 하는 누름 — 칼질 뒤에는 J 를 뺀다(1타의 경직 중 J 는 2타를 세우는 자리라 따로 본다).</summary>
     private static readonly (string Name, InputFrame Press, Func<Fighter, double, bool> Took)[] _presses =
@@ -269,6 +270,107 @@ public class FighterStiffTests
         Travel(TestConfigs.Fighter()).ShouldBe(Travel(TestConfigs.Fighter(dashRecover: 0)), 1e-9);
     }
 
+    // ── 패리 뒤 경직 ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 헛친 패리의 경직 동안 막혀야 하는 누름. 위의 <see cref="_presses"/> 와 같되 <b>패리는 새로 선 패리</b>만 먹은 것으로 친다 — 경직도
+    /// 패리 행동이라(<see cref="Fighter.Action"/> 이 Parry 인 채) "패리 중인가" 로 보면 첫 누름부터 참이다. 헛친 패리 뒤에는 J 도 막힌다.
+    /// </summary>
+    private static readonly (string Name, InputFrame Press, Func<Fighter, double, bool> Took)[] _afterParry =
+        _presses.Where(p => p.Name != "패리")
+            .Append(("패리", _parry, (f, _) => f.Action == FighterAction.Parry && f.ActionElapsed < 1.5 * _dt))
+            .Append(("칼질", _attack, (f, _) => f.Action == FighterAction.Attack))
+            .ToArray();
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0.1)]
+    [InlineData(0.4)]
+    public void 헛친_패리는_커밋_뒤_경직_틱만큼_모든_것을_늦추고_그동안_제자리다(double? stiff)
+    {
+        // 패리의 커밋(0.333초)이 끝난 뒤 parry_stiff 동안 가드 · 패리 · 대시 · 걸음 · 점프가 막힌다 — 경직이 없는 같은 파이터보다 **정확히
+        // 경직 틱만큼** 늦게 먹는다. 못 받아친 패리는 J 까지 버리므로 칼질도 같이 늦다(헛친 난사의 값이 커밋 전체 + 경직이다).
+        // 길이를 바꿔 돌린다: 규칙이 경직을 숫자로 박았으면 셋 중 둘이 빨개진다.
+        FighterConfig c = TestConfigs.Fighter(parryStiff: stiff);
+        FighterConfig none = TestConfigs.Fighter(parryStiff: 0);
+        int n = Ticks(c.ParryStiff);
+        n.ShouldBeGreaterThan(0, "경직이 없다 — 이 테스트가 아무것도 안 본다");
+
+        foreach ((string name, InputFrame press, Func<Fighter, double, bool> took) in _afterParry)
+        {
+            int late = FirstTook(c, _parry, press, took) - FirstTook(none, _parry, press, took);
+            late.ShouldBe(n, $"{name}: 패리 뒤 경직({c.ParryStiff}초 = {n}틱)만큼 늦지 않다");
+        }
+
+        Fighter f = Spawn(c);
+        f.Tick(_parry, _dt);
+        UntilStiff(f);
+        double x = f.X;
+        for (int t = 1; t < n; t++)
+        {
+            f.Tick(new InputFrame(1, false, false, false, false), _dt);
+            f.Action.ShouldBe(FighterAction.Parry, $"패리 경직 {t}틱째에 패리가 끝났다");
+            f.Parrying.ShouldBeFalse($"패리 경직 {t}틱째에 받아치는 창이 다시 열렸다");
+            f.X.ShouldBe(x, 1e-9, $"패리 경직 {t}틱째에 움직였다");
+        }
+    }
+
+    [Fact]
+    public void 받아친_패리의_경직_중에_누른_J_는_곧장_1타다()
+    {
+        // 되받아치기는 그대로다 (설계 §4.3 · 판정 13) — 받아친 패리의 커밋 **과 경직** 안에서 누른 J 는 그 틱에 1타를 세운다. 그래서 반격
+        // 산수(받아친 다음 틱의 J → 2연격이 닿기까지 약 1.1초 · BossDataTests)가 안 바뀐다. 경직의 틱마다 누르고, 경직이 끝난 다음 틱(Idle)의
+        // J 도 1타임을 본다 — 경직 안의 어느 틱이 J 를 버려도 빨개진다.
+        FighterConfig c = TestConfigs.Fighter();
+        int n = Ticks(c.ParryStiff);
+
+        for (int k = 1; k <= n + 1; k++)
+        {
+            Fighter f = Spawn(c);
+            f.Tick(_parry, _dt);
+            f.ParryPrecise();   // 판정기가 받아쳤다고 알린다 — 보스 없이 Fighter 만 본다(BossSwings 가 부르는 자리다)
+            UntilStiff(f);
+            Idle(f, k - 1);
+            double stamina = f.Stamina;
+            bool inStiff = f.Stiff;
+
+            f.Tick(_attack, _dt);
+
+            inStiff.ShouldBe(k <= n, $"경직 {k}틱째의 셋업이 어긋났다");
+            f.Action.ShouldBe(FighterAction.Attack, $"받아친 패리의 경직 {k}틱째에 누른 J 가 1타를 안 세웠다");
+            f.ComboStep.ShouldBe(0, $"경직 {k}틱째의 J: 되받아치기는 1타부터다");
+            f.ActionElapsed.ShouldBe(_dt, 1e-9, $"경직 {k}틱째의 J: 1타의 시계가 누른 틱부터 안 돈다");
+            f.Stiff.ShouldBeFalse($"경직 {k}틱째의 J: 칼이 섰는데 경직이 남았다");
+            f.Stamina.ShouldBe(stamina - c.AttackCost, 1e-9, $"경직 {k}틱째의 J: 칼 값을 안 냈다");
+        }
+    }
+
+    [Fact]
+    public void 헛친_패리의_경직_중에_누른_J_는_버린다()
+    {
+        // 못 받아친 패리는 커밋 내내 J 를 버렸다(설계 §5.3) — 경직까지 그렇다. 버린 J 는 값도 안 낸다. 경직의 마지막 틱에 패리가 끝나고(Idle),
+        // 다음 틱의 J 가 1타다.
+        FighterConfig c = TestConfigs.Fighter();
+        int n = Ticks(c.ParryStiff);
+
+        Fighter f = Spawn(c);
+        f.Tick(_parry, _dt);
+        UntilStiff(f);
+        double stamina = f.Stamina;
+        for (int t = 1; t < n; t++)
+        {
+            f.Tick(_attack, _dt);
+            f.Action.ShouldBe(FighterAction.Parry, $"헛친 패리의 경직 {t}틱째에 J 가 경직을 끊었다");
+            f.Stamina.ShouldBe(stamina, 1e-9, $"헛친 패리의 경직 {t}틱째: 버린 J 가 값을 냈다");
+        }
+
+        f.Tick(_attack, _dt);
+        f.Action.ShouldBe(FighterAction.Idle, "패리 경직이 제 틱에 안 끝났다 — 데이터보다 길다");
+
+        f.Tick(_attack, _dt);
+        f.Action.ShouldBe(FighterAction.Attack, "패리 경직이 끝났는데 J 가 안 섰다");
+    }
+
     // ── 스태미나 · 탈진 ──────────────────────────────────────────────────────
 
     [Fact]
@@ -276,35 +378,44 @@ public class FighterStiffTests
     {
         // 회복은 Idle 에서만이다(설계 §5.2) — **경직은 행동의 일부라 Idle 이 아니다**(#82). 경직 동안 차면 0 에 닿은 칼질이 경직 동안
         // 차 올라 탈진하지 않는다(아래). 경직이 끝나는 틱은 행동이 끝나는 틱이라 그 틱부터 찬다 — 경직이 없던 때 행동이 끝나는 틱과 같다.
-        FighterConfig c = TestConfigs.Fighter();
-        int n = Ticks(c.Combo[0].Stiff);
-
-        Fighter f = Spawn(c);
-        f.Tick(_attack, _dt);
-        UntilStiff(f);
-        double stamina = f.Stamina;
-
-        for (int t = 1; t < n; t++)
-        {
-            f.Tick(default, _dt);
-            f.Stamina.ShouldBe(stamina, 1e-9, $"경직 {t}틱째에 스태미나가 찼다");
-        }
-
-        f.Tick(default, _dt);
-        f.Action.ShouldBe(FighterAction.Idle);
-        f.Stamina.ShouldBe(stamina + (c.StaminaRegen * _dt), 1e-9, "경직이 끝나는 틱에 한 틱어치가 안 찼다");
-    }
-
-    [Fact]
-    public void 스태미나_0_에서_끝난_칼질과_대시는_경직이_끝나는_틱에_탈진한다()
-    {
-        // 설계 §5.5 — 행동의 값으로 0 이 되면 그 행동이 **끝나는 틱**에 탈진한다. 이제 "끝나는 틱" 은 경직까지 끝나는 틱이다(#82):
-        // 경직 동안은 칼질 · 대시가 아직 도는 것이라 탈진이 안 들고, 스태미나는 0 그대로다(Idle 이 아니다).
+        // 칼질 · 대시 · 패리가 같은 규칙이다 — 패리의 경직도 한 줄로 따로 가지 않는다.
         FighterConfig c = TestConfigs.Fighter();
         foreach ((string name, InputFrame press, double stiff) in new[]
         {
             ("칼질", _attack, c.Combo[0].Stiff),
             ("대시", _dash, c.DashRecover),
+            ("패리", _parry, c.ParryStiff),
+        })
+        {
+            int n = Ticks(stiff);
+            Fighter f = Spawn(c);
+            f.Tick(press, _dt);
+            UntilStiff(f);
+            double stamina = f.Stamina;
+
+            for (int t = 1; t < n; t++)
+            {
+                f.Tick(default, _dt);
+                f.Stamina.ShouldBe(stamina, 1e-9, $"{name}: 경직 {t}틱째에 스태미나가 찼다");
+            }
+
+            f.Tick(default, _dt);
+            f.Action.ShouldBe(FighterAction.Idle, $"{name}: 경직이 제 틱에 안 끝났다");
+            f.Stamina.ShouldBe(stamina + (c.StaminaRegen * _dt), 1e-9, $"{name}: 경직이 끝나는 틱에 한 틱어치가 안 찼다");
+        }
+    }
+
+    [Fact]
+    public void 스태미나_0_에서_끝난_칼질_대시_패리는_경직이_끝나는_틱에_탈진한다()
+    {
+        // 설계 §5.5 — 행동의 값으로 0 이 되면 그 행동이 **끝나는 틱**에 탈진한다. 이제 "끝나는 틱" 은 경직까지 끝나는 틱이다(#82):
+        // 경직 동안은 칼질 · 대시 · 패리가 아직 도는 것이라 탈진이 안 들고, 스태미나는 0 그대로다(Idle 이 아니다).
+        FighterConfig c = TestConfigs.Fighter();
+        foreach ((string name, InputFrame press, double stiff) in new[]
+        {
+            ("칼질", _attack, c.Combo[0].Stiff),
+            ("대시", _dash, c.DashRecover),
+            ("패리", _parry, c.ParryStiff),
         })
         {
             int n = Ticks(stiff);

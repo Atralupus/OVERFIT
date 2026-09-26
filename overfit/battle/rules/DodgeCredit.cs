@@ -107,6 +107,8 @@ public sealed class DodgeCredit
         // "이 누름이 겨냥한 판정" 이 성립하는 구간이다 — 대시의 공이 대시 행동이 도는 동안인 것과 같은 경계다.
         // 옛 경계는 누름의 기억 창(0.5초)이었고 스펙이 그 창을 지웠다. 창을 놓치고 커밋 안에서 맞은 판정은
         // 그대로 이 누름의 시도로 남는다 — "늦어서 못 받았다" 가 "아무것도 안 했다" 와 같은 점이 되지 않게.
+        // (#82) 패리 행동은 커밋 뒤의 **패리 뒤 경직**까지다(Action 이 Parry 인 채 Fighter.Stiff) — 경직 중에 맞은 판정도 이 누름의 시도다.
+        // 대시 경직과 같은 규칙이고, 패리 행동(35틱)이 3연격의 판정 사이(42 · 66틱)보다 짧아 누름 하나가 두 판정을 설명하지 않는다.
         if (fighter.Action == FighterAction.Parry && fighter.ActionElapsed <= BattleSim.Dt)
         {
             _parryStartedAt = now;

@@ -168,13 +168,15 @@ public class FighterDataTests
     // ── 행동 뒤 경직 (#82 · 설계 §5.1 · §5.6) ──────────────────────────────────
 
     [Fact]
-    public void 경직은_셋_다_있고_2연격을_다_휘두른_뒤가_1타_뒤보다_길다()
+    public void 경직은_넷_다_있고_2연격을_다_휘두른_뒤가_1타_뒤보다_길다()
     {
-        // 유저(2026-09-26): "대시 후 경직 살짝, 1타공격 후 경직, 2타는 2타까지 공격후에는 좀더 오래 경직이 있게". **틱으로** 견준다 —
-        // 규칙이 세는 것이 틱이라(BattleSim.TicksFor) 초로는 달라도 같은 틱이면 유저가 말한 "더 오래" 가 화면에 없다.
+        // 유저(2026-09-26): "대시 후 경직 살짝, 1타공격 후 경직, 2타는 2타까지 공격후에는 좀더 오래 경직이 있게" · "패리도 후경직이 좀
+        // 커야합니다". **틱으로** 견준다 — 규칙이 세는 것이 틱이라(BattleSim.TicksFor) 초로는 달라도 같은 틱이면 유저가 말한 "더 오래" 가
+        // 화면에 없다.
         foreach ((string id, FighterConfig c) in Load())
         {
             c.DashRecover.ShouldBeGreaterThan(0, $"{id}: 대시 뒤 경직이 없다");
+            c.ParryStiff.ShouldBeGreaterThan(0, $"{id}: 패리 뒤 경직이 없다");
             c.Combo[0].Stiff.ShouldBeGreaterThan(0, $"{id}: 1타 뒤 경직이 없다");
             BattleSim.TicksFor(c.Combo[1].Stiff).ShouldBeGreaterThan(BattleSim.TicksFor(c.Combo[0].Stiff),
                 $"{id}: 2타 뒤 경직({c.Combo[1].Stiff})이 1타 뒤({c.Combo[0].Stiff})보다 길지 않다");

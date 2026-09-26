@@ -21,11 +21,11 @@ namespace Overfit.Rules.Tests.Battle;
 public static class TestConfigs
 {
     /// <summary>
-    /// 기준 파이터. 경직 셋(<paramref name="firstStiff"/> · <paramref name="secondStiff"/> · <paramref name="dashRecover"/>)은
-    /// <b>경직의 길이를 규칙이 데이터에서 읽는지 보는 테스트</b>만 준다(#82 · FighterStiffTests) — 보스의 <c>exhaustSeconds</c> 와 같은
-    /// 자리다. 0 을 주면 경직이 없는 파이터다: 경직이 없던 때와 견줘 "정확히 그만큼 늦다" 를 재는 대조군이다.
+    /// 기준 파이터. 경직 넷(<paramref name="firstStiff"/> · <paramref name="secondStiff"/> · <paramref name="dashRecover"/> ·
+    /// <paramref name="parryStiff"/>)은 <b>경직의 길이를 규칙이 데이터에서 읽는지 보는 테스트</b>만 준다(#82 · FighterStiffTests) — 보스의
+    /// <c>exhaustSeconds</c> 와 같은 자리다. 0 을 주면 경직이 없는 파이터다: 경직이 없던 때와 견줘 "정확히 그만큼 늦다" 를 재는 대조군이다.
     /// </summary>
-    public static FighterConfig Fighter(double? firstStiff = null, double? secondStiff = null, double? dashRecover = null) => new()
+    public static FighterConfig Fighter(double? firstStiff = null, double? secondStiff = null, double? dashRecover = null, double? parryStiff = null) => new()
     {
         MoveSpeed = 420,
         JumpVelocity = 940,
@@ -44,6 +44,8 @@ public static class TestConfigs
         // 패리는 **실제 값 그대로**다 (설계 §5.3) — 가드 셋과 같이 캐릭터 성능이 아니라 조작의 정의다.
         ParryPreciseWindow = 0.133,
         ParryDuration = 0.3333,
+        // 패리 뒤 경직도 실제 값 그대로다 (#82) — 0.25 = 15틱으로 딱 떨어진다. 헛친 패리 한 번이 커밋 20틱 + 경직 15틱이다.
+        ParryStiff = parryStiff ?? 0.25,
         ParryCost = 15,
         ParryAnim = "attack2",
         ParryAnimFps = 12,
