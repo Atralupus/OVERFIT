@@ -71,6 +71,9 @@ public partial class BossView : Node2D
     /// <summary>히트스톱으로 그림이 멈춰 있나.</summary>
     private bool _frozen;
 
+    /// <summary>맞은 뒤 첫 <see cref="Show"/> 가 그린 장을 로그로 남길 차례인가 — <see cref="Hit"/> 가 세우고 그 Show 가 지운다.</summary>
+    private bool _flashLogPending;
+
     public override void _Ready()
     {
         _sprite = GetNode<AnimatedSprite2D>("Sprite");
@@ -152,6 +155,13 @@ public partial class BossView : Node2D
         // 흰 플래시는 틴트 위에 셰이더가 민다 — COLOR 에 modulate 가 이미 곱해져 있어 선딜 · 탈진 틴트 위에서도 희다.
         double flash = _feel.BossHitFlashSeconds <= 0 ? 0 : _hitFlashLeft / _feel.BossHitFlashSeconds;
         _hitFlash.SetShaderParameter(_flashParam, (float)flash);
+
+        // 장을 고른 **뒤**에 찍어야 플래시 아래 실제로 그린 장이다(Hit 의 요약).
+        if (_flashLogPending)
+        {
+            _flashLogPending = false;
+            Log.Debug("view", $"boss_flash anim={_sprite.Animation} frame={_sprite.Frame} flash={flash:0.00}");
+        }
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -183,13 +193,16 @@ public partial class BossView : Node2D
     /// </para>
     ///
     /// <para>
-    /// 번쩍인 장을 로그로 남긴다 — "자세가 안 끊겼다" 를 스크린샷 한 장이 아니라 줄로도 본다(<c>[view][D] boss_flash</c>).
+    /// 번쩍인 장을 로그로 남긴다 — "자세가 안 끊겼다" 를 스크린샷 한 장이 아니라 줄로도 본다(<c>[view][D] boss_flash</c>). 찍는 것은
+    /// 여기가 아니라 <b>맞은 뒤 첫 <see cref="Show"/></b> 다. 이것은 <c>_PhysicsProcess</c> 의 <c>BattleCues.Observe</c> 가 불러 이 자리의
+    /// 장은 맞기 <b>전</b>에 그린 것이다 — 여기서 찍던 때는 옛 hit_white 였어도 같은 <c>anim=attack frame=0</c> 이 나와 줄이 끊김을 못
+    /// 봤다(#71 최종 리뷰 F-I4). Show 가 장을 고른 뒤에 찍으면 흰 플래시 아래 그린 장이라, 맞은 자세로 바꾸는 손질이 다시 들면 anim 이 바뀐다.
     /// </para>
     /// </summary>
     public void Hit()
     {
         _hitFlashLeft = _feel.BossHitFlashSeconds;
-        Log.Debug("view", $"boss_flash anim={_sprite.Animation} frame={_sprite.Frame}");
+        _flashLogPending = true;
     }
 
     public void Die()
