@@ -45,8 +45,6 @@
     "attack_ring_from": 12,
     "attack_ring_to": 150,
 
-    "tell_lead_seconds": 0.9,
-
     "landing_wave_spread_seconds": 0.125,
     "landing_wave_fade_seconds": 0.3,
     "landing_wave_alpha": 0.35,

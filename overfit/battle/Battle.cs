@@ -552,7 +552,6 @@ public partial class Battle : Node2D
             _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
-            _sim.NextActiveIn,
             _sim.Boss.Exhausted,
             _sim.BossStep?.Anim,
             _sim.BossStep?.Frame));

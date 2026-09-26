@@ -42,7 +42,7 @@ public enum BossPhase
     /// <summary>패턴이 안 돈다. 다가오는 중이다.</summary>
     Idle,
 
-    /// <summary>선딜. 아직 올 판정이 남았다 — 남은 시간이 선딜 틴트의 무르익음이 된다(<c>BossView</c>).</summary>
+    /// <summary>선딜. 아직 올 판정이 남았다 — 얼마나 남았는지는 안 그린다(#78 · 미끼가 그림으로 새지 않게).</summary>
     Windup,
 
     /// <summary>후딜. 이 패턴에 더 올 판정이 없다.</summary>
@@ -123,8 +123,8 @@ public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame
 /// <param name="Facing">-1 왼쪽 · +1 오른쪽. <b>규칙이 정한 값을 그대로 싣는다</b> —
 /// 뷰가 보스와 파이터의 x 를 보고 스스로 정하면 "같은 시드면 같은 결과" 가 그림까지 덮지 못하고,
 /// 무엇보다 <b>패턴 중 잠금</b>(<c>Boss.Face</c>)이 뷰에서 풀려 예고가 스윙 도중에 뒤집힌다.</param>
-/// <param name="Phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
-/// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
+/// <param name="Phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중. <b>다음 판정까지 남은 시간은 싣지 않는다</b> (#78 · 설계 §6) — 그 값으로
+/// 선딜 틴트를 무르익히던 때 2단계의 미끼(같은 그림 · 엇박)가 그림으로 샜다. 싣지 않으면 뷰가 다시 쓸 길도 없다.</param>
 /// <param name="Exhausted">탈진했나 (#72 · 설계 §4.3). take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선 채 푸른 톤이다 —
 /// 패리로든 경직 게이지로든(#71) 같은 그림이다. 맞으면 흰 플래시가 그 위에 얹힐 뿐 자세는 안 끊긴다.</param>
 /// <param name="Anim">
@@ -141,7 +141,6 @@ public readonly record struct BossFrame(
     double Y,
     int Facing,
     BossPhase Phase,
-    double? NextActiveIn,
     bool Exhausted,
     string? Anim,
     int? Frame);

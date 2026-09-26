@@ -166,7 +166,7 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
         _drive.Resume();
 
-        // ── 보스 선딜: 예고 자세에 서서 틴트가 무르익는 중 (링은 없다 · #81) ──
+        // ── 보스 선딜: 예고 자세에 한 색의 선딜 틴트로 선다 (무르익음은 #78 · 링은 #81 로 걷었다) ──
         await _drive.Until(() => _battle?.BossWindingUp == true, _pollTimeout);
         await _drive.Frames(12);
         await Screenshot.CaptureAsync(this, "battle-6-windup");

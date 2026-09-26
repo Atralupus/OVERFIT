@@ -15,8 +15,16 @@ namespace Overfit.Battle.View;
 ///
 /// <para>
 /// 패턴 중 붉은 틴트 하나로는 <b>무엇이 오는지</b>가 안 보인다는 것이 플레이 피드백이었다.
-/// 그래서 선딜과 판정이 서는 순간을 가른다 — 선딜에는 단계가 붙든 공격 자세에 서서 몸이 선딜 틴트 쪽으로
-/// 무르익고, 판정이 서면 몸이 한 번 번쩍인다(화면 흔들림은 <c>BattleCues</c> 가 같이 건다).
+/// 그래서 선딜과 판정이 서는 순간을 가른다 — 선딜에는 단계가 붙든 공격 자세에 한 가지 선딜 틴트로 서고, 판정이 서면 몸이
+/// 한 번 번쩍인다(화면 흔들림은 <c>BattleCues</c> 가 같이 건다).
+/// </para>
+///
+/// <para>
+/// <b>다음 판정까지 남은 시간은 안 그린다</b> (#78 · 설계 §6 「5번 PR」). 전에는 선딜 틴트가 판정을 향해 <b>무르익었다</b>(<c>NextActiveIn</c> 과
+/// <c>feel.tell_lead_seconds</c> 로 쟀다 — 같은 값으로 조여 들던 예고 링은 #81 이 먼저 걷었다). 2단계의 미끼는 <b>그림이 같아야</b> 미끼인데
+/// (1타로 여는 세 패턴은 1.30초까지 같다 · 엇박은 f0 을 더 붙든다), 무르익음은 다음 판정의 시각을 미리 말했다: 0.975초에 3연격은 0.575,
+/// 잡기는 0.725 가 남아 몸 색이 달랐고, 엇박은 첫 틱부터 3연격보다 0.15 덜 무르익었다. 그래서 걷었다 — 뷰는 이제 그 값을 받지도 않는다
+/// (<see cref="BossFrame"/>). 판정 보기(§6.1)의 "다음 판정" 은 디버그라 남는다.
 /// </para>
 ///
 /// <para>
@@ -34,14 +42,17 @@ namespace Overfit.Battle.View;
 /// <para>
 /// <b>무엇이 오는지는 그림이 말한다</b> (#72 · 설계 §6). 규칙의 단계가 가리키는 장(<c>anim</c> · <c>frame</c>)을 그대로
 /// 붙든다 — 3연격은 칼을 든 f0, 점프 공격은 웅크린 <c>jump</c> f0 다. 옛 변종의 예고 표지(칼 · 끌기 · 도약 표지 아홉)와
-/// 빨간 가드 불가 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 새 두 패턴에는 가드 불가 판정이 없어 빨강이 말할
-/// 것이 없다. 선딜 틴트의 무르익음(<see cref="Ripeness"/>)이 "언제" 를 거들고, 5번 PR 이 그것도 걷는다(설계 §6).
+/// 빨간 가드 불가 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 가드 불가(잡기 · #78)는 붕괴가 아니라 잡힘이고 흰 구가 말한다.
 /// </para>
 /// </summary>
 public partial class BossView : Node2D
 {
-    /// <summary>선딜이 무르익었을 때의 몸 색. 판정이 가까울수록 이쪽으로 간다.</summary>
-    private static readonly Color _windupTint = new(2.00f, 0.72f, 0.30f);
+    /// <summary>
+    /// 선딜의 몸 색 — <b>한 가지</b>다 (#78). 전에는 판정이 가까울수록 흰색에서 (2.00, 0.72, 0.30) 쪽으로 무르익었다 — 그 값이 다음 판정의
+    /// 시각을 말해 2단계의 미끼가 그림으로 샜다. 무르익음을 걷으며 그 길의 한가운데(0.5) 색 하나로 남긴다: 선딜 내내 "무언가 온다" 는
+    /// 말하되 "언제" 는 안 말한다. 색을 정리하는 것은 6번 PR(연출)이다.
+    /// </summary>
+    private static readonly Color _windupTint = new(1.50f, 0.86f, 0.65f);
 
     private static readonly Color _recoverTint = new(0.70f, 0.70f, 0.78f);
 
@@ -128,10 +139,6 @@ public partial class BossView : Node2D
         _hitFlashLeft = System.Math.Max(0, _hitFlashLeft - dt);
         HoldLastFrameWhenDead();
 
-        // 선딜 틴트의 무르익음만 쓴다 — 같은 값으로 조여 들던 예고 링은 걷었다(#81). 탈진하면 패턴이 끊겨 Phase 가 Idle 이라
-        // 0 이다 (#72 · 설계 §4.3).
-        float ripeness = Ripeness(phase, frame.NextActiveIn);
-
         string anim = AnimationFor(frame.Anim, frame.Exhausted);
         if (anim == frame.Anim && frame.Frame is int held)
         {
@@ -143,7 +150,7 @@ public partial class BossView : Node2D
         }
 
         _sprite.SpeedScale = _frozen ? 0.0f : 1.0f;
-        _sprite.Modulate = Tint(phase, ripeness, frame.Exhausted);
+        _sprite.Modulate = Tint(phase, frame.Exhausted);
 
         // 흰 플래시는 틴트 위에 셰이더가 민다 — COLOR 에 modulate 가 이미 곱해져 있어 선딜 · 탈진 틴트 위에서도 희다.
         double flash = _feel.BossHitFlashSeconds <= 0 ? 0 : _hitFlashLeft / _feel.BossHitFlashSeconds;
@@ -210,17 +217,6 @@ public partial class BossView : Node2D
         _sprite.SpeedScale = frozen ? 0.0f : 1.0f;
     }
 
-    /// <summary>판정까지 얼마나 무르익었나(0 = 아직 멀었다 · 1 = 이번 프레임).</summary>
-    private float Ripeness(BossPhase phase, double? nextActiveIn)
-    {
-        if (phase != BossPhase.Windup || nextActiveIn is not { } left || left > _feel.TellLeadSeconds)
-        {
-            return 0;
-        }
-
-        return Mathf.Clamp(1.0f - (float)(left / _feel.TellLeadSeconds), 0.0f, 1.0f);
-    }
-
     private string AnimationFor(string? anim, bool exhausted)
     {
         if (_dead)
@@ -249,7 +245,7 @@ public partial class BossView : Node2D
         _flashLeft = seconds;
     }
 
-    private Color Tint(BossPhase phase, float ripeness, bool exhausted)
+    private Color Tint(BossPhase phase, bool exhausted)
     {
         // 맞은 흰 플래시는 틴트가 아니라 셰이더다(Hit) — 그 위에 얹히므로 여기서 틴트를 걷을 필요가 없다. 옛 흰 실루엣(hit_white)은
         // 작가의 픽셀을 덧칠하지 않으려고 틴트를 하양으로 걷었다: 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 됐다(이슈 #28).
@@ -260,7 +256,7 @@ public partial class BossView : Node2D
 
         Color baseTint = phase switch
         {
-            BossPhase.Windup => Colors.White.Lerp(_windupTint, ripeness),
+            BossPhase.Windup => _windupTint,
             BossPhase.Recover => _recoverTint,
             _ => Colors.White,
         };
