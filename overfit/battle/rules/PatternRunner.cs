@@ -12,6 +12,13 @@ namespace Overfit.Battle.Rules;
 /// (<see cref="HitBox.ActiveSeconds"/>) — 살아 있는 동안 몸에 대 보는 것은 <c>BattleSim</c> 이다.
 /// 그래서 <c>multi_hit</c> 을 타임라인의 active 개수로 셀 수 있고, 한 번 휘두른 칼에 여러 번 맞는 일이 없다.
 /// </para>
+///
+/// <para>
+/// <b>시계는 틱을 센다</b> (#72 · 설계 §3.6 ⑤). 단계의 시각 T 는 세울 때 한 번 틱으로 바꾸고
+/// (<see cref="BattleSim.TicksFor"/> — 반올림은 거기 한 곳이다), 시계가 그 틱에 닿는 틱에 단계에 든다.
+/// T = 0 인 첫 단계는 러너의 첫 틱이다. 전에는 1/60 을 더해 가서 1.55초 판정이 93틱이 아니라 94틱에,
+/// 2.65초가 159틱이 아니라 160틱에 섰다 — 부동소수 누적이 판정을 한 틱씩 밀었다.
+/// </para>
 /// </summary>
 public sealed class PatternRunner
 {
@@ -26,6 +33,9 @@ public sealed class PatternRunner
     /// </summary>
     private readonly int _finisher;
 
+    /// <summary>단계마다 드는 틱 — 패턴의 첫 틱이 1 이다. 세울 때 한 번 바꾼다.</summary>
+    private readonly int[] _at;
+
     private int _next;
 
     public PatternRunner(PatternDef def)
@@ -33,11 +43,106 @@ public sealed class PatternRunner
         ArgumentNullException.ThrowIfNull(def);
         _def = def;
         _finisher = def.Timeline.FindLastIndex(s => s.Kind == "active");
+        _at = new int[def.Timeline.Count];
+        for (int i = 0; i < _at.Length; i++)
+        {
+            _at[i] = BattleSim.TicksFor(def.Timeline[i].T);
+        }
     }
 
-    public double Elapsed { get; private set; }
+    /// <summary>
+    /// 패턴 시계 — 지금까지 민 틱 수. <b>세운 틱(<c>holdClock</c>)에는 안 는다</b> — 돌진(5번 PR)처럼 도착 시각이
+    /// 파이터 자리에 달린 움직임이 도는 동안 뒤 단계를 기다리게 하는 자리다(설계 §8.1).
+    /// </summary>
+    public int Ticks { get; private set; }
 
-    public bool Finished => Elapsed >= _def.Duration;
+    /// <summary>마지막 단계(<c>end</c>)에 들었다.</summary>
+    public bool Finished => _next >= _def.Timeline.Count;
+
+    /// <summary>지금 들어 있는 단계 — 마지막으로 든 것. 아직 한 틱도 안 돌았으면 null.</summary>
+    public PatternStep? Step { get; private set; }
+
+    /// <summary>
+    /// <b>이번 틱에</b> 든 단계가 단 움직임 (설계 §8.1). 없으면 null. 러너는 움직임을 돌리지 않는다 — 파이터의 자리가
+    /// 있어야 도는데 러너는 플레이어를 모른다. 돌리는 것은 <c>BattleSim</c> 이고, 러너는 그 결과의 <c>HoldClock</c> 만 따른다.
+    /// </summary>
+    public MotionDef? StartedMotion { get; private set; }
+
+    /// <summary>
+    /// 한 틱 민다. 이 틱에 새로 선 판정을 돌려준다 — 없으면 빈 목록.
+    ///
+    /// <para>
+    /// <paramref name="holdClock"/> 이 참이면 <b>아무것도 안 한다</b> — 시계도 안 밀고 단계에도 안 든다.
+    /// 움직임을 단 단계에 들면 그 틱에는 거기서 멈춘다: 그 뒤의 단계는 T 가 같아도 다음 틱부터 든다 —
+    /// 시계를 세우는 움직임이면 그것이 끝난 다음 틱부터다(설계 §4.6: "A + 1 부터 시계가 다시 간다").
+    /// </para>
+    /// </summary>
+    /// <param name="holdClock">지난 틱의 움직임이 이 틱의 시계를 세웠나 (<c>MotionStep.HoldClock</c>).</param>
+    public IReadOnlyList<HitBox> Tick(bool holdClock = false)
+    {
+        StartedMotion = null;
+        if (Finished || holdClock)
+        {
+            return _none;
+        }
+
+        Ticks++;
+
+        List<HitBox>? hits = null;
+        while (_next < _def.Timeline.Count && _at[_next] <= Ticks)
+        {
+            PatternStep step = _def.Timeline[_next];
+            _next++;
+            Step = step;
+
+            // 헛스윙은 **판정이 아니라 박자**다 (이슈 #48). 여기서 HitBox 를 하나도 안 내는 것이
+            // 요점이라, damage 0 판정으로 흉내 내지 않는다 — 그러면 BattleSim 이 관측을 한 건
+            // 남기고, 일어난 적 없는 판정이 "안 맞았다" 로 계측에 쌓인다.
+            if (step.Kind == "feint")
+            {
+                Feints++;
+                continue;
+            }
+
+            if (step.Kind == "active" && step.Distance is not null && step.Height is not null)
+            {
+                hits ??= new List<HitBox>();
+                hits.Add(new HitBox(
+                    ShapeOf(step), step.Damage, step.GuardBreak, Finisher: _next - 1 == _finisher,
+                    ActiveSeconds: step.ActiveSeconds));
+            }
+
+            if (step.Motion is { } motion)
+            {
+                StartedMotion = motion;
+                break;
+            }
+        }
+
+        return (IReadOnlyList<HitBox>?)hits ?? _none;
+    }
+
+    /// <summary>
+    /// 아직 안 든 첫 <c>active</c> 단계 — <b>다음 판정</b>이다. 없으면 null.
+    /// 판정이 선 틱에 그 단계는 "다음" 이기를 그친다 — 창이 살아 있는지는 <c>BattleSim</c> 이 따로 안다.
+    /// </summary>
+    public PatternStep? NextActive => NextActiveAt() is int k ? _def.Timeline[k] : null;
+
+    /// <summary>다음 판정까지 남은 시간(초) — 그 단계의 틱에서 지금 시계를 뺀 것. 없으면 null.</summary>
+    public double? NextActiveIn => NextActiveAt() is int k ? (_at[k] - Ticks) * BattleSim.Dt : null;
+
+    private int? NextActiveAt()
+    {
+        for (int k = _next; k < _def.Timeline.Count; k++)
+        {
+            if (_def.Timeline[k].Kind == "active")
+            {
+                return k;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// 지금까지 지나간 <b>헛스윙</b>(<c>feint</c> 단계) 수 — 이슈 #48.
@@ -50,45 +155,6 @@ public sealed class PatternRunner
     /// </para>
     /// </summary>
     public int Feints { get; private set; }
-
-    /// <summary>한 틱 민다. 이 틱에 새로 선 판정을 돌려준다 — 없으면 빈 목록.</summary>
-    public IReadOnlyList<HitBox> Tick(double dt)
-    {
-        if (Finished)
-        {
-            return _none;
-        }
-
-        Elapsed += dt;
-
-        List<HitBox>? hits = null;
-        while (_next < _def.Timeline.Count && _def.Timeline[_next].T <= Elapsed)
-        {
-            PatternStep step = _def.Timeline[_next];
-            _next++;
-
-            // 헛스윙은 **판정이 아니라 박자**다 (이슈 #48). 여기서 HitBox 를 하나도 안 내는 것이
-            // 요점이라, damage 0 판정으로 흉내 내지 않는다 — 그러면 BattleSim 이 관측을 한 건
-            // 남기고, 일어난 적 없는 판정이 "안 맞았다" 로 계측에 쌓인다.
-            if (step.Kind == "feint")
-            {
-                Feints++;
-                continue;
-            }
-
-            if (step.Kind != "active" || step.Distance is null || step.Height is null)
-            {
-                continue;
-            }
-
-            hits ??= new List<HitBox>();
-            hits.Add(new HitBox(
-                ShapeOf(step), step.Damage, step.GuardBreak, Finisher: _next - 1 == _finisher,
-                ActiveSeconds: step.ActiveSeconds));
-        }
-
-        return (IReadOnlyList<HitBox>?)hits ?? _none;
-    }
 
     /// <summary>
     /// 타임라인 한 단계의 판정 모양. <b>모양을 짓는 곳은 여기 하나다</b> — 러너가 판정을 낼 때와

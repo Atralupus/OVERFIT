@@ -92,6 +92,28 @@ public sealed class PatternStep
     /// </para>
     /// </summary>
     public double ActiveSeconds { get; init; }
+
+    /// <summary>
+    /// 이 단계에 들 때 시작하는 <b>움직임</b> (설계 §8.1) — 도약(<c>leap</c>) 같은 것. 없으면 null.
+    /// 판정이 아닌 단계에만 단다: 보스는 판정 창 동안 안 움직인다(설계 §3.5 6 — 데이터 테스트가 막는다).
+    /// </summary>
+    public MotionDef? Motion { get; init; }
+}
+
+/// <summary>
+/// 타임라인 단계가 다는 움직임 하나 (설계 §8.1). <see cref="Id"/> 가 등록표(<see cref="BossMotions"/>)의 열쇠이고
+/// 나머지는 그 구현이 읽는 수치다 — 움직임을 하나 더할 때 러너도 <c>BattleSim</c> 도 안 연다(CLAUDE.md §2).
+/// </summary>
+public sealed class MotionDef
+{
+    /// <summary>등록표의 id — <c>leap</c>.</summary>
+    public required string Id { get; init; }
+
+    /// <summary><c>leap</c>: 포물선의 정점 높이(px, 발바닥 기준).</summary>
+    public double Height { get; init; }
+
+    /// <summary><c>leap</c>: 뜬 시간(초) — 도약하는 틱부터 내리는 틱까지. 틱으로는 <c>BattleSim.TicksFor</c> 로 바꾼다.</summary>
+    public double Air { get; init; }
 }
 
 /// <summary>

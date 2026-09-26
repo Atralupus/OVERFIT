@@ -33,6 +33,13 @@ public sealed class BattleSetup
 
     public required ulong Seed { get; set; }
 
+    /// <summary>
+    /// 움직임 등록표 (#72 · 설계 §8.1) — <b>선택</b>이다. 비우면 <see cref="BossMotions.Create"/> 다. 테스트가 가짜 움직임을 넣는
+    /// 자리다: 3번 PR 에는 패턴 시계를 세우는 움직임이 없어(도약의 <see cref="MotionStep.HoldClock"/> 은 늘 거짓이다), 움직임의
+    /// <c>HoldClock</c> 이 이 판을 거쳐 러너에 닿는지를 진짜 움직임으로는 못 잰다.
+    /// </summary>
+    public Func<MotionDef, MotionBounds, IBossMotion?>? Motions { get; set; }
+
     /// <summary>이 틱을 넘기면 시간 초과로 패배. <b>한 판이 반드시 끝나게 하는 안전장치다.</b></summary>
     public required int MaxTicks { get; set; }
 }
@@ -61,8 +68,22 @@ public sealed class BattleSim
 
     private PatternRunner? _runner;
     private PatternDef? _current;
-    private double _gapLeft;
+
+    /// <summary>다음 패턴까지 남은 쉬는 틱 (설계 §3.6 ⑤ — 간격도 틱으로 센다: 0.8초 = 48틱).</summary>
+    private int _gapLeft;
     private int _picks;
+
+    /// <summary>
+    /// 지금 도는 움직임 (설계 §8.1) — 러너가 움직임을 단 단계에 들 때 서고, 스스로 끝났다고 말하면 걷는다.
+    /// 러너가 아니라 여기가 돌리는 이유: 움직임은 파이터의 X 를 읽는데 러너는 플레이어를 모른다.
+    /// </summary>
+    private IBossMotion? _motion;
+
+    /// <summary>움직임이 시작된 뒤의 틱 — <see cref="MotionContext.Tick"/> 로 넘긴다.</summary>
+    private int _motionTick;
+
+    /// <summary>지난 틱의 움직임이 이 틱의 패턴 시계를 세웠나 (<see cref="MotionStep.HoldClock"/>).</summary>
+    private bool _holdClock;
 
     /// <summary>회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 관측을 지을 때 묻는다.</summary>
     private readonly DodgeCredit _credit = new();
@@ -94,7 +115,7 @@ public sealed class BattleSim
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
         // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
         Boss.Face(Fighter.X);
-        _gapLeft = setup.Boss.PatternGap;
+        _gapLeft = GapTicks;
     }
 
     /// <summary>
@@ -177,34 +198,18 @@ public sealed class BattleSim
     /// 배우고, 그건 사람에게 아무 의미가 없다.
     /// </para>
     /// </summary>
-    public double? NextActiveIn => NextActive() is { } step ? step.T - _runner!.Elapsed : null;
+    public double? NextActiveIn => _runner?.NextActiveIn;
 
     /// <summary>
-    /// 아직 안 지나간 첫 <c>active</c> 단계 — <b>다음 판정</b>이다. 없거나 패턴이 없으면 null.
+    /// 아직 안 든 첫 <c>active</c> 단계 — <b>다음 판정</b>이다. 없거나 패턴이 없으면 null.
     ///
     /// <para>
-    /// 두 조회가 이 한 자리를 본다(<see cref="NextActiveIn"/> · <see cref="NextActiveGuardBreak"/>).
-    /// 각자 타임라인을 훑게 두면 "다음 판정" 의 뜻이 조용히 갈리고, 그러면 링의 크기와 색이
-    /// 서로 다른 대를 가리킨다.
+    /// 두 조회가 이 한 자리를 본다(<see cref="NextActiveIn"/> · <see cref="NextActiveGuardBreak"/>) — 둘 다
+    /// 러너가 센 틱에서 온다(<see cref="PatternRunner.NextActive"/>). 각자 타임라인을 훑게 두면 "다음 판정" 의 뜻이
+    /// 조용히 갈리고, 그러면 링의 크기와 색이 서로 다른 대를 가리킨다.
     /// </para>
     /// </summary>
-    private PatternStep? NextActive()
-    {
-        if (_runner is null || _current is null)
-        {
-            return null;
-        }
-
-        foreach (PatternStep step in _current.Timeline)
-        {
-            if (step.Kind == "active" && step.T > _runner.Elapsed)
-            {
-                return step;
-            }
-        }
-
-        return null;
-    }
+    private PatternStep? NextActive() => _runner?.NextActive;
 
     /// <summary>
     /// <b>다음</b> active 판정이 가드 불가인가 (이슈 #53). 더 올 판정이 없거나 패턴이 없으면 false.
@@ -298,6 +303,9 @@ public sealed class BattleSim
     /// </summary>
     private double Standoff => Boss.HalfWidth + Fighter.HalfWidth;
 
+    /// <summary>패턴과 패턴 사이의 쉬는 틱. 반올림은 <see cref="TicksFor"/> 한 곳이다.</summary>
+    private int GapTicks => TicksFor(Boss.PatternGap);
+
     /// <summary>보스: 굳었으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
     private void AdvanceBoss()
     {
@@ -310,11 +318,12 @@ public sealed class BattleSim
 
         if (_runner is null)
         {
-            _gapLeft -= Dt;
+            _gapLeft--;
 
             // 방향은 **쉬는 동안에만** 바꾼다. 여기 두는 것 자체가 잠금의 절반이고
             // (나머지 절반은 Boss.Face 안의 가드다), 그래서 패턴이 서는 순간의 방향이
-            // 그 패턴이 끝날 때까지 그대로 간다 — 예고가 거짓말이 되지 않는다.
+            // 그 패턴이 끝날 때까지 그대로 간다 — 예고가 거짓말이 되지 않는다. 예외는 움직임 하나다
+            // (Boss.Move — 도약은 뛰는 틱에 착지 쪽으로 돌아선다 · 설계 §4.2).
             // **다가가는 자리와 무관하게 파이터 중심을 본다** — Standoff 는 서는 자리지 보는 곳이 아니다.
             int was = Boss.Facing;
             Boss.Face(Fighter.X);
@@ -337,11 +346,18 @@ public sealed class BattleSim
         // 헛스윙은 러너가 누적으로 센다 (이슈 #48). 차이를 여기서 옮기는 것은 판이 패턴을
         // 여러 번 돌기 때문이다 — 러너는 패턴마다 새로 서므로 그 값은 이번 패턴의 것뿐이다.
         int feintsBefore = _runner.Feints;
-        foreach (HitBox box in _runner.Tick(Dt))
+        foreach (HitBox box in _runner.Tick(_holdClock))
         {
             // 판정은 여기서 대지 않고 **살려 둔다** (이슈 #59) — 대는 곳은 BossSwings.Resolve 하나다.
             _swings.Open(box, _current!.Tags, Boss.CurrentPattern ?? "?");
         }
+
+        if (_runner.StartedMotion is { } motion)
+        {
+            StartMotion(motion);
+        }
+
+        Move();
 
         if (_runner.Feints > feintsBefore)
         {
@@ -355,7 +371,49 @@ public sealed class BattleSim
             _runner = null;
             _current = null;
             Boss.CurrentPattern = null;
-            _gapLeft = Boss.PatternGap;
+            _motion = null;
+            _holdClock = false;
+            _gapLeft = GapTicks;
+        }
+    }
+
+    /// <summary>
+    /// 러너가 방금 든 단계의 움직임을 세운다 (설계 §8.1). 등록표에 없는 id 는 규칙 위반이다 — 데이터 테스트가
+    /// 먼저 막지만, 여기까지 오면 움직이지 않고 <c>[E]</c> 를 남긴다(보스는 제자리에서 패턴을 끝까지 돈다).
+    /// </summary>
+    private void StartMotion(MotionDef def)
+    {
+        var bounds = new MotionBounds(Boss.HalfWidth, _setup.Arena.Width - Boss.HalfWidth, Standoff);
+        _motion = _setup.Motions is { } make ? make(def, bounds) : BossMotions.Create(def, bounds);
+        _motionTick = 0;
+        if (_motion is null)
+        {
+            Log.Error("boss", $"motion_missing id={def.Id} pattern={Boss.CurrentPattern} tick={Ticks}");
+            return;
+        }
+
+        Log.Debug("boss", () => $"motion_begin id={def.Id} pattern={Boss.CurrentPattern} fighter_x={Fighter.X:0} tick={Ticks}");
+    }
+
+    /// <summary>
+    /// 도는 움직임을 한 틱 민다 — 보스를 옮기고, 다음 틱의 패턴 시계를 세울지 받아 둔다. 파이터는 이번 틱을 이미 민
+    /// 뒤다(<see cref="Tick"/> 의 순서) — 움직임이 읽는 파이터의 X 가 그 값이다(설계 §4.6).
+    /// </summary>
+    private void Move()
+    {
+        if (_motion is null)
+        {
+            _holdClock = false;
+            return;
+        }
+
+        MotionStep step = _motion.Tick(new MotionContext(Boss.X, Boss.Y, Boss.Facing, Fighter.X, _motionTick++));
+        Boss.Move(step.X, step.Y, step.Facing);
+        _holdClock = !step.Finished && step.HoldClock;
+        if (step.Finished)
+        {
+            _motion = null;
+            Log.Debug("boss", () => $"motion_end x={Boss.X:0} facing={Boss.Facing} tick={Ticks}");
         }
     }
 
@@ -370,7 +428,7 @@ public sealed class BattleSim
             // 간격을 되돌려 놓고 나간다. 안 그러면 _gapLeft 가 0 이하로 남아 다음 틱에도
             // 곧장 이 갈래로 떨어져, 유효한 id 가 뽑힐 때까지 매 틱 [E] 를 쏟는다 —
             // 헤드리스 판정이 읽는 로그가 그것으로 뒤덮인다.
-            _gapLeft = Boss.PatternGap;
+            _gapLeft = GapTicks;
             Log.Error("boss", $"pattern_missing id={id}");
             return;
         }

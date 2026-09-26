@@ -551,6 +551,86 @@ public class BattleSimTests
         errors.ShouldBeLessThanOrEqualTo(7, "간격을 안 되돌려 매 틱 에러를 쏟고 있다");
     }
 
+    [Fact]
+    public void 간격과_패턴의_끝도_틱으로_센다()
+    {
+        // 설계 §3.6 ⑤ — 쉬는 간격도 틱으로 센다. 0.2초는 12틱이라 첫 패턴은 12틱에 서고, 2.0초(120틱)짜리 패턴은
+        // 러너의 120번째 틱(판의 132틱)에 끝나며, 다음 패턴은 또 12틱 뒤(144틱)에 선다. 1/60 을 빼 가던 때는
+        // 0.2 가 13틱 · 2.0 이 121틱이었다 — 부동소수 누적이 간격과 끝을 한 틱씩 늘였다.
+        BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0);
+        var begins = new List<int>();
+        var ends = new List<int>();
+        string? was = null;
+        for (int i = 0; i < 200; i++)
+        {
+            sim.Tick(default);
+            if (sim.Boss.CurrentPattern != was)
+            {
+                (sim.Boss.CurrentPattern is null ? ends : begins).Add(sim.Ticks);
+                was = sim.Boss.CurrentPattern;
+            }
+        }
+
+        begins.ShouldBe(new[] { 12, 144 });
+        ends.ShouldBe(new[] { 132 });
+    }
+
+    /// <summary>도약 하나에 바닥 전체를 치는 착지 — 점프 공격(설계 §4.2)의 뼈대다. 뛰는 것은 0.4초 · 내리는 것은 1.0초다.</summary>
+    private static PatternDef Leaping() => new()
+    {
+        Tell = TestConfigs.Tell(),
+        Tags = new PatternTags
+        {
+            DashWindow = 0.2,
+            DashDirection = "out",
+            Jumpable = true,
+            AntiAir = false,
+            Parryable = false,
+            ParryWindow = 0,
+            PunishGreed = false,
+            Reach = "far",
+            Feint = false,
+            MultiHit = 1,
+            Tracking = false,
+            HasGuardBreak = false,
+        },
+        Timeline = new List<PatternStep>
+        {
+            new() { T = 0.0, Kind = "windup" },
+            new() { T = 0.4, Kind = "windup", Motion = new MotionDef { Id = "leap", Height = 280, Air = 0.6 } },
+            new() { T = 1.0, Kind = "active", Distance = new double[] { 0, 1920 }, Height = new double[] { 0, 60 }, Damage = 12, ActiveSeconds = 0.125 },
+            new() { T = 1.5, Kind = "end" },
+        },
+    };
+
+    [Fact]
+    public void 도약하는_패턴은_보스를_띄워_파이터_앞에_내리고_내린_틱에_판정을_연다()
+    {
+        // 설계 §4.2 · §8.1 — 움직임은 BattleSim 이 돌린다(러너는 파이터를 모른다). 뛰는 틱의 파이터(480)에서 보스 쪽으로
+        // 115 앞(595)에 내리고, 내리는 바로 그 틱에 착지 판정이 선다 — 보스는 판정 창 동안 안 움직인다(§3.5 6).
+        BattleSim sim = OnePattern(Leaping());
+        double top = 0;
+        int lastAir = 0, airTicks = 0;
+        for (int i = 1; i <= 120 && sim.Events.Count == 0; i++)
+        {
+            sim.Tick(default);
+            if (sim.Boss.Y > 0)
+            {
+                top = Math.Max(top, sim.Boss.Y);
+                lastAir = sim.Ticks;
+                airTicks++;
+            }
+        }
+
+        sim.Events.Count.ShouldBe(1, "착지 판정이 안 섰다");
+        airTicks.ShouldBe(35, "뜬 틱(s = 1/36 ~ 35/36)이 35 가 아니다");
+        top.ShouldBe(280, 1e-9);
+        sim.Ticks.ShouldBe(lastAir + 1, "내린 틱과 판정이 선 틱이 다르다");
+        sim.Boss.Y.ShouldBe(0);
+        sim.Boss.X.ShouldBe(sim.Fighter.X + Standoff(), 1e-9);
+        sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit, "땅에 선 파이터가 바닥 전체 착지에 안 맞았다");
+    }
+
     /// <summary>판정 하나짜리 패턴. 기하와 태그를 부르는 쪽이 정한다.</summary>
     private static PatternDef OneHit(
         double[] distance, double[] height, bool parryable, double at, bool guardBreak = false) => new()
@@ -969,8 +1049,8 @@ public class BattleSimTests
     /// 패리 가능한 판정 하나(24틱째)를 틱마다 <paramref name="input"/> 으로 받아 본다.
     ///
     /// <para>
-    /// 판정 틱을 손으로 안 적는 이유는 간격 소진이 부동소수 누적에 걸려 한 틱씩 밀릴 수 있기
-    /// 때문이다 — 박아 두면 타임라인을 건드릴 때마다 무관한 실패가 난다.
+    /// 판정 틱을 손으로 안 적는 이유는 간격과 시각이 바뀔 때마다 그 숫자가 같이 움직이기 때문이다 —
+    /// 박아 두면 타임라인을 건드릴 때마다 무관한 실패가 난다.
     /// </para>
     /// </summary>
     private static (DodgeEvent Event, int Tick) OneAt(Func<int, InputFrame> input)
@@ -1371,12 +1451,10 @@ public class BattleSimTests
         // 규칙을 못박고, 이 테스트는 그 규칙이 `내려찍기 I` 의 진짜 수치에서도 성립하는지를 본다 —
         // 데이터가 바뀌어도 박자가 고정인지는 데이터로만 알 수 있다.
         //
-        // 66틱 = 1.10초다 — 이슈 #54 가 넓힌 미끼 간격(1.55 → 2.65) 그대로다. 단계는 `T <= Elapsed`
-        // 에서 서고 누적한 Elapsed 는 부동소수라 1.55 · 2.65 둘 다 **한 틱 늦게** 닿는데(94 · 160틱),
-        // 둘이 같이 늦어 간격은 그대로다. 이슈 #54 전의 1.40 → 2.30 은 1.40 만 늦게 닿아 0.90초가
-        // 55틱이었다. 그 한 틱은 패리와 무관하게 늘 같으므로 박자는 그대로 고정이다 —
-        // 여기서 재는 것은 "1.10 인가" 가 아니라 **"두 판이 같은가"** 다. 이 상수는 그 값을 옮겨 적은
-        // 것이라 1단계의 간격을 고치면 같이 고친다(이슈 #54 에서 55 → 66).
+        // 66틱 = 1.10초다 — 이슈 #54 가 넓힌 미끼 간격(1.55 → 2.65) 그대로다. 단계는 세울 때 정한 정수 틱에
+        // 서므로(93 · 159틱 · 설계 §3.6 ⑤) 간격이 정확히 66틱이다 — 1/60 을 더해 가던 때는 둘 다 한 틱 늦게
+        // (94 · 160틱) 닿아 간격만 같았다. 여기서 재는 것은 "1.10 인가" 가 아니라 **"두 판이 같은가"** 다.
+        // 이 상수는 그 값을 옮겨 적은 것이라 1단계의 간격을 고치면 같이 고친다(이슈 #54 에서 55 → 66).
         //
         // 전에는 2타를 받아치면 여기에 경직 0.5초와 히트스톱 7프레임이 붙어 **91틱(1.52초)** 이
         // 됐다 — 같은 패턴이 손에 따라 다른 박자였던 자리다(그때의 간격 0.90 기준).

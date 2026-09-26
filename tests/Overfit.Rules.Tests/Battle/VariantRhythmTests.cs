@@ -38,7 +38,7 @@ public class VariantRhythmTests
         var ticks = new List<int>();
         for (int k = 1; !runner.Finished; k++)
         {
-            ticks.AddRange(runner.Tick(BattleSim.Dt).Select(_ => k));
+            ticks.AddRange(runner.Tick().Select(_ => k));
         }
 
         return ticks;

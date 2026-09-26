@@ -75,6 +75,21 @@ public class BossFacingTests
     }
 
     [Fact]
+    public void 움직임만은_패턴_중에도_돌아서게_한다()
+    {
+        // 잠금의 **유일한** 예외다 (설계 §4.2) — 도약은 뛰는 틱에 착지 자리 쪽으로 돌아선다. 그 길을 Boss.Move 하나로 둔다.
+        Boss boss = Spawn();
+        boss.Face(500);
+        boss.CurrentPattern = "점프 공격";
+
+        boss.Face(1500);
+        boss.Facing.ShouldBe(-1, "잠금이 풀렸다");
+
+        boss.Move(boss.X, 0, 1);
+        boss.Facing.ShouldBe(1, "움직임이 방향을 못 바꿨다");
+    }
+
+    [Fact]
     public void 판이_서는_순간_이미_파이터를_보고_있다()
     {
         // 파이터는 아레나의 25% · 보스는 75% 에 선다. 첫 프레임부터 맞아야 한다 —

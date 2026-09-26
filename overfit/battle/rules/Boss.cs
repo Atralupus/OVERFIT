@@ -77,10 +77,11 @@ public sealed class Boss
     public double X { get; private set; }
 
     /// <summary>
-    /// 발바닥 높이 (바닥 0). <b>지금은 늘 0 이다</b> — 뛰어오르는 패턴(설계 §4.2)이 들어올 때 움직인다.
-    /// 판정은 이것을 모양을 놓는 자리로 쓴다(<see cref="Placement"/>).
+    /// 발바닥 높이 (바닥 0). 도약(설계 §4.2)이 움직이고(<see cref="Move"/>), 판정 창 동안에는 늘 땅이다 —
+    /// 움직임은 창 밖에서만 돈다(설계 §3.5 6). 판정은 이것을 모양을 놓는 자리로 쓰고(<see cref="Placement"/>),
+    /// 몸통도 발과 같이 올라간다(<see cref="Body"/>).
     /// </summary>
-    public double Y { get; }
+    public double Y { get; private set; }
 
     /// <summary>몸통 — 중심 ± 반폭, 발바닥에서 키만큼 (월드). 파이터의 칼이 이것에 대 본다 (이슈 #59).</summary>
     public HitRect Body => new(X - _config.HalfWidth, X + _config.HalfWidth, Y, Y + _config.Height);
@@ -160,6 +161,24 @@ public sealed class Boss
         if (toward != 0)
         {
             Facing = toward;
+        }
+    }
+
+    /// <summary>
+    /// 움직임(설계 §8.1)이 정한 자리로 옮긴다. <b>패턴 중에도 돌아선다</b> — 방향 잠금(<see cref="Face"/>)의
+    /// <b>유일한</b> 예외가 이것이다: 도약은 뛰는 틱에 착지 자리 쪽으로 돌아선다(설계 §4.2). 잠금을 푸는 길을
+    /// 여기 하나로 두어야, 예고를 거짓말로 만드는 돌아서기가 어디서 나는지를 한 자리에서 본다.
+    /// </summary>
+    /// <param name="x">발 중심 x. 아레나 안으로 자른다.</param>
+    /// <param name="y">발바닥 높이. 바닥 아래로는 안 간다.</param>
+    /// <param name="facing">볼 쪽. 0 이면 그대로 둔다.</param>
+    public void Move(double x, double y, int facing)
+    {
+        X = Math.Clamp(x, _config.HalfWidth, _arena.Width - _config.HalfWidth);
+        Y = Math.Max(0, y);
+        if (facing != 0)
+        {
+            Facing = Math.Sign(facing);
         }
     }
 
