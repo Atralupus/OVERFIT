@@ -213,27 +213,22 @@ public partial class Battle : Node2D
         _feel = Balance.Data.Feel;
         _result.Bind(OnAgain, OnTitle);
 
-        Dictionary<string, FighterConfig> fighters = Load<FighterConfig>("res://data/fighters.json");
-        Dictionary<string, BossConfig> bosses = Load<BossConfig>("res://data/bosses.json");
-        Dictionary<string, PatternDef> patterns = Load<PatternDef>("res://data/patterns.json");
-        Dictionary<string, StageDef> stages = Load<StageDef>("res://data/stages.json");
-
-        // 판정 모양도 데이터다 (이슈 #59). 칼질이 id 로 가리키는 모양을 여기서 읽어 규칙에 넘긴다 — 규칙은 파일을 모른다.
-        Dictionary<string, HitShape> shapes = LoadShapes("res://data/hitboxes.json");
+        // 데이터 다섯은 데모와 같은 자리에서 읽는다(BattleTables). 판정 모양도 데이터다 (이슈 #59) — 규칙은 파일을 모른다.
+        BattleTables data = BattleTables.Load();
 
         // 아레나 폭 · 한 판의 상한 · 기본 보스 · 고정 캐릭터는 balance.json 이 정한다. 전에는 그 값들이
         // 게임 · 데모 · 테스트 다섯 곳에 리터럴로 흩어져 있었고 이미 갈려 있었다.
         BattleBalance battle = Balance.Data.Battle;
 
         // 캐릭터 하나로 계속 간다 (이슈 #22 — 3택을 만들지 않는다). 누구인지는 데이터가 정한다.
-        if (!fighters.TryGetValue(battle.Fighter, out FighterConfig? fighter))
+        if (!data.Fighters.TryGetValue(battle.Fighter, out FighterConfig? fighter))
         {
             Log.Error("battle", $"fighter_missing id={battle.Fighter}");
             _broken = true;
             return;
         }
 
-        if (!bosses.TryGetValue(battle.Boss, out BossConfig? boss))
+        if (!data.Bosses.TryGetValue(battle.Boss, out BossConfig? boss))
         {
             Log.Error("battle", $"boss_missing id={battle.Boss}");
             _broken = true;
@@ -242,24 +237,24 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
-        _patterns = patterns;
+        _patterns = data.Patterns;
 
         // 단계는 Autoload 가 들고 있다 — 씬은 다시 시작할 때마다 새로 만들어지므로 여기 두면 사라진다.
         _stage = Game.Instance.Stage;
-        _hasNextStage = stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
+        _hasNextStage = data.Stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
 
         // 단계 명부는 data/stages.json 이 정한다 — patterns.json 의 키 순서를 쓰면 패턴을
         // 파일 맨 위에 끼워 넣는 것만으로 1단계가 다른 전투가 된다.
-        IReadOnlyList<string> ids = StageRoster.For(stages, _stage);
+        IReadOnlyList<string> ids = StageRoster.For(data.Stages, _stage);
 
         _sim = new BattleSim(new BattleSetup
         {
             Arena = new Arena(battle.ArenaWidth),
             Fighter = _fighterConfig,
-            HitShapes = shapes,
+            HitShapes = data.Shapes,
             Boss = _bossConfig,
             PatternIds = ids,
-            Patterns = patterns,
+            Patterns = data.Patterns,
             Seed = 51,
             MaxTicks = battle.MaxTicks,
         });
@@ -730,19 +725,6 @@ public partial class Battle : Node2D
         }
 
         return _sim.NextActiveIn is null ? BossPhase.Recover : BossPhase.Windup;
-    }
-
-    private static Dictionary<string, T> Load<T>(string path)
-    {
-        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        return JsonData<T>.ParseTable(file.GetAsText(), path);
-    }
-
-    /// <summary><c>hitboxes.json</c> → 판정 모양. 문제는 <c>HitShapeTable</c> 이 전부 모아 한 번에 던진다.</summary>
-    private static Dictionary<string, HitShape> LoadShapes(string path)
-    {
-        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        return HitShapeTable.Parse(file.GetAsText(), path);
     }
 
     /// <summary>규칙의 칼질 칸 → 뷰의 시트. 뷰가 fighters.json 을 직접 안 읽게 여기서 옮겨 준다.</summary>
