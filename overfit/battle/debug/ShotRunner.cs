@@ -36,6 +36,12 @@ public partial class ShotRunner : Node
     /// </summary>
     private const double _tellTimeout = 16.0;
 
+    /// <summary>
+    /// 두 패턴 중 <b>정해진 하나</b>를 기다리는 상한(초) (#72). 1단계는 uniform 이라 한 주기(간격 0.8 + 3.25 또는 1.5초)마다
+    /// 반반이다 — 30초면 예닐곱 번 뽑아 못 볼 확률이 1% 밑이다. 넘기면 위와 같이 경고만 남기고 그냥 찍는다.
+    /// </summary>
+    private const double _patternTimeout = 30.0;
+
     private Overfit.Battle.Battle? _battle;
 
     public override void _Ready() => _ = RunAsync();
@@ -141,6 +147,14 @@ public partial class ShotRunner : Node
         await Combo();
         await Guarding();
         await Facing();
+        await Leap();
+        await StageTwo();
+
+        // 판정이 그려진 사진은 판정 보기로 띄웠을 때만 뜻이 있다 — 안 켰으면 흰 궤적 위에 아무것도 없다(설계 §6.1 · §9).
+        if (GetTree().DebugCollisionsHint)
+        {
+            await Hitboxes();
+        }
 
         Log.Marker("shots", "shots=done");
         GetTree().Quit();
@@ -318,6 +332,100 @@ public partial class ShotRunner : Node
         await Frames(26);
         Hold("move_left", false);
         await Screenshot.CaptureAsync(this, "battle-9c-facing-locked");
+    }
+
+    /// <summary>
+    /// 공중의 점프 공격 한 장 (#72 · 설계 §4.2 · §9). <b>정점 근처</b>에서 찍는다 — 궤적은 4H·s(1−s)(H = 280)라 발이 250 위인 것은
+    /// 36틱 중 가운데 11틱 남짓이다. 규칙의 Y 를 그린 몸이 땅에서 떠 있어야 한다(설계 §6 「보스 높이」).
+    /// <b>새 판에서</b> 점프 공격을 기다린다 — 패턴은 무작위라 몇 주기일 수 있다.
+    /// </summary>
+    private async Task Leap()
+    {
+        await NewBattle(1);
+        await Until(() => _battle is { BossPattern: "점프 공격" } && _battle.BossY >= 250, _patternTimeout);
+        await Screenshot.CaptureAsync(this, "battle-6a-leap");
+    }
+
+    /// <summary>
+    /// 2단계 전투 한 장 (#72 · 설계 §9). 두 단계의 명부가 5번 PR 까지 같아 싸우는 그림은 1단계와 같다 — 그래서 그 판의
+    /// <b>결과 화면</b>을 찍는다: "2단계 · 보스 체력 …" 이 그 판이 2단계였다는 것을 글로 말한다. 아무것도 안 하고 맞아 죽는다
+    /// (<c>battle-8-result</c> 와 같은 길).
+    /// </summary>
+    private async Task StageTwo()
+    {
+        await NewBattle(2);
+        await Until(() => _battle?.ResultVisible == true, _battleTimeout);
+        await Frames(2);
+        await Screenshot.CaptureAsync(this, "battle-11-stage-2");
+    }
+
+    /// <summary>
+    /// 판정 보기 다섯 장 (설계 §9) — <c>HITBOXES=1 tools/build.sh shots</c> 에서만 찍고 <c>out/shots</c> 에만 남는다.
+    ///
+    /// <para>
+    /// ① <b>3연격의 세 장</b> — 판정마다 규칙이 대 본 틱에 한 장. 채운 사각형(규칙이 대 본 모양)이 그림의 흰 궤적과 겹쳐야 한다.
+    /// ② <b>착지 띠</b> — 바닥 전체 · 높이 0 ~ 60. ③ <b>착지 앞의 패리</b> — 착지 창이 열리기 직전에 K 를 눌러 패리 창 안에서
+    /// 착지를 맞는다. 파이터 몸통이 "패리 창" 색이 아니어야 한다: 착지는 패리를 안 받아 실효 방어가 없다(설계 §6.1).
+    /// 가만히 선 파이터는 셋 다 창의 첫 틱에 맞고 그 판정은 그 틱에 끝난다 — 그래서 대 본 그 틱에 판을 세우고 찍는다
+    /// (<see cref="CaptureTested"/>).
+    /// </para>
+    ///
+    /// <para>
+    /// ③ 은 <b>새 판의 첫 점프 공격</b>에서 찍는다. 같은 판에서 두 번째를 기다리면 그새 착지 자리(파이터 115 앞)에 선 보스의
+    /// 3연격을 서너 번 맞아 죽을 수 있다 — 새 판은 보스가 960 떨어져 선다.
+    /// </para>
+    /// </summary>
+    private async Task Hitboxes()
+    {
+        await NewBattle(1);
+
+        // ① 3연격의 선딜을 기다려 셋을 차례로 — 대 본 틱을 찍고, 대 보기가 그친 것을 보고 다음 판정을 기다린다.
+        await Until(() => _battle is { BossPattern: "3연격", BossWindingUp: true }, _patternTimeout);
+        for (int hit = 1; hit <= 3; hit++)
+        {
+            await CaptureTested($"hitbox-1-triple-{hit}", _pollTimeout);
+            await Until(() => _battle is { BossSwingTested: false }, _pollTimeout);
+        }
+
+        // ②
+        await Until(() => _battle is { BossPattern: "점프 공격", BossWindingUp: true }, _patternTimeout);
+        await CaptureTested("hitbox-2-landing", _pollTimeout);
+
+        // ③ 판정까지 5틱(0.08초) 안이면 누른다 — 패리 창(0.133초 = 8틱)이 착지 창의 첫 틱을 덮는다(battle-10d 와 같은 규칙).
+        await NewBattle(1);
+        await Until(
+            () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08,
+            _patternTimeout);
+        Tap("parry");
+        await CaptureTested("hitbox-3-landing-parry", _pollTimeout);
+    }
+
+    /// <summary>
+    /// 보스 판정을 대 본 <b>그 틱</b>의 화면을 찍는다 (설계 §6.1 · §9). 셔터가 한 틱만 늦어도 첫 틱에 닿아 끝난 판정의 사각형이 없고
+    /// 몸통 색도 파이터 쪽 상태로 돌아간 그림이 찍힌다. 그래서 조건이 참인 그 자리에서 트리를 멈춘다 — <see cref="Until"/> 의 조건은
+    /// 물리 틱 신호 안에서, <c>Battle</c> 이 다음 틱을 밀기 <b>전에</b> 돈다. 멈춘 동안 화면은 방금 그린 그 틱이고, 찍은 뒤 푼다.
+    /// </summary>
+    private async Task CaptureTested(string name, double timeout)
+    {
+        await Until(() => _battle is { BossSwingTested: true } && Pause(), timeout);
+        await Screenshot.CaptureAsync(this, name);
+        GetTree().Paused = false;
+    }
+
+    /// <summary>트리를 멈춘다. <see cref="CaptureTested"/> 의 조건 안에서 부르려고 참을 돌려준다.</summary>
+    private bool Pause()
+    {
+        GetTree().Paused = true;
+        return true;
+    }
+
+    /// <summary>그 단계의 새 판을 세우고 씬이 설 때까지 기다린다.</summary>
+    private async Task NewBattle(int stage)
+    {
+        Game.Instance.SetStage(stage);
+        Game.Instance.GoTo(Game.Scene.Battle);
+        await Frames(4);
+        _battle = GetTree().CurrentScene as Overfit.Battle.Battle;
     }
 
     /// <summary>

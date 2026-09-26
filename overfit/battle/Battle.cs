@@ -167,11 +167,24 @@ public partial class Battle : Node2D
     public int BossHealth => _broken ? 0 : _sim.Boss.Health;
 
     /// <summary>
-    /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 예고</b>를
-    /// 증명하려면 "지금 어느 패턴인가" 를 보고 셔터를 눌러야 한다. 같은 패턴을 세 번 찍으면
-    /// 세 장이 똑같고, 그건 증명이 아니라 우연이다.
+    /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 그림</b>(3연격의 칼 · 점프 공격의
+    /// 도약)을 증명하려면 "지금 어느 패턴인가" 를 보고 셔터를 눌러야 한다. 패턴은 무작위로 뽑힌다.
     /// </summary>
     public string? BossPattern => _broken || _over ? null : _sim.Boss.CurrentPattern;
+
+    /// <summary>
+    /// 보스의 발바닥 높이 (#72 · 설계 §4.2). 위와 같이 디버그 전용 읽기다 — 공중의 점프 공격을 찍으려면 정점 근처에서
+    /// 셔터를 눌러야 하고, 도약 시각은 데이터(<c>motion.air</c>)라 프레임을 세면 그 값을 고치는 날 땅이 찍힌다.
+    /// </summary>
+    public double BossY => _broken || _over ? 0 : _sim.Boss.Y;
+
+    /// <summary>
+    /// 이 틱에 규칙이 파이터에게 보스 판정을 <b>대 봤나</b> (설계 §6.1). 위와 같이 디버그 전용 읽기다 — 판정 보기(<c>HITBOXES=1</c>)의
+    /// 사진이 흰 궤적 위의 채운 사각형과 실효 몸통 색을 보이려면 사각형을 그리는 그 틱에 셔터를 눌러야 한다. 창이 산 동안
+    /// (<c>SwingLive</c>)으로는 모자라다: 땅에 선 몸은 3연격과 착지 띠에 창의 첫 틱에 닿고, 닿은 판정은 그 틱에 끝나 틱 사이에
+    /// 한 번도 "살아 있다" 로 안 읽힌다.
+    /// </summary>
+    public bool BossSwingTested => !_broken && !_over && _sim.BossTestedRects.Count > 0;
 
     /// <summary>
     /// 다음 판정까지 남은 시간(초). 더 올 판정이 없으면 0. 위와 같이 디버그 전용 읽기다 —
@@ -591,7 +604,8 @@ public partial class Battle : Node2D
             Phase(),
             _sim.NextActiveIn,
             _sim.Boss.Exhausted,
-            _sim.BossStep?.Anim));
+            _sim.BossStep?.Anim,
+            _sim.BossStep?.Frame));
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);

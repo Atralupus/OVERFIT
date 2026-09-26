@@ -15,15 +15,16 @@ namespace Overfit.Battle.View;
 ///
 /// <para>
 /// 패턴 중 붉은 틴트 하나로는 <b>무엇이 오는지</b>가 안 보인다는 것이 플레이 피드백이었다.
-/// 그래서 선딜과 판정이 서는 순간을 확실히 가른다 — 선딜에는 <c>attack</c> 모션과 함께
+/// 그래서 선딜과 판정이 서는 순간을 확실히 가른다 — 선딜에는 단계가 붙든 공격 자세와 함께
 /// 예고 링이 <b>조여 들고</b>, 판정이 서면 충격파가 <b>퍼진다</b>. 방향이 반대라
 /// 둘을 헷갈릴 수 없다.
 /// </para>
 ///
 /// <para>
-/// <b>무엇이 오는지는 그림이 말한다</b> (#72 · 설계 §6). 옛 변종의 예고 표지(칼 · 끌기 · 도약 표지 아홉)와 빨간 가드 불가
-/// 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 새 두 패턴에는 가드 불가 판정이 없어 빨강이 말할 것이 없다.
-/// 남은 링과 선딜 틴트는 "언제" 를 말하고, 5번 PR(링의 조임 · 틴트의 무르익음) · 6번 PR(링 전부)이 걷는다.
+/// <b>무엇이 오는지는 그림이 말한다</b> (#72 · 설계 §6). 규칙의 단계가 가리키는 장(<c>anim</c> · <c>frame</c>)을 그대로
+/// 붙든다 — 3연격은 칼을 든 f0, 점프 공격은 웅크린 <c>jump</c> f0 다. 옛 변종의 예고 표지(칼 · 끌기 · 도약 표지 아홉)와
+/// 빨간 가드 불가 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 새 두 패턴에는 가드 불가 판정이 없어 빨강이 말할
+/// 것이 없다. 남은 링과 선딜 틴트는 "언제" 를 말하고, 5번 PR(링의 조임 · 틴트의 무르익음) · 6번 PR(링 전부)이 걷는다.
 /// </para>
 /// </summary>
 public partial class BossView : Node2D
@@ -126,10 +127,14 @@ public partial class BossView : Node2D
             _ring.Charge(Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness), _tellRingColor);
         }
 
-        string anim = AnimationFor(phase, frame.Anim, frame.Exhausted);
+        string anim = AnimationFor(frame.Anim, frame.Exhausted);
         if (anim == "hit" && _exhaustShown && _sprite.Animation != "hit")
         {
             HoldLastFrame("hit");
+        }
+        else if (anim == frame.Anim && frame.Frame is int held)
+        {
+            HoldAt(anim, held);
         }
         else
         {
@@ -202,7 +207,7 @@ public partial class BossView : Node2D
         return Mathf.Clamp(1.0f - (float)(left / _feel.TellLeadSeconds), 0.0f, 1.0f);
     }
 
-    private string AnimationFor(BossPhase phase, string? anim, bool exhausted)
+    private string AnimationFor(string? anim, bool exhausted)
     {
         if (_dead)
         {
@@ -222,11 +227,10 @@ public partial class BossView : Node2D
             return "hit";
         }
 
-        // 선딜에만 공격 모션이다. 후딜까지 두면 "아직 온다" 와 "끝났다" 가 같은 그림이 된다.
-        // **어느 모션인가는 패턴이 정한다**(patterns.json 의 tell.anim) — 팩의 셋을 백장의 셋에
-        // 하나씩 붙였다. 이름이 비면 옛 이름으로 돌아가지 않고 idle 이다: 조용히 attack 을 쓰면
-        // 배정이 빠진 패턴이 "잘 도는 것처럼" 보인다.
-        return phase == BossPhase.Windup && !string.IsNullOrEmpty(anim) ? anim : "idle";
+        // **규칙의 단계가 가리키는 그림이다** (#72 · 설계 §6) — 선딜 · 판정 · 후딜 모두. 후딜의 장(칼을 내린 f3)과
+        // 끝(idle)이 "끝났다" 를 말하고, 몸 색(후딜 틴트)이 거들어 "아직 온다" 와 갈린다. 패턴이 안 돌면 idle 이다:
+        // 이름이 비었을 때 조용히 attack 을 쓰면 그림이 빠진 단계가 "잘 도는 것처럼" 보인다.
+        return !string.IsNullOrEmpty(anim) ? anim : "idle";
     }
 
     private void Flash(Color color, double seconds)
@@ -288,6 +292,24 @@ public partial class BossView : Node2D
             _sprite.Frame = frames.GetFrameCount(name) - 1;
             _sprite.Pause();
         }
+    }
+
+    /// <summary>
+    /// 그 애니메이션의 <paramref name="frame"/> 번째 장에 <b>세운다</b> (#72 · 설계 §6) — 타임라인 단계가 가리키는 장이다.
+    /// 장이 바뀐 때만 손댄다: 매 프레임 <c>Frame</c> 을 다시 넣으면 엔진이 그 장의 진행을 0 으로 되돌릴 뿐 그림은 같다.
+    /// 없는 장이면 손대지 않는다 — 데이터 테스트(<c>PatternDataTests</c>)가 장 수를 팩과 대 보므로 여기 올 일이 없다.
+    /// </summary>
+    private void HoldAt(string name, int frame)
+    {
+        Animate(name);
+        if (_sprite.SpriteFrames is not { } frames || !frames.HasAnimation(name)
+            || frame >= frames.GetFrameCount(name) || (_sprite.Frame == frame && !_sprite.IsPlaying()))
+        {
+            return;
+        }
+
+        _sprite.Frame = frame;
+        _sprite.Pause();
     }
 
     /// <summary>

@@ -94,8 +94,15 @@ public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame
 /// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
 /// <param name="Exhausted">탈진했나 (#72 · 설계 §4.3). take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선 채 푸른 톤이다 —
 /// 패리로든 경직 게이지로든(4번 PR) 같은 그림이다.</param>
-/// <param name="Anim">선딜에 재생할 모션 이름 — 지금 든 타임라인 단계의 <c>anim</c>(<c>patterns.json</c> · 설계 §8.1).
-/// 패턴이 안 돌면 null. 옛 예고 표지(칼 · 끌기 · 危)는 변종과 같이 걷었다(#72 · 설계 §6).</param>
+/// <param name="Anim">
+/// 지금 든 타임라인 단계의 그림 — 보스 팩 <c>.tres</c> 의 애니메이션 이름(<c>patterns.json</c> 의 <c>anim</c> · 설계 §8.1).
+/// 패턴이 안 돌면 null. <b>이것이 예고다</b> (#72 · 설계 §6): 옛 예고 표지(칼 · 끌기 · 危)를 걷었고, 3연격의 칼을 든 f0 ·
+/// 점프 공격의 웅크린 <c>jump</c> f0 가 무엇이 오는지를 말한다.
+/// </param>
+/// <param name="Frame">
+/// 그 단계가 붙드는 장(0부터). 뷰가 그 장에 세우고 멈춘다 — 장을 제 속도로 흘려 보내면 그림이 규칙의 창보다 먼저
+/// 지나간다(파이터의 <c>HoldWindup</c> 과 같은 이유). null 이면 그 애니메이션을 제 속도로 돈다.
+/// </param>
 public readonly record struct BossFrame(
     double X,
     double Y,
@@ -103,4 +110,5 @@ public readonly record struct BossFrame(
     BossPhase Phase,
     double? NextActiveIn,
     bool Exhausted,
-    string? Anim);
+    string? Anim,
+    int? Frame);
