@@ -268,7 +268,8 @@ public sealed class BossSwings
             Direction: direction,
             Airborne: !_fighter.Grounded,
             Distance: Math.Abs(_fighter.X - _boss.X),
-            // 칼질 중이면 욕심이다 — 1타든 2타든 (설계 §7.2). 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다.
+            // 칼질 중이면 욕심이다 — 1타든 2타든 (설계 §7.2). 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다. 칼질 뒤 경직(#82)도
+            // 칼질이다 — 휘두른 값으로 서 있다가 맞은 것이다.
             GreedWindow: _fighter.Action == FighterAction.Attack,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서

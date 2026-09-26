@@ -36,12 +36,21 @@ public class BossExhaustTests
             Windup = s.Windup,
             Active = s.Active,
             Recover = s.Recover,
+            Stiff = s.Stiff,
             Damage = s.Damage,
             Hitbox = s.Hitbox,
             Poise = 100,
         };
         return c;
     }
+
+    /// <summary>
+    /// 떠 있는 보스가 칼 끝(<see cref="BattleSim.FighterReach"/>)에 들어왔나 — 도약이 파이터 쪽으로 날아오는 동안 <b>한 번</b> 휘두를 자리다.
+    /// 들어오기 전에 휘두르면 빗나가고, 1타는 경직까지 0.68초 커밋이라(#82) 36틱짜리 도약 안에서 다시 못 휘두른다 — 전에는 빗나가도
+    /// 17틱 뒤에 또 휘둘러 도약 도중에 닿았다.
+    /// </summary>
+    private static bool InReach(BattleSim sim) =>
+        sim.Boss.Y > 0 && sim.Boss.X - sim.Fighter.X <= sim.Boss.HalfWidth + sim.FighterReach;
 
     private static BattleSim Sim(FighterConfig fighter, BossConfig boss, string pattern) => new(new BattleSetup
     {
@@ -160,7 +169,7 @@ public class BossExhaustTests
         int exhaustedAt = 0;
         for (int i = 0; i < 300 && exhaustedAt == 0; i++)
         {
-            bool swing = sim.Boss.Y > 0 && sim.Fighter.Action == FighterAction.Idle;
+            bool swing = InReach(sim) && sim.Fighter.Action == FighterAction.Idle;
             sim.Tick(swing ? _attack : default);
             control.Tick(default);
             if (sim.Boss.Exhausted)
@@ -204,7 +213,7 @@ public class BossExhaustTests
         using var log = new LogCapture();
         for (int i = 0; i < 300 && !(sim.Boss.Exhausted && sim.Boss.Y == 0); i++)
         {
-            bool swing = sim.Boss.Y > 0 && !sim.Boss.Exhausted && sim.Fighter.Action == FighterAction.Idle;
+            bool swing = InReach(sim) && !sim.Boss.Exhausted && sim.Fighter.Action == FighterAction.Idle;
             sim.Tick(swing ? _attack : default);
         }
 

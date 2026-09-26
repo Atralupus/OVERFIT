@@ -41,6 +41,7 @@ public class BossPoiseTests
         Windup = s.Windup,
         Active = s.Active,
         Recover = s.Recover,
+        Stiff = s.Stiff,
         Damage = s.Damage,
         Hitbox = s.Hitbox,
         Poise = poise,

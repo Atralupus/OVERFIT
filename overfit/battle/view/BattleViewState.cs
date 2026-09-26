@@ -65,6 +65,9 @@ public enum BossPhase
 /// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.
 /// 가드 링의 굵기가 아니라 <b>밝기</b>가 이것이라, 바닥에 가까울수록 링이 꺼져 간다.
 /// <b>뷰가 최대 스태미나를 따로 들지 않게</b> 비율로 넘긴다.</param>
+/// <param name="Stiff">행동 뒤 경직 중인가 (#82) — 칼질(<see cref="FighterPose.Attack"/>)이면 시트를 끝까지 흘린 뒤 <c>idle</c> 의 첫
+/// 장에 멈춰 서고, 대시(<see cref="FighterPose.Dash"/>)면 대시의 마지막 자세를, 패리(<see cref="FighterPose.Parry"/>)면 칼을 사선으로
+/// 세운 마지막 장(f3)을 붙든다. 자세는 그대로라(경직도 그 행동이다) 이것이 따로 온다.</param>
 public readonly record struct FighterFrame(
     double X,
     double Y,
@@ -72,7 +75,8 @@ public readonly record struct FighterFrame(
     FighterPose Pose,
     bool Invulnerable,
     bool Exhausted,
-    double GuardStamina);
+    double GuardStamina,
+    bool Stiff);
 
 /// <summary>
 /// 한 렌더 프레임에 HUD 를 그리는 데 필요한 전부 — <see cref="FighterFrame"/> 과 같은 규약이다. 비율과 몫은 <c>Battle</c> 이 규칙의

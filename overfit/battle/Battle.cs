@@ -129,8 +129,9 @@ public partial class Battle : Node2D
     public bool FighterGuarding => !_broken && !_over && _sim.Fighter.Guarding;
 
     /// <summary>
-    /// 지금 패리 커밋 중인가. 디버그 전용 읽기다 — 패리는 이제 누르는 것 한 번이라(설계 §5.3) 스크린샷이
-    /// 그 0.33초를 노리려면 규칙에게 물어야 한다.
+    /// 지금 패리 행동 중인가 — 커밋(0.333초)과 그 뒤 패리 뒤 경직(0.25초 · #82)을 합친 0.583초다. 디버그 전용 읽기다 —
+    /// 패리는 이제 누르는 것 한 번이라(설계 §5.3) 스크린샷이 그 사이를 노리려면 규칙에게 물어야 한다(<c>battle-4-parry</c> 는
+    /// 참이 된 뒤 10프레임 — 커밋의 한가운데다).
     /// </summary>
     public bool FighterParrying => !_broken && !_over && _sim.Fighter.Action == FighterAction.Parry;
 
@@ -161,6 +162,13 @@ public partial class Battle : Node2D
 
     /// <summary>파이터가 탈진했나 (#71 · 설계 §5.5). 위와 같이 디버그 전용 읽기다 — 탈진한 장은 규칙에게 물어 찍는다.</summary>
     public bool FighterExhausted => !_broken && !_over && _sim.Fighter.Exhausted;
+
+    /// <summary>
+    /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82)도 탈진도 아니다. 위와 같이 디버그 전용 읽기다 — 스크린샷이
+    /// 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자 둘째 J 가 1타의 경직에 떨어져 2타가 됐다.
+    /// </summary>
+    public bool FighterFree =>
+        !_broken && !_over && _sim.Fighter.Action == FighterAction.Idle && !_sim.Fighter.Exhausted;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 보스가 <b>희게 번쩍이는</b> 순간이고(#71 ·
@@ -267,7 +275,8 @@ public partial class Battle : Node2D
         _fighterView.Load(
             _fighterConfig.Sprite,
             Swings(_fighterConfig),
-            new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0));
+            new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
+            _fighterConfig.ParryAnimFrames);
         _bossView.Load(_bossConfig.Sprite);
 
         if (GetTree().DebugCollisionsHint)
@@ -528,7 +537,8 @@ public partial class Battle : Node2D
             _sim.Fighter.Exhausted,
             // 남은 스태미나를 **비율로** 넘긴다 (이슈 #47) — 최대값의 사본을 뷰에 두면
             // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다.
-            _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina));
+            _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina,
+            _sim.Fighter.Stiff));
 
         _bossView.Show(new BossFrame(
             _sim.Boss.X,

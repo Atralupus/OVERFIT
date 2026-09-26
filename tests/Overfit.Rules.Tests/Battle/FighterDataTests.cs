@@ -156,13 +156,50 @@ public class FighterDataTests
     public void 스태미나_하나당_경직도는_이어_치는_쪽이_더_쌓는다()
     {
         // 설계 §4.5 — 2연격 55/28 = 1.96 · 1타만 10/14 = 0.71. 1타만 되풀이하는 쪽이 싸면 "2타가 더 큰 경직도" 가 게이지를
-        // 여는 길이 아니게 된다. 초당으로는 견주지 않는다: 1타만 쉬지 않고 치는 빠르기(초당 52)는 스태미나가 못 버틴다.
+        // 여는 길이 아니게 된다. 초당으로는 견주지 않는다: 1타만 쉬지 않고 치는 빠르기(0.667초마다 — 칼질 16틱 + 1타 뒤 경직
+        // 24틱 · #82 · 스태미나 초당 21)는 스태미나가 못 버틴다 — 회복은 Idle 에서만이고 경직은 Idle 이 아니다.
         foreach ((string id, FighterConfig c) in Load())
         {
             double chained = (c.Combo[0].Poise + c.Combo[1].Poise) / (2 * c.AttackCost);
             double single = c.Combo[0].Poise / c.AttackCost;
             chained.ShouldBeGreaterThan(single, $"{id}: 2연격이 스태미나 하나당 1타보다 덜 쌓는다");
         }
+    }
+
+    // ── 행동 뒤 경직 (#82 · 설계 §5.1 · §5.6) ──────────────────────────────────
+
+    [Fact]
+    public void 경직은_넷_다_있고_2연격을_다_휘두른_뒤가_1타_뒤보다_길다()
+    {
+        // 유저(2026-09-26): "대시 후 경직 살짝, 1타공격 후 경직, 2타는 2타까지 공격후에는 좀더 오래 경직이 있게" · "패리도 후경직이 좀
+        // 커야합니다". **틱으로** 견준다 — 규칙이 세는 것이 틱이라(BattleSim.TicksFor) 초로는 달라도 같은 틱이면 유저가 말한 "더 오래" 가
+        // 화면에 없다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.DashRecover.ShouldBeGreaterThan(0, $"{id}: 대시 뒤 경직이 없다");
+            c.ParryStiff.ShouldBeGreaterThan(0, $"{id}: 패리 뒤 경직이 없다");
+            c.Combo[0].Stiff.ShouldBeGreaterThan(0, $"{id}: 1타 뒤 경직이 없다");
+            BattleSim.TicksFor(c.Combo[1].Stiff).ShouldBeGreaterThan(BattleSim.TicksFor(c.Combo[0].Stiff),
+                $"{id}: 2타 뒤 경직({c.Combo[1].Stiff})이 1타 뒤({c.Combo[0].Stiff})보다 길지 않다");
+        }
+    }
+
+    [Fact]
+    public void 연격_1타만_되풀이하는_것보다_2연격을_되풀이하는_쪽이_초당_피해가_크다()
+    {
+        // 유저(2026-09-26 · #82 댓글): "1타만 했을때 후경직을 더 크게 줘야겠네요 2타가 더 의미있게". 경직이 없던 때는 1타만 쉬지 않고
+        // 치는 쪽(10 / 0.25 = 초당 40)이 2연격(40 / 1.25 = 32)보다 셌다 — 2타를 이을 까닭이 손에 없었다. 지금 1타만 = 10 / (0.25 + 0.40)
+        // = 15.4 · 2연격 = 40 / (1.25 + 0.50) = 22.9. 스태미나는 안 넣는다 — 여기는 손의 빠르기다(스태미나 쪽은 경직도 테스트가 본다).
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            ComboStepDef first = c.Combo[0], second = c.Combo[1];
+            double single = first.Damage / (Cycle(first) + Stiff(first));
+            double chained = (first.Damage + second.Damage) / (Cycle(first) + Cycle(second) + Stiff(second));
+            chained.ShouldBeGreaterThan(single, $"{id}: 2연격(초당 {chained:0.0})이 1타만(초당 {single:0.0})보다 약하다 — 2타가 뜻이 없다");
+        }
+
+        static double Cycle(ComboStepDef s) => s.Windup + s.Active + s.Recover;
+        static double Stiff(ComboStepDef s) => BattleSim.TicksFor(s.Stiff) * BattleSim.Dt;
     }
 
     [Fact]

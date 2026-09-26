@@ -6,17 +6,24 @@ namespace Overfit.Battle.Rules;
 public enum FighterAction
 {
     Idle,
+
+    /// <summary>
+    /// 대시 — <b>대시 뒤 경직</b>(<c>dash_recover</c> · #82)까지가 대시다. 경직 동안은 제자리에 선 채(<see cref="Fighter.Stiff"/>) 행동 ·
+    /// 이동 · 점프 · 가드가 막히고, 그 사이 맞은 판정은 대시의 것이다(<see cref="DodgeCredit"/>).
+    /// </summary>
     Dash,
 
     /// <summary>
     /// 칼질 중이다 — 2연격의 몇 번째 칼인지는 <see cref="Fighter.ComboStep"/> 이 말한다 (설계 §5.1).
-    /// <b>끝까지 커밋한다</b>: 도는 동안 가드 · 패리 · 대시 · 이동이 안 된다. 맞아도 안 끊긴다.
+    /// <b>끝까지 커밋한다</b>: 도는 동안 가드 · 패리 · 대시 · 이동이 안 된다. 맞아도 안 끊긴다. 이어지는 칼이 없으면 <b>칼질 뒤 경직</b>
+    /// (<c>combo[].stiff</c> · #82)까지가 칼질이다 — 1타의 경직 중에 누른 J 만은 곧장 2타가 된다.
     /// </summary>
     Attack,
 
     /// <summary>
     /// 패리 — 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 커밋 동안 가드 · 패리 · 대시 · 이동이 안 된다 —
     /// <b>받아쳤으면</b> 그 뒤의 J 만은 곧장 1타가 된다(되받아치기). 창 밖에서 맞으면 <b>그냥 맞는다</b> — 가드가 아니다.
+    /// 받아쳤든 헛쳤든 커밋 뒤의 <b>패리 뒤 경직</b>(<c>parry_stiff</c> · #82)까지가 패리다 — 되받아치기의 J 는 경직 안에서도 선다.
     /// </summary>
     Parry,
 
@@ -45,6 +52,27 @@ public sealed class Fighter
     /// 셌다(1.1 − 66 × 1/60 이 −9.5e−16 이라 66틱이었던 것은 우연이다).
     /// </summary>
     private int _exhaustLeft;
+
+    /// <summary>
+    /// 칼질 칸마다 그 칼질 뒤 경직의 길이(틱) — <c>combo[].stiff</c> 를 세울 때 한 번 바꾼다 (#82). <b>초를 더해 가며 세지 않는다</b>:
+    /// 1/60 을 더해 가는 칼질의 시계는 1타(0.25초)를 15틱이 아니라 16틱에 끝낸다(15번 더한 값이 0.24999999999999997 이다). 경직까지
+    /// 그렇게 세면 데이터의 0.40 이 몇 틱인지를 부동소수가 정한다.
+    /// </summary>
+    private readonly int[] _stiffTicks;
+
+    /// <summary>대시 뒤 경직의 길이(틱) — <c>dash_recover</c> 를 세울 때 한 번 바꾼다 (#82).</summary>
+    private readonly int _dashRecoverTicks;
+
+    /// <summary>패리 뒤 경직의 길이(틱) — <c>parry_stiff</c> 를 세울 때 한 번 바꾼다 (#82). 받아쳤든 헛쳤든 같다.</summary>
+    private readonly int _parryStiffTicks;
+
+    /// <summary>
+    /// 남은 행동 뒤 경직 틱 (#82). 0 이 아니면 지금 행동(칼질 · 대시 · 패리)은 제 시간을 다 돌았고 경직만 남았다. <b>행동은 그대로다</b> —
+    /// <see cref="Action"/> 이 Attack · Dash · Parry 인 채라 커밋이 막던 것(행동 · 이동 · 점프 · 가드)이 그대로 막히고, 커밋이 풀어 주던 것
+    /// (1타의 경직 중 J → 2타 · 받아친 패리의 J → 되받아치기)도 그대로 풀리고, 스태미나도 안 찬다(Idle 이 아니다). 경직의 마지막 틱에 행동이
+    /// 끝난다(<see cref="End"/>).
+    /// </summary>
+    private int _stiffLeft;
 
     /// <summary>공중에서 대시를 이미 썼나. 착지하거나 패리를 성공하면 풀린다.</summary>
     private bool _airDashUsed;
@@ -79,7 +107,21 @@ public sealed class Fighter
         Stamina = config.MaxStamina;
         Facing = 1;
         _exhaustTicks = BattleSim.TicksFor(config.ExhaustSeconds);
+        _stiffTicks = new int[config.Combo.Count];
+        for (int i = 0; i < _stiffTicks.Length; i++)
+        {
+            _stiffTicks[i] = StiffTicks(config.Combo[i].Stiff);
+        }
+
+        _dashRecoverTicks = StiffTicks(config.DashRecover);
+        _parryStiffTicks = StiffTicks(config.ParryStiff);
     }
+
+    /// <summary>
+    /// 경직(초)을 틱으로. 반올림은 <see cref="BattleSim.TicksFor"/> 한 곳이다 — 다만 <b>0 은 0 틱</b>이다. TicksFor 는 0 이하를 한 틱으로
+    /// 올리는데(판정 창 · 시각에는 0 틱이 없다), 경직의 0 은 "경직이 없다" 는 뜻이다: 손맛을 보며 데이터에서 끄는 자리다.
+    /// </summary>
+    private static int StiffTicks(double seconds) => seconds > 0 ? BattleSim.TicksFor(seconds) : 0;
 
     public double X { get; private set; }
 
@@ -152,9 +194,17 @@ public sealed class Fighter
 
     /// <summary>
     /// 굳어 있나 — 행동 · 이동 · 점프 · 가드가 전부 막힌다. 지금 굳는 길은 탈진 하나다(<see cref="Exhausted"/>): 이 둘을 가르는 것은
-    /// "왜 굳었나" 와 "무엇이 막히나" 가 다른 질문이라서다 — 규칙의 막음은 이것을 보고, 그림은 까닭(탈진)을 본다.
+    /// "왜 굳었나" 와 "무엇이 막히나" 가 다른 질문이라서다 — 규칙의 막음은 이것을 보고, 그림은 까닭(탈진)을 본다. 행동 뒤 경직
+    /// (<see cref="Stiff"/> · #82)은 굳음이 아니다 — 행동이 아직 도는 것이라 행동의 커밋이 막는다.
     /// </summary>
     public bool Locked => Exhausted;
+
+    /// <summary>
+    /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>) · 대시(<c>dash_recover</c>) · 패리(<c>parry_stiff</c>)가 제 시간을 다 돌고
+    /// 경직만 남았다. 행동은 그대로라(<see cref="Action"/>) 막는 것은 이것을 안 본다. 뷰가 경직의 그림을 고르는 데 쓴다 — 칼질은 시트를
+    /// 끝까지 흘린 뒤 선 자세(<c>idle</c> 첫 장)에 멈추고, 대시는 마지막 자세 · 패리는 마지막 장을 붙든다.
+    /// </summary>
+    public bool Stiff => _stiffLeft > 0;
 
     /// <summary>공중 대시를 이미 썼나. 착지 · 패리로 풀린다 (나인 솔즈의 보상 구조).</summary>
     public bool AirDashSpent => _airDashUsed;
@@ -198,7 +248,7 @@ public sealed class Fighter
     public bool Affords(FighterAction action) => Cost(action) <= 0 || Stamina > Cost(action);
 
     /// <summary>
-    /// 맞았다. <b>칼질은 안 끊긴다</b> — 끝까지 커밋이다(설계 §5.1). 맞으면 끊기던 것은 차지였고, 차지는 없어졌다.
+    /// 맞았다. <b>칼질은 안 끊긴다</b> — 끝까지 커밋이다(설계 §5.1). 행동 뒤 경직(#82)도 안 끊긴다. 맞으면 끊기던 것은 차지였고, 차지는 없어졌다.
     /// </summary>
     public void TakeDamage(int amount) => Health = Math.Max(0, Health - amount);
 
@@ -256,7 +306,7 @@ public sealed class Fighter
     /// (<c>BattleSim.Exhaust</c> · 하나다)을 부르는 것은 <see cref="BattleSim"/> 이다(#72 · 설계 §4.3).
     ///
     /// <para>
-    /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
+    /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋과 패리 뒤 경직(#82)이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
     /// 이 뒤의 틱에 누른 J 는 곧장 1타가 된다(<see cref="Begin"/> — 되받아치기). 이것은 <see cref="BattleSim"/> 의 틱에서
     /// 파이터의 틱 <b>뒤</b>에 도는 보스 판정(<see cref="BossSwings.Resolve"/>)에서 불리므로, 받아친 그 틱의 J 는 이미 지나갔고
     /// 되받아치기는 다음 틱부터다.
@@ -287,8 +337,8 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// 진행 중인 행동의 시계를 밀고, 끝났으면 Idle 로 돌린다 — 칼질이면 눌러 둔 다음 칼로 잇는다. 끝난 행동의 값으로 스태미나가
-    /// 0 이 됐으면 그 끝나는 틱에 탈진한다.
+    /// 진행 중인 행동의 시계를 밀고, 제 시간을 다 돌았으면 경직에 들이거나(#82) Idle 로 돌린다 — 칼질이면 눌러 둔 다음 칼로 잇는다.
+    /// 경직은 틱으로 세고 마지막 틱에 행동이 끝난다(<see cref="End"/>).
     /// </summary>
     private void Advance(double dt)
     {
@@ -311,21 +361,58 @@ public sealed class Fighter
             return;
         }
 
+        // 경직 중이다 — 행동의 시계(초)는 이미 다 돌았고 남은 것은 틱이다.
+        if (_stiffLeft > 0)
+        {
+            _stiffLeft--;
+            if (_stiffLeft == 0)
+            {
+                End();
+            }
+
+            return;
+        }
+
         if (ActionElapsed < Duration(Action))
         {
             return;
         }
 
-        if (Action == FighterAction.Attack && Chain())
+        // 칼질이 끝나는 틱 — 눌러 둔 다음 칼이 있으면 **그 틱에** 잇는다(경직은 안 붙는다 · 2타가 서는 틱은 경직이 없던 때와 같다).
+        if (Action == FighterAction.Attack && _comboQueued && CanChain)
         {
+            Chain();
             return;
         }
 
+        // 제 시간을 다 돌았다 — 이을 것이 없으면 경직에 든다. 0 인 경직(데이터에서 끈 경직)은 이 틱에 끝난다 — 경직이 없던 때와 같다.
+        _comboQueued = false;
+        _stiffLeft = StiffOf(Action);
+        if (_stiffLeft == 0)
+        {
+            End();
+        }
+    }
+
+    /// <summary>
+    /// 행동이 끝났다 — 경직이 있었으면 그 마지막 틱이다(#82). 칼질 칸과 눌러 둔 칼을 지운다. 다음 칼 때문이 아니다 — 새 칼은
+    /// <see cref="Start"/> 가 어차피 1타부터 세운다. <see cref="ComboStep"/> · <see cref="AttackDamage"/> 가 <b>Idle 에서도 읽히기</b>
+    /// 때문이다: 디버그 읽기 <c>Battle.FighterComboStep</c>(셔터가 2타를 노린다)는 아무 때나 <see cref="ComboStep"/> 을 묻는다
+    /// (FighterActionTests 의 "2타 뒤에는 이어 칠 것이 없다" 가 끝난 뒤의 0 을 본다). <see cref="AttackDamage"/> 는 "다음에 누르면
+    /// 휘두를 칼" 을 말한다. 안 지우면 서 있는 파이터가 끝난 2타를 지금 칼로 말한다.
+    ///
+    /// <para>
+    /// 행동의 값으로 0 이 됐으면 그 행동을 <b>끝까지</b> 한 뒤 — 끝나는 이 틱에 — 탈진한다(설계 §5.5 · 마지막 칼은 들어간다). "끝나는 틱"
+    /// 은 <b>경직까지 끝나는 틱</b>이다: 경직 동안은 아직 그 행동이라 탈진이 안 든다. 끝나는 틱의 0 은 곧 그 행동의 값이 만든 0 이다 —
+    /// 행동 중에는 경직까지 스태미나가 안 차고, 다른 값(가드의 칩)은 가드 중에만 나간다.
+    /// </para>
+    /// </summary>
+    private void End()
+    {
         Action = FighterAction.Idle;
         ActionElapsed = 0;
-
-        // 행동의 값으로 0 이 됐으면 그 행동을 **끝까지** 한 뒤 — 끝나는 이 틱에 — 탈진한다(설계 §5.5 · 마지막 칼은 들어간다).
-        // 끝나는 틱의 0 은 곧 그 행동의 값이 만든 0 이다: 행동 중에는 스태미나가 안 차고, 다른 값(가드의 칩)은 가드 중에만 나간다.
+        _step = 0;
+        _comboQueued = false;
         if (Stamina <= 0)
         {
             Exhaust();
@@ -333,46 +420,58 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// 탈진에 든다 (#71 · 설계 §5.5). 부르는 곳은 셋이다 — 행동의 값으로 0 이 된 행동이 끝나는 틱(<see cref="Advance"/>) · 가드로
+    /// 행동이 제 시간을 다 돈 뒤의 경직(틱) — 칼질은 그 칸의 것, 대시는 대시의 것, 패리는 패리의 것(#82). 패리는 받아쳤든 헛쳤든 붙는다:
+    /// 받아친 사람은 경직 안에서도 J 로 되받아치므로(<see cref="Begin"/>) 서는 것은 헛친 사람뿐이다.
+    /// </summary>
+    private int StiffOf(FighterAction action) => action switch
+    {
+        FighterAction.Attack => _stiffTicks[_step],
+        FighterAction.Dash => _dashRecoverTicks,
+        FighterAction.Parry => _parryStiffTicks,
+        _ => 0,
+    };
+
+    /// <summary>
+    /// 탈진에 든다 (#71 · 설계 §5.5). 부르는 곳은 셋이다 — 행동의 값으로 0 이 된 행동이 경직까지 끝나는 틱(<see cref="End"/>) · 가드로
     /// 막다가 딱 0 이 된 칩(<see cref="GuardChip"/>) · 가드 붕괴(<see cref="GuardBreak"/>). 하던 것이 그 자리에서 끝나고 서서
-    /// <c>exhaust_seconds</c> 를 보낸다. 지난 행동의 칼질 칸 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다: 새 행동을 세울 때(<see cref="Start"/>)
-    /// 지우던 것인데, 탈진은 행동을 세우지 않고 끝내는 자리다.
+    /// <c>exhaust_seconds</c> 를 보낸다. 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다: 새 행동을 세울 때
+    /// (<see cref="Start"/>) 지우던 것인데, 탈진은 행동을 세우지 않고 끝내는 자리다.
     /// </summary>
     private void Exhaust()
     {
         _exhaustLeft = _exhaustTicks;
         Action = FighterAction.Idle;
         ActionElapsed = 0;
+        _stiffLeft = 0;
         _step = 0;
         _comboQueued = false;
         _parryLanded = false;
     }
 
     /// <summary>
-    /// 칼질이 끝나는 틱 — 눌러 둔 다음 칼이 있으면 <b>그 틱에</b> 잇는다 (설계 §5.1: "1타가 끝나는 틱에 2타가
-    /// 이어진다"). 값(<c>attack_cost</c>)은 이을 때 낸다: 누를 때 내면 1타가 끝나기 전에 스태미나가 바닥나도 2타가
-    /// 선다. 스태미나가 <b>남아 있으면</b> 모자라도 잇고(마지막 한 번 · #71 · 설계 §5.5) <b>0 이면</b> 잇지 않고 선다 —
-    /// 2번 PR 의 결정 4("모자라면 잇지 않는다")가 이것으로 바뀌었다. 이었으면 true 다.
+    /// 다음 칼을 이을 수 있나 — 다음 칸이 있고 스태미나가 <b>남아 있다</b>. 모자라도 잇고(마지막 한 번 · #71 · 설계 §5.5) <b>0 이면</b>
+    /// 잇지 않고 선다 — 2번 PR 의 결정 4("모자라면 잇지 않는다")가 이것으로 바뀌었다.
+    /// </summary>
+    private bool CanChain => _step + 1 < _config.Combo.Count && Stamina > 0;
+
+    /// <summary>
+    /// 다음 칼을 잇는다 (설계 §5.1). 부르는 자리는 둘이다 — 칼질이 끝나는 틱에 눌러 둔 칼이 있을 때(<see cref="Advance"/>: "1타가 끝나는
+    /// 틱에 2타가 이어진다")와 1타의 경직 중에 J 를 눌렀을 때(<see cref="Begin"/> · #82). 값(<c>attack_cost</c>)은 이을 때 낸다: 누를 때
+    /// 내면 1타가 끝나기 전에 스태미나가 바닥나도 2타가 선다. 경직은 거기서 끝난다 — 이어 치는 사람은 서지 않는다.
     ///
     /// <para>
-    /// 잇는 칼의 시계는 0 에서 시작한다. 이 틱은 앞 칼질의 마지막 틱이라 새 칼의 첫 틱은 다음 틱이다 —
-    /// <see cref="Begin"/> 이 새 행동을 세운 틱을 경과 시간에 넣는 것과 한 틱 다르지만, 그 차이는 언제나 같아 박자가 고정이다.
+    /// 잇는 칼의 시계는 0 에서 시작한다. 끝나는 틱에 이은 칼은 그 틱이 앞 칼질의 마지막 틱이라 첫 틱이 다음 틱이고, 경직 중에 누른 칼은
+    /// <see cref="Begin"/> 이 세운 틱이 첫 틱이다(Idle 에서 누른 J 와 같다) — 그래서 경직의 첫 틱에 누른 J 와 1타 도중 눌러 둔 J 는
+    /// 같은 틱에 2타의 첫 틱을 연다.
     /// </para>
     /// </summary>
-    private bool Chain()
+    private void Chain()
     {
-        bool chain = _comboQueued && _step + 1 < _config.Combo.Count && Stamina > 0;
-        _comboQueued = false;
-        if (!chain)
-        {
-            _step = 0;
-            return false;
-        }
-
         Spend(_config.AttackCost);
         _step++;
         ActionElapsed = 0;
-        return true;
+        _stiffLeft = 0;
+        _comboQueued = false;
     }
 
     /// <summary>행동이 저절로 끝나는 시각(초). 가드는 여기 없다 — 끝내는 것은 손가락이다.</summary>
@@ -394,19 +493,26 @@ public sealed class Fighter
     };
 
     /// <summary>
-    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리) 중이거나 굳었으면 입력을 버린다 — 공격 둘만 예외다: 칼질 중의
-    /// 공격은 다음 칼로 기억하고, <b>받아친</b> 패리의 커밋 중의 공격은 곧장 1타를 세운다(되받아치기). 가드는 커밋이
-    /// 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
+    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리 — 행동 뒤 경직까지) 중이거나 굳었으면 입력을 버린다 — 공격 셋만 예외다:
+    /// 칼질 중의 공격은 다음 칼로 기억하고, 1타의 경직 중의 공격은 곧장 2타를 세우고(#82), <b>받아친</b> 패리의 커밋 · 경직 중의 공격은
+    /// 곧장 1타를 세운다(되받아치기). 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
     /// </summary>
     private void Begin(InputFrame input)
     {
         // 칼질 중에 또 누르면 다음 칼을 **기억만** 한다 (설계 §5.1). 1타는 끝까지 커밋이고, 이어지는 것은 1타가
-        // 끝나는 틱이다(Chain). 다른 입력은 버린다 — 끝까지 커밋이다.
+        // 끝나는 틱이다(Advance · Chain). 다른 입력은 버린다 — 경직까지 끝까지 커밋이다.
+        //
+        // 1타의 **경직 중에** 누른 J 는 기억하지 않고 **그 틱에** 2타를 세운다 (#82) — 잇는 창을 너그럽게 둔다: 1타가 끝난 뒤에 눌러도
+        // 이어지고, 서는 것은 한 번만 치고 마는 사람뿐이다. 경직이 끝나기를 기다려 세우면 누른 J 가 경직만큼 늦게 나간다.
         if (Action == FighterAction.Attack)
         {
-            if (input.Attack && _step + 1 < _config.Combo.Count)
+            if (input.Attack && _stiffLeft == 0 && _step + 1 < _config.Combo.Count)
             {
                 _comboQueued = true;
+            }
+            else if (input.Attack && _stiffLeft > 0 && CanChain)
+            {
+                Chain();
             }
 
             return;
@@ -418,6 +524,10 @@ public sealed class Fighter
         // 누른 J 가 아무 표시 없이 사라졌고, 데모(시드 51)의 봇은 마무리를 받아친 다음 틱부터 누른 J 를 커밋이 끝날 때까지
         // 14틱 내내 버렸다(최종 리뷰 I1). 받는 J 는 Idle 에서 누른 J 와 같다(Start · CanStart). 못 받아친 패리는 J 까지
         // 버린다 — 헛친 난사의 값은 커밋 전체다.
+        //
+        // **패리 뒤 경직(#82)도 여기다** — 경직은 패리 행동의 끝자락이라 Action 이 Parry 인 채 이 갈래를 탄다. 그래서 받아친 사람의 J 는 경직
+        // 안에서도 곧장 1타고(반격 산수 약 1.1초가 그대로다), 헛친 사람은 커밋 20틱 + 경직 15틱 내내 J 까지 버린다. 경직에서 J 를 따로 막거나
+        // 풀지 않는 것이 규칙이다: 받아쳤는지만이 가른다.
         if (Action == FighterAction.Parry)
         {
             if (_parryLanded && input.Attack && CanStart(FighterAction.Attack))
@@ -454,13 +564,14 @@ public sealed class Fighter
 
     /// <summary>
     /// 행동을 세운다 — 값을 내고 시계를 0 에서 돌린다. 새 행동을 세우는 곳은 여기 하나다: 되받아치기도 이것을 타서
-    /// Idle 에서 누른 J 와 한 글자도 안 다르다. 지난 행동의 칼질 칸 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다.
+    /// Idle 에서 누른 J 와 한 글자도 안 다르다. 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다.
     /// </summary>
     private void Start(FighterAction action)
     {
         Spend(Cost(action));
         Action = action;
         ActionElapsed = 0;
+        _stiffLeft = 0;
         _step = 0;
         _comboQueued = false;
         _parryLanded = false;
@@ -476,7 +587,7 @@ public sealed class Fighter
     ///
     /// <para>
     /// <b>마지막 한 번은 할 수 있다</b> (#71 · 설계 §5.5 · 소울라이크). 값이 있는 행동은 스태미나가 <b>0 보다 많으면</b> 값보다 모자라도
-    /// 시작하고, 값은 0 에서 멈춘다(<see cref="Spend"/>) — 그 행동이 끝나는 틱에 탈진한다(<see cref="Advance"/>). 전에는 값이 모자라면
+    /// 시작하고, 값은 0 에서 멈춘다(<see cref="Spend"/>) — 그 행동이 경직까지 끝나는 틱에 탈진한다(<see cref="End"/>). 전에는 값이 모자라면
     /// 안 나가 행동으로는 0 에 닿지 않았다(100 − 14 × 7 = 2). 가드를 드는 것은 여전히 공짜다(값 0).
     /// </para>
     ///
@@ -488,7 +599,10 @@ public sealed class Fighter
     private bool CanStart(FighterAction action) =>
         (Cost(action) <= 0 || Stamina > 0) && !(action == FighterAction.Dash && !Grounded && _airDashUsed);
 
-    /// <summary>행동 중에는 회복하지 않는다 — 그래야 연속 행동에 값이 붙는다.</summary>
+    /// <summary>
+    /// 행동 중에는 회복하지 않는다 — 그래야 연속 행동에 값이 붙는다. <b>행동 뒤 경직도 행동이다</b>(#82 · Idle 이 아니다): 경직 동안 차면
+    /// 0 에 닿은 칼질 · 대시가 경직 동안 차 올라 끝나는 틱에 탈진하지 않는다(<see cref="End"/>).
+    /// </summary>
     private void Regen(double dt)
     {
         if (Action == FighterAction.Idle)
@@ -504,10 +618,11 @@ public sealed class Fighter
             return;
         }
 
-        if (Action == FighterAction.Dash)
+        if (Action == FighterAction.Dash && _stiffLeft == 0)
         {
             // 대시는 바라보는 쪽으로만 간다. 방향 입력을 안 받는다 — 시작 순간의 판단이 전부여야
-            // dash_direction 축이 "어느 쪽으로 빠졌나"를 깨끗하게 잰다.
+            // dash_direction 축이 "어느 쪽으로 빠졌나"를 깨끗하게 잰다. 대시 뒤 경직(#82)에는 안 간다 — 대시가 끝난 자리에 선다.
+            // 경직 동안 흘러가면 경직이 대시의 사거리를 늘인다(보스 몸을 지나는 거리 · FighterDataTests).
             X += Facing * _config.DashSpeed * dt;
         }
         else if (Action == FighterAction.Idle && input.Move != 0)

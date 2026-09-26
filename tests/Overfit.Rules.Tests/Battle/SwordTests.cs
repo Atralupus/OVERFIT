@@ -141,6 +141,7 @@ public class SwordTests
             Windup = second.Windup,
             Active = second.Active,
             Recover = second.Recover,
+            Stiff = second.Stiff,
             Damage = second.Damage,
             Poise = second.Poise,
             Hitbox = longId,

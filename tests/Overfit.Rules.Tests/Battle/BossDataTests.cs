@@ -132,20 +132,25 @@ public class BossDataTests
     }
 
     [Fact]
-    public void 게이지를_깬_2타_뒤에도_반격_2연격이_탈진_안에_다_닿는다()
+    public void 게이지를_깬_2타_뒤에도_탈진_안에_1타_하나는_반응_여유를_남기고_닿는다()
     {
-        // 설계 §4.3 — 게이지를 깬 것이 2타면 그 2타를 끝까지 휘둘러야 다음 칼이 선다(2연격의 끝이다). 가장 나쁜 경우는 2타가
-        // 창의 첫 틱에 닿아 무너뜨린 것이다: 남은 판정 + 후딜 0.3333 + 다음 틱의 J 0.0167 + 반격 2연격이 닿기까지 1.0834 =
-        // 1.4334초 ≤ 1.5. 패리 쪽(위 둘)은 반응 여유 0.15 를 넣지만 여기는 **여유 없이** 잰다 — 몰아치던 손을 그대로 이어 누르는
-        // 자리다. 탈진을 줄이는 날 여기가 먼저 빨개진다.
+        // 설계 §4.3 — 게이지를 깬 것이 2타면 그 2타를 끝까지 휘두르고 **2타 뒤 경직까지** 서야 다음 칼이 선다(2연격의 끝이다 · #82).
+        // 가장 나쁜 경우는 2타가 창의 첫 틱에 닿아 무너뜨린 것이다: 남은 판정 + 후딜 0.3333 + 2타 뒤 경직 0.5 + 다음 틱의 J 0.0167 +
+        // 1타가 창의 끝 틱에 닿기까지(선딜 + 판정) 0.1666 = 1.0166초 — 1.5 에 0.4834 가 남는다. 경직은 규칙처럼 틱으로 센다.
+        //
+        // **전에는 반격 2연격이 여유 없이 들어갔다**(1.4334초 — 0.0666 이 남았다). 2타 뒤 경직 0.5 가 들며 그 2연격(1.9334초)은 이제 안
+        // 들어간다 — 게이지 쪽 반격은 1타 하나다. 패리 쪽 반격(위 둘 — 되받아치기 2연격)은 그대로라, 받아친 쪽이 때려서 연 쪽보다 확실히
+        // 크다(설계 §11 「게이지가 패리 중심 고리를 약하게 할 수 있다」를 누그러뜨린다). 여유는 패리 쪽과 같은 0.15 다 — 이제 1타 하나라
+        // 보고 누를 틈이 있다.
         foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
         {
             foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
             {
-                ComboStepDef last = c.Combo[^1];
-                double lead = last.Active + last.Recover + TestConfigs.CounterLead(c);
-                boss.ExhaustSeconds.ShouldBeGreaterThanOrEqualTo(lead,
-                    $"{id}: 탈진 {boss.ExhaustSeconds}초에 게이지를 깬 {who} 의 반격 2연격({lead:0.0000}초)이 안 들어간다");
+                ComboStepDef first = c.Combo[0], last = c.Combo[^1];
+                double stiff = BattleSim.TicksFor(last.Stiff) * BattleSim.Dt;
+                double lead = last.Active + last.Recover + stiff + BattleSim.Dt + first.Windup + first.Active;
+                (boss.ExhaustSeconds - lead).ShouldBeGreaterThanOrEqualTo(0.15,
+                    $"{id}: 탈진 {boss.ExhaustSeconds}초에 게이지를 깬 {who} 의 반격 1타({lead:0.0000}초)가 겨우 들어간다 — 반응할 틈이 없다");
             }
         }
     }
