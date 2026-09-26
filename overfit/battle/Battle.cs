@@ -67,10 +67,18 @@ public partial class Battle : Node2D
     /// 살고, 그래서 학습 데이터에 sim-to-real 간극이 안 생긴다. 규칙으로 옮기면 반대로 이 숫자가
     /// 리플레이의 일부가 되어, 손맛을 눈으로 고칠 때마다 지금까지의 리플레이가 못 쓰게 된다.
     /// 남는 차이는 사람이 벽시계로 <c>hitstop_frames</c> 만큼 더 쉰다는 것 하나이고, 그것이 걸리는 자리는
-    /// <b>보스가 무너지는 순간</b>이다(#72) — 1.5초짜리 탈진 안이라 아무 판단도 안 민다.
+    /// <b>보스가 무너지는 순간</b>이다(#72) — 1.5초짜리 탈진 안이라 아무 판단도 안 민다. 그동안 누른 키는
+    /// 버리지 않고 끝난 첫 틱에 넘긴다(<see cref="_carried"/> · #71).
     /// </para>
     /// </summary>
     private int _hitstopLeft;
+
+    /// <summary>
+    /// 히트스톱 동안 누른 엣지 (#71 · 설계 §1 「대화로 정한 것」). 세운 프레임에는 시뮬레이션이 안 돌아 입력을 받을 틱이 없다 —
+    /// 모아 두었다가 히트스톱이 끝난 첫 틱의 입력에 싣는다(<see cref="InputFrame.Carry"/>). 받아친 것을 보고 곧장 누른 J(되받아치기)가
+    /// 그 7프레임에 떨어지는 일이 흔하다 — 전에는 버려져 "눌렀는데 안 나간" 칼이 됐다.
+    /// </summary>
+    private InputFrame _carried;
 
     private double _shakeLeft;
     private double _shakeAmp;
@@ -286,10 +294,11 @@ public partial class Battle : Node2D
             return;
         }
 
-        // 히트스톱. 시계를 늘이지 않고 **세운다** — 이 프레임엔 시뮬레이션이 한 틱도 안 간다.
-        // 그 사이 입력 엣지는 버려지는데, 그게 히트스톱이 뜻하는 바다(게임이 멈춘 것이다).
+        // 히트스톱. 시계를 늘이지 않고 **세운다** — 이 프레임엔 시뮬레이션이 한 틱도 안 간다. 그 사이 누른 엣지는
+        // 버리지 않고 모아 끝난 첫 틱에 넘긴다(#71) — 게임은 멈췄어도 손은 안 멈췄다.
         if (_hitstopLeft > 0)
         {
+            _carried = InputFrame.Carry(_carried, Read());
             _hitstopLeft--;
             if (_hitstopLeft == 0)
             {
@@ -299,7 +308,17 @@ public partial class Battle : Node2D
             return;
         }
 
-        InputFrame input = Read();
+        InputFrame input = InputFrame.Carry(_carried, Read());
+
+        // 넘긴 **엣지**가 있을 때만 적는다. _carried 에는 레벨(이동 · 가드)도 모이는데 넘기는 것은 엣지뿐이다 — 통째로 default 와 견주면
+        // 방향이나 ↓ 를 붙든 채 멈춤을 지난 것만으로 아무것도 안 넘긴 hitstop_carry 가 찍힌다.
+        if (_carried.Jump || _carried.Dash || _carried.Parry || _carried.Attack)
+        {
+            Log.Debug("battle", $"hitstop_carry jump={_carried.Jump} dash={_carried.Dash} parry={_carried.Parry} attack={_carried.Attack} tick={_sim.Ticks + 1}");
+        }
+
+        _carried = default;
+
         BattleOutcome? outcome = _sim.Tick(input);
         _cues.Observe(input);
 
