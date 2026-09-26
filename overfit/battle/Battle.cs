@@ -118,18 +118,16 @@ public partial class Battle : Node2D
     public int FighterHealth => _broken ? 0 : _sim.Fighter.Health;
 
     /// <summary>
-    /// 공격 판정이 선 틱인가. 위와 같이 디버그 전용 읽기다 — 이 순간이 곧 <b>칼이 지나가는
-    /// 프레임</b>이라(fighters.json 의 combo 한 칸의 blade_frame), 스크린샷이 "칼이 보이는가" 를
-    /// 증명하려면 프레임 수를 세는 대신 이것을 보고 셔터를 눌러야 한다. 세어 두면 공격 타이밍을
-    /// 고치는 순간 조용히 어긋나 선딜 자세만 찍힌다 — 이슈 #38 전의 스크린샷이 그랬다.
-    /// </summary>
-    public bool FighterAttackActive => !_broken && !_over && _sim.Fighter.AttackActive;
-
-    /// <summary>
     /// 이 틱에 규칙이 보스에게 파이터 칼을 <b>대 봤나</b> (설계 §6.1 · §9) — <see cref="BossSwingTested"/> 의 파이터 쪽이다. 위와 같이
-    /// 디버그 전용 읽기다. <see cref="FighterAttackActive"/> 로는 모자라다: 칼은 한 번 닿으면 그 틱에 끝나(<c>BattleSim.Strike</c>)
-    /// 다음 틱부터 채운 사각형이 없다. 걸어 들어오는 보스에게 첫 칼이 창의 첫 틱에 닿아(gap=-82 · tick 213) 판정 보기의
-    /// <c>battle-5-attack</c> 이 흰 궤적만 찍혔다 (#72).
+    /// 디버그 전용 읽기다. 대 본 틱은 곧 <b>칼이 지나가는 프레임</b>이라(fighters.json 의 combo 한 칸의 blade_frame), 스크린샷이
+    /// "칼이 보이는가" 를 증명하려면 <b>프레임 수를 세지 않고 규칙에게 묻는다</b> — 세어 두면 공격 타이밍을 고치는 순간 조용히 어긋나
+    /// 선딜 자세만 찍힌다. 이슈 #38 전의 스크린샷이 그랬다.
+    ///
+    /// <para>
+    /// 칼의 창이 살아 있나(<c>Fighter.AttackActive</c>)로 물으면 모자라다: 칼은 한 번 닿으면 그 틱에 끝나(<c>BattleSim.Strike</c>) 다음
+    /// 틱부터 채운 사각형이 없는데 창은 계속 산다. 그렇게 물어 찍던 때, 걸어 들어오는 보스에게 첫 칼이 창의 첫 틱에 닿아
+    /// (gap=-82 · tick 213) 판정 보기의 <c>battle-5-attack</c> 이 흰 궤적만 찍혔다 (#72).
+    /// </para>
     /// </summary>
     public bool FighterSwingTested => !_broken && !_over && _sim.FighterTestedRects.Count > 0;
 
