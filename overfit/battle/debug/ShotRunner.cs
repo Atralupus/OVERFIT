@@ -487,11 +487,13 @@ public partial class ShotRunner : Node
     /// </para>
     ///
     /// <para>
-    /// ② <c>battle-6b-landing-wave</c> (#83) — 바닥 띠를 규칙이 대 본 <b>그 틱</b>에 멈춰 찍는다(<see cref="CaptureTested"/>). 흰 충격파가
-    /// 막 선 장이다: 한 프레임 퍼져 두 앞머리가 보스 발밑에서 양쪽으로 480px 남짓 나가 있고, 띠의 높이는 판정의 높이(60)다. 더 늦게 찍으면
-    /// 앞머리가 화면 밖으로 나가(0.125초에 판정의 끝 ±1920 까지 간다) "발밑에서 퍼진다" 가 안 보인다. 파이터는 그 전에 <b>뛰어</b> 띠 위에
-    /// 떠 있다 — 띠 위와 띠 안이 한 장에서 갈려야 "낮은 곳이 맞는다" 가 읽힌다. 창이 열리기 0.3초(18틱) 전에 누른다: 점프는 누른 틱 + 3 ~
-    /// + 55 동안 발이 60 위라(patterns.json 의 점프 공격 _note) 창 8틱을 다 덮고, 창이 열리는 틱에 발이 250 남짓에 있다.
+    /// ② <c>battle-6b-landing-wave</c> (#83) — 착지 창 8틱 중 <b>넷째 틱</b>에 멈춰 찍는다(<see cref="CaptureTested"/>). 흰 충격파가
+    /// <b>반쯤 퍼진</b> 장이다: 밑깔개가 아레나 전체(판정을 아레나로 자른 것)에 옅게 깔려 있고, 밝은 앞머리 둘이 보스 발밑과 아레나 끝의
+    /// 가운데쯤(0.067초 / 0.125초 ≈ 절반)을 달리고 있으며, 띠의 높이는 판정의 높이(60)다. 전에는 창의 첫 틱에 찍었다 — 앞머리가 화면 밖으로
+    /// 곧장 나가던 때라 그 틱밖에 없었다(리뷰 m4). 지금 첫 틱에 찍으면 앞머리가 아직 발밑에 붙어 "달린다" 가 안 보인다.
+    /// 파이터는 그 전에 <b>뛰어</b> 띠 위에 떠 있다 — 띠 위와 띠 안이 한 장에서 갈려야 "낮은 곳이 맞는다" 가 읽힌다. 창이 열리기 0.3초(18틱)
+    /// 전에 누른다: 점프는 누른 틱 + 3 ~ + 55 동안 발이 60 위라(patterns.json 의 점프 공격 _note) 창 8틱을 다 덮는다. 몸에 안 닿은 띠는 창
+    /// 내내 대 보므로 넷째 틱에도 <c>BossSwingTested</c> 가 참이다.
     /// </para>
     /// </summary>
     private async Task Leap()
@@ -504,6 +506,10 @@ public partial class ShotRunner : Node
             () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn <= 0.3,
             _pollTimeout);
         Tap("jump");
+
+        // 창의 첫 틱을 보고 세 틱 더 민다 — 넷째 틱의 신호 안에서 멈춘다(CaptureOn 과 같은 자리). 그 장의 충격파는 네 프레임 퍼졌다.
+        await Until(() => _battle is { BossSwingTested: true }, _pollTimeout);
+        await Frames(3);
         await CaptureTested("battle-6b-landing-wave", _pollTimeout);
     }
 

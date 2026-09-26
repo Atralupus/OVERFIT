@@ -10,7 +10,14 @@ namespace Overfit.Battle.View;
 /// <para>
 /// 착지 판정은 그림의 칼 궤적이 아니라 바닥 띠(<c>band [0, 1920, 0, 60]</c>)라, 보스 공격의 링을 걷은 뒤(#81)에는 "낮은 곳이 맞는다" 가
 /// 화면 어디에도 없었다. 그래서 띠 자체를 그린다 — <b>모양은 규칙이 그 틱에 대 본 판정 사각형에서 읽는다</b>(<see cref="FloorWave"/>).
-/// 높이는 판정의 높이이고 앞머리는 판정의 가로 끝까지 간다. 보이는 것이 곧 맞는 것이다.
+/// 높이는 판정의 높이이고 앞머리는 판정의 가로 끝(아레나로 자른 것)까지 간다. 보이는 것이 곧 맞는 것이다.
+/// </para>
+///
+/// <para>
+/// <b>셋을 겹쳐 그린다</b> (리뷰 m4). ① <b>밑깔개</b> — 판정 전체(아레나로 자른 것)를 선 첫 프레임부터 옅게 깐다. 규칙은 창의 첫 틱에
+/// 바닥 전체를 치므로 앞머리가 아직 발밑에 있어도 "낮은 곳이 다 지금 맞는다" 가 화면에 있어야 한다. ② <b>띠</b> — 두 앞머리 사이를
+/// 밑깔개보다 밝게. ③ <b>앞머리</b> — 양쪽으로 창 내내 고르게 달려 나가는 밝은 끝. 앞머리는 충격파가 퍼지는 것을, 밑깔개는 맞는 자리
+/// 전체를 말한다. 전에는 밑깔개 없이 앞머리가 화면 밖(±1920)을 향해 처음이 빠르게 가서, 퍼지는 것이 두세 프레임만 보여 번쩍임으로 읽혔다.
 /// </para>
 ///
 /// <para>
@@ -43,8 +50,9 @@ public partial class LandingWave : Node2D
     public override void _Ready() => _feel = Balance.Data.Feel;
 
     /// <summary>
-    /// 충격파를 세운다 — 바닥 전체를 치는 판정이 서는 틱에 <c>BattleCues</c> 가 부른다. 이미 퍼지던 것이 있으면 새것으로 갈아 끼운다
-    /// (2단계의 점프 ×3 은 앞의 띠가 옅어지기 전에 다음 착지가 온다 · 설계 §4.8).
+    /// 충격파를 세운다 — 바닥 전체를 치는 판정이 서는 틱에 <c>BattleCues</c> 가 부른다. 이미 퍼지던 것이 있으면 새것으로 갈아 끼운다.
+    /// 지금 데이터에서 둘이 겹치는 일은 없다 — 충격파는 0.4초 남짓 살고(퍼짐 0.125 + 옅어짐 0.3) 착지는 가장 잦은 2단계의 점프 ×3 도
+    /// 1.5초 간격이다(설계 §4.8). 갈아 끼우는 것은 그 간격이 줄어드는 날을 위한 것이다: 앞의 띠를 이어 그리면 새 착지의 발밑이 안 보인다.
     /// </summary>
     public void Start(FloorWave wave)
     {
@@ -89,8 +97,13 @@ public partial class LandingWave : Node2D
         float top = -(float)wave.Height;
         float x0 = (float)left;
         float x1 = (float)right;
+        var underlay = new Color(_white, (float)_feel.LandingWaveUnderlayAlpha * strength);
         var fill = new Color(_white, (float)_feel.LandingWaveAlpha * strength);
         var edge = new Color(_white, (float)_feel.LandingWaveEdgeAlpha * strength);
+
+        // 밑깔개 — 판정 전체(아레나로 자른 것)를 첫 프레임부터. 앞머리가 발밑에 있는 첫 틱에 규칙은 이미 이 전부를 친다. 띠와 앞머리는 그
+        // 위에 겹친다: 앞머리가 지나간 곳이 더 밝아 달리는 것이 읽힌다.
+        DrawRect(new Rect2((float)wave.Left, top, (float)(wave.Right - wave.Left), -top), underlay);
 
         // 앞머리 — 앞끝이 가장 밝고 안쪽으로 띠의 밝기까지 내려온다. 발밑보다 안쪽으로는 안 넘어간다(막 섰을 때 두 앞머리가 겹치지 않게).
         // 평평한 띠는 두 앞머리 **사이**에만 칠한다 — 앞머리 밑까지 칠하면 앞머리의 안쪽 끝에서 알파가 겹쳐 턱이 진다.
