@@ -65,26 +65,28 @@ public class BossHitsTests
     public void 판정의_답은_단계의_키에서_오고_없으면_받는다()
     {
         // 설계 §8.1 — 판정의 답 dash · guard · parry 는 없으면 태그대로(받는다)이고, 적으면 그 판정만 좁힌다. 판을 세울 때 판정에 싣는다 —
-        // 규칙(HitResolver)과 관측(BossSwings.BuildEvent)이 같은 값을 읽게.
+        // 규칙(HitResolver)과 관측(BossSwings.BuildEvent)이 같은 값을 읽게. 판정마다 답을 **하나씩만** 닫는다 — 셋을 한꺼번에 닫으면
+        // 어느 키가 어느 칸으로 가는지를 못 가른다(parry 키가 Dashable 로 가는 배선이 셋 다 닫힌 판정에서는 똑같이 거짓이다).
         HitBox?[] hits = BossHits.Of(new PatternDef
         {
             Tags = TestConfigs.Sweep(100, 0).Tags,
             Timeline = new List<PatternStep>
             {
                 new() { T = 0.5, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125 },
-                new()
-                {
-                    T = 1.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125,
-                    Dash = false, Guard = false, Parry = false,
-                },
-                new() { T = 1.5, Kind = "end" },
+                new() { T = 1.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Dash = false },
+                new() { T = 1.5, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Guard = false },
+                new() { T = 2.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Parry = false },
+                new() { T = 2.5, Kind = "end" },
             },
         }, TestConfigs.HitShapes());
 
-        HitBox open = hits[0]!.Value;
-        (open.Dashable, open.Guardable, open.Parryable).ShouldBe((true, true, true), "답이 없는 판정이 무언가를 안 받는다");
-        HitBox closed = hits[1]!.Value;
-        (closed.Dashable, closed.Guardable, closed.Parryable).ShouldBe((false, false, false), "적은 답이 판정에 안 실렸다");
+        hits.Take(4).Select(h => (h!.Value.Dashable, h.Value.Guardable, h.Value.Parryable)).ShouldBe(new[]
+        {
+            (true, true, true),
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        }, "단계의 키가 판정의 제 칸에 안 실렸다 — 답이 없으면 받고, 적은 키는 그 수단 하나만 닫는다");
     }
 
     [Fact]
@@ -92,7 +94,8 @@ public class BossHitsTests
     {
         // 설계 §7.3 — 대시 · 가드 · 패리의 "고를 수 있었나" 는 판정 단위다. 태그에서 가져오면 한 패턴 안에서 1타는 다 되고 잡기는 점프만
         // 되는 자리(1타 잡기)에서 거짓을 싣는다 — 대시 의존도의 분모가 "대시로는 못 피하는 판정" 으로 부푼다. 태그로는 셋 다 되는 패턴에서
-        // 둘째 판정만 셋을 막는다. 가만히 선 파이터가 둘 다 맞는다.
+        // 둘째 · 셋째 · 넷째 판정이 대시 · 가드 · 패리를 **하나씩** 막는다 — 셋을 한꺼번에 막으면 어느 답이 어느 칸으로 가는지를 못 가른다
+        // (패리 가능이 Dashable 을 읽는 배선이 그대로 통과했다). 가만히 선 파이터가 넷 다 맞는다.
         PatternTags tags = new()
         {
             DashWindow = 0.2,
@@ -112,12 +115,10 @@ public class BossHitsTests
             Timeline = new List<PatternStep>
             {
                 new() { T = 0.5, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125 },
-                new()
-                {
-                    T = 1.0, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125,
-                    Dash = false, Guard = false, Parry = false,
-                },
-                new() { T = 1.5, Kind = "end" },
+                new() { T = 1.0, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Dash = false },
+                new() { T = 1.5, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Guard = false },
+                new() { T = 2.0, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Parry = false },
+                new() { T = 2.5, Kind = "end" },
             },
         };
         var sim = new BattleSim(new BattleSetup
@@ -126,20 +127,26 @@ public class BossHitsTests
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "둘" },
-            Patterns = new Dictionary<string, PatternDef> { ["둘"] = pattern },
+            PatternIds = new[] { "넷" },
+            Patterns = new Dictionary<string, PatternDef> { ["넷"] = pattern },
             Seed = 1,
             MaxTicks = 60 * 10,
         });
 
-        for (int i = 0; i < 180 && sim.Events.Count < 2; i++)
+        for (int i = 0; i < 300 && sim.Events.Count < 4; i++)
         {
             sim.Tick(default);
         }
 
-        sim.Events.Count.ShouldBe(2, "두 판정의 관측이 안 섰다");
-        sim.Events.Select(e => (e.DashAvailable, e.GuardAvailable, e.ParryAvailable))
-            .ShouldBe(new[] { (true, true, true), (false, false, false) }, "관측이 판정의 답이 아니라 태그를 실었다");
+        sim.Events.Count.ShouldBe(4, "네 판정의 관측이 안 섰다");
+        sim.Events.Select(e => e.Verdict).ShouldAllBe(v => v == HitVerdict.Hit, "가만히 선 파이터가 네 판정을 다 맞지 않았다");
+        sim.Events.Select(e => (e.DashAvailable, e.GuardAvailable, e.ParryAvailable)).ShouldBe(new[]
+        {
+            (true, true, true),
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        }, "관측이 판정의 제 답이 아니라 태그나 다른 수단의 답을 실었다");
     }
 
     [Theory]
