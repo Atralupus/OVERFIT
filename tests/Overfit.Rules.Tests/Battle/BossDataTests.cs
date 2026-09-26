@@ -98,4 +98,55 @@ public class BossDataTests
         }
     }
 
+    [Fact]
+    public void 연격_한_번으로는_안_무너지고_연달아_두_번이면_두_번째_2타에_무너진다()
+    {
+        // 설계 §4.5 — 게이지 100 · 1타 10 · 2타 45: 한 번은 55 라 안 무너지고, 연달아 두 번이면 10 → 55 → 65 → 110 에서 두 번째
+        // 2타에 무너진다. 셋째 칼(65)에 무너지면 "2타가 더 큰 경직도" 가 무너뜨리는 칼이 아니다.
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
+            {
+                double once = c.Combo[0].Poise + c.Combo[1].Poise;
+                once.ShouldBeLessThan(boss.PoiseMax, $"{id}: {who} 의 2연격 한 번({once})에 무너진다");
+                (once + c.Combo[0].Poise).ShouldBeLessThan(boss.PoiseMax, $"{id}: {who} 의 두 번째 1타에 무너진다");
+                (2 * once).ShouldBeGreaterThanOrEqualTo(boss.PoiseMax, $"{id}: {who} 의 2연격 두 번({2 * once})으로도 안 무너진다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 경직_유예가_한_연격을_0_15초_넘게_남기고_덮는다()
+    {
+        // 설계 §4.5 — 1타가 판정 창의 첫 틱에 닿고 2타가 창의 끝 틱에 닿는 가장 긴 경우가 1타의 판정 + 후딜 + 2타의 선딜 + 판정 =
+        // 1.0001초다. 유예(1.2초)가 그보다 짧으면 2타가 닿기 전에 게이지가 줄기 시작해 이어 친 칼이 앞 칼의 몫을 잃는다.
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
+            {
+                double longest = c.Combo[0].Active + c.Combo[0].Recover + c.Combo[1].Windup + c.Combo[1].Active;
+                (boss.PoiseDecayDelay - longest).ShouldBeGreaterThanOrEqualTo(0.15,
+                    $"{id}: 유예 {boss.PoiseDecayDelay}초가 {who} 의 2연격({longest:0.0000}초)을 겨우 덮는다");
+            }
+        }
+    }
+
+    [Fact]
+    public void 게이지를_깬_2타_뒤에도_반격_2연격이_탈진_안에_다_닿는다()
+    {
+        // 설계 §4.3 — 게이지를 깬 것이 2타면 그 2타를 끝까지 휘둘러야 다음 칼이 선다(2연격의 끝이다). 가장 나쁜 경우는 2타가
+        // 창의 첫 틱에 닿아 무너뜨린 것이다: 남은 판정 + 후딜 0.3333 + 다음 틱의 J 0.0167 + 반격 2연격이 닿기까지 1.0834 =
+        // 1.4334초 ≤ 1.5. 패리 쪽(위 둘)은 반응 여유 0.15 를 넣지만 여기는 **여유 없이** 잰다 — 몰아치던 손을 그대로 이어 누르는
+        // 자리다. 탈진을 줄이는 날 여기가 먼저 빨개진다.
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
+            {
+                ComboStepDef last = c.Combo[^1];
+                double lead = last.Active + last.Recover + TestConfigs.CounterLead(c);
+                boss.ExhaustSeconds.ShouldBeGreaterThanOrEqualTo(lead,
+                    $"{id}: 탈진 {boss.ExhaustSeconds}초에 게이지를 깬 {who} 의 반격 2연격({lead:0.0000}초)이 안 들어간다");
+            }
+        }
+    }
 }

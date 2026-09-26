@@ -153,6 +153,9 @@ public sealed class Fighter
     /// <summary>지금(또는 다음에 누르면) 휘두르는 칼질의 피해. 칸마다 데이터가 정한다 — 2타가 1타의 세 배다.</summary>
     public int AttackDamage => Step.Damage;
 
+    /// <summary>지금 칼질이 보스의 경직 게이지를 채우는 양 (#71) — 2타가 1타보다 크다. 게이지를 채우는 것은 <c>BattleSim</c> 이다.</summary>
+    public int AttackPoise => Step.Poise;
+
     /// <summary>
     /// 지금 도는 칼질이 몇 번째인가 (0 = 1타). 뷰가 어느 시트를 그릴지 · <see cref="BattleSim"/> 이 어느 칼 모양을
     /// 댈지를 이것으로 안다.

@@ -43,6 +43,13 @@ public sealed class ComboStepDef
     public required int Damage { get; init; }
 
     /// <summary>
+    /// 이 칼질이 보스의 경직 게이지를 채우는 양 (#71 · 설계 §4.5) — 1타 10 · 2타 45. 유저의 "두번째 2타공격은 더 큰 경직도" 다.
+    /// 칼이 닿을 때 한 번 찬다(한 번 휘두르면 한 번만 맞는다). 끝(<c>bosses.json</c> 의 <c>poise_max</c>)과 짝이라
+    /// <c>BossDataTests</c> 가 둘을 같이 본다.
+    /// </summary>
+    public required int Poise { get; init; }
+
+    /// <summary>
     /// 칼의 판정 모양 — <c>hitboxes.json</c> 의 id(<c>팩/애니메이션/장</c>). <see cref="BladeFrame"/> 의 흰 궤적에서
     /// 뽑은 것이다. <c>BattleSim</c> 이 판을 세울 때 모양을 찾고, 없는 id 면 그 자리에서 거절한다.
     /// </summary>

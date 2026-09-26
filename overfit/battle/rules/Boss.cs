@@ -38,6 +38,21 @@ public sealed class BossConfig
     /// </summary>
     public required double ExhaustSeconds { get; init; }
 
+    /// <summary>
+    /// 경직 게이지의 끝 (#71 · 설계 §4.5). 파이터의 칼질마다의 경직도(<c>fighters.json</c> 의 <c>combo[].poise</c>)가 이것의
+    /// 백분율로 읽히게 100 이다 — 1타 10 · 2타 45 라 2연격 한 번(55)은 안 무너지고 연달아 두 번이면 두 번째 2타에 무너진다.
+    /// </summary>
+    public required double PoiseMax { get; init; }
+
+    /// <summary>
+    /// 마지막으로 맞은 뒤 게이지가 그대로인 시간(초) — 1.2초 = 72틱 (반올림은 <c>BattleSim.TicksFor</c>). 한 연격의 가장 긴 경우
+    /// (1타가 창의 첫 틱 · 2타가 창의 끝 틱 · 1.0001초)를 0.1999 남기고 덮는다 — 이어 친 칼이 앞 칼의 몫을 안 잃는다.
+    /// </summary>
+    public required double PoiseDecayDelay { get; init; }
+
+    /// <summary>유예가 끝난 뒤 초당 빠지는 양 — 틱마다 같은 몫(× 1/60)이다. "서서히" — 가득 찬 게이지가 10초에 빠진다.</summary>
+    public required double PoiseDecayPerSecond { get; init; }
+
     public required string Sprite { get; init; }
 }
 
@@ -107,7 +122,7 @@ public sealed class Boss
     public bool Exhausted => _exhaustLeft > 0;
 
     /// <summary>
-    /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(패리 · 4번 PR 의 경직 게이지)이 몇이든
+    /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(패리 · 경직 게이지 — #71)이 몇이든
     /// 같은 상태 · 같은 그림에 닿아야 한다(설계 §4.3). 길이는 틱이다 — 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
     /// </summary>
     public void Exhaust(int ticks) => _exhaustLeft = Math.Max(0, ticks);

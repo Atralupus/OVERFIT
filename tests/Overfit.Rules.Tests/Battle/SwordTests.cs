@@ -142,6 +142,7 @@ public class SwordTests
             Active = second.Active,
             Recover = second.Recover,
             Damage = second.Damage,
+            Poise = second.Poise,
             Hitbox = longId,
         };
 
