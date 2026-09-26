@@ -273,8 +273,11 @@ public sealed class BossSwings
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
             // 이 셋이 없으면 만들어지지 않는다.
             DashAvailable: swing.Tags.DashWindow > 0,
-            JumpAvailable: swing.Tags.Jumpable,
             ParryAvailable: swing.Tags.Parryable,
+
+            // 점프만은 **판정 단위**다 (#72 · 설계 §7.3) — 모양의 윗끝과 파이터의 점프로 판을 세울 때 잰 값이다. 태그(jumpable)를
+            // 실으면 3연격의 2 · 3타까지 "점프도 됐다" 로 실려 점프 의존도의 분모가 부푼다.
+            JumpAvailable: box.Jumpable,
 
             // 뒤의 둘만 **태그가 아니라 판정**에서 온다 (이슈 #53). guard_break 도 마무리도
             // 판정 단위라 같은 패턴 안에서 대마다 값이 다르다 — 태그(has_guard_break)를 읽으면

@@ -112,7 +112,7 @@ public class StageRosterTests
         IReadOnlyList<string> roster = StageRoster.For(Stages(), LastStage());
 
         roster.ShouldContain(
-            id => patterns[id].Timeline.Any(s => s.Kind == "active" && s.Distance![0] > 0),
+            id => patterns[id].Timeline.Any(s => s.Kind == "active" && s.Band != null && s.Band[0] > 0),
             "마지막 단계 명부에 안쪽 안전지대를 가진 패턴이 없다 — dash_direction_bias 가 상수가 된다");
     }
 

@@ -66,6 +66,12 @@ public sealed class BattleSim
     /// </summary>
     private readonly HitShape[] _swords;
 
+    /// <summary>
+    /// 명부의 패턴마다 타임라인 칸별 보스 판정 — 판을 세울 때 한 번 짓는다(<see cref="BossHits"/> · #72 · 설계 §8.1). 모양이 없는
+    /// 판정은 그 자리에서 전부 모아 거절한다.
+    /// </summary>
+    private readonly Dictionary<string, HitBox?[]> _hits;
+
     private PatternRunner? _runner;
     private PatternDef? _current;
 
@@ -108,6 +114,7 @@ public sealed class BattleSim
 
         _setup = setup;
         _swords = Swords(setup);
+        _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes, setup.Fighter);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
         _swings = new BossSwings(Fighter, Boss, _credit);
@@ -242,12 +249,12 @@ public sealed class BattleSim
     public IReadOnlyList<HitRect> BossTestedRects => _swings.TestedRects;
 
     /// <summary>
-    /// 선딜 중이면 <b>다음</b> 판정이 칠 자리 (월드) — 어디로 올지 미리 보인다. 러너가 그 판정을 낼 때와
-    /// 같은 함수(<see cref="PatternRunner.ShapeOf"/>)로 짓는다. 더 올 판정이 없으면 빈 목록.
+    /// 선딜 중이면 <b>다음</b> 판정이 칠 자리 (월드) — 어디로 올지 미리 보인다. 러너가 낼 바로 그 판정(판을 세울 때 지은 것 ·
+    /// <see cref="PatternRunner.NextHit"/>)을 지금 자리에 놓는다. 더 올 판정이 없으면 빈 목록.
     /// </summary>
     public IReadOnlyList<HitRect> BossNextRects =>
-        NextActive() is { } step
-            ? PatternRunner.ShapeOf(step).Place(new Placement(Boss.X, Boss.Y, Boss.Facing))
+        _runner?.NextHit is { } hit
+            ? hit.Shape.Place(new Placement(Boss.X, Boss.Y, Boss.Facing))
             : Array.Empty<HitRect>();
 
     /// <summary>
@@ -495,7 +502,7 @@ public sealed class BattleSim
         }
 
         _current = def;
-        _runner = new PatternRunner(def);
+        _runner = new PatternRunner(def, _hits[id]);
         Boss.CurrentPattern = id;
         Log.Debug("boss", () => $"pattern_begin id={id} pick={_picks} tick={Ticks}");
     }

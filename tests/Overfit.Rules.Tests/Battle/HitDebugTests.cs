@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Overfit.Battle.Rules;
 using Shouldly;
 using Xunit;
@@ -30,6 +31,40 @@ public class HitDebugTests
 
         sim.BossTestedRects.ShouldBeEmpty("아직 판정이 안 섰는데 댄 자리가 있다");
         sim.BossNextRects.ShouldBe(HitShape.Band(0, 5000, 0, 5000).Place(BossAt(sim)));
+    }
+
+    [Fact]
+    public void 그림에서_뽑은_판정도_러너가_낼_그_모양이_다음_판정으로_보인다()
+    {
+        // 설계 §8.1 — 판정 단계가 hitbox id 를 가리키면 그 모양(hitboxes.json)으로 친다. 디버그 표시의 "다음 판정" 은 러너가 낼
+        // 바로 그 판정을 그린다 — 판을 세울 때 지은 것이다(BossHits). 보스는 왼쪽을 보고 있으니 궤적이 왼쪽으로 뒤집혀 놓인다.
+        HitShape swing = TestConfigs.HitShapes()["medieval_king/attack/2"];
+        var pattern = new PatternDef
+        {
+            Tell = TestConfigs.Tell(),
+            Tags = TestConfigs.Sweep(100, 0).Tags,
+            Timeline = new List<PatternStep>
+            {
+                new() { T = 0.0, Kind = "windup" },
+                new() { T = 0.85, Kind = "active", Hitbox = "medieval_king/attack/2", Damage = 8, ActiveSeconds = 0.125 },
+                new() { T = 1.3, Kind = "end" },
+            },
+        };
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            PatternIds = new[] { "1타" },
+            Patterns = new Dictionary<string, PatternDef> { ["1타"] = pattern },
+            Seed = 1,
+            MaxTicks = 60 * 30,
+        });
+        TestConfigs.UntilWindup(sim);
+
+        sim.Boss.Facing.ShouldBe(-1);
+        sim.BossNextRects.ShouldBe(swing.Place(BossAt(sim)));
     }
 
     [Fact]

@@ -523,6 +523,31 @@ public class BattleSimTests
     }
 
     [Fact]
+    public void 판정의_모양이_없으면_판을_세울_때_빠진_것을_전부_말한다()
+    {
+        // 설계 §8.1 — 보스 판정의 모양은 판을 세울 때 한 번 찾고, 빠진 id 는 전부 모아 한 번에 거절한다(칼의 모양과 같은 규약).
+        // 판정이 처음 서는 틱에 찾다 틀리면 판이 한참 돈 뒤라 무엇이 빠졌는지가 스택에 안 남는다.
+        var pattern = new PatternDef
+        {
+            Tell = TestConfigs.Tell(),
+            Tags = TestConfigs.Sweep(100, 0).Tags,
+            Timeline = new List<PatternStep>
+            {
+                new() { T = 0.5, Kind = "active", Hitbox = "없는팩/attack/2", Damage = 5 },
+                new() { T = 1.0, Kind = "active", Hitbox = "없는팩/attack2/2", Damage = 5 },
+                new() { T = 2.0, Kind = "end" },
+            },
+        };
+        BattleSetup setup = Setup();
+        setup.PatternIds = new[] { "단타" };
+        setup.Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern };
+
+        string message = Should.Throw<ArgumentException>(() => new BattleSim(setup)).Message;
+        message.ShouldContain("없는팩/attack/2");
+        message.ShouldContain("없는팩/attack2/2");
+    }
+
+    [Fact]
     public void 없는_패턴_id_는_매_틱_에러를_쏟지_않는다()
     {
         // Begin 이 간격을 안 되돌린 채 나가면 _gapLeft 가 0 이하로 남아 다음 틱에도 곧장
@@ -598,7 +623,7 @@ public class BattleSimTests
         {
             new() { T = 0.0, Kind = "windup" },
             new() { T = 0.4, Kind = "windup", Motion = new MotionDef { Id = "leap", Height = 280, Air = 0.6 } },
-            new() { T = 1.0, Kind = "active", Distance = new double[] { 0, 1920 }, Height = new double[] { 0, 60 }, Damage = 12, ActiveSeconds = 0.125 },
+            new() { T = 1.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 12, ActiveSeconds = 0.125 },
             new() { T = 1.5, Kind = "end" },
         },
     };
@@ -660,7 +685,7 @@ public class BattleSimTests
             },
             Timeline = new List<PatternStep>
         {
-            new() { T = at, Kind = "active", Distance = distance, Height = height, Damage = 5, GuardBreak = guardBreak },
+            new() { T = at, Kind = "active", Band = new[] { distance[0], distance[1], height[0], height[1] }, Damage = 5, GuardBreak = guardBreak },
             new() { T = at + (6 * BattleSim.Dt), Kind = "end" },
         },
         };
@@ -1202,8 +1227,8 @@ public class BattleSimTests
             },
             Timeline = new List<PatternStep>
             {
-                new() { T = 3 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
-                new() { T = 6 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
+                new() { T = 3 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
+                new() { T = 6 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
                 new() { T = 10 * BattleSim.Dt, Kind = "end" },
             },
         };
@@ -1282,8 +1307,8 @@ public class BattleSimTests
         },
         Timeline = new List<PatternStep>
         {
-            new() { T = _firstHit * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
-            new() { T = _lastHit * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5, GuardBreak = guardBreak },
+            new() { T = _firstHit * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
+            new() { T = _lastHit * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5, GuardBreak = guardBreak },
             new() { T = (_lastHit + 6) * BattleSim.Dt, Kind = "end" },
         },
     };
@@ -1404,8 +1429,8 @@ public class BattleSimTests
             Tags = TwoHits(guardBreak: false).Tags,
             Timeline = new List<PatternStep>
             {
-                new() { T = 12 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 50 }, Height = new double[] { 0, 300 }, Damage = 5, ActiveSeconds = 0.5 },
-                new() { T = 24 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
+                new() { T = 12 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 50, 0, 300 }, Damage = 5, ActiveSeconds = 0.5 },
+                new() { T = 24 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
                 new() { T = 60 * BattleSim.Dt, Kind = "end" },
             },
         };
@@ -1460,8 +1485,8 @@ public class BattleSimTests
             },
             Timeline = new List<PatternStep>
             {
-                new() { T = 30 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
-                new() { T = 60 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5, GuardBreak = true },
+                new() { T = 30 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
+                new() { T = 60 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5, GuardBreak = true },
                 new() { T = 72 * BattleSim.Dt, Kind = "end" },
             },
         };
@@ -1583,7 +1608,7 @@ public class BattleSimTests
         Timeline = new List<PatternStep>
         {
             new() { T = 6 * BattleSim.Dt, Kind = "feint" },
-            new() { T = 24 * BattleSim.Dt, Kind = "active", Distance = new double[] { 0, 2000 }, Height = new double[] { 0, 300 }, Damage = 5 },
+            new() { T = 24 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
             new() { T = 30 * BattleSim.Dt, Kind = "end" },
         },
     };

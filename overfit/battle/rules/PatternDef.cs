@@ -67,11 +67,18 @@ public sealed class PatternStep
 
     public required string Kind { get; init; }
 
-    /// <summary>active 일 때 [최소, 최대] 거리. 다른 kind 면 null.</summary>
-    public IReadOnlyList<double>? Distance { get; init; }
+    /// <summary>
+    /// 판정 모양 — <c>hitboxes.json</c> 의 id(<c>팩/애니메이션/장</c> · 그림의 흰 궤적에서 뽑았다 · 설계 §3.3). active 에서
+    /// <see cref="Band"/> 와 <b>꼭 하나</b>만 갖는다(데이터 테스트가 막는다). 모양은 판을 세울 때 한 번 찾는다(<c>BossHits</c>).
+    /// </summary>
+    public string? Hitbox { get; init; }
 
-    /// <summary>active 일 때 [아래, 위] 높이. 다른 kind 면 null.</summary>
-    public IReadOnlyList<double>? Height { get; init; }
+    /// <summary>
+    /// 좌우 대칭 띠 — [안쪽, 바깥쪽, 아래, 위] (보스 중심에서 · 발바닥에서, px · 설계 §3.3). 그림에서 뽑지 않는 모양이다:
+    /// 바닥 전체를 치는 착지 같은 것. 옛 거리 띠 · 높이 띠(<c>distance</c> · <c>height</c>)를 한 칸에 모았다 —
+    /// 둘이 늘 짝이었고, 모양으로는 <see cref="HitShape.Band"/> 한 가지다.
+    /// </summary>
+    public IReadOnlyList<double>? Band { get; init; }
 
     public int Damage { get; init; }
 

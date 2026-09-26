@@ -34,7 +34,8 @@ public class VariantRhythmTests
     /// <summary><paramref name="pattern"/> 의 판정들이 서는 러너 틱(패턴이 선 뒤 몇 번째 틱인가).</summary>
     private static List<int> ActiveTicks(string pattern)
     {
-        var runner = new PatternRunner(TestConfigs.Patterns()[pattern]);
+        PatternDef def = TestConfigs.Patterns()[pattern];
+        var runner = new PatternRunner(def, BossHits.Of(def, TestConfigs.HitShapes(), TestConfigs.Fighter()));
         var ticks = new List<int>();
         for (int k = 1; !runner.Finished; k++)
         {

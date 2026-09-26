@@ -157,7 +157,7 @@ public static class TestConfigs
             new() { T = 0.0, Kind = "windup" },
             new()
             {
-                T = 0.5, Kind = "active", Distance = new[] { 0.0, maxDistance }, Height = new[] { 0.0, 5000.0 },
+                T = 0.5, Kind = "active", Band = new[] { 0.0, maxDistance, 0.0, 5000.0 },
                 Damage = 7, ActiveSeconds = activeSeconds,
             },
             new() { T = endAt, Kind = "end" },

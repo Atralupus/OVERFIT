@@ -19,9 +19,12 @@ namespace Overfit.Battle.Rules;
 /// </para></param>
 /// <param name="ActiveSeconds">이 판정이 살아 있는 초 (이슈 #59). 0 이면 한 틱이다 —
 /// <see cref="PatternStep.ActiveSeconds"/> 를 그대로 싣는다. 틱으로 바꾸는 것은 <c>BattleSim.TicksFor</c> 다.</param>
+/// <param name="Jumpable">점프 한 번으로 창 내내 발이 이 모양 위에 있을 수 있나 (#72 · 설계 §7.3). 판을 세울 때 이 판의 파이터로
+/// 잰다(<c>BossHits.TicksAbove</c>). 관측의 <c>JumpAvailable</c> 이 이것이다 — 패턴 태그(<c>jumpable</c>)는 요약일 뿐이다.</param>
 public readonly record struct HitBox(
     HitShape Shape,
     int Damage,
     bool GuardBreak = false,
     bool Finisher = false,
-    double ActiveSeconds = 0);
+    double ActiveSeconds = 0,
+    bool Jumpable = false);

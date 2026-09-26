@@ -26,6 +26,9 @@ public sealed class PatternRunner
 
     private readonly PatternDef _def;
 
+    /// <summary>타임라인 칸별 판정 — 판을 세울 때 지었다(<see cref="BossHits"/>). active 가 아닌 칸은 null.</summary>
+    private readonly IReadOnlyList<HitBox?> _hits;
+
     /// <summary>
     /// 마지막 <c>active</c> 단계의 자리 — <b>마무리</b>다 (이슈 #53). 판정이 없으면 -1.
     /// 데이터의 깃발이 아니라 여기서 뽑는 이유는 <see cref="HitBox.Finisher"/> 에 적어 두었다:
@@ -38,10 +41,19 @@ public sealed class PatternRunner
 
     private int _next;
 
-    public PatternRunner(PatternDef def)
+    /// <param name="def">패턴.</param>
+    /// <param name="hits">칸별 판정 — <see cref="BossHits"/> 가 지었다. 타임라인과 길이가 같다.</param>
+    public PatternRunner(PatternDef def, IReadOnlyList<HitBox?> hits)
     {
         ArgumentNullException.ThrowIfNull(def);
+        ArgumentNullException.ThrowIfNull(hits);
+        if (hits.Count != def.Timeline.Count)
+        {
+            throw new ArgumentException($"판정 칸 {hits.Count} 이 타임라인 {def.Timeline.Count} 칸과 다르다", nameof(hits));
+        }
+
         _def = def;
+        _hits = hits;
         _finisher = def.Timeline.FindLastIndex(s => s.Kind == "active");
         _at = new int[def.Timeline.Count];
         for (int i = 0; i < _at.Length; i++)
@@ -104,12 +116,10 @@ public sealed class PatternRunner
                 continue;
             }
 
-            if (step.Kind == "active" && step.Distance is not null && step.Height is not null)
+            if (_hits[_next - 1] is { } hit)
             {
                 hits ??= new List<HitBox>();
-                hits.Add(new HitBox(
-                    ShapeOf(step), step.Damage, step.GuardBreak, Finisher: _next - 1 == _finisher,
-                    ActiveSeconds: step.ActiveSeconds));
+                hits.Add(hit with { Finisher = _next - 1 == _finisher });
             }
 
             if (step.Motion is { } motion)
@@ -127,6 +137,9 @@ public sealed class PatternRunner
     /// 판정이 선 틱에 그 단계는 "다음" 이기를 그친다 — 창이 살아 있는지는 <c>BattleSim</c> 이 따로 안다.
     /// </summary>
     public PatternStep? NextActive => NextActiveAt() is int k ? _def.Timeline[k] : null;
+
+    /// <summary>다음 판정이 칠 모양 — 디버그 표시의 "다음 판정" 이 러너가 낼 바로 그 판정을 그린다. 없으면 null.</summary>
+    public HitBox? NextHit => NextActiveAt() is int k ? _hits[k] : null;
 
     /// <summary>다음 판정까지 남은 시간(초) — 그 단계의 틱에서 지금 시계를 뺀 것. 없으면 null.</summary>
     public double? NextActiveIn => NextActiveAt() is int k ? (_at[k] - Ticks) * BattleSim.Dt : null;
@@ -155,20 +168,4 @@ public sealed class PatternRunner
     /// </para>
     /// </summary>
     public int Feints { get; private set; }
-
-    /// <summary>
-    /// 타임라인 한 단계의 판정 모양. <b>모양을 짓는 곳은 여기 하나다</b> — 러너가 판정을 낼 때와
-    /// 디버그 표시가 "다음 판정" 을 그릴 때가 같은 함수를 불러야 둘이 같은 자리를 가리킨다.
-    /// 지금은 옛 거리 띠 · 높이 띠를 좌우 대칭 두 장으로 옮긴다 (<see cref="HitShape.Band"/>).
-    /// </summary>
-    public static HitShape ShapeOf(PatternStep step)
-    {
-        ArgumentNullException.ThrowIfNull(step);
-        if (step.Distance is null || step.Height is null)
-        {
-            throw new ArgumentException($"판정이 아닌 단계다 — kind={step.Kind}", nameof(step));
-        }
-
-        return HitShape.Band(step.Distance[0], step.Distance[1], step.Height[0], step.Height[1]);
-    }
 }

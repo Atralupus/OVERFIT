@@ -39,20 +39,46 @@ public class PatternDataTests
         }
     }
 
+    /// <summary>패턴의 판정들 — 판을 세울 때처럼 <see cref="BossHits"/> 가 이 캐릭터로 짓는다.</summary>
+    private static IEnumerable<HitBox> Hits(PatternDef def, FighterConfig fighter) =>
+        BossHits.Of(def, TestConfigs.HitShapes(), fighter).Where(h => h is not null).Select(h => h!.Value);
+
     [Fact]
-    public void Active_단계는_거리와_높이를_갖는다()
+    public void 판정_단계는_hitbox_와_band_중_꼭_하나를_갖는다()
     {
+        // 설계 §8.1 — 판정 단계는 그림에서 뽑은 모양의 id(hitbox) 또는 바닥 띠(band) 중 **꼭 하나**를 갖는다. 둘 다 있으면 어느 것이
+        // 치는지 데이터만 보고 모르고, 둘 다 없으면 판을 세울 때 거절된다(BossHits). id 는 hitboxes.json 에 있어야 한다 —
+        // JsonData 는 모르는 키를 조용히 버리므로 "hitbx" 같은 오타는 빌드를 그냥 지나간다.
+        Dictionary<string, HitShape> shapes = TestConfigs.HitShapes();
+        int checkedSteps = 0;
         foreach ((string id, PatternDef def) in Load())
         {
-            foreach (PatternStep step in def.Timeline.Where(s => s.Kind == "active"))
+            foreach (PatternStep step in def.Timeline)
             {
-                step.Distance.ShouldNotBeNull($"{id}: active 에 distance 가 없다");
-                step.Height.ShouldNotBeNull($"{id}: active 에 height 가 없다");
-                step.Distance!.Count.ShouldBe(2, $"{id}: distance 는 [최소, 최대] 둘이다");
-                step.Height!.Count.ShouldBe(2, $"{id}: height 는 [아래, 위] 둘이다");
-                step.Damage.ShouldBeGreaterThan(0, $"{id}: active 인데 피해가 0 이다");
+                if (step.Kind != "active")
+                {
+                    (step.Hitbox is null && step.Band is null).ShouldBeTrue($"{id}: t={step.T} 판정이 아닌 단계({step.Kind})에 모양이 있다");
+                    continue;
+                }
+
+                checkedSteps++;
+                (step.Hitbox is null).ShouldNotBe(step.Band is null, $"{id}: t={step.T} 판정 단계는 hitbox 와 band 중 꼭 하나다");
+                step.Damage.ShouldBeGreaterThan(0, $"{id}: t={step.T} 판정인데 피해가 0 이다");
+                if (step.Hitbox is { } hitbox)
+                {
+                    shapes.ShouldContainKey(hitbox, $"{id}: t={step.T} 의 hitbox {hitbox} 가 hitboxes.json 에 없다");
+                }
+                else
+                {
+                    IReadOnlyList<double> b = step.Band!;
+                    b.Count.ShouldBe(4, $"{id}: t={step.T} band 는 [안쪽, 바깥쪽, 아래, 위] 넷이다");
+                    b[0].ShouldBeLessThanOrEqualTo(b[1], $"{id}: t={step.T} band 의 안쪽이 바깥쪽보다 멀다");
+                    b[2].ShouldBeLessThanOrEqualTo(b[3], $"{id}: t={step.T} band 의 아래가 위보다 높다");
+                }
             }
         }
+
+        checkedSteps.ShouldBeGreaterThan(0, "판정이 하나도 없다 — 이 가드가 아무것도 안 본다");
     }
 
     [Fact]
@@ -91,35 +117,22 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void Jumpable_태그가_각_캐릭터의_실제_점프_정점과_맞는다()
+    public void Jumpable_태그는_판정_하나라도_점프로_넘을_수_있는가와_같다()
     {
-        // 전에는 하드코딩한 100px 과 견줬다 — fighters.json 과 아무 관계가 없었다.
-        // 정점이 판정 상단에 몇 px 차로 붙어 있으면 jump_velocity 를 조금 올리는 것만으로
-        // 그 패턴이 실제로 넘을 수 있게 되면서도 태그는 false 인 채고 **아무 테스트도 안 빨개졌다.**
-        // 그래서 캐릭터마다 실제 정점을 재서 대조한다.
-        //
-        // HitResolver 가 높이로 빗나가게 하는 조건은 발밑(Y)이 판정 상단보다 위인 것이다 —
-        // 그래서 기준은 "정점 > 모든 active 의 상단" 이다.
-        Dictionary<string, double> apexes = TestConfigs.Fighters()
-            .ToDictionary(f => f.Key, f => JumpApex(f.Value));
+        // 설계 §7.3 — 점프 가능은 **판정마다** 그 모양의 윗끝과 캐릭터의 실제 점프로 잰다(BossHits.TicksAbove — 관측의
+        // JumpAvailable 이 그 값이다). 태그 jumpable 은 패턴의 요약(망의 입력)이라 "판정 하나라도 넘을 수 있다" 와 같아야 한다.
+        // 전에는 정점과 판정 상단을 견줬다 — 발이 창 내내 위에 있어야 넘는다는 것(창이 여러 틱이다)을 못 봤다.
+        Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
 
-        // 캐릭터가 없으면 아래 foreach 가 공허하게 참이다 — 이 가드가 한 번 그렇게 죽은 적이 있다
-        // (안쪽 안전지대 가드가 continue 로만 빠져나가던 것과 같은 종류의 구멍이다).
-        apexes.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
+        // 캐릭터가 없으면 아래 foreach 가 공허하게 참이다 — 이 가드가 한 번 그렇게 죽은 적이 있다.
+        fighters.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
 
         foreach ((string id, PatternDef def) in Load())
         {
-            List<PatternStep> actives = def.Timeline.Where(s => s.Kind == "active").ToList();
-            // active 가 하나도 없으면 Max 가 던지고 All 은 공허하게 참이다. 먼저 못박는다 —
-            // 그래야 이 가드가 "태그가 거짓말을 해도 조용히 통과"하는 구멍 없이 기하를 본다.
-            actives.ShouldNotBeEmpty($"{id}: active 단계가 없다");
-            double top = actives.Max(s => s.Height![1]);
-
-            foreach ((string who, double apex) in apexes)
+            foreach ((string who, FighterConfig c) in fighters)
             {
-                (apex > top).ShouldBe(def.Tags.Jumpable,
-                    $"{id}: jumpable={def.Tags.Jumpable} 인데 {who}의 점프 정점 {apex:0.00}px 과"
-                    + $" 판정 상단 {top}px 이 그 말과 다르다");
+                Hits(def, c).Any(h => h.Jumpable).ShouldBe(def.Tags.Jumpable,
+                    $"{id}: jumpable={def.Tags.Jumpable} 인데 {who} 의 점프로 잰 판정들이 그 말과 다르다");
             }
         }
     }
@@ -153,8 +166,8 @@ public class PatternDataTests
         // ⚠ 이 둘은 **같이 움직인다.** 점프를 먼저 정하고 패턴의 height 를 거기 맞추는 것이
         // 이슈 #28 이 바로잡은 순서다(#27 은 반대로 갇혔다). 한쪽만 고치면 여기서 빨개진다.
         List<double> tops = Load().Values
-            .SelectMany(d => d.Timeline.Where(s => s.Kind == "active"))
-            .Select(s => s.Height![1])
+            .SelectMany(d => Hits(d, TestConfigs.Fighter()))
+            .Select(h => h.Shape.Bounds.Y1)
             .ToList();
         Dictionary<string, double> apexes = TestConfigs.Fighters()
             .ToDictionary(f => f.Key, f => JumpApex(f.Value));
@@ -177,7 +190,7 @@ public class PatternDataTests
         // 대공은 지상이 안전하다 — 판정의 아래끝이 땅에서 떠 있어야 한다.
         foreach ((string id, PatternDef def) in Load())
         {
-            bool offGround = def.Timeline.Where(s => s.Kind == "active").Any(s => s.Height![0] > _standingHeight);
+            bool offGround = Hits(def, TestConfigs.Fighter()).Any(h => h.Shape.Bounds.Y0 > _standingHeight);
             def.Tags.AntiAir.ShouldBe(offGround, $"{id}: anti_air={def.Tags.AntiAir} 인데 판정 바닥이 맞지 않는다");
         }
     }
@@ -268,7 +281,7 @@ public class PatternDataTests
     {
         // "in" 은 "보스 쪽으로 파고들면 판정을 빠져나간다" 는 뜻이고, "either" 는 그 안쪽 길이
         // 밖으로 빠지는 길과 **함께** 있다는 뜻이다. 둘 다 참이려면 판정의 **안쪽 끝**이
-        // 보스 중심에서 떨어져 있어야 한다 (distance[0] > 0).
+        // 보스 중심에서 떨어져 있어야 한다 (band[0] > 0).
         // 문자열 화이트리스트만 보던 때 돌진이 distance[0]=0 인 채로 "in" 을 달고 있었다 —
         // 자기 타임라인에 대해 거짓인 태그였고, 망은 그걸 사실로 배웠을 것이다.
         int checkedPatterns = 0;
@@ -281,8 +294,8 @@ public class PatternDataTests
 
             checkedPatterns++;
             def.Timeline.Where(s => s.Kind == "active")
-                .ShouldContain(s => s.Distance![0] > 0,
-                    $"{id}: dash_direction={def.Tags.DashDirection} 인데 안쪽에 안전한 틈이 없다 (모든 active 의 distance[0]=0)");
+                .ShouldContain(s => s.Band != null && s.Band[0] > 0,
+                    $"{id}: dash_direction={def.Tags.DashDirection} 인데 안쪽에 안전한 틈이 없다 (band[0] > 0 인 active 가 없다)");
         }
 
         // 여섯 패턴 전부 "out" 이던 때 이 가드는 매번 continue 로 빠져나가 **한 번도 실행되지 않았다.**
@@ -433,7 +446,7 @@ public class PatternDataTests
         string tags = FormattableString.Invariant(
             $"{t.DashWindow}|{t.DashDirection}|{t.Jumpable}|{t.AntiAir}|{t.Parryable}|{t.ParryWindow}|{t.PunishGreed}|{t.Reach}|{t.Feint}|{t.MultiHit}|{t.Tracking}");
         IEnumerable<string> steps = def.Timeline.Select(s => FormattableString.Invariant(
-            $"{s.T}:{s.Kind}:{string.Join(',', s.Distance ?? Array.Empty<double>())}:{string.Join(',', s.Height ?? Array.Empty<double>())}:{s.Damage}"));
+            $"{s.T}:{s.Kind}:{string.Join(',', s.Band ?? Array.Empty<double>())}:{s.Damage}"));
         return tags + "#" + string.Join(';', steps);
     }
 
