@@ -109,7 +109,7 @@ public static class HitResolver
                 break;
         }
 
-        switch (Effective(fighter, tags))
+        switch (Effective(fighter, tags, box))
         {
             case Defense.Invulnerable:
                 return HitVerdict.Dodged;
@@ -132,10 +132,18 @@ public static class HitResolver
     /// 이 파이터가 이 태그의 판정 앞에서 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1). <see cref="Resolve"/> 가 몸이 닿은 뒤
     /// 이것으로 갈래를 고르고, 판정 보기가 몸통 색을 이것으로 칠한다 — 한 자리에서 정해야 색과 판정이 다른 말을 안 한다.
     /// <paramref name="tags"/> 가 null(대 본 판정이 없다)이면 파이터 쪽 상태 그대로다.
+    ///
+    /// <para>
+    /// <paramref name="box"/> 는 그 판정의 답이다 (#78 · 설계 §7.3) — 대시 · 가드 · 패리를 받나. 태그를 <b>좁히기만</b> 한다: 답이 거짓인
+    /// 수단은 창 안이어도 없는 것과 같다. null 이면 답을 모르는 자리라 태그와 파이터의 창만 본다.
+    /// </para>
     /// </summary>
-    public static Defense Effective(Fighter fighter, PatternTags? tags)
+    public static Defense Effective(Fighter fighter, PatternTags? tags, HitBox? box = null)
     {
         ArgumentNullException.ThrowIfNull(fighter);
+        bool dashable = box?.Dashable ?? true;
+        bool parryable = box?.Parryable ?? true;
+        bool guardable = box?.Guardable ?? true;
 
         // 유효 창은 **패턴과 캐릭터 중 좁은 쪽**이다.
         //
@@ -143,7 +151,7 @@ public static class HitResolver
         // 선언해도 아무 일도 안 일어났는데 — 그 숫자는 망의 입력이 된다. 거짓말하는 숫자는
         // 없는 숫자보다 나쁘다. "빠른 공격은 패리하기 더 어렵다" 는 진짜 설계 레버라
         // 태그를 지우는 대신 물게 했다.
-        if (fighter.Action == FighterAction.Dash
+        if (dashable && fighter.Action == FighterAction.Dash
             && Within(fighter.ActionElapsed, fighter.DashIFrames, tags?.DashWindow ?? double.PositiveInfinity))
         {
             return Defense.Invulnerable;
@@ -153,7 +161,7 @@ public static class HitResolver
         // 무적 → 패리 → 가드 순을 고정해 둔다: 나중에 겹치는 수단이 생겨도 판정이 안 흔들린다.
         //
         // 이슈 #47 은 반대 순서였다 — 그때는 가드가 패리 뒤에 섰다.
-        if ((tags?.Parryable ?? true)
+        if (parryable && (tags?.Parryable ?? true)
             && Within(fighter.SinceParryPress, fighter.PreciseParryWindow, tags?.ParryWindow ?? double.PositiveInfinity))
         {
             return Defense.Parrying;
@@ -162,8 +170,9 @@ public static class HitResolver
         // ↓ 를 누르고 있으면 막는다 (설계 §5.2). 창을 놓친 패리는 여기 안 온다 — 패리와 가드는 다른 행동이라
         // 패리 커밋 중에는 가드가 아니고, 그 판정은 맨몸에 떨어진다(설계 §5.3).
         //
-        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2).
-        return fighter.Guarding ? Defense.Guarding : Defense.None;
+        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2). 가드를 안 받는
+        // 판정(잡기 · #78)은 가드 중이어도 맨몸이다 — 붕괴가 아니다(설계 §5.2).
+        return guardable && fighter.Guarding ? Defense.Guarding : Defense.None;
     }
 
     /// <summary>

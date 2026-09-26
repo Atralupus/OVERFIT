@@ -374,6 +374,61 @@ public class HitResolverTests
     }
 
     [Fact]
+    public void 대시를_안_받는_판정은_무적_창_안이어도_맞는다()
+    {
+        // 설계 §7.3 · §4.7 — 판정의 답(dash: false)은 패턴 태그를 좁힌다. 태그로는 대시 창이 넓게(0.18) 열려 있고 파이터는 무적 창
+        // 한가운데지만 이 판정만은 맨몸이다 — 잡기가 "대시중에도 잡히는 공격" 인 자리다. 같은 몸에 답이 없는 판정은 무적이 먹는다.
+        Fighter f = Acting(new InputFrame(0, false, true, false, false), 3);
+        f.Invulnerable.ShouldBeTrue("무적 창 안이 아니다 — 이 테스트가 답을 안 본다");
+
+        HitResolver.Resolve(f, _at, Mid(), Tags(false)).ShouldBe(HitVerdict.Dodged);
+        HitResolver.Resolve(f, _at, Mid() with { Dashable = false }, Tags(false)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 가드를_안_받는_판정은_가드_중에도_맨몸이다()
+    {
+        // 설계 §5.2 · §7.3 — 가드로 못 막는 판정은 가드를 깨는 것이 아니라 가드를 **안 본다**: 붕괴(전액 + 탈진)가 아니라 맨몸에 떨어진다.
+        // 스태미나가 모자라 깨질 몸이어도 맨몸이다 — 옛 guard_break(빨간 마무리)가 흉내 내던 것과 다른 결과다(설계 §8 「지우는 것」).
+        HitResolver.Resolve(Guarding(), _at, Mid() with { Guardable = false }, Tags(parryable: true)).ShouldBe(HitVerdict.Hit);
+
+        Fighter spent = Guarding();
+        spent.Spend(spent.Stamina - 1);
+        HitResolver.Resolve(spent, _at, Mid() with { Guardable = false }, Tags(parryable: true))
+            .ShouldBe(HitVerdict.Hit, "가드를 안 받는 판정이 모자란 스태미나로 붕괴를 냈다 — 가드를 봤다");
+    }
+
+    [Fact]
+    public void 패리를_안_받는_판정은_패리_창_안이어도_맞는다()
+    {
+        // 설계 §5.3 · §7.3 — 태그로는 받아칠 수 있는 패턴(parryable: true)이라도 판정의 답(parry: false)이 그 판정만 좁힌다. 같은 누름에
+        // 답이 없는 판정은 받아친다 — 한 패턴 안에서 1타는 받아치고 잡기는 못 받아치는 자리다(설계 §4.7).
+        Fighter f = Acting(new InputFrame(0, false, false, true, false), 2);
+        f.Parrying.ShouldBeTrue("패리 창 안이 아니다 — 이 테스트가 답을 안 본다");
+
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+        HitResolver.Resolve(f, _at, Mid() with { Parryable = false }, Tags(parryable: true)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 실효_방어는_판정의_답도_본다()
+    {
+        // 설계 §6.1 — 5번 PR 부터 몸통 색은 판정 단위의 답으로 칠한다. 잡기 앞의 무적 · 가드가 "무적" · "가드" 색이면 그 색이 거짓말한다.
+        // 답을 모르는 자리(판정 없이 태그만)는 전처럼 태그와 파이터의 창만 본다.
+        Fighter dashing = Acting(new InputFrame(0, false, true, false, false), 1);
+        HitResolver.Effective(dashing, Tags(false), Mid()).ShouldBe(Defense.Invulnerable);
+        HitResolver.Effective(dashing, Tags(false), Mid() with { Dashable = false }).ShouldBe(Defense.None, "대시를 안 받는 판정 앞의 무적을 칠한다");
+
+        Fighter parrying = Acting(new InputFrame(0, false, false, true, false), 1);
+        HitResolver.Effective(parrying, Tags(parryable: true), Mid() with { Parryable = false })
+            .ShouldBe(Defense.None, "패리를 안 받는 판정 앞의 패리 창을 칠한다");
+
+        HitResolver.Effective(Guarding(), Tags(parryable: true), Mid() with { Guardable = false })
+            .ShouldBe(Defense.None, "가드를 안 받는 판정 앞의 가드를 칠한다");
+        HitResolver.Effective(Guarding(), Tags(parryable: true), Mid()).ShouldBe(Defense.Guarding);
+    }
+
+    [Fact]
     public void 실제_3타는_초승달_안쪽만_틈이고_땅의_등_뒤와_앞끝_너머는_거리다()
     {
         // 설계 §2 — attack3 f2 의 궤적은 땅에서 앞만 친다: 보스 중심 +80 안(초승달 안쪽)과 등 뒤는 땅에 선 사람에게 안전하다

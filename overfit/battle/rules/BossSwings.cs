@@ -47,6 +47,9 @@ public sealed class BossSwings
     /// <summary>이 틱에 대 본 판정의 태그 — <see cref="TestedTags"/>.</summary>
     private PatternTags? _testedTags;
 
+    /// <summary>이 틱에 대 본 판정 — <see cref="TestedBox"/>.</summary>
+    private HitBox? _testedBox;
+
     public BossSwings(Fighter fighter, Boss boss, DodgeCredit credit, JumpClearance jump)
     {
         ArgumentNullException.ThrowIfNull(fighter);
@@ -96,6 +99,9 @@ public sealed class BossSwings
     /// </summary>
     public PatternTags? TestedTags => _testedTags;
 
+    /// <summary>이 틱에 <b>대 본</b> 판정 — 그 판정의 답(대시 · 가드 · 패리 · #78)을 몸통 색이 같이 본다. <see cref="TestedTags"/> 와 같은 판정이다.</summary>
+    public HitBox? TestedBox => _testedBox;
+
     /// <summary>
     /// 러너가 방금 낸 판정을 <b>살려 둔다</b> (이슈 #59). 창이 몇 틱이든 대는 곳은 <see cref="Resolve"/> 하나다.
     /// 태그와 패턴 id 를 지금 받아 두는 것은 러너가 이 틱 끝에 끝나면 패턴과 <c>CurrentPattern</c> 이
@@ -130,6 +136,7 @@ public sealed class BossSwings
         _parried = false;
         _tested.Clear();
         _testedTags = _live.Count > 0 ? _live[0].Tags : null;
+        _testedBox = _live.Count > 0 ? _live[0].Box : null;
         var at = new Placement(_boss.X, _boss.Y, _boss.Facing);
 
         int kept = 0;
@@ -296,17 +303,18 @@ public sealed class BossSwings
             GreedWindow: _fighter.Action == FighterAction.Attack,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
-            // 이 셋이 없으면 만들어지지 않는다.
-            DashAvailable: swing.Tags.DashWindow > 0,
-            ParryAvailable: swing.Tags.Parryable,
+            // 이 셋이 없으면 만들어지지 않는다. 대시 · 패리는 태그를 판정의 답이 좁힌다 (#78 · 설계 §7.3) — 규칙(HitResolver.Effective)과
+            // 같은 두 값이다. 태그만 실으면 1타는 다 되고 잡기는 점프만 되는 한 패턴(1타 잡기)에서 잡기가 "대시도 됐다" 로 실린다.
+            DashAvailable: swing.Tags.DashWindow > 0 && box.Dashable,
+            ParryAvailable: swing.Tags.Parryable && box.Parryable,
 
             // 점프만은 **판정과 자리 단위**다 (#85 · 설계 §7.3) — 창이 열린 틱에 첫 판정이 선 자리에서 잰 값이다(Step). 태그(jumpable)를
             // 실으면 판정마다의 답이 뭉개지고, 모양 전체의 윗끝으로 재면(#72) 보스 앞에서 넘는 2타 · 바짝 붙어 넘는 3타가 "못 넘었다" 로 실린다.
             JumpAvailable: swing.Jumpable,
 
-            // 가드는 지금 모든 판정에서 된다 (#72 · 설계 §7.2) — 가드 불가 판정을 걷었다. 5번 PR 의 잡기가 판정 단위의 답으로
-            // 처음 거짓을 싣는다(설계 §7.3).
-            GuardAvailable: true);
+            // 가드는 판정의 답 하나다 (#78 · 설계 §7.3) — 태그가 없다. 옛 가드 불가 판정(guard_break)은 #72 에서 걷었고, 잡기가
+            // 판정 단위의 답으로 처음 거짓을 싣는다.
+            GuardAvailable: box.Guardable);
     }
 
     /// <summary>관측을 확정한다 — 스트림에 남기고 로그 한 줄을 찍는다. <see cref="_events"/> 에 붙는 곳은 여기뿐이다.</summary>

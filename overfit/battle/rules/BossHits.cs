@@ -78,7 +78,9 @@ public static class BossHits
                 continue;
             }
 
-            hits[i] = new HitBox(shape, step.Damage, step.ActiveSeconds);
+            // 대시 · 가드 · 패리의 답은 단계가 적는다 (#78 · 설계 §7.3) — 없으면 받는다(태그대로). 적으면 이 판정만 좁힌다.
+            hits[i] = new HitBox(shape, step.Damage, step.ActiveSeconds,
+                Dashable: step.Dash ?? true, Guardable: step.Guard ?? true, Parryable: step.Parry ?? true);
         }
 
         return hits;

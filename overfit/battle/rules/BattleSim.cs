@@ -267,12 +267,12 @@ public sealed class BattleSim
     public bool SwingLive => _swings.Live;
 
     /// <summary>
-    /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 견준 실효
-    /// 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가
+    /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 답(#78 · 대시 ·
+    /// 가드 · 패리)에 견준 실효 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가
     /// "패리 창" 색으로 칠해지면 그 색이 거짓말을 한다. 같은 틱의 사각형(<see cref="BossTestedRects"/>)과 같은 판정을 본다 —
     /// 닿아서 그 틱에 끝난 판정도 그 틱에는 이 색을 정한다. 대 본 판정이 없으면 파이터 쪽 상태 그대로다.
     /// </summary>
-    public Defense FighterDefense => HitResolver.Effective(Fighter, _swings.TestedTags);
+    public Defense FighterDefense => HitResolver.Effective(Fighter, _swings.TestedTags, _swings.TestedBox);
 
     /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
     public IReadOnlyList<HitRect> FighterTestedRects =>

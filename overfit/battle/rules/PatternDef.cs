@@ -88,6 +88,19 @@ public sealed class PatternStep
     public int Damage { get; init; }
 
     /// <summary>
+    /// 판정의 답 — 이 판정을 <b>대시 무적</b>으로 흘릴 수 있나 (#78 · 설계 §7.3 · §8.1). 없으면(null) 패턴 태그(<c>dash_window</c>)대로 받고,
+    /// <c>false</c> 면 이 판정만 좁힌다: 무적 창 안이어도 맨몸이다. 규칙(<see cref="HitResolver"/>)과 관측(<c>DashAvailable</c>)이 같은 값을 읽는다 —
+    /// 판을 세울 때 판정에 싣는다(<c>BossHits</c> · <see cref="HitBox.Dashable"/>). 잡기가 "대시중에도 잡히는" 자리다(설계 §4.7).
+    /// </summary>
+    public bool? Dash { get; init; }
+
+    /// <summary>판정의 답 — <b>가드</b>로 막을 수 있나 (<see cref="Dash"/> 와 같은 규약). <c>false</c> 면 가드 중이어도 맨몸이다 — 붕괴가 아니다.</summary>
+    public bool? Guard { get; init; }
+
+    /// <summary>판정의 답 — <b>패리</b>로 받아칠 수 있나 (<see cref="Dash"/> 와 같은 규약). 태그(<c>parryable</c>)가 되는 패턴 안에서 이 판정만 막는다.</summary>
+    public bool? Parry { get; init; }
+
+    /// <summary>
     /// active 가 <b>몇 초 동안</b> 살아 있나 (이슈 #59 · 설계 §3.5). 0 이면 한 틱이다.
     ///
     /// <para>
