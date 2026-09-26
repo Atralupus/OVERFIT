@@ -21,9 +21,19 @@ public readonly record struct MotionContext(double BossX, double BossY, int Faci
 /// <param name="Finished">이 틱으로 움직임이 끝났나. 끝난 틱의 자리가 곧 선 자리다.</param>
 /// <param name="HoldClock">
 /// 다음 틱에 패턴 시계를 세우나 (설계 §8.1). 참인 동안 러너는 시계를 안 밀고 뒤 단계에 안 든다 — 도착 시각이
-/// 파이터 자리에 달린 움직임(돌진 · 5번 PR)이 뒤 단계를 기다리게 하는 자리다. 도약은 늘 거짓이다.
+/// 파이터 자리에 달린 움직임(돌진 · 설계 §4.6)이 뒤 단계를 기다리게 하는 자리다. 도약은 늘 거짓이다. 끝난 움직임의 값은 안 따른다
+/// (<c>BattleSim.Move</c>) — 끝난 움직임은 걷혀 다음 틱에 시계를 풀어 줄 자리가 없다.
 /// </param>
-public readonly record struct MotionStep(double X, double Y, int Facing, bool Finished, bool HoldClock);
+/// <param name="HoldTicks">
+/// 이 틱 뒤로 시계를 몇 틱 더 세울 것 같나 — 지금 자리에서 잰 <b>추정</b>이다 (#78 · 설계 §4.6). 다음 판정까지 남은 시간
+/// (<c>BattleSim.NextActiveIn</c>)이 이것을 더한다. 시계를 안 세우는 움직임은 0 이다.
+/// </param>
+/// <param name="GoalX">
+/// 움직임이 끝나면 설 자리(x · 땅) — 모르면 null (#78 · #59 의 3/6 넘김). 판정 보기의 "다음 판정" 이 이 자리에 선다: 지금 자리에 놓으면
+/// 도약의 착지 띠가 공중에 뜨고 돌진의 3타가 달리는 보스를 따라 미끄러진다. 규칙은 이 값을 안 읽는다.
+/// </param>
+public readonly record struct MotionStep(
+    double X, double Y, int Facing, bool Finished, bool HoldClock, int HoldTicks = 0, double? GoalX = null);
 
 /// <summary>움직임이 판을 세울 때 받는 것 — 보스가 설 수 있는 가로 범위와, 보스와 파이터의 몸 둘 폭.</summary>
 /// <param name="MinX">보스 중심의 왼쪽 끝 (반폭).</param>
@@ -33,7 +43,7 @@ public readonly record struct MotionBounds(double MinX, double MaxX, double Stan
 
 /// <summary>
 /// 보스의 움직임 하나 (설계 §8.1). 움직임을 단 단계에 들 때 하나가 서고, 스스로 끝났다고 말할 때까지 틱마다 불린다 —
-/// 도약은 뜬 시간 뒤(그 사이의 단계들을 건너 착지까지), 돌진(5번 PR)은 닿을 때.
+/// 도약은 뜬 시간 뒤(그 사이의 단계들을 건너 착지까지), 돌진은 닿을 때(#78).
 /// </summary>
 public interface IBossMotion
 {
@@ -50,6 +60,7 @@ public static class BossMotions
         new(StringComparer.Ordinal)
         {
             ["leap"] = (def, bounds) => new LeapMotion(def, bounds),
+            ["rush"] = (def, bounds) => new RushMotion(def, bounds),
         };
 
     /// <summary>등록된 id 들 — 데이터 테스트가 <c>patterns.json</c> 의 <c>motion.id</c> 를 여기와 대 본다.</summary>

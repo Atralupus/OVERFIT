@@ -322,7 +322,7 @@ public class PatternDataTests
 
                 leaps++;
 
-                // height · air 는 도약만 쓰는 수치라 required 가 아니다(돌진 · 5번 PR 은 다른 칸을 쓴다). 키 이름이 틀리면 JsonData 가
+                // height · air 는 도약만 쓰는 수치라 required 가 아니다(돌진은 speed · stop 을 쓴다 · #78). 키 이름이 틀리면 JsonData 가
                 // 조용히 버려 0 이 되고, 보스가 땅에서 미끄러지며 36틱 내내 파이터의 칼에 닿는다 — 여기서 막는다.
                 leap.Height.ShouldBeGreaterThan(0, $"{id}: 도약(t={def.Timeline[i].T})의 height 가 없다");
                 leap.Air.ShouldBeGreaterThan(0, $"{id}: 도약(t={def.Timeline[i].T})의 air 가 없다");

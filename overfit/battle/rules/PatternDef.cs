@@ -69,7 +69,7 @@ public sealed class PatternStep
 
     /// <summary>
     /// 이 단계가 붙드는 장(0부터). 뷰가 그 장에 세우고 멈춘다 — 장을 제 속도로 흘려 보내면 그림이 규칙의 창보다 먼저
-    /// 지나간다(설계 §6). null 이면 그 애니메이션을 제 속도로 돈다(<c>run</c> · <c>idle</c> — 5번 PR).
+    /// 지나간다(설계 §6). null 이면 그 애니메이션을 제 속도로 돈다(돌진의 <c>run</c> · 잡기의 <c>idle</c> — #78).
     /// </summary>
     public int? Frame { get; init; }
 
@@ -131,7 +131,7 @@ public sealed class PatternStep
 /// </summary>
 public sealed class MotionDef
 {
-    /// <summary>등록표의 id — <c>leap</c>.</summary>
+    /// <summary>등록표의 id — <c>leap</c> · <c>rush</c>.</summary>
     public required string Id { get; init; }
 
     /// <summary><c>leap</c>: 포물선의 정점 높이(px, 발바닥 기준).</summary>
@@ -139,6 +139,12 @@ public sealed class MotionDef
 
     /// <summary><c>leap</c>: 뜬 시간(초) — 도약하는 틱부터 내리는 틱까지. 틱으로는 <c>BattleSim.TicksFor</c> 로 바꾼다.</summary>
     public double Air { get; init; }
+
+    /// <summary><c>rush</c>: 달리는 빠르기(px/s · #78 · 설계 §4.6). 3600 이면 틱당 정확히 60px 다.</summary>
+    public double Speed { get; init; }
+
+    /// <summary><c>rush</c>: 파이터 앞 몇 px 에서 멈추나 — 앞쪽 거리 d 가 이 안이면 돌진이 끝난다(설계 §4.6).</summary>
+    public double Stop { get; init; }
 }
 
 /// <summary>패턴 하나. <c>data/patterns.json</c> 의 값 부분이다.</summary>

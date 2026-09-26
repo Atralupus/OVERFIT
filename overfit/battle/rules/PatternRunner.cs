@@ -55,7 +55,7 @@ public sealed class PatternRunner
     }
 
     /// <summary>
-    /// 패턴 시계 — 지금까지 민 틱 수. <b>세운 틱(<c>holdClock</c>)에는 안 는다</b> — 돌진(5번 PR)처럼 도착 시각이
+    /// 패턴 시계 — 지금까지 민 틱 수. <b>세운 틱(<c>holdClock</c>)에는 안 는다</b> — 돌진(#78)처럼 도착 시각이
     /// 파이터 자리에 달린 움직임이 도는 동안 뒤 단계를 기다리게 하는 자리다(설계 §8.1).
     /// </summary>
     public int Ticks { get; private set; }
