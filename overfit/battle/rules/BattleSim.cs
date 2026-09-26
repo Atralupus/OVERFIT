@@ -109,6 +109,13 @@ public sealed class BattleSim
     private bool _holdClock;
 
     /// <summary>
+    /// 공중에서 무너진 보스가 따라 내리는 움직임 (#71 · 설계 §4.2) — 끊긴 도약의 <b>높이만</b> 쓴다. 땅에서 무너졌으면 null 이다.
+    /// 패턴의 움직임(<see cref="_motion"/>)과 따로 두는 이유: 패턴은 무너질 때 끊겨 러너 · 움직임 · 시계가 다 걷히는데(<see cref="EndPattern"/>)
+    /// 이것만은 땅에 닿을 때까지 탈진 동안 돈다.
+    /// </summary>
+    private IBossMotion? _fall;
+
+    /// <summary>
     /// 회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 여기는 틱마다 <see cref="DodgeCredit.Remember"/> 로
     /// 먹이기만 한다 — 관측을 지으며 묻는 것은 <see cref="BossSwings"/> 이고, 같은 인스턴스를 세울 때 넘긴다.
     /// </summary>
@@ -346,13 +353,18 @@ public sealed class BattleSim
     /// <summary>패턴과 패턴 사이의 쉬는 틱. 반올림은 <see cref="TicksFor"/> 한 곳이다.</summary>
     private int GapTicks => TicksFor(Boss.PatternGap);
 
-    /// <summary>보스: 탈진했으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
+    /// <summary>
+    /// 보스: 탈진했으면 아무것도 안 하고(공중에서 무너졌으면 내리기만 한다 · <see cref="Fall"/>), 쉬는 중이면 다가가고, 패턴 중이면
+    /// 타임라인을 민다.
+    /// </summary>
     private void AdvanceBoss()
     {
         // 탈진 시계만은 탈진해 있어도 돈다 — 아니면 안 풀린다. 풀리는 틱부터 쉬는 갈래로 간다.
         Boss.Tick();
         if (Boss.Exhausted)
         {
+            // 탈진한 보스는 다가가지도 돌아서지도 않는다(설계 §4.3) — 공중에서 무너졌으면 높이만 따라 내린다.
+            Fall();
             return;
         }
 
@@ -403,12 +415,42 @@ public sealed class BattleSim
         if (_runner.Finished)
         {
             Log.Debug("boss", () => $"pattern_end id={Boss.CurrentPattern} tick={Ticks}");
-            _runner = null;
-            _current = null;
-            Boss.CurrentPattern = null;
-            _motion = null;
-            _holdClock = false;
-            _gapLeft = GapTicks;
+            EndPattern();
+        }
+    }
+
+    /// <summary>
+    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 여섯 줄이다 (#71 · #59 의 3/6 넘김 —
+    /// 둘이 따로 적혀 있으면 하나만 고치는 날 끊긴 패턴이 무언가를 남긴다). 다음 패턴은 간격을 처음부터 센 뒤에 고른다.
+    /// </summary>
+    private void EndPattern()
+    {
+        _runner = null;
+        _current = null;
+        Boss.CurrentPattern = null;
+        _motion = null;
+        _holdClock = false;
+        _gapLeft = GapTicks;
+    }
+
+    /// <summary>
+    /// 공중에서 무너진 보스를 한 틱 내린다 (#71 · 설계 §4.2). 끊긴 도약을 그대로 한 틱 더 밀어 <b>높이만</b> 쓴다 — 포물선의 높이를
+    /// 그대로 따라 그 자리에 내린다. 가로는 멈추고 돌아서지도 않는다(탈진한 보스는 아무것도 안 한다). 착지 판정은 패턴과 같이 끊겨
+    /// 안 선다. 땅에 닿으면 걷는다 — 도약이 탈진보다 짧아 늘 탈진 안에 닿는다(<c>PatternDataTests</c> 가 본다).
+    /// </summary>
+    private void Fall()
+    {
+        if (_fall is null)
+        {
+            return;
+        }
+
+        MotionStep step = _fall.Tick(new MotionContext(Boss.X, Boss.Y, Boss.Facing, Fighter.X, _motionTick++));
+        Boss.Move(Boss.X, step.Y, 0);
+        if (step.Finished || Boss.Y <= 0)
+        {
+            _fall = null;
+            Log.Debug("boss", () => $"exhaust_landed x={Boss.X:0} tick={Ticks}");
         }
     }
 
@@ -454,9 +496,10 @@ public sealed class BattleSim
 
     /// <summary>
     /// <b>탈진 루틴 — 하나다</b> (#72 · #71 · 설계 §4.3). 원인이 패리든 경직 게이지든 같은 상태 · 같은 그림에 닿아야
-    /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격 · 움직임은 안 온다), 열린 창은
-    /// 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 게이지는 원인과 무관하게 비운다 — 안 비우면 반쯤 찬 게이지가 탈진이
-    /// 풀리자마자 한 대에 무너진다. 탈진이 풀리면 간격을 처음부터 세어 다음 패턴을 고른다.
+    /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격은 안 온다 · 움직임은 공중이면 높이만
+    /// 따라 내리고 땅이면 멈춘다 — <see cref="Fall"/>), 열린 창은 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 게이지는 원인과
+    /// 무관하게 비운다 — 안 비우면 반쯤 찬 게이지가 탈진이 풀리자마자 한 대에 무너진다. 탈진이 풀리면 간격을 처음부터 세어 다음 패턴을
+    /// 고른다.
     /// </summary>
     /// <param name="cause">무엇이 무너뜨렸나 — <c>parry</c> · <c>poise</c>. 로그의 <c>cause=</c> 다.</param>
     private void Exhaust(string cause)
@@ -470,15 +513,18 @@ public sealed class BattleSim
 
         string id = Boss.CurrentPattern ?? "-";
         _swings.Cut(Ticks, "exhaust");
-        _runner = null;
-        _current = null;
-        Boss.CurrentPattern = null;
-        _motion = null;
-        _holdClock = false;
-        _gapLeft = GapTicks;
+
+        // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
+        // 땅이면 남길 것이 없다: 돌진(5번 PR)처럼 땅을 가는 움직임은 그 자리에서 멈춘다.
+        _fall = Boss.Y > 0 ? _motion : null;
+        EndPattern();
         _poise.Empty();
         Boss.Exhaust(TicksFor(_setup.Boss.ExhaustSeconds));
         Log.Debug("boss", () => $"exhaust cause={cause} id={id} tick={Ticks}");
+        if (_fall is not null)
+        {
+            Log.Debug("boss", () => $"exhaust_fall y={Boss.Y:0} x={Boss.X:0} tick={Ticks}");
+        }
     }
 
     /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>

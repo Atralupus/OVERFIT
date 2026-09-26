@@ -317,6 +317,26 @@ public class PatternDataTests
         leaps.ShouldBeGreaterThan(0, "도약이 하나도 없다 — 이 가드가 아무것도 안 본다");
     }
 
+    [Fact]
+    public void 도약은_탈진보다_짧아_공중에서_무너진_보스가_탈진_안에_내린다()
+    {
+        // 설계 §4.2 · #71 — 공중에서 게이지로 무너진 보스는 끊긴 도약의 높이만 따라 내리고, 그 내림은 탈진 갈래에서만 돈다
+        // (BattleSim.Fall). 뜬 시간이 탈진보다 길면 풀린 보스가 공중에 선 채 쉬는 갈래로 가 떠 있는다. 지금은 0.60 < 1.5 다.
+        int exhaust = BattleSim.TicksFor(TestConfigs.Boss().ExhaustSeconds);
+        int leaps = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            foreach (PatternStep step in def.Timeline.Where(s => s.Motion is { Id: "leap" }))
+            {
+                leaps++;
+                BattleSim.TicksFor(step.Motion!.Air).ShouldBeLessThan(exhaust,
+                    $"{id}: 도약(t={step.T})이 {step.Motion.Air}초 떠 있다 — 탈진({exhaust}틱) 안에 못 내린다");
+            }
+        }
+
+        leaps.ShouldBeGreaterThan(0, "도약이 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
     /// <summary>
     /// 팩 <c>.tres</c> 의 애니메이션 → 장 수. 장은 <c>AtlasTexture</c> sub_resource 의 id(<c>이름_번호</c>)로 센다 —
     /// <c>tools/install_assets.py</c> 가 그렇게 짓는다. 이름은 애니메이션 목록의 <c>"name": &amp;"…"</c> 에서 온다.
