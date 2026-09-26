@@ -288,7 +288,13 @@ public sealed class BattleSim
         // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
         double wasX = Fighter.X;
         double wasY = Fighter.Y;
+        // 탈진에 드는 틱을 잡으려고 틱 시작의 탈진을 잡아 둔다 — 로그가 무엇이 바닥냈는지를 말한다(LogFighterExhaust).
+        bool wasExhausted = Fighter.Exhausted;
         Fighter.Tick(input, Dt);
+
+        // 보스 판정이 볼 가드 — 파이터를 민 **뒤**의 값이다. 막다가 든 탈진(딱 0 · 붕괴)은 판정이 이 가드를 봤을 때만 난다. 틱 시작에서
+        // 잡으면 이 틱에 ↓ 를 눌러 선 가드가 깨져도 action 으로 적혔다(#71 계획 리뷰가 밟았다).
+        bool guarding = Fighter.Guarding;
         _credit.Remember(Ticks * Dt, input, wasGrounded, wasX, wasY, Fighter, Boss);
         AdvanceBoss();
 
@@ -304,6 +310,11 @@ public sealed class BattleSim
         else if (broken)
         {
             Exhaust("poise");
+        }
+
+        if (Fighter.Exhausted && !wasExhausted)
+        {
+            LogFighterExhaust(guarding);
         }
 
         BattleOutcome? outcome = Outcome();
@@ -526,6 +537,16 @@ public sealed class BattleSim
             Log.Debug("boss", () => $"exhaust_fall y={Boss.Y:0} x={Boss.X:0} tick={Ticks}");
         }
     }
+
+    /// <summary>
+    /// 파이터가 탈진에 든 틱 (#71 · 설계 §5.5) — 무엇이 바닥냈나를 남긴다: 막다가(<c>guard</c> — 딱 0 이 된 칩 · 붕괴)냐, 끝난 행동의
+    /// 값(<c>action</c>)이냐. 보스 판정 앞(파이터를 민 뒤)에 가드였으면 막다가다 — 행동의 값으로 난 탈진은 파이터를 미는 동안(행동이 끝나는
+    /// 틱) 들고 그때 파이터는 선다(가드가 아니다). 가드의 칩과 붕괴는 판정이 가드를 봐야만 난다.
+    /// 관측 줄([dodge])은 막다가 난 탈진만 싣는다 — 행동의 값으로 난 탈진은 이 줄이 유일한 흔적이다. 따로 둔 메서드인 것은
+    /// 람다가 <see cref="Tick"/> 의 지역 값을 붙잡으면 클로저가 메서드 입구에서 매 틱 만들어지기 때문이다(<see cref="Strike"/> 의 주석).
+    /// </summary>
+    private void LogFighterExhaust(bool guarding) =>
+        Log.Debug("fighter", () => $"exhaust cause={(guarding ? "guard" : "action")} tick={Ticks}");
 
     /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>
     private void Begin()

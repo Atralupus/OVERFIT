@@ -65,7 +65,7 @@ public static class TestConfigs
         // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
         GuardChipRatio = 0.25,
         GuardStaminaPerDamage = 1.8,
-        GuardBreakLock = 1.1,
+        ExhaustSeconds = 1.1,
         StaminaRegen = 40,
         Sprite = "test_unit",
     };

@@ -54,7 +54,7 @@ public enum BossPhase
 /// <param name="Pose">그릴 자세.</param>
 /// <param name="Invulnerable">대시 <b>무적 창</b> 안인가. 잔상이 이것에 묶인다 —
 /// 대시(0.18초)보다 무적(0.14초)이 짧은 것은 일부러고, 그 차이가 보여야 대시 타이밍이 의미를 갖는다.</param>
-/// <param name="Locked">가드가 깨져 굳었나. <c>guard_break_lock</c> 동안 아무것도 못 한다 —
+/// <param name="Locked">굳었나 — 파이터가 탈진했다(가드 붕괴 · 스태미나 0 · #71). <c>exhaust_seconds</c> 동안 아무것도 못 한다 —
 /// <b>화면에 안 보이면 버그로 읽힌다</b>(키가 안 먹는 것처럼 보인다), 그래서 몸 색으로 말한다.
 /// 부정확 패리의 고정이 없어져(이슈 #53) 이 색은 이제 한 가지 뜻뿐이다.</param>
 /// <param name="GuardStamina">가드가 얼마나 버틸 수 있나 0~1 (이슈 #47) — 남은 스태미나를 최대로 나눈 값이다.

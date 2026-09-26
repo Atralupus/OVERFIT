@@ -135,13 +135,16 @@ public sealed class FighterConfig
     public required double GuardStaminaPerDamage { get; init; }
 
     /// <summary>
-    /// 가드가 깨졌을 때 굳는 시간(초). <b>이 게임에 남은 유일한 고정</b>이다 (이슈 #53) —
-    /// 부정확 패리가 사라지면서 "굳는다" 는 결과가 붕괴 하나에만 붙는다.
-    /// 그 길이가 "남은 타격을 그대로 맞는" 값이고, 그게 버티기를 고른 값이다 — 근거는 <b>3연격의 2타 → 3타 간격</b>이다
-    /// (93틱 → 159틱 = 66틱 = 1.1초 · #72 · 설계 §5.5): 2타에 깨진 가드는 3타가 서는 틱까지 못 선다. 전에는 옛 변종들의
-    /// 미끼 간격(1.10 · 이슈 #54)이었고, 그 변종이 없어지며 값은 그대로 근거만 바뀌었다(<c>PatternDataTests</c> 가 본다).
+    /// <b>탈진</b>의 길이(초) — 스태미나를 다 썼거나 가드가 깨졌을 때 (#71 · 설계 §5.5). 이 동안 행동 · 이동 · 점프 · 가드가 전부
+    /// 막히고, 맞으면 그대로 맞는다. 틱으로 센다 — 1.1초 = 66틱이고 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
+    ///
+    /// <para>
+    /// 옛 <c>guard_break_lock</c> 을 넓힌 것이다 — 값도 그대로다. 붕괴도 탈진이고, 이제 행동의 값으로 스태미나가 0 이 돼도 탈진한다
+    /// (유저: "유저도 스테미나 다쓰면 탈진해야합니다"). 근거는 <b>3연격의 2타 → 3타 간격</b>이다(93틱 → 159틱 = 66틱 · #72):
+    /// 2타에 깨진 가드는 3타가 서는 틱까지 못 선다. 전에는 옛 변종들의 미끼 간격(1.10 · 이슈 #54)이었다(<c>PatternDataTests</c> 가 본다).
+    /// </para>
     /// </summary>
-    public required double GuardBreakLock { get; init; }
+    public required double ExhaustSeconds { get; init; }
 
     /// <summary>초당 회복량. 행동 중에는 회복하지 않는다 — <b>가드 중에도 안 찬다.</b></summary>
     public required double StaminaRegen { get; init; }

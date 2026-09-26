@@ -92,7 +92,7 @@ public partial class FighterView : Node2D
     private static readonly Color _guardChipColor = new(0.70f, 0.62f, 0.95f, 0.85f);
 
     /// <summary>
-    /// 가드가 <b>깨졌을</b> 때. 이것만은 크게 터진다 — <c>guard_break_lock</c> 동안 아무것도 못 하는데
+    /// 가드가 <b>깨졌을</b> 때. 이것만은 크게 터진다 — 그 뒤 탈진(<c>exhaust_seconds</c> · #71) 동안 아무것도 못 하는데
     /// 화면이 조용하면 그건 버그로 읽힌다.
     ///
     /// <para>
@@ -363,7 +363,7 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 guard_break_lock 동안 굳는데
+    /// 가드가 <b>깨졌다</b> (이슈 #47). 여기만은 크게 터진다 — 전액을 맞고 탈진(#71)해 굳는데
     /// 화면이 조용하면 "키가 안 먹는다" 로 읽힌다. 그 뒤의 고정은 <see cref="_lockedTint"/> 가 말한다.
     /// </summary>
     public void GuardBroken()

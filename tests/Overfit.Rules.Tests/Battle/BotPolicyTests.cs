@@ -80,6 +80,50 @@ public class BotPolicyTests
     }
 
     [Fact]
+    public void 봇은_값보다_많을_때만_눌러_스스로_탈진하지_않는다()
+    {
+        // 설계 §5.4 · §5.5 — 규칙은 스태미나가 남아 있으면 모자라도 마지막 한 번을 허락하지만, 봇은 값보다 많을 때만 누른다: 마지막
+        // 한 번으로도, 값이 딱 맞는 한 번(0 에 닿는다)으로도 스스로 탈진하지 않는다(#71). 여러 시드로 잰다.
+        //
+        // 그 앞에 "많을" 의 경계를 따로 본다 — 값과 딱 같으면 0 에 닿아 탈진하므로 거짓이다(≥ 가 아니라 > · 설계 §5.4). 판만 보면
+        // Affords 를 ≥ 로 뒤집어도 초록이었다(변이로 쟀다): 봇이 누르는 판단과 여기서 견주는 판단이 한 함수이고, 16 판에 스태미나가
+        // 값과 딱 같은 틱에 누르는 일이 없다.
+        FighterConfig c = TestConfigs.Fighter();
+        var edge = new Fighter(c, TestConfigs.Arena(), 960);
+        edge.Spend(c.MaxStamina - c.DashCost - 1);
+        edge.Affords(FighterAction.Dash).ShouldBeTrue("값보다 1 많은데 모자라다고 봤다");
+        edge.Spend(1);
+        edge.Affords(FighterAction.Dash).ShouldBeFalse("값과 딱 같은 스태미나를 넉넉하다고 봤다 — 누르면 0 에 닿아 탈진한다");
+
+        foreach (ulong seed in _seeds)
+        {
+            var sim = new BattleSim(Setup(seed));
+            var bot = new BotPolicy(seed);
+            BattleOutcome? outcome = null;
+            while (outcome is null)
+            {
+                InputFrame input = bot.Next(sim);
+                if (input.Dash)
+                {
+                    sim.Fighter.Affords(FighterAction.Dash).ShouldBeTrue($"시드 {seed} · {sim.Ticks}틱: 모자란 대시를 눌렀다");
+                }
+
+                if (input.Parry)
+                {
+                    sim.Fighter.Affords(FighterAction.Parry).ShouldBeTrue($"시드 {seed} · {sim.Ticks}틱: 모자란 패리를 눌렀다");
+                }
+
+                if (input.Attack)
+                {
+                    sim.Fighter.Affords(FighterAction.Attack).ShouldBeTrue($"시드 {seed} · {sim.Ticks}틱: 모자란 칼질을 눌렀다");
+                }
+
+                outcome = sim.Tick(input);
+            }
+        }
+    }
+
+    [Fact]
     public void 봇이_가만히_선_것보다는_잘한다()
     {
         // 봇이 아무 판단도 안 하면 학습 데이터가 "가만히 있으면 죽는다" 하나뿐이다.

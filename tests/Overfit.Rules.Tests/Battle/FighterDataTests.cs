@@ -305,7 +305,7 @@ public class FighterDataTests
             c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 받아칠 이유가 없다");
             c.GuardChipRatio.ShouldBeLessThan(1, $"{id}: 가드가 전액을 흘린다 — 막는 것에 뜻이 없다");
             c.GuardStaminaPerDamage.ShouldBeGreaterThan(0, $"{id}: 가드 비용이 0 이다");
-            c.GuardBreakLock.ShouldBeGreaterThan(0, $"{id}: 가드가 깨져도 굳지 않는다 — 붕괴에 값이 없다");
+            c.ExhaustSeconds.ShouldBeGreaterThan(0, $"{id}: 탈진해도 안 굳는다 — 붕괴에도 스태미나를 다 쓴 것에도 값이 없다");
         }
     }
 
