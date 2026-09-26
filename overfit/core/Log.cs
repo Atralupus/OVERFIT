@@ -106,7 +106,7 @@ public static class Log
     }
 
     /// <summary>
-    /// 지연 <see cref="Info(string, string)"/>. <b>Info 도 뜨거운 자리가 있다</b> — <c>BattleSim.Land</c> 는 보스 판정
+    /// 지연 <see cref="Info(string, string)"/>. <b>Info 도 뜨거운 자리가 있다</b> — <c>BossSwings.Land</c> 는 보스 판정
     /// 하나마다 한 줄을 남기는데, 학습 데이터 공장은 한 판에 10~150 판정을 수백만 판 돌린다.
     /// 즉시 오버로드만 있으면 <c>LOG_LEVEL=off</c> 로 돌려도 그 포맷 비용을 전부 낸다.
     /// </summary>

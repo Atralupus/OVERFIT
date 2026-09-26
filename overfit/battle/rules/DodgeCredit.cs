@@ -148,8 +148,8 @@ public sealed class DodgeCredit
     /// <para>
     /// <b>Dodged 는 무적이 먹은 그 틱에만 크레딧을 문다</b> (이슈 #59 · 리뷰 라운드 1). 창이 몇 틱 더
     /// 사는 동안 미뤘다 나중에 물으면 그새 대시가 끝나 <c>_dashStartedAt</c> 이 NaN 으로 돌아가 있을 수
-    /// 있고, 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 크레딧이 나간다 — 그래서 <c>BattleSim.Step</c> 은
-    /// Dodged 를 처음 본 틱에 곧장 <c>BattleSim.BuildEvent</c> 를 불러 관측을 지어 두고, 창이 닫힐 때
+    /// 있고, 그러면 "0초 전에 프레임 퍼펙트로 피했다" 는 거짓 크레딧이 나간다 — 그래서 <c>BossSwings.Step</c> 은
+    /// Dodged 를 처음 본 틱에 곧장 <c>BossSwings.BuildEvent</c> 를 불러 관측을 지어 두고, 창이 닫힐 때
     /// 그 스냅샷을 그대로 내보낸다(다시 묻지 않는다).
     /// </para>
     /// </summary>

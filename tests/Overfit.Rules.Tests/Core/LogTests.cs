@@ -71,7 +71,7 @@ public class LogTests
     [Fact]
     public void 비싼_Info_도_레벨이_꺼져_있으면_안_만든다()
     {
-        // BattleSim.Land 는 판정마다 한 줄을 Info 로 남긴다 — 수백만 판 × 10~150 판정이면
+        // BossSwings.Land 는 판정마다 한 줄을 Info 로 남긴다 — 수백만 판 × 10~150 판정이면
         // LOG_LEVEL=off 여도 그 포맷 비용을 다 낸다. 지연 오버로드가 없으면 그걸 피할 방법이 없다.
         using var capture = new LogCapture(LogLevel.Off);
         int calls = 0;
