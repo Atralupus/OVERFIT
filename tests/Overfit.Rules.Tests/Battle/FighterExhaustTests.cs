@@ -48,6 +48,22 @@ public class FighterExhaustTests
         return ticks;
     }
 
+    /// <summary>스태미나를 <paramref name="stamina"/> 만 남기고 대시를 누른 뒤 <paramref name="hold"/> 를 붙든 채 대시가 끝나는 틱까지 민다.</summary>
+    private static Fighter DashThrough(double stamina, InputFrame hold)
+    {
+        Fighter f = Spawn();
+        f.Spend(f.Stamina - stamina);
+        f.Tick(_dash, _dt);
+        f.Action.ShouldBe(FighterAction.Dash, "대시가 안 섰다");
+        for (int i = 0; i < 120 && f.Action == FighterAction.Dash; i++)
+        {
+            f.Tick(hold, _dt);
+        }
+
+        f.Action.ShouldBe(FighterAction.Idle, "대시가 안 끝났다");
+        return f;
+    }
+
     [Theory]
     [InlineData(FighterAction.Dash)]
     [InlineData(FighterAction.Parry)]
@@ -201,6 +217,32 @@ public class FighterExhaustTests
             f.Tick(press, _dt);
             took(f, x).ShouldBeTrue($"{name}: 풀린 다음 틱에 안 섰다");
         }
+    }
+
+    [Fact]
+    public void 탈진이_드는_틱에도_걷거나_뛰지_못한다()
+    {
+        // Fighter.Tick 의 `lockedAtStart || Locked` 에서 `|| Locked` 의 몫 — 이 틱에 든 탈진(값으로 0 이 된 행동이 끝나는 틱)이 그 틱의
+        // 걸음 · 점프부터 막는다. 틱 시작의 굳음만 보면 그 틱은 행동이 막 끝났고 굳음은 아직 없어, 대시가 끝나는 틱에 걷고 Space 를 붙든
+        // 파이터는 **탈진한 채 공중으로 솟는다**(최종 리뷰 F-I1 이 실측했다). 전에는 리플레이 골든 해시만 이것을 잡았다 — 5번 PR 이 이 자리
+        // (굳음과 탈진 가르기 · 설계 §4.7)를 다시 쓰며 골든을 옮기면 같이 묻힌다.
+        var hold = new InputFrame(1, Jump: true, false, false, false);
+
+        // 대조 — 같은 대시를 입력 없이 끝낸 자리. 대시는 바라보는 쪽으로만 가고(이동 입력을 안 받는다) 길이가 같아 두 대시의 끝이 같다.
+        double dashOnly = DashThrough(stamina: 5, default).X;
+
+        Fighter spent = DashThrough(stamina: 5, hold);
+        spent.Exhausted.ShouldBeTrue("5 남은 대시가 끝났는데 탈진하지 않았다 — 이 테스트가 탈진이 드는 틱을 못 본다");
+        spent.X.ShouldBe(dashOnly, "탈진이 든 틱에 걸었다");
+        spent.Y.ShouldBe(0, "탈진이 든 틱에 뛰었다");
+        spent.VelocityY.ShouldBeLessThanOrEqualTo(0, "탈진이 든 틱에 솟을 기세를 받았다");
+
+        // 대조 — 스태미나가 남은 대시는 같은 입력으로 끝나는 틱에 걷고 뛴다. 이것이 없으면 위 단언은 그 틱의 입력이 원래 아무것도 못 하는
+        // 날에도 초록이다.
+        Fighter rested = DashThrough(stamina: 100, hold);
+        rested.Exhausted.ShouldBeFalse();
+        rested.X.ShouldBeGreaterThan(dashOnly, "스태미나가 남은 대시가 끝나는 틱에 안 걸었다 — 대조가 무너졌다");
+        rested.VelocityY.ShouldBeGreaterThan(0, "스태미나가 남은 대시가 끝나는 틱에 안 뛰었다 — 대조가 무너졌다");
     }
 
     [Fact]
