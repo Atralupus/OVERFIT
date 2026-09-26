@@ -77,6 +77,10 @@
     <Compile Include="../../overfit/battle/rules/DodgeCredit.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotPolicy.cs" LinkBase="linked/battle/rules" />
+
+    <!-- 뷰의 순수 절반 (#83). 규칙은 아니지만 Godot 을 모르므로 여기서 돈다 — core/Log.cs · LogSink.cs 와 같은 가름이다:
+         그리는 노드(battle/view/LandingWave.cs)는 빼고, 규칙의 판정 사각형에서 모양을 읽는 계산만 넣는다. 넣었으니 TDD 게이트도 이 파일을 본다. -->
+    <Compile Include="../../overfit/battle/view/FloorWave.cs" LinkBase="linked/battle/view" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.

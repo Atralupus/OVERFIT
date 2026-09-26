@@ -179,6 +179,44 @@ public sealed class FeelBalance
     /// </summary>
     public required double TellLeadSeconds { get; init; }
 
+    /// <summary>
+    /// 착지의 흰 충격파가 발밑에서 판정의 양끝까지 퍼지는 시간(초) (#83). 유저: "점프공격때 하단영역에 데미지를 준다는 연출이
+    /// 있어야겠네요 흰색영역이 퍼지면서 충격파를 주는듯한 연출을 추가해주세요." (2026-09-26)
+    ///
+    /// <para>
+    /// <b>판정 창 안에 끝나야 한다</b> — 착지 띠의 <c>active_seconds</c>(0.125)와 같은 값이다. 러너는 그 창을 8틱(0.133초)으로 세므로
+    /// 앞머리는 창이 닫히기 반 틱 전에 판정의 끝에 닿는다. 창보다 느리면 판정이 끝났는데 앞머리가 아직 가고 있어 "지금 퍼지는 것에
+    /// 맞는다" 로 읽힌다. <c>FloorWaveTests</c> 가 바닥을 치는 띠의 창마다 잰다.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ 규칙의 띠는 창의 <b>첫 틱부터</b> 바닥 전체를 친다. 퍼지는 것은 그림이라 멀리 선 사람은 앞머리가 닿기 몇 틱 전에 맞는다 —
+    /// 그래서 짧게 두고, 처음이 빠르고 끝이 느리게 퍼진다(<c>FloorWave.Fronts</c>): 한 프레임 만에 양쪽 480px 까지 간다.
+    /// </para>
+    /// </summary>
+    public required double LandingWaveSpreadSeconds { get; init; }
+
+    /// <summary>
+    /// 다 퍼진 충격파가 옅어져 사라지는 시간(초) (#83). 퍼지는 동안은 옅어지지 않는다 — 판정이 사는 동안 띠가 흐려지면 "끝났다" 로
+    /// 읽힌다. 0.3초는 화면 흔들림(0.2초)보다 조금 길다: 흔들림이 가라앉은 뒤에도 띠의 높이를 눈으로 잴 틈이 남는다.
+    /// </summary>
+    public required double LandingWaveFadeSeconds { get; init; }
+
+    /// <summary>
+    /// 충격파 띠의 불투명도 0~1 (#83). <b>반투명</b>이어야 한다 — 띠 안에 선 두 몸의 발이 보여야 "누가 그 높이에 있나" 가 읽힌다.
+    /// 색(흰색)은 여기 없다 — 색은 "얼마나" 가 아니라 "무엇" 이라 뷰의 이름 붙은 상수다(이 클래스 머리).
+    /// </summary>
+    public required double LandingWaveAlpha { get; init; }
+
+    /// <summary>충격파 앞머리의 불투명도 0~1 (#83). 띠(<see cref="LandingWaveAlpha"/>)보다 밝아야 퍼지는 쪽이 읽힌다.</summary>
+    public required double LandingWaveEdgeAlpha { get; init; }
+
+    /// <summary>
+    /// 충격파 앞머리의 폭(px) (#83) — 앞끝에서 안쪽으로 이만큼이 띠의 밝기에서 앞머리의 밝기로 올라간다. 앞머리는 한 프레임에 수백 px 를
+    /// 가므로 얇은 선은 한 장면에서 선으로만 보이고 "달려간다" 가 안 읽힌다.
+    /// </summary>
+    public required double LandingWaveEdgeWidth { get; init; }
+
     /// <summary>사망 애니메이션을 보여주고 결과 화면을 띄우기까지의 시간(초).</summary>
     public required double DeathHoldSeconds { get; init; }
 }
