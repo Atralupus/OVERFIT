@@ -60,7 +60,8 @@ public class PatternPickerTests
     public void 명부에_없는_패턴이_든_대본은_세울_때_거절한다()
     {
         // 설계 §4.4 — 명부에 없는 id 는 세울 때 거절한다. 판 도중에 명부 밖을 내면 BattleSim 이 [E] 를 남기며 간격마다 다시 고르는데(아래
-        // 테스트), 대본은 사람이 손으로 쓰는 것이라 틀리면 대본을 넘긴 자리(GifRunner · ShotRunner)에서 바로 멈춰야 한다. 빠진 것은 전부 싣는다.
+        // 테스트), 대본은 사람이 손으로 쓰는 것이라 틀리면 대본(GifRunner · ShotRunner 가 넘긴다)으로 판을 세우는 자리에서 바로 멈춰야 한다 —
+        // 이 예외를 StageRoster.Setup 이 [E] 로 바꿔 판을 세우지 않는다(StageRosterTests). 빠진 것은 전부 싣는다.
         string[] roster = { "3연격", "점프 3연속" };
         Should.Throw<ArgumentException>(() => new ScriptPicker(roster, new[] { "3연격", "돌진", "잡기" }))
             .Message.ShouldContain("돌진, 잡기");

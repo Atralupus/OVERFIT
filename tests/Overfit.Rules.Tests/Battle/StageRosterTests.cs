@@ -176,6 +176,33 @@ public class StageRosterTests
     }
 
     [Fact]
+    public void 명부_밖의_대본은_판을_세우지_않고_규칙_위반을_남긴다()
+    {
+        // ScriptPicker 는 명부 밖의 id 를 세울 때 던진다. 그 예외가 Setup 을 빠져나가면 Battle._Ready 안에서 터지고, Godot 은 예외를
+        // 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매 프레임 NRE 가 나 진짜 원인 한 줄이 그 밑에 묻혔다
+        // (#78 T6-I1). 다른 실패와 같이 [E] 를 남기고 null 을 돌려줘야 Battle 이 판을 깨진 채로 멈춘다. data 에 picker: script 를 적어
+        // 대본 없이 선 것도 같은 길이다.
+        using var log = new LogCapture();
+
+        StageRoster.Setup(Stages(), 1, 51, System.Array.Empty<AttemptRecord>(), new[] { "3연격", "없는패턴" }).ShouldBeNull();
+
+        log.Lines.ShouldContain(l =>
+            l.StartsWith("[stage][E] script_rejected stage=1 reason=", System.StringComparison.Ordinal)
+            && l.Contains("없는패턴", System.StringComparison.Ordinal));
+
+        var scriptedData = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "script" },
+        };
+
+        StageRoster.Setup(scriptedData, 1, 51, System.Array.Empty<AttemptRecord>()).ShouldBeNull();
+
+        log.Lines.ShouldContain(l =>
+            l.StartsWith("[stage][E] script_rejected stage=1 reason=", System.StringComparison.Ordinal)
+            && l.Contains("대본이 없다", System.StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void 고르기가_빠진_단계는_읽을_때_빠진_키를_말한다()
     {
         // picker 는 required 다 — 빠진 채로 읽히면 어느 고르기로 돌지를 코드의 기본값이 조용히 정한다.

@@ -52,8 +52,9 @@ public sealed class UniformPicker : IPatternPicker
 /// (<c>StageRosterTests</c> 가 막는다): 전투에 닿는 길은 <c>Game</c> 의 다음 전투 한 칸뿐이다.
 ///
 /// <para>
-/// 명부에 없는 id 는 <b>세울 때</b> 거절한다 — 빠진 것을 전부 싣는다. 대본은 사람이 손으로 쓰는 것이라 틀리면 넘긴 자리에서 바로 멈춰야 한다
-/// (판 도중에 명부 밖을 내면 <c>BattleSim</c> 은 <c>[E]</c> 를 남기며 간격마다 다시 고를 뿐이다). uniform 과 같이 상태가 없다 — 몇 번째로
+/// 명부에 없는 id 는 <b>세울 때</b> 거절한다 — 빠진 것을 전부 싣는다. 대본은 사람이 손으로 쓰는 것이라 틀리면 그 판을 세우는 자리에서 바로
+/// 멈춰야 한다(판 도중에 명부 밖을 내면 <c>BattleSim</c> 은 <c>[E]</c> 를 남기며 간격마다 다시 고를 뿐이다). 이 예외는 <c>StageRoster.Setup</c> 이
+/// 받아 <c>[E] script_rejected</c> 로 바꾸고 판을 세우지 않는다 — <c>Battle</c> 은 깨진 채로 멈춘다. uniform 과 같이 상태가 없다 — 몇 번째로
 /// 뽑는지(<c>draw</c>)를 받아 조회만 한다.
 /// </para>
 /// </summary>
@@ -120,7 +121,11 @@ public static class PatternPickers
     /// <summary>등록된 id 들 — 데이터 테스트가 <c>stages.json</c> 의 <c>picker</c> 를 여기와 대 본다.</summary>
     public static IReadOnlyCollection<string> Ids => _table.Keys;
 
-    /// <summary>고르기 하나를 세운다. 모르는 id 면 null — 부르는 쪽이 <c>[E]</c> 를 남긴다.</summary>
+    /// <summary>
+    /// 고르기 하나를 세운다. 모르는 id 면 null — 부르는 쪽이 <c>[E]</c> 를 남긴다. 재료가 그 고르기에 안 맞으면(대본이 비었거나 명부 밖 ·
+    /// <c>script</c> 인데 대본이 없음) <see cref="ArgumentException"/> 을 던진다 — <c>StageRoster.Setup</c> 이 받아 <c>[E] script_rejected</c> 를
+    /// 남기고 null 로 바꾼다.
+    /// </summary>
     public static IPatternPicker? Create(string id, PickerInputs inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);

@@ -45,7 +45,8 @@ public static class StageRoster
     /// <paramref name="stage"/> 단계의 명부와 고르기를 세운다 (#72 · 설계 §4.4). <b>게임(<c>Battle</c>)과 데모(<c>BattleDemo</c>)가
     /// 이 한 자리에서 세운다</b> — 따로 세우면 로그의 <c>seed=</c> 를 데모에 넘겨도 다른 고르기로 돌 수 있다. 고르기는 시도를
     /// 시작할 때 그때까지의 기록으로 한 번 세운다 — 판 도중에는 안 바뀐다. 단계를 못 찾거나(<see cref="Resolve"/> 가 <c>[E]</c> 를
-    /// 남겼다) 고르기가 등록표에 없으면 null 이다.
+    /// 남겼다) 고르기가 등록표에 없거나 대본이 명부 밖이면(<c>script</c> 고르기에 대본이 없는 것도) <c>[E]</c> 를 남기고 null 이다 — <b>던지지
+    /// 않는다</b>: <c>Battle</c> 은 null 을 받아 판을 깨진 채로 멈추지만, 예외는 <c>_Ready</c> 를 빠져나가 반쯤 선 노드를 남긴다.
     /// </summary>
     /// <param name="stages"><c>stages.json</c>.</param>
     /// <param name="stage">단계.</param>
@@ -65,7 +66,20 @@ public static class StageRoster
         }
 
         string id = script is null ? def.Picker : "script";
-        IPatternPicker? picker = PatternPickers.Create(id, new PickerInputs(def.Patterns, history, seed, stage, script));
+        IPatternPicker? picker;
+        try
+        {
+            picker = PatternPickers.Create(id, new PickerInputs(def.Patterns, history, seed, stage, script));
+        }
+        catch (ArgumentException e)
+        {
+            // 대본이 명부 밖이거나(ScriptPicker) script 고르기에 대본이 없으면 세울 때 던진다. 여기서 받지 않으면 예외가 Battle._Ready 를
+            // 빠져나가고, Godot 은 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매 프레임 NRE 가 나 이 한 줄이
+            // 그 밑에 묻혔다(#78 T6-I1). 다른 실패와 같이 [E] 를 남기고 null — Battle 이 판을 깨진 채로 멈춘다. [E] 는 판정을 그대로 떨어뜨린다.
+            Log.Error("stage", $"script_rejected stage={stage} reason={e.Message}");
+            return null;
+        }
+
         if (picker is null)
         {
             Log.Error("stage", $"picker_missing id={id} stage={stage}");
