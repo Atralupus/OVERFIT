@@ -58,14 +58,15 @@ public static class Det
     /// <para>
     /// ⚠ <b>값은 계약이다.</b> 이미 있는 번호를 바꾸거나 재사용하지 않는다 — 바꾸면 그 도메인의 과거 결과가 전부 달라진다.
     /// 새 도메인은 뒤에 <b>추가만</b> 한다. 0 은 "도메인 없음"으로 비워 둔다 (실수로 초기화된 uint 를 잡기 위해).
+    /// 더할 때는 여기 한 줄과 <see cref="Name"/> 의 짝을 같이 넣는다.
     /// </para>
-    ///
-    /// 아직 도메인이 하나도 없다. 게임 규칙이 생기면 <c>public const uint Weight = 1;</c> 처럼
-    /// 여기 한 줄씩 더하고 <see cref="Name"/> 에도 짝을 넣는다.
     /// </summary>
     public static class Domain
     {
-        /// <summary>보스가 다음에 어떤 패턴을 돌릴지. 프로토타입에서는 무작위이고, 나중에 망이 이 자리를 갈아끼운다.</summary>
+        /// <summary>
+        /// 보스가 다음에 어떤 패턴을 돌릴지 — <c>uniform</c> 고르기의 스트림이다(#72 · 설계 §4.4). 망은 이 스트림을 갈아끼우지 않고
+        /// 고르기 등록표(<c>PatternPickers</c>)에 구현을 하나 더한다 — 그때도 uniform 은 대조군으로 이 스트림을 그대로 쓴다.
+        /// </summary>
         public const uint PatternPick = 1;
 
         /// <summary>최소 봇이 회피 수단을 고를 때. 학습 데이터용 봇 함대는 이 스트림을 쓰지 않는다.</summary>
@@ -93,6 +94,13 @@ public static class Det
         /// </summary>
         public const uint BotCombo = 5;
 
+        /// <summary>
+        /// 시도(전투 한 번)의 시드 (#72 · 설계 §4.4) — <c>Hash64(세션 시드, Attempt, k1: 시도 번호)</c>. 재시도마다 보스가
+        /// 달라지게 하는 자리다(유저: "재시도 할때마다 달라지게"). 뽑기는 그 시드 위에서 지금처럼 <see cref="PatternPick"/> 를 쓴다.
+        /// 번호는 뒤에 더할 뿐이다.
+        /// </summary>
+        public const uint Attempt = 6;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -101,6 +109,7 @@ public static class Det
             BotCharge => "bot_charge",
             BotGuard => "bot_guard",
             BotCombo => "bot_combo",
+            Attempt => "attempt",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

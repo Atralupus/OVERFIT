@@ -19,6 +19,8 @@
 #   tools/build.sh import              에셋 임포트만 (헤드리스). 클론 직후 반드시 한 번
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
 #   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
+#                                      시드는 시도 시드다(기본 51) — 게임 로그의 [run][I] attempt=… seed=X 를 그대로 넘기면
+#                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
 #                                      엔진 안에서 뷰포트를 직접 찍는다 — 화면 기록 권한이 필요 없고 다른 창이 안 겹친다
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
@@ -59,6 +61,10 @@ LOG_ARG=""
 # 판정 보기 (이슈 #59 · 설계 §6.1). 실행 중에는 못 켜므로(SceneTree.debug_collisions_hint) 띄울 때 정한다.
 HITBOX_ARG=""
 [[ "${HITBOXES:-}" == "1" ]] && HITBOX_ARG="--debug-collisions"
+
+# 세션 시드 (#72 · 설계 §4.4). 게임은 켤 때마다 벽시계로 세션 시드를 뽑는다. Game 을 타는 두 명령(smoke · shots)은
+# 실행마다 같은 판이어야 로그와 사진이 같은 것을 가리키므로 51 로 고정한다 — 시도마다 시드는 여전히 다르다.
+SESSION_ARG="--session-seed=51"
 
 # 버전은 Godot 이 알려주는 값에서 뽑는다. 하드코딩하면 업그레이드 때 조용히 어긋난다.
 godot_version() { "$GODOT" --version 2>/dev/null | tail -1 | tr -d '\r'; }
@@ -365,7 +371,7 @@ cmd_smoke() {
   # 헤드리스는 실시간 동기화가 없어 프레임이 폭주한다. --fixed-fps 로 1프레임=1/60초를 고정해야 타이머가 프레임 수와 맞는다.
   mkdir -p "$OUT"
   local log="$OUT/smoke.log" code=0
-  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" --quit-after 3600 -- --tour $LOG_ARG > "$log" 2>&1 || code=$?
+  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" --quit-after 3600 -- --tour $SESSION_ARG $LOG_ARG > "$log" 2>&1 || code=$?
   grep -E "^\[(boot|data|scene|tour)\]" "$log" || true
   judge_headless "스모크" "$log" "tour=done" "$code"
   # 순회가 정말 씬을 갈아끼웠나. 표지만 보면 "돌지 않고 끝난" 경우를 못 본다.
@@ -382,6 +388,11 @@ cmd_smoke() {
   # 지고, 여기 smoke 는 디버그 빌드라 그 반대쪽은 못 본다 — 익스포트한 빌드로 따로 본다.)
   expect_log "$log" debug '^\[scene\]\[D\] input action=debug_stage_2 stage_jump from=[0-9]+ to=2$' "단계 점프 키(2)가 안 먹었습니다."
   expect_log "$log" info '^\[scene\]\[I\] battle ready stage=2 fighter=' "단계 점프 뒤에 2단계 전투가 안 섰습니다."
+  # 시도마다 시드 (#72 · 설계 §4.4). 세션 시드 51 에서 첫 전투(1단계)와 단계 점프로 선 전투(2단계)가 시도 1 · 2 이고, 시드는
+  # Hash64(51, attempt, k1: 번호) 다 — RunHistoryTests 가 첫 값을 박아 뒀다. 둘째 줄이 "전투가 설 때마다 시드가 바뀐다" 를 본다.
+  expect_log "$log" info '^\[run\]\[I\] session_seed=51$' "세션 시드 51 이 안 넘어갔습니다 — 스모크가 실행마다 다른 판을 돕니다."
+  expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=uniform history=0$' "첫 전투가 시도 1 의 시드로 안 섰습니다."
+  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었습니다."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."
@@ -430,7 +441,7 @@ cmd_shots() {
   local out="$OUT/shots" log="$OUT/shots.log" code=0
   rm -rf "$out"
   mkdir -p "$out"
-  "$GODOT" --path "$PROJECT" $HITBOX_ARG -- --shots "--shot-dir=$out" $LOG_ARG > "$log" 2>&1 || code=$?
+  "$GODOT" --path "$PROJECT" $HITBOX_ARG -- --shots "--shot-dir=$out" $SESSION_ARG $LOG_ARG > "$log" 2>&1 || code=$?
   grep -E "^\[(shots|shot)\]" "$log" || true
   judge_headless "스크린샷" "$log" "shots=done" "$code"
 

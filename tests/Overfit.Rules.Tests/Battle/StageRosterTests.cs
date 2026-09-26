@@ -114,7 +114,7 @@ public class StageRosterTests
         using var log = new LogCapture();
         var shortened = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 5, Patterns = new[] { "3연격" } },
+            ["1"] = new() { Want = 5, Patterns = new[] { "3연격" }, Picker = "uniform" },
         };
 
         StageRoster.For(shortened, 1);
@@ -135,6 +135,71 @@ public class StageRosterTests
     }
 
     [Fact]
+    public void 단계마다_고르기가_등록표에_있고_1단계는_uniform_이다()
+    {
+        // 모르는 id 는 판을 세울 때 [E] 로 멈춘다(Battle) — 이 테스트가 그 전에 막는다(설계 §4.4 · §8.1).
+        // 1단계는 망이 들어와도 uniform 이다: 이 단계가 "무엇에 기대는가" 를 재는 자리라, 고르기가 기록을 읽으면
+        // 2단계가 읽을 측정이 기운다.
+        foreach ((string stage, StageDef def) in Stages())
+        {
+            PatternPickers.Ids.ShouldContain(def.Picker, $"{stage}단계의 picker={def.Picker} 가 등록표에 없다");
+        }
+
+        Stages()["1"].Picker.ShouldBe("uniform");
+    }
+
+    [Fact]
+    public void 고르기가_빠진_단계는_읽을_때_빠진_키를_말한다()
+    {
+        // picker 는 required 다 — 빠진 채로 읽히면 어느 고르기로 돌지를 코드의 기본값이 조용히 정한다.
+        const string json = """{ "1": { "want": 2, "patterns": ["3연격", "점프 공격"] } }""";
+
+        Should.Throw<DataException>(() => JsonData<StageDef>.ParseTable(json, "stages.json")).Message.ShouldContain("1.picker");
+    }
+
+    [Fact]
+    public void 단계의_정의는_명부와_같은_규칙으로_잘라_찾는다()
+    {
+        // 전투는 명부와 고르기를 **같은 단계**에서 읽어야 한다 — 명부만 잘라 쓰고 고르기는 물은 단계에서 찾으면 둘이 갈린다.
+        using var log = new LogCapture();
+        Dictionary<string, StageDef> stages = Stages();
+        string last = LastStage().ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        StageRoster.Resolve(stages, 99).ShouldBeSameAs(stages[last]);
+        StageRoster.Resolve(stages, 1).ShouldBeSameAs(stages["1"]);
+    }
+
+    [Fact]
+    public void 단계를_세우면_그_단계의_명부와_고르기가_나온다()
+    {
+        // 게임(Battle)과 데모(BattleDemo)가 이 한 자리에서 세운다 — 둘이 따로 세우면 로그의 seed= 를 데모에 넘겨도
+        // 다른 고르기로 돌 수 있다(설계 §4.4 의 되살리기).
+        ulong seed = Det.Hash64(51, Det.Domain.Attempt, k1: 1);
+
+        StageSetup setup = StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>()).ShouldNotBeNull();
+
+        setup.PatternIds.ShouldBe(new[] { "3연격", "점프 공격" });
+        setup.PickerId.ShouldBe("uniform");
+        var uniform = new UniformPicker(seed, 2);
+        Enumerable.Range(0, 50).Select(setup.Picker.Pick).ShouldBe(Enumerable.Range(0, 50).Select(uniform.Pick));
+    }
+
+    [Fact]
+    public void 모르는_고르기의_단계는_세우지_않고_규칙_위반을_남긴다()
+    {
+        // 데이터 테스트가 막지만, 막힌 것을 지나 판이 서면 어느 고르기로 도는지 아무도 모른다 — 세우지 않는다.
+        using var log = new LogCapture();
+        var stages = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "없는고르기" },
+        };
+
+        StageRoster.Setup(stages, 1, 51, System.Array.Empty<AttemptRecord>()).ShouldBeNull();
+
+        log.Lines.ShouldContain("[stage][E] picker_missing id=없는고르기 stage=1");
+    }
+
+    [Fact]
     public void 명부에_구멍이_있으면_예외가_아니라_에러_로그를_남긴다()
     {
         // Math.Clamp 로 범위만 맞춘 뒤 바로 색인하던 때는, stages.json 의 키가 연속이라는
@@ -143,8 +208,8 @@ public class StageRosterTests
         using var log = new LogCapture();
         var holed = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" } },
-            ["3"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" } },
+            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "uniform" },
+            ["3"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "uniform" },
         };
 
         StageRoster.For(holed, 2).ShouldBeEmpty();
@@ -161,7 +226,7 @@ public class StageRosterTests
         using var log = new LogCapture();
         var empty = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 2, Patterns = System.Array.Empty<string>() },
+            ["1"] = new() { Want = 2, Patterns = System.Array.Empty<string>(), Picker = "uniform" },
         };
 
         StageRoster.For(empty, 1).ShouldBeEmpty();

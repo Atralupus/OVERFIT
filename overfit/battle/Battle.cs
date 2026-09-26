@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using Godot;
 using Overfit.Battle.Rules;
@@ -45,6 +44,9 @@ public partial class Battle : Node2D
 
     private int _stage;
     private bool _hasNextStage;
+
+    /// <summary>이 전투의 시도 — 번호와 시드 (#72 · 설계 §4.4). 설 때 열고, 끝나면 그 판의 관측과 함께 기록에 붙인다.</summary>
+    private (int Number, ulong Seed) _attempt;
 
     private bool _over;
     private BattleOutcome _outcome;
@@ -242,9 +244,17 @@ public partial class Battle : Node2D
         _stage = Game.Instance.Stage;
         _hasNextStage = data.Stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
 
-        // 단계 명부는 data/stages.json 이 정한다 — patterns.json 의 키 순서를 쓰면 패턴을
-        // 파일 맨 위에 끼워 넣는 것만으로 1단계가 다른 전투가 된다.
-        IReadOnlyList<string> ids = StageRoster.For(data.Stages, _stage);
+        // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
+        // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup).
+        RunHistory history = Game.Instance.History;
+        _attempt = history.Open();
+        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records) is not { } stage)
+        {
+            _broken = true; // [E] 는 StageRoster 가 남겼다
+            return;
+        }
+
+        Log.Info("run", $"attempt={_attempt.Number} stage={_stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
 
         _sim = new BattleSim(new BattleSetup
         {
@@ -252,9 +262,10 @@ public partial class Battle : Node2D
             Fighter = _fighterConfig,
             HitShapes = data.Shapes,
             Boss = _bossConfig,
-            PatternIds = ids,
+            PatternIds = stage.PatternIds,
             Patterns = data.Patterns,
-            Seed = 51,
+            Seed = _attempt.Seed,
+            Picker = stage.Picker,
             MaxTicks = battle.MaxTicks,
         });
 
@@ -274,7 +285,7 @@ public partial class Battle : Node2D
             _world.AddChild(_hitboxDebug);
         }
 
-        Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={ids.Count}");
+        Log.Info("scene", $"battle ready stage={_stage} fighter={battle.Fighter} patterns={stage.PatternIds.Count}");
     }
 
     /// <summary>
@@ -507,6 +518,11 @@ public partial class Battle : Node2D
         }
 
         Log.Info("scene", $"battle over outcome={outcome} stage={_stage} ticks={_sim.Ticks}");
+
+        // 끝까지 간 시도만 기록에 붙는다 — 이긴 판도(1단계를 이긴 판이 곧 1단계 기록이다 · 설계 §4.4). 판마다 한 번이고,
+        // 관측이 살아 있는 마지막 자리가 여기다.
+        Game.Instance.History.Record(new AttemptRecord(_attempt.Number, _stage, _attempt.Seed, outcome, [.. _sim.Events]));
+        Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
     }
 
     /// <summary>

@@ -31,6 +31,7 @@ public sealed class BattleSetup
 
     public required IReadOnlyDictionary<string, PatternDef> Patterns { get; set; }
 
+    /// <summary>시도 시드 (#72 · 설계 §4.4). 게임에서는 <c>RunHistory.Open</c> 이, 데모에서는 <c>--seed</c> 가 준다.</summary>
     public required ulong Seed { get; set; }
 
     /// <summary>
@@ -40,6 +41,13 @@ public sealed class BattleSetup
     /// </summary>
     public Func<MotionDef, MotionBounds, IBossMotion?>? Motions { get; set; }
 
+    /// <summary>
+    /// 패턴 고르기 (#72 · 설계 §4.4) — <b>선택</b>이다. 비우면 (<see cref="Seed"/>, <see cref="PatternIds"/>) 위의
+    /// <see cref="UniformPicker"/> 라, 고르기를 모르는 테스트의 판이 그대로 선다. 게임과 데모는 단계의 <c>picker</c> 로
+    /// 등록표(<see cref="PatternPickers"/>)에서 세워 넣는다.
+    /// </summary>
+    public IPatternPicker? Picker { get; set; }
+
     /// <summary>이 틱을 넘기면 시간 초과로 패배. <b>한 판이 반드시 끝나게 하는 안전장치다.</b></summary>
     public required int MaxTicks { get; set; }
 }
@@ -48,8 +56,8 @@ public sealed class BattleSetup
 /// 전투 한 판. <b>여기만이 파이터와 보스를 동시에 안다.</b>
 ///
 /// <para>
-/// 패턴 선택은 지금 <b>무작위</b>다. 일부러다 — 나중에 망이 이 자리를 갈아끼울 때
-/// 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
+/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 지금은 <b>무작위</b>(<c>uniform</c>)뿐이다. 일부러다 —
+/// 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
 /// 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 순서를 낸다.
 /// </para>
 /// </summary>
@@ -59,6 +67,9 @@ public sealed class BattleSim
     public const double Dt = 1.0 / 60.0;
 
     private readonly BattleSetup _setup;
+
+    /// <summary>패턴 고르기 — <see cref="BattleSetup.Picker"/>, 비었으면 시드 위의 uniform.</summary>
+    private readonly IPatternPicker _picker;
 
     /// <summary>
     /// 칼질 단계마다의 칼 — <c>hitboxes.json</c> 에서 그림의 흰 궤적으로 뽑은 모양 (이슈 #59 · 설계 §5.1).
@@ -104,15 +115,17 @@ public sealed class BattleSim
     {
         ArgumentNullException.ThrowIfNull(setup);
 
-        // 빈 명부는 여기서 막는다. 그대로 받으면 첫 패턴을 고를 때 Det.RollInt(n: 0) 이
-        // ArgumentOutOfRangeException 으로 터진다 — 판이 한참 돈 뒤라, 무엇이 잘못됐는지가
-        // 그 스택에 안 적힌다. 세울 때 거절하면 부른 자리가 그대로 남는다.
+        // 빈 명부는 여기서 막는다. 고르기가 낼 칸이 없다 — 전에는 첫 패턴을 고를 때 Det.RollInt(n: 0) 이
+        // ArgumentOutOfRangeException 으로 터졌는데 판이 한참 돈 뒤라, 무엇이 잘못됐는지가 그 스택에 안 적혔다.
+        // 넘겨받은 고르기(#72)라면 터지지도 않고 간격마다 pick_out_of_range 만 쌓으며 보스 없는 판이 돈다.
+        // 세울 때 거절하면 부른 자리가 그대로 남는다.
         if (setup.PatternIds.Count == 0)
         {
             throw new ArgumentException("패턴 명부가 비었다 — 한 판을 세울 수 없다", nameof(setup));
         }
 
         _setup = setup;
+        _picker = setup.Picker ?? new UniformPicker(setup.Seed, setup.PatternIds.Count);
         _swords = Swords(setup);
         _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes, setup.Fighter);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
@@ -434,11 +447,21 @@ public sealed class BattleSim
         Log.Debug("boss", () => $"exhaust cause={cause} id={id} tick={Ticks}");
     }
 
-    /// <summary>다음 패턴을 고른다. 무작위이되 시드·도메인·뽑은 횟수로 좌표를 조회한다.</summary>
+    /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>
     private void Begin()
     {
-        int index = Det.RollInt(_setup.Seed, Det.Domain.PatternPick, _setup.PatternIds.Count, k1: _picks);
+        int draw = _picks;
+        int index = _picker.Pick(draw);
         _picks++;
+        if ((uint)index >= (uint)_setup.PatternIds.Count)
+        {
+            // 아래 pattern_missing 과 같은 이유로 간격을 되돌린다 — 매 틱 [E] 를 쏟지 않게. 예외로 두면 엔진의 ERROR 블록으로만
+            // 나와 어느 고르기가 무엇을 냈는지가 안 남는다. 망이 들어오면 고르기가 데이터(기록)를 읽으므로 올 수 있는 자리다.
+            _gapLeft = GapTicks;
+            Log.Error("boss", $"pick_out_of_range index={index} roster={_setup.PatternIds.Count} draw={draw} tick={Ticks}");
+            return;
+        }
+
         string id = _setup.PatternIds[index];
         if (!_setup.Patterns.TryGetValue(id, out PatternDef? def))
         {

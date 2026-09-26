@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using Godot;
+using Overfit.Battle.Rules;
 
 namespace Overfit.Core;
 
@@ -68,6 +69,12 @@ public partial class Game : Node
     /// </summary>
     public int Stage { get; private set; } = 1;
 
+    /// <summary>
+    /// 세션의 시도 번호와 기록 (#72 · 설계 §4.4). 단계처럼 여기(Autoload)에 둔다 — 전투 씬은 설 때마다 새로 만들어진다.
+    /// 로직은 <see cref="RunHistory"/>(규칙 층 · 테스트 안)에 있다.
+    /// </summary>
+    public RunHistory History { get; private set; } = null!;
+
     public override void _Ready()
     {
         // 로그 출력을 Godot 에 꽂는다. 모듈 초기화(LogSink.AutoInstall)가 이미 꽂았으므로 여기선 멱등이다 —
@@ -82,9 +89,12 @@ public partial class Game : Node
         Log.Info("scene", $"start={Current} log_level={Log.Level}");
         Log.Debug("boot", $"user_args=[{string.Join(" ", OS.GetCmdlineUserArgs())}] user_dir={OS.GetUserDataDir()}");
 
+        string[] args = OS.GetCmdlineUserArgs();
+        History = new RunHistory(SessionSeed(args));
+        Log.Info("run", $"session_seed={History.SessionSeed}");
+
         // 검증용. tools/build.sh smoke 가 `-- --tour` 로 띄운다.
         // 규칙 자체 테스트는 여기 없다 — Godot 을 안 띄우는 `tools/build.sh test` 가 전부 돌린다.
-        string[] args = OS.GetCmdlineUserArgs();
         if (OS.IsDebugBuild() && CmdArgs.Has(args, "--tour"))
         {
             _ = TourAsync();
@@ -112,8 +122,24 @@ public partial class Game : Node
         Log.Info("run", $"stage={Stage}");
     }
 
-    /// <summary>판을 처음으로. 타이틀로 나갈 때 부른다 — 안 부르면 다음 판이 5단계에서 시작한다.</summary>
-    public void ResetRun() => SetStage(1);
+    /// <summary>
+    /// 판을 처음으로 — 1단계로 돌아가고 시도 기록을 비운다(새 런은 1단계에서 다시 잰다 · 설계 §4.4). 타이틀로 나갈 때와
+    /// 클리어 뒤 [처음부터] 에 부른다 — 안 부르면 다음 판이 2단계에서 시작한다. 세션 시드와 시도 번호는 안 돌아간다.
+    /// </summary>
+    public void ResetRun()
+    {
+        SetStage(1);
+        History.Clear();
+        Log.Debug("run", $"history_cleared attempts={History.Attempts}");
+    }
+
+    /// <summary>
+    /// 세션 시드 (#72 · 설계 §4.4). <c>--session-seed=N</c> 이 있으면 그것이고(스모크 · 스크린샷은 <c>tools/build.sh</c> 가
+    /// 51 을 넘긴다 — 실행마다 같은 판을 찍으려고), 없으면 벽시계의 마이크로초를 <see cref="Det.Mix64"/> 로 섞는다.
+    /// <b>벽시계는 규칙 층에서만 금지다</b>(CLAUDE.md §4) — 여기는 Godot 쪽이고, 규칙은 뽑힌 수를 받기만 한다.
+    /// </summary>
+    private static ulong SessionSeed(string[] args) =>
+        CmdArgs.UInt64(args, "--session-seed=") ?? Det.Mix64((ulong)(DateTime.UtcNow.Ticks / TimeSpan.TicksPerMicrosecond));
 
     public void GoTo(Scene scene)
     {
@@ -160,7 +186,7 @@ public partial class Game : Node
     /// <para>
     /// 단계 번호를 여기 표로 적지 않고 <b>액션 이름에서 읽는다</b> — 키와 단계의 짝이 <c>project.godot</c>
     /// 한 곳에만 있어야 한다. 몇 단계까지 있는지는 여기서 안 자른다: <c>data/stages.json</c> 이 알고,
-    /// 없는 단계는 전투 씬이 가장 가까운 단계로 잘라 [W] 를 남긴다(<c>StageRoster.For</c>).
+    /// 없는 단계는 전투 씬이 가장 가까운 단계로 잘라 [W] 를 남긴다(<c>StageRoster.Resolve</c>).
     /// </para>
     /// </summary>
     private static (string Action, int Stage)? StageJump(InputEvent e)

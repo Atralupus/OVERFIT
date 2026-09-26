@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -49,19 +50,23 @@ public class BotPolicyTests
     [Fact]
     public void 데모의_봇이_실제_1단계를_이긴다()
     {
-        // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 1단계 명부 · 시드 51 (#72 · 설계 §9).
+        // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 1단계 명부와 고르기 · 시드 51 (#72 · 설계 §9).
         // "봇이 1단계를 이길 수 있다" 가 데모의 전제인데 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 —
-        // 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이 실제 데이터다.
+        // 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이 실제 데이터다. 명부와 고르기는 데모처럼
+        // StageRoster.Setup 에서 받는다 — 따로 세우면 1단계의 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
         BalanceData balance = TestConfigs.Balance();
+        StageSetup stage = StageRoster.Setup(TestConfigs.Stages(), 1, 51, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException("stages.json 에 1단계가 안 선다");
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
             HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Bosses()[balance.Battle.Boss],
-            PatternIds = StageRoster.For(TestConfigs.Stages(), 1),
+            PatternIds = stage.PatternIds,
             Patterns = TestConfigs.Patterns(),
             Seed = 51,
+            Picker = stage.Picker,
             MaxTicks = balance.Battle.MaxTicks,
         });
         var bot = new BotPolicy(51);

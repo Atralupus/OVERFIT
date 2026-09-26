@@ -168,6 +168,15 @@ public class DetTests
     }
 
     [Fact]
+    public void 시도_도메인은_6번_attempt_다()
+    {
+        // 시도 시드 = Hash64(세션 시드, Attempt, k1: 시도 번호) (#72 · 설계 §4.4). 번호는 뒤에 더할 뿐이고(CLAUDE.md §4)
+        // 로그의 이름도 계약이다 — 바꾸면 그 도메인의 과거 시드가 전부 달라진다.
+        Det.Domain.Attempt.ShouldBe(6u);
+        Det.Domain.Name(Det.Domain.Attempt).ShouldBe("attempt");
+    }
+
+    [Fact]
     public void 도메인_이름은_모르는_번호를_숫자_그대로_돌려준다()
     {
         Det.Domain.Name(0).ShouldBe("0");

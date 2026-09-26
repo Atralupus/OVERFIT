@@ -66,6 +66,8 @@
     <Compile Include="../../overfit/battle/rules/BossMotions.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/LeapMotion.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/StageRoster.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PatternPickers.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/RunHistory.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/HitResolver.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/Boss.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BattleSim.cs" LinkBase="linked/battle/rules" />

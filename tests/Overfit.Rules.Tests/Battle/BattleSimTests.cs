@@ -430,8 +430,8 @@ public class BattleSimTests
     [Fact]
     public void 빈_명부는_첫_뽑기가_아니라_판을_세울_때_거절한다()
     {
-        // 빈 목록을 그대로 받으면 Begin 의 Det.RollInt(n: 0) 이 터진다 — 첫 패턴이 설 때까지
-        // 아무 일도 없다가, 판이 도는 도중에 C# 예외로 나온다. 그 예외는 우리 로그 형식이
+        // 빈 목록을 그대로 받았을 때 Begin 의 Det.RollInt(n: 0) 이 터졌다 — 첫 패턴이 설 때까지
+        // 아무 일도 없다가, 판이 도는 도중에 C# 예외로 나왔다. 그 예외는 우리 로그 형식이
         // 아니라 엔진 ERROR 블록으로만 보인다. 세우는 자리에서 막는다.
         BattleSetup setup = Setup();
         setup.PatternIds = System.Array.Empty<string>();

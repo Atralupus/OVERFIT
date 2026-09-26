@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using Godot;
 using Overfit.Battle.Rules;
 using Overfit.Core;
@@ -18,7 +18,11 @@ public partial class BattleDemo : Node
     public override void _Ready()
     {
         string[] args = OS.GetCmdlineUserArgs();
-        ulong seed = (ulong)(CmdArgs.Double(args, "--seed=") ?? 51);
+
+        // 시드는 **시도 시드 그 자체**다 — 게임을 안 타므로 세션도 번호도 없다. 64비트 그대로 읽는다 (#72 · 설계 §4.4): 게임
+        // 로그의 [run][I] attempt=… seed=X 를 --seed=X 로 넘기면 그 시도의 보스 순서가 되살아난다. 전에는 Double 로 읽어
+        // 2^53 을 넘는 시드(시도 시드는 거의 다 그렇다)가 다른 판을 돌렸다.
+        ulong seed = CmdArgs.UInt64(args, "--seed=") ?? 51;
         int stage = (int)(CmdArgs.Double(args, "--stage=") ?? 1);
 
         // 게임과 같은 자리에서 읽는다 — 둘이 다른 판을 세우지 않게 (BattleTables).
@@ -47,11 +51,15 @@ public partial class BattleDemo : Node
             return;
         }
 
-        // 단계 명부는 data/stages.json 이 정한다. patterns.json 의 키 순서에서 앞 N 개를 자르던
-        // 옛 방식은 패턴을 파일 맨 위에 끼워 넣는 것만으로 같은 단계를 다른 전투로 바꿨다.
-        IReadOnlyList<string> ids = StageRoster.For(data.Stages, stage);
+        // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup). 기록은 비어 있다 —
+        // uniform 은 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 순서가 선다.
+        if (StageRoster.Setup(data.Stages, stage, seed, Array.Empty<AttemptRecord>()) is not { } setup)
+        {
+            GetTree().Quit(1);
+            return;
+        }
 
-        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={stage} patterns={ids.Count}");
+        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}");
 
         var sim = new BattleSim(new BattleSetup
         {
@@ -59,9 +67,10 @@ public partial class BattleDemo : Node
             Fighter = fighter,
             HitShapes = data.Shapes,
             Boss = boss,
-            PatternIds = ids,
+            PatternIds = setup.PatternIds,
             Patterns = data.Patterns,
             Seed = seed,
+            Picker = setup.Picker,
             MaxTicks = battle.MaxTicks,
         });
 

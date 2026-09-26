@@ -103,6 +103,11 @@ public class ReplayGoldenTests
         Dictionary<string, StageDef> stages = JsonData<StageDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "stages.json")), "stages.json");
 
+        // 게임처럼 **그 단계의 명부와 고르기**로 선다 (#72 · 설계 §4.4) — 1단계의 picker 를 바꾸면 여기가 움직인다.
+        // 기록은 비어 있다: 골든의 시드는 시도 시드 그 자체이고(데모의 --seed 와 같다), uniform 은 기록을 안 읽는다.
+        StageSetup stage = StageRoster.Setup(stages, 1, seed, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException("stages.json 에 1단계가 안 선다");
+
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -113,10 +118,11 @@ public class ReplayGoldenTests
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
             // **1단계로 돈다** (#72 · 설계 §9) — 2단계 명부는 5번 PR 이 통째로 바꾸므로, 거기 걸면 그 PR 이 결정론과 무관하게
             // 골든을 움직인다. 1단계는 망이 들어와도 uniform 이라(설계 §4.4) 이 판의 순서도 시드만으로 선다.
-            PatternIds = StageRoster.For(stages, 1),
+            PatternIds = stage.PatternIds,
             Patterns = JsonData<PatternDef>.ParseTable(
                 File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
             Seed = seed,
+            Picker = stage.Picker,
             MaxTicks = TestConfigs.MaxTicks(),
         });
 
