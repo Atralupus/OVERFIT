@@ -167,7 +167,8 @@ public partial class Battle : Node2D
     /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82)도 탈진도 아니다. 위와 같이 디버그 전용 읽기다 — 스크린샷이
     /// 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자 둘째 J 가 1타의 경직에 떨어져 2타가 됐다.
     /// </summary>
-    public bool FighterFree => !_broken && !_over && _sim.Fighter.Action == FighterAction.Idle && !_sim.Fighter.Exhausted;
+    public bool FighterFree =>
+        !_broken && !_over && _sim.Fighter.Action == FighterAction.Idle && !_sim.Fighter.Exhausted;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 보스가 <b>희게 번쩍이는</b> 순간이고(#71 ·

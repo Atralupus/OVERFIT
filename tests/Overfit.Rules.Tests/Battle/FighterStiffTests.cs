@@ -446,7 +446,8 @@ public class FighterStiffTests
     /// 첫 관측이 난 틱까지 민다. 시험 판정은 사거리 <paramref name="reach"/> 까지 · 높이 0 ~ 5000 · 창 0.5초다(<see cref="TestConfigs.Sweep"/>).
     /// 경직은 <b>창이 열린 틱</b>에 본다 — 빗나감의 관측은 창이 닫히는 틱에 나오지만 그 이유와 수단은 열린 틱의 것이다(설계 §3.6 ①).
     /// </summary>
-    private static (BattleSim Sim, int Lead, FighterAction AtOpen) StiffWhenOpened(InputFrame press, double reach, int intoStiff)
+    private static (BattleSim Sim, int Lead, FighterAction AtOpen) StiffWhenOpened(
+        InputFrame press, double reach, int intoStiff)
     {
         (BattleSim sim, int lead) = Pressed(press, reach, intoStiff);
         for (int i = 0; i < 120 && sim.NextActiveIn is not null; i++)

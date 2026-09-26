@@ -648,7 +648,8 @@ public partial class FighterView : Node2D
             return;
         }
 
-        int last = System.Math.Min(_parry.StartFrame + _parryFrames - 1, _sprite.SpriteFrames!.GetFrameCount(_parry.Anim) - 1);
+        int last = System.Math.Min(
+            _parry.StartFrame + _parryFrames - 1, _sprite.SpriteFrames!.GetFrameCount(_parry.Anim) - 1);
         if ((frame.Stiff || _sprite.Frame >= last) && (_sprite.Frame != last || _sprite.IsPlaying()))
         {
             _sprite.Frame = last;

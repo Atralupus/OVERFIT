@@ -25,61 +25,67 @@ public static class TestConfigs
     /// <paramref name="parryStiff"/>)은 <b>경직의 길이를 규칙이 데이터에서 읽는지 보는 테스트</b>만 준다(#82 · FighterStiffTests) — 보스의
     /// <c>exhaustSeconds</c> 와 같은 자리다. 0 을 주면 경직이 없는 파이터다: 경직이 없던 때와 견줘 "정확히 그만큼 늦다" 를 재는 대조군이다.
     /// </summary>
-    public static FighterConfig Fighter(double? firstStiff = null, double? secondStiff = null, double? dashRecover = null, double? parryStiff = null) => new()
+    public static FighterConfig Fighter(
+        double? firstStiff = null, double? secondStiff = null, double? dashRecover = null, double? parryStiff = null)
     {
-        MoveSpeed = 420,
-        JumpVelocity = 940,
-        MaxHealth = 100,
-        MaxStamina = 100,
-        HalfWidth = 30,
-        Height = 120,
-        DashSpeed = 2200,
-        DashDuration = 0.18,
-        DashIFrames = 0.14,
-        DashCost = 25,
-        // 경직 셋(대시 뒤 · 1타 뒤 · 2타 뒤)은 **실제 값 그대로**다 (#82) — 유저가 손맛으로 고른 값이고, 기준 파이터의 칼질(0.28 · 0.6초)이
-        // 실제와 달라도 "한 번만 친 사람이 선다 · 2연격 뒤가 가장 길다 · 대시 뒤는 살짝" 의 모양이 이 값에서 나온다. 0.10 · 0.40 · 0.50 은
-        // 6 · 24 · 30틱으로 딱 떨어져 테스트가 세는 틱이 반올림에 안 걸린다.
-        DashRecover = dashRecover ?? 0.10,
-        // 패리는 **실제 값 그대로**다 (설계 §5.3) — 가드 셋과 같이 캐릭터 성능이 아니라 조작의 정의다.
-        ParryPreciseWindow = 0.133,
-        ParryDuration = 0.3333,
-        // 패리 뒤 경직도 실제 값 그대로다 (#82) — 0.25 = 15틱으로 딱 떨어진다. 헛친 패리 한 번이 커밋 20틱 + 경직 15틱이다.
-        ParryStiff = parryStiff ?? 0.25,
-        ParryCost = 15,
-        ParryAnim = "attack2",
-        ParryAnimFps = 12,
-        ParryAnimFrames = 4,
-        // 기준 파이터에는 그림이 없지만 칼질 한 칸의 관계는 진짜여야 한다 — 50fps · 14장이면 재생 0.28초로
-        // 셋의 합과 같고, 0번에서 시작해 4번 장(0.08초)이 선딜의 끝이다. 거짓 값을 넣으면 이 픽스처가
-        // "그림에서 거꾸로 정한다" 는 규칙의 반례가 된다.
-        Combo = new List<ComboStepDef>
+        return new FighterConfig
         {
-            new()
+            MoveSpeed = 420,
+            JumpVelocity = 940,
+            MaxHealth = 100,
+            MaxStamina = 100,
+            HalfWidth = 30,
+            Height = 120,
+            DashSpeed = 2200,
+            DashDuration = 0.18,
+            DashIFrames = 0.14,
+            DashCost = 25,
+            // 경직 셋(대시 뒤 · 1타 뒤 · 2타 뒤)은 **실제 값 그대로**다 (#82) — 유저가 손맛으로 고른 값이고, 기준 파이터의 칼질(0.28 · 0.6초)이
+            // 실제와 달라도 "한 번만 친 사람이 선다 · 2연격 뒤가 가장 길다 · 대시 뒤는 살짝" 의 모양이 이 값에서 나온다. 0.10 · 0.40 · 0.50 은
+            // 6 · 24 · 30틱으로 딱 떨어져 테스트가 세는 틱이 반올림에 안 걸린다.
+            DashRecover = dashRecover ?? 0.10,
+            // 패리는 **실제 값 그대로**다 (설계 §5.3) — 가드 셋과 같이 캐릭터 성능이 아니라 조작의 정의다.
+            ParryPreciseWindow = 0.133,
+            ParryDuration = 0.3333,
+            // 패리 뒤 경직도 실제 값 그대로다 (#82) — 0.25 = 15틱으로 딱 떨어진다. 헛친 패리 한 번이 커밋 20틱 + 경직 15틱이다.
+            ParryStiff = parryStiff ?? 0.25,
+            ParryCost = 15,
+            ParryAnim = "attack2",
+            ParryAnimFps = 12,
+            ParryAnimFrames = 4,
+            // 기준 파이터에는 그림이 없지만 칼질 한 칸의 관계는 진짜여야 한다 — 50fps · 14장이면 재생 0.28초로
+            // 셋의 합과 같고, 0번에서 시작해 4번 장(0.08초)이 선딜의 끝이다. 거짓 값을 넣으면 이 픽스처가
+            // "그림에서 거꾸로 정한다" 는 규칙의 반례가 된다.
+            Combo = new List<ComboStepDef>
             {
-                Anim = "attack", Fps = 50, Frames = 14, StartFrame = 0, BladeFrame = 4,
-                Windup = 0.08, Active = 0.06, Recover = 0.14, Stiff = firstStiff ?? 0.40, Damage = 8, Hitbox = TestSwordId, Poise = 10,
+                new()
+                {
+                    Anim = "attack", Fps = 50, Frames = 14, StartFrame = 0, BladeFrame = 4,
+                    Windup = 0.08, Active = 0.06, Recover = 0.14, Stiff = firstStiff ?? 0.40,
+                    Damage = 8, Hitbox = TestSwordId, Poise = 10,
+                },
+                // 2타 — 기준값이라 짧다(실제는 1.0초). 여기서 진짜여야 하는 것은 **모양**이다: 1타보다 선딜이 길고 더 아프다.
+                // 20fps · 12장이면 재생 0.6초로 셋의 합과 같고, 0번에서 시작해 6번 장(0.3초)이 선딜의 끝이다.
+                // 칼은 1타와 같은 기준 사각형이다 — 기준 파이터는 그림이 없다.
+                // 경직도(10 · 45)는 **실제 값 그대로**다 (#71) — 보스의 게이지(실제 bosses.json)와 짝이라, 여기서 다르면 테스트가 말하는
+                // "두 번째 2타에 무너진다" 가 게임의 것이 아니게 된다.
+                new()
+                {
+                    Anim = "attack2", Fps = 20, Frames = 12, StartFrame = 0, BladeFrame = 6,
+                    Windup = 0.3, Active = 0.1, Recover = 0.2, Stiff = secondStiff ?? 0.50,
+                    Damage = 24, Hitbox = TestSwordId, Poise = 45,
+                },
             },
-            // 2타 — 기준값이라 짧다(실제는 1.0초). 여기서 진짜여야 하는 것은 **모양**이다: 1타보다 선딜이 길고 더 아프다.
-            // 20fps · 12장이면 재생 0.6초로 셋의 합과 같고, 0번에서 시작해 6번 장(0.3초)이 선딜의 끝이다.
-            // 칼은 1타와 같은 기준 사각형이다 — 기준 파이터는 그림이 없다.
-            // 경직도(10 · 45)는 **실제 값 그대로**다 (#71) — 보스의 게이지(실제 bosses.json)와 짝이라, 여기서 다르면 테스트가 말하는
-            // "두 번째 2타에 무너진다" 가 게임의 것이 아니게 된다.
-            new()
-            {
-                Anim = "attack2", Fps = 20, Frames = 12, StartFrame = 0, BladeFrame = 6,
-                Windup = 0.3, Active = 0.1, Recover = 0.2, Stiff = secondStiff ?? 0.50, Damage = 24, Hitbox = TestSwordId, Poise = 45,
-            },
-        },
-        AttackCost = 12,
-        // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
-        // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
-        GuardChipRatio = 0.25,
-        GuardStaminaPerDamage = 1.8,
-        ExhaustSeconds = 1.1,
-        StaminaRegen = 40,
-        Sprite = "test_unit",
-    };
+            AttackCost = 12,
+            // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
+            // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
+            GuardChipRatio = 0.25,
+            GuardStaminaPerDamage = 1.8,
+            ExhaustSeconds = 1.1,
+            StaminaRegen = 40,
+            Sprite = "test_unit",
+        };
+    }
 
     /// <summary>기준 파이터의 칼 id. <c>hitboxes.json</c> 에는 없다 — <see cref="HitShapes"/> 가 더해 준다.</summary>
     public const string TestSwordId = "test/sword";

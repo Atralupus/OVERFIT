@@ -1096,7 +1096,8 @@ public class BattleSimTests
         const int press = 3;
         (DodgeEvent e, int hitTick) = ParryAt(press, at: 44);
 
-        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(c.ParryDuration + (BattleSim.TicksFor(c.ParryStiff) * BattleSim.Dt),
+        double parryAction = c.ParryDuration + (BattleSim.TicksFor(c.ParryStiff) * BattleSim.Dt);
+        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(parryAction,
             "판정이 패리 행동 안에 섰다 — 이 테스트가 경직까지 끝난 뒤를 안 본다");
         e.Verdict.ShouldBe(HitVerdict.Hit);
         e.Verb.ShouldBe(DodgeVerb.None, "경직까지 끝난 누름이 이 판정의 공을 가져갔다");
