@@ -558,16 +558,27 @@ public partial class FighterView : Node2D
     /// 대시 뒤 경직 (#82) — 대시의 <b>마지막 자세</b>를 붙든다(규칙: 경직도 대시다). 대시는 <c>run</c> 을 빌려 도는데, 경직 동안 흘려
     /// 두면 제자리에서 달리는 그림이 되고, <c>idle</c> 로 두면 "이제 움직일 수 있다" 고 말하는데 키는 안 먹는다 — 탈진에 색을 입히는
     /// 것과 같은 이유다(안 보이면 버그로 읽힌다). 멈춘 <c>run</c> 장과 꺼진 꼬리 색(<see cref="_dashTailTint"/>)이 "아직 대시다" 를
-    /// 말한다. 경직이 끝나 바로 이어진 새 대시는 이름이 같아 <see cref="Animate"/> 가 다시 안 틀므로 여기서 다시 흘린다.
+    /// 말한다.
+    ///
+    /// <para>
+    /// <b>푸는 것도 여기서 한다 — 걸음(<see cref="FighterPose.Run"/>)까지.</b> 걸음도 같은 <c>run</c> 이라, 경직이 끝나는 틱에
+    /// 곧장 이어진 걸음이든 새 대시든 <see cref="Animate"/> 는 이름이 안 바뀌었다고 보고 다시 안 튼다. 대시 쪽만 풀던 때는
+    /// 방향키를 쥔 채 대시한 사람(가장 흔한 입력이다 — 가운데 Idle 한 틱이 없다)이 멈춘 <c>run</c> 장 하나로 미끄러져 걸었다 —
+    /// 키를 떼거나 다른 그림으로 바뀔 때까지. <c>battle-9c</c> 의 대본이 바로 그 길인데 찍기 직전에 키를 떼 Idle 로 찍히므로 사진에는
+    /// 안 나왔다 — 리뷰가 찾았고, 매 프레임 장 번호 로그로 확인했다(대시 뒤 걸음에서 멈춘 <c>run</c> 18프레임 → 0).
+    /// 시트가 <c>run</c> 일 때만 푼다 — 팩에 <c>run</c> 이 없어 <see cref="Animate"/> 가 앞 시트를 남겼으면 그 시트(붙든 칼질 ·
+    /// 패리의 마지막 장)를 흘려서는 안 된다.
+    /// </para>
     /// </summary>
     private void HoldDash(FighterFrame frame)
     {
-        if (frame.Pose != FighterPose.Dash || _dead || _hitPoseLeft > 0)
+        if (frame.Pose is not (FighterPose.Dash or FighterPose.Run) || _dead || _hitPoseLeft > 0
+            || _sprite.Animation != AnimationFor(frame.Pose))
         {
             return;
         }
 
-        if (frame.Stiff)
+        if (frame.Pose == FighterPose.Dash && frame.Stiff)
         {
             if (_sprite.IsPlaying())
             {
