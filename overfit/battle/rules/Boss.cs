@@ -25,31 +25,18 @@ public sealed class BossConfig
     public required double PatternGap { get; init; }
 
     /// <summary>
-    /// 패턴의 <b>마무리</b>를 패리로 받아쳤을 때 굳는 시간(초) — 이 게임에 <b>하나뿐인</b> 경직이다
-    /// (이슈 #53).
+    /// <b>탈진</b>의 길이(초) — 받아치면 어느 타든 보스가 탈진한다 (#72 · 설계 §4.3). 틱으로는 <c>BattleSim</c> 이 바꿔 넘긴다
+    /// (1.5초 = 90틱 · 보스는 <c>BattleSim</c> 을 모른다).
     ///
     /// <para>
-    /// 전에는 경직이 둘이었다: 평범한 패리의 0.5초와 가드 불가를 받아친 1.6초. 평범한 쪽을 없앤
-    /// 것이 이 이슈의 절반이다 — 1·2타를 패리하면 패턴 타임라인이 0.5초 서고 뷰의 히트스톱까지
-    /// 겹쳐, <b>같은 패턴인데 3타가 올 때까지의 시간이 매번 달랐다</b>(0.90초 → 1.52초).
-    /// 그게 유저가 말한 "딜레이가 매번 다르다" 이고, 리듬이 흔들리면 외울 것이 없어진다.
-    /// 이제 앞의 연타를 받아친 상은 <b>피해 0 · 기 +1 · 공중 대시 회복</b>이고 박자는 고정이다.
-    /// </para>
-    ///
-    /// <para>
-    /// 남은 하나는 <b>마무리</b>(<see cref="HitBox.Finisher"/>)에 걸린다. 마무리는 아홉 변종 전부
-    /// 빨간 가드 불가라 1단계부터 이 상이 서고, 마무리에 거는 것이 안전하기도 하다: 그 뒤에는 올
-    /// 판정이 없어서 타임라인이 서도 미룰 것이 없다. 손으로 단 깃발(guard_break)이 아니라 타임라인의
-    /// 자리에 거는 이유는 <see cref="HitBox.Finisher"/> 에 적어 두었다.
-    /// </para>
-    ///
-    /// <para>
-    /// 길이는 <b>2연격 한 번이 이 경직 안에 들어가는가</b>로 정해진다(이슈 #59 — 전에는 최대 차지였다). 전에는
-    /// 경직 + <see cref="PatternGap"/> 을 합쳐서 쟀는데, 그러면 패턴 간격을 고치는 날
-    /// 이 상이 조용히 사라진다. <c>BossDataTests</c> 가 그 산수를 <c>fighters.json</c> 과 대조한다.
+    /// 길이는 <b>반격 2연격이 확실히 들어가는가</b>로 잰다. 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타라(되받아치기)
+    /// 가장 이른 J 는 받아친 다음 틱이고, 그 2연격의 2타가 창의 끝 틱에 닿기까지 0.0167 + 0.25 + 0.6667 + 0.1667 = 1.1001초다.
+    /// 1.5 에서 0.3999 가 남는다 — <c>BossDataTests</c> 가 사람의 반응 여유 0.15 를 넣어 <c>fighters.json</c> 과 대조한다.
+    /// 전에는 마무리를 받아쳤을 때만 굳었고(<c>finisher_parry_stagger</c> 2.3 · 이슈 #53) 앞의 연타를 받아친 상은 피해 0 뿐이었다 —
+    /// 스펙이 "어느 타든 끊고 탈진" 으로 바꿨다.
     /// </para>
     /// </summary>
-    public required double FinisherParryStagger { get; init; }
+    public required double ExhaustSeconds { get; init; }
 
     public required string Sprite { get; init; }
 }
@@ -62,7 +49,9 @@ public sealed class Boss
 {
     private readonly BossConfig _config;
     private readonly Arena _arena;
-    private double _staggerLeft;
+
+    /// <summary>남은 탈진 틱. 0 이면 탈진이 아니다.</summary>
+    private int _exhaustLeft;
 
     public Boss(BossConfig config, Arena arena, double x)
     {
@@ -112,23 +101,25 @@ public sealed class Boss
     public double PatternGap => _config.PatternGap;
 
     /// <summary>
-    /// 굳었나. <b>패턴을 취소하지 않고 세운다</b> — 취소로 하면 연속타 패턴이 첫 대만 받아내도
-    /// 통째로 지워져, 조작을 맞추는 이슈(#27)가 밸런스를 통째로 바꾸게 된다.
+    /// 탈진했나 (#72 · 설계 §4.3). 탈진한 보스는 아무것도 안 한다 — 패턴은 무너질 때 끊겼고(<c>BattleSim</c> 의 탈진 루틴),
+    /// 다가가지도 돌아서지도 않는다. 맞으면 피해만 들어간다.
     /// </summary>
-    public bool Staggered => _staggerLeft > 0;
+    public bool Exhausted => _exhaustLeft > 0;
 
     /// <summary>
-    /// <b>패턴의 마무리를 받아쳤다</b> (이슈 #53). 굳는 길이는 데이터(bosses.json)가 정한다.
-    ///
-    /// <para>
-    /// 부르는 자리가 하나뿐인 것이 계약이다 — 앞의 연타를 패리해도 보스는 <b>안 굳는다.</b>
-    /// 굳으면 패턴 타임라인이 서고, 그 순간 같은 패턴의 박자가 플레이어마다 · 시도마다 달라진다.
-    /// </para>
+    /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(패리 · 4번 PR 의 경직 게이지)이 몇이든
+    /// 같은 상태 · 같은 그림에 닿아야 한다(설계 §4.3). 길이는 틱이다 — 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
     /// </summary>
-    public void Stagger() => _staggerLeft = _config.FinisherParryStagger;
+    public void Exhaust(int ticks) => _exhaustLeft = Math.Max(0, ticks);
 
-    /// <summary>경직 시계를 민다. <b>굳어 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
-    public void Tick(double dt) => _staggerLeft = Math.Max(0, _staggerLeft - dt);
+    /// <summary>탈진 시계를 한 틱 민다. <b>탈진해 있어도 도는 유일한 시계다</b> — 안 그러면 안 풀린다.</summary>
+    public void Tick()
+    {
+        if (_exhaustLeft > 0)
+        {
+            _exhaustLeft--;
+        }
+    }
 
     public void TakeDamage(int amount) => Health = Math.Max(0, Health - amount);
 

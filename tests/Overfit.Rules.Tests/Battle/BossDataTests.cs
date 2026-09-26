@@ -56,15 +56,12 @@ public class BossDataTests
     }
 
     [Fact]
-    public void 경직_하나만으로_2연격이_들어간다()
+    public void 탈진_하나만으로_되받아치기_2연격이_들어간다()
     {
-        // 상이 없으면 "가드 불가" 는 그냥 더 아픈 판정이다 (이슈 #47). 상은 **2연격 한 번**이다 (이슈 #59 · 설계 §5.1)
-        // — 전에는 최대 차지였고, 차지가 없어지며 그 자리를 2타(1타의 세 배)가 받았다.
+        // 받아치면 어느 타든 보스가 탈진한다 (#72 · 설계 §4.3). 그 상은 **2연격 한 번**이다 — 받아쳤다 → 제일 센 걸 꽂는다.
         //
-        // ⚠ **패턴 간격을 더해서 재지 않는다** (이슈 #53). 전에는 경직 1.6 + 간격 0.8 = 2.4 로 쟀는데
-        // 그 셈은 둘을 다 밟는다: 간격은 경직이 **풀린 뒤**의 시간이라 한 동작으로 안 이어지고,
-        // 무엇보다 patterns.json 의 간격을 고치는 날 이 상이 말없이 사라진다.
-        // 이제 경직 하나만으로 들어가야 한다.
+        // ⚠ **패턴 간격을 더해서 재지 않는다** (이슈 #53). 간격은 탈진이 **풀린 뒤**의 시간이라 한 동작으로 안 이어지고,
+        // patterns.json 의 간격을 고치는 날 이 상이 말없이 사라진다. 탈진 하나만으로 들어가야 한다.
         Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
         fighters.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
 
@@ -72,24 +69,21 @@ public class BossDataTests
         {
             foreach ((string who, FighterConfig c) in fighters)
             {
-                // 칼이 닿기까지 = 한 틱 + 1타 전체 + 2타의 선딜 + 판정 (TestConfigs.FinisherPunishLead).
-                // **J 는 패리 커밋이 끝나기를 안 기다린다** — 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다(되받아치기 ·
-                // 판정 13). 가장 이른 J 는 받아친 다음 틱이다. 이 PR 의 앞 커밋들은 커밋 길이(0.333초)를 통째로 더했다 —
-                // 그때는 그 J 를 버렸다.
-                double lead = TestConfigs.FinisherPunishLead(c);
-                boss.FinisherParryStagger.ShouldBeGreaterThanOrEqualTo(lead,
-                    $"{id}: 경직 {boss.FinisherParryStagger} 초에"
-                    + $" {who} 의 되받아치기 2연격({lead:0.000}초)가 안 들어간다");
+                // 칼이 닿기까지 = 한 틱 + 1타 전체 + 2타의 선딜 + 판정의 끝 (TestConfigs.CounterLead) — 2타가 창의 **끝 틱**에
+                // 닿는 가장 나쁜 경우다(설계 §4.3). J 는 패리 커밋이 끝나기를 안 기다린다(되받아치기 · 판정 13).
+                double lead = TestConfigs.CounterLead(c);
+                boss.ExhaustSeconds.ShouldBeGreaterThanOrEqualTo(lead,
+                    $"{id}: 탈진 {boss.ExhaustSeconds} 초에 {who} 의 되받아치기 2연격({lead:0.000}초)가 안 들어간다");
             }
         }
     }
 
     [Fact]
-    public void 경직에_받아친_것을_알아차릴_여유가_남는다()
+    public void 탈진에_받아친_것을_알아차릴_여유가_남는다()
     {
         // 딱 맞으면 **사람이 못 쓴다.** 받아친 것을 보고 손을 공격 키로 옮기는 시간이 있어야
         // "받아쳤다 → 제일 센 걸 꽂는다" 가 한 동작이 된다. 0.15초는 사람 반응의 아래쪽이다 —
-        // 이 여유가 0 이 되면 경직 길이가 산수로만 맞고 손으로는 안 맞는다.
+        // 이 여유가 0 이 되면 탈진 길이가 산수로만 맞고 손으로는 안 맞는다. 지금 값: 1.5 − 1.1001 = 0.3999.
         Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
 
         foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
@@ -97,9 +91,9 @@ public class BossDataTests
             foreach ((string who, FighterConfig c) in fighters)
             {
                 // 여유는 **받아친 다음 틱부터** 센다 — 커밋 안이어도 알아차린 순간 J 가 나간다(위 테스트의 주석).
-                double lead = TestConfigs.FinisherPunishLead(c);
-                (boss.FinisherParryStagger - lead).ShouldBeGreaterThanOrEqualTo(0.15,
-                    $"{id}: {who} 의 되받아치기 2연격({lead:0.000}초)가 경직에 겨우 들어간다 — 반응할 틈이 없다");
+                double lead = TestConfigs.CounterLead(c);
+                (boss.ExhaustSeconds - lead).ShouldBeGreaterThanOrEqualTo(0.15,
+                    $"{id}: {who} 의 되받아치기 2연격({lead:0.000}초)가 탈진에 겨우 들어간다 — 반응할 틈이 없다");
             }
         }
     }

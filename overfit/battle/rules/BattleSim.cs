@@ -225,9 +225,7 @@ public sealed class BattleSim
     ///
     /// <para>
     /// 빨강을 마무리(<see cref="HitBox.Finisher"/>)가 아니라 이 깃발에 매다는 이유: 색이 말하는 것이
-    /// "가드로 못 막는다" 이기 때문이다. 데이터에서는 둘이 언제나 같은 대이고(PatternDataTests 가
-    /// 양쪽에서 못박는다) 상은 마무리에 걸리므로, 화면과 규칙이 같은 한 대를 가리킨다 — 다만 각자
-    /// **자기 뜻에 맞는 칸**을 읽는다. 둘이 갈라지는 날이 오면 빨강은 여전히 "못 막는다" 를 말한다.
+    /// "가드로 못 막는다" 이기 때문이다. 데이터에서는 둘이 언제나 같은 대다(PatternDataTests 가 양쪽에서 못박는다).
     /// </para>
     ///
     /// <para>
@@ -270,8 +268,15 @@ public sealed class BattleSim
         Fighter.Tick(input, Dt);
         _credit.Remember(Ticks * Dt, input, wasGrounded, wasX, wasY, Fighter, Boss);
         AdvanceBoss();
-        _swings.Resolve(Ticks);
+
+        // 같은 틱의 순서는 보스 판정 → 파이터의 칼 → 끊기다 (설계 §3.5 5). 받아친 틱에 파이터의 칼이 먼저 돌고,
+        // 그 뒤에 보스가 무너져 남은 창을 버린다.
+        bool parried = _swings.Resolve(Ticks);
         Strike();
+        if (parried)
+        {
+            Exhaust("parry");
+        }
 
         if (!Boss.Alive)
         {
@@ -306,12 +311,12 @@ public sealed class BattleSim
     /// <summary>패턴과 패턴 사이의 쉬는 틱. 반올림은 <see cref="TicksFor"/> 한 곳이다.</summary>
     private int GapTicks => TicksFor(Boss.PatternGap);
 
-    /// <summary>보스: 굳었으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
+    /// <summary>보스: 탈진했으면 아무것도 안 하고, 쉬는 중이면 다가가고, 패턴 중이면 타임라인을 민다.</summary>
     private void AdvanceBoss()
     {
-        // 경직 시계만은 굳어 있어도 돈다 — 아니면 안 풀린다.
-        Boss.Tick(Dt);
-        if (Boss.Staggered)
+        // 탈진 시계만은 탈진해 있어도 돈다 — 아니면 안 풀린다. 풀리는 틱부터 쉬는 갈래로 간다.
+        Boss.Tick();
+        if (Boss.Exhausted)
         {
             return;
         }
@@ -415,6 +420,33 @@ public sealed class BattleSim
             _motion = null;
             Log.Debug("boss", () => $"motion_end x={Boss.X:0} facing={Boss.Facing} tick={Ticks}");
         }
+    }
+
+    /// <summary>
+    /// <b>탈진 루틴 — 하나다</b> (#72 · 설계 §4.3). 원인이 패리든(3번 PR) 경직 게이지든(4번 PR) 같은 상태 · 같은 그림에 닿아야
+    /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격 · 움직임은 안 온다), 열린 창은
+    /// 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 탈진이 풀리면 간격을 처음부터 세어 다음 패턴을 고른다.
+    /// </summary>
+    /// <param name="cause">무엇이 무너뜨렸나 — <c>parry</c>. 로그의 <c>cause=</c> 다.</param>
+    private void Exhaust(string cause)
+    {
+        // 탈진한 보스에게는 판정도 채움도 없어 다시 무너질 길이 없다 — 오면 규칙 위반이다.
+        if (Boss.Exhausted)
+        {
+            Log.Error("boss", $"exhaust_reentry cause={cause} tick={Ticks}");
+            return;
+        }
+
+        string id = Boss.CurrentPattern ?? "-";
+        _swings.Cut(Ticks, "exhaust");
+        _runner = null;
+        _current = null;
+        Boss.CurrentPattern = null;
+        _motion = null;
+        _holdClock = false;
+        _gapLeft = GapTicks;
+        Boss.Exhaust(TicksFor(_setup.Boss.ExhaustSeconds));
+        Log.Debug("boss", () => $"exhaust cause={cause} id={id} tick={Ticks}");
     }
 
     /// <summary>다음 패턴을 고른다. 무작위이되 시드·도메인·뽑은 횟수로 좌표를 조회한다.</summary>

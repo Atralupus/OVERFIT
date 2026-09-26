@@ -91,7 +91,7 @@ public static class TestConfigs
 
     /// <summary>
     /// 2연격의 마지막 칼이 닿기까지(초) — 앞 칼질 전부 + 마지막 칼질의 선딜 + 판정. 2타는 1타가 끝나는 틱에
-    /// 이어진다(설계 §5.1). 마무리를 받아친 경직이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
+    /// 이어진다(설계 §5.1). 받아친 뒤의 탈진이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
     /// </summary>
     public static double ComboLead(FighterConfig c)
     {
@@ -105,13 +105,13 @@ public static class TestConfigs
     }
 
     /// <summary>
-    /// 마무리를 받아친 틱부터 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
+    /// 받아친 틱부터 되받아치기 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
     /// (<c>Fighter.Begin</c> 의 되받아치기 · 판정 13) — 커밋이 끝나기를 안 기다린다. 가장 이른 J 는 받아친
-    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 경직)을 파이터의 틱
+    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 탈진)을 파이터의 틱
     /// 뒤에 내므로 받아친 그 틱의 J 는 이미 지나갔다. <see cref="ComboLead"/> 만 쓰면 받아친 그 틱에 누른 J 를 세는
     /// 셈이고, 그 J 는 규칙이 못 받는다. 사람의 반응은 여기 안 넣는다 — 그 여유는 BossDataTests 가 따로 잰다.
     /// </summary>
-    public static double FinisherPunishLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
+    public static double CounterLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
 
     /// <summary>
     /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
@@ -256,7 +256,7 @@ public static class TestConfigs
             HalfWidth = data.HalfWidth,
             Height = data.Height,
             PatternGap = patternGap ?? data.PatternGap,
-            FinisherParryStagger = data.FinisherParryStagger,
+            ExhaustSeconds = data.ExhaustSeconds,
             Sprite = data.Sprite,
         };
     }

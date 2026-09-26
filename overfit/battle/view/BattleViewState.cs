@@ -139,8 +139,8 @@ public readonly record struct BossTell(
 /// 무엇보다 <b>패턴 중 잠금</b>(<c>Boss.Face</c>)이 뷰에서 풀려 예고가 스윙 도중에 뒤집힌다.</param>
 /// <param name="Phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
 /// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
-/// <param name="Staggered">가드 불가를 받아쳐 굳어 있나 (이슈 #53). 이 동안은 예고를 그리지 않고
-/// idle 을 <c>feel.stagger_anim_speed</c> 로 느리게 돌린다 — 팩에 지친 모션이 없어서 고른 방법이다.</param>
+/// <param name="Exhausted">탈진했나 (#72 · 설계 §4.3). take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선 채 푸른 톤이다 —
+/// 패리로든 경직 게이지로든(4번 PR) 같은 그림이다.</param>
 /// <param name="Anim">선딜에 재생할 모션 이름. 패턴마다 다르다(<c>patterns.json</c> 의 <c>tell.anim</c>).
 /// 패턴이 안 돌면 null.</param>
 /// <param name="Tell">이 패턴의 예고 표지. 패턴이 안 돌거나 후딜이면 null.</param>
@@ -149,6 +149,6 @@ public readonly record struct BossFrame(
     int Facing,
     BossPhase Phase,
     double? NextActiveIn,
-    bool Staggered,
+    bool Exhausted,
     string? Anim,
     BossTell? Tell);

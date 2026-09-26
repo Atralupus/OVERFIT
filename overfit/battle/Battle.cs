@@ -66,8 +66,8 @@ public partial class Battle : Node2D
     /// 지나가는 상태의 열은 걸든 안 걸든 한 칸도 안 다르다 — 헤드리스 봇과 사람이 <b>같은 판</b>을
     /// 살고, 그래서 학습 데이터에 sim-to-real 간극이 안 생긴다. 규칙으로 옮기면 반대로 이 숫자가
     /// 리플레이의 일부가 되어, 손맛을 눈으로 고칠 때마다 지금까지의 리플레이가 못 쓰게 된다.
-    /// 남는 차이는 사람이 벽시계로 <c>hitstop_frames</c> 만큼 더 쉰다는 것 하나이고, 이제 그것이
-    /// 걸리는 자리는 <b>3타를 받아친 순간</b> 하나뿐이다 — 2.3초짜리 경직 안이라 아무 판단도 안 민다.
+    /// 남는 차이는 사람이 벽시계로 <c>hitstop_frames</c> 만큼 더 쉰다는 것 하나이고, 그것이 걸리는 자리는
+    /// <b>보스가 무너지는 순간</b>이다(#72) — 1.5초짜리 탈진 안이라 아무 판단도 안 민다.
     /// </para>
     /// </summary>
     private int _hitstopLeft;
@@ -93,6 +93,9 @@ public partial class Battle : Node2D
 
     /// <summary>지난 틱에 패리 중이었나. 꺼졌다 켜진 틱이 새 패리다 — 칼질과 같은 규약이다.</summary>
     private bool _lastParrying;
+
+    /// <summary>지난 틱에 보스가 탈진해 있었나. 꺼졌다 켜진 틱이 <b>무너지는 순간</b>이다 — 히트스톱이 거기 걸린다.</summary>
+    private bool _lastBossExhausted;
     private bool _walking;
 
     /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
@@ -168,12 +171,11 @@ public partial class Battle : Node2D
     public bool BossGuardBreak => !_broken && !_over && _sim.NextActiveGuardBreak;
 
     /// <summary>
-    /// 보스가 <b>굳어 있나</b> (이슈 #53). 위와 같이 디버그 전용 읽기다 — 마무리를 받아친 상이
-    /// 화면에서 "지쳤다" 로 읽히는지를 증명하려면 그 2.3초 안에서 셔터를 눌러야 한다.
-    /// 프레임을 세지 않는 이유는 늘 같다: 경직 길이는 데이터라 세어 두면 그 값을 고치는 날
-    /// 이 장이 조용히 다른 순간을 찍는다.
+    /// 보스가 <b>탈진했나</b> (#72 · 설계 §4.3). 위와 같이 디버그 전용 읽기다 — 받아친 상이 화면에서 "무너졌다" 로
+    /// 읽히는지를 증명하려면 그 1.5초 안에서 셔터를 눌러야 한다. 프레임을 세지 않는 이유는 늘 같다: 탈진 길이는
+    /// 데이터라 세어 두면 그 값을 고치는 날 이 장이 조용히 다른 순간을 찍는다.
     /// </summary>
-    public bool BossStaggered => !_broken && !_over && _sim.Boss.Staggered;
+    public bool BossExhausted => !_broken && !_over && _sim.Boss.Exhausted;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
@@ -399,10 +401,13 @@ public partial class Battle : Node2D
                 DodgeEvent e = _sim.Events[i];
                 switch (e.Verdict)
                 {
+                    // 받아쳤다 — 작은 고리와 약한 흔들림이다(요청이 "화면이 약간 흔들리고 작은 성공 표시" · 이슈 #53). 0.7 은
+                    // 판정마다 도는 것(0.45)보다 조금 세고 피격(1.0)보다 훨씬 약하다. 받아치면 보스가 무너지는데(#72) 그 히트스톱과
+                    // 큰 흔들림은 여기가 아니라 탈진에 드는 틱이 건다(아래) — 원인이 무엇이든 같은 탈진에 같이 걸리게.
                     case HitVerdict.Parried:
-                        // **마무리를 받아쳤나**가 연출의 크기를 정한다 (이슈 #53) — 보스가 굳는
-                        // 조건과 같은 칸이다. 규칙 층에 뷰용 콜백이 없으므로 그 사실은 관측에 실려 온다.
-                        ParryLanded(finisher: e.Finisher);
+                        _parries++;
+                        _fighterView.ParrySuccess();
+                        ShakeFor(0.7);
                         break;
 
                     // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
@@ -444,6 +449,17 @@ public partial class Battle : Node2D
             _bossView.Hit();
         }
 
+        // **보스가 무너지는 틱** (#72 · 설계 §4.3 · §7.2) — 히트스톱과 흔들림이 여기 걸린다. 관측(받아친 판정)이 아니라
+        // 탈진에 드는 것을 앞 틱과 견줘 잡는다: 4번 PR 의 경직 게이지 탈진에는 받아친 관측이 없다.
+        if (_sim.Boss.Exhausted && !_lastBossExhausted)
+        {
+            ShakeFor(1.0);
+            _hitstopLeft = _feel.HitstopFrames;
+            Freeze(true);
+        }
+
+        _lastBossExhausted = _sim.Boss.Exhausted;
+
         // 새 칼질이 시작된 **그 틱** (이슈 #54) — 1타든, 1타가 끝나는 틱에 이어진 2타든(설계 §5.1). 2타는 행동이
         // Attack 그대로라 "행동이 바뀌었나" 로는 못 본다: 몇 번째 칼질인지가 바뀐 것을 본다. 렌더 프레임이 아니라
         // 여기(물리 틱)서 보는 이유는 FighterView.SwingBegan 의 주석에 적었다.
@@ -475,40 +491,6 @@ public partial class Battle : Node2D
         _lastFighterHealth = _sim.Fighter.Health;
         _lastBossHealth = _sim.Boss.Health;
         _lastAttackActive = _sim.Fighter.AttackActive;
-    }
-
-    /// <summary>
-    /// 받아쳤다 (이슈 #53). <b>1·2타에는 작은 고리와 약한 흔들림뿐</b>이고, <b>가드 불가인 3타에만</b>
-    /// 히트스톱이 붙는다.
-    ///
-    /// <para>
-    /// 전에는 모든 패리가 섬광 + 스파크 + 히트스톱 7프레임을 받았다. 그 히트스톱이 경직 0.5초와
-    /// 겹쳐 <b>같은 패턴의 3타가 0.90초 뒤에 오기도 1.52초 뒤에 오기도 했다</b> — 유저가
-    /// "딜레이가 매번 다르다" 고 말한 것이 이것이다. 시간을 세우는 것은 "이건 특별하다" 는 말이라,
-    /// 매번 일어나는 일에 걸면 그 말이 박자를 먹는다.
-    /// </para>
-    ///
-    /// <para>
-    /// 흔들림은 <b>판정마다 도는 것(0.45)보다 조금 세고 피격(1.0)보다 훨씬 약하다.</b>
-    /// 요청이 "화면이 약간 흔들리고 작은 성공 표시" 였고, 받아친 것은 맞은 것이 아니다.
-    /// </para>
-    /// </summary>
-    /// <param name="finisher">그 판정이 패턴의 <b>마무리</b>였나. 규칙 층이 보스를 굳히는 조건과
-    /// 같은 칸이다 — 화면이 서는 것과 보스가 굳는 것이 다른 조건으로 갈리면 히트스톱이 경직 없는
-    /// 자리에 걸려 박자만 먹는다.</param>
-    private void ParryLanded(bool finisher)
-    {
-        _parries++;
-        _fighterView.ParrySuccess();
-        ShakeFor(0.7);
-
-        if (!finisher)
-        {
-            return;
-        }
-
-        _hitstopLeft = _feel.HitstopFrames;
-        Freeze(true);
     }
 
     private void Freeze(bool frozen)
@@ -639,7 +621,7 @@ public partial class Battle : Node2D
             _sim.Boss.Facing,
             Phase(),
             _sim.NextActiveIn,
-            _sim.Boss.Staggered,
+            _sim.Boss.Exhausted,
             CurrentAnim(),
             CurrentTell()));
 

@@ -356,17 +356,9 @@ public partial class ShotRunner : Node
         await Frames(3);
         await Screenshot.CaptureAsync(this, "battle-11-feint");
 
-        // ── 지친 보스: 마무리를 받아쳐 굳은 동안 (이슈 #53) ──────────────
-        // **Medieval King Pack 2 에는 지친 모션이 없다.** 시트는 열뿐이고(idle · run · jump · fall ·
-        // attack1~3 · take-hit · take-hit-white · death) 그중 "숨이 차 서 있다" 인 것이 하나도 없다.
-        // 없는 이름으로 Play 하면 뷰가 [W] 한 줄만 남기고 아무것도 안 바꿔, 칼을 든 공격 자세가
-        // 2.3초 동안 그대로 선다 — 상을 받은 장면이 상을 안 받은 장면과 똑같아진다.
-        // 그래서 지어내지 않고 **있는 것을 느리게** 돌린다: idle × stagger_anim_speed + 식은 몸 색.
-        // 이 장은 그 둘이 실제로 "지쳤다" 로 읽히는지를 눈으로 확인하는 자리다.
-        //
-        // 받아친 것(battle-10d)이 마무리가 아니었으면 보스는 안 굳으므로, 굳을 때까지 계속 받아친다 —
-        // 바로 앞에서 헛스윙을 찍었으니 다음으로 오는 판정이 곧 그 `III-역린` 의 마무리다.
-        for (int i = 0; i < 60 * 14 && _battle is { BossStaggered: false }; i++)
+        // ── 탈진한 보스: 받아쳐 무너진 동안 (#72 · 설계 §4.3) ──────────────
+        // take-hit 를 한 번 돌고 마지막 장에 선 채 푸른 톤이다. 어느 타를 받아쳐도 무너지므로 받아칠 때까지 누른다.
+        for (int i = 0; i < 60 * 14 && _battle is { BossExhausted: false }; i++)
         {
             if (_battle is { BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08)
             {
@@ -376,9 +368,9 @@ public partial class ShotRunner : Node
             await Frames(1);
         }
 
-        if (_battle is { BossStaggered: false })
+        if (_battle is { BossExhausted: false })
         {
-            Log.Warn("shots", "stagger_not_seen");
+            Log.Warn("shots", "exhaust_not_seen");
         }
 
         await Frames(6);

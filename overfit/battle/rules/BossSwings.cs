@@ -41,6 +41,9 @@ public sealed class BossSwings
     /// <summary>관측을 짓는 틱의 번호 — <see cref="Resolve"/> 가 받는다.</summary>
     private int _tick;
 
+    /// <summary>이 틱에 받아친 판정이 있었나 — <see cref="Resolve"/> 가 돌려준다.</summary>
+    private bool _parried;
+
     public BossSwings(Fighter fighter, Boss boss, DodgeCredit credit)
     {
         ArgumentNullException.ThrowIfNull(fighter);
@@ -80,11 +83,16 @@ public sealed class BossSwings
     public void Open(HitBox box, PatternTags tags, string patternId) =>
         _live.Add(new LiveSwing(box, tags, patternId, BattleSim.TicksFor(box.ActiveSeconds)));
 
-    /// <summary>살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다.</summary>
+    /// <summary>
+    /// 살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다. <b>받아친 판정이 있었으면 true</b> —
+    /// 보스를 탈진시키는 것은 부르는 쪽(<c>BattleSim</c> 의 탈진 루틴)이다: 같은 틱의 순서가 보스 판정 → 파이터의 칼 → 끊기라서다
+    /// (설계 §3.5 5).
+    /// </summary>
     /// <param name="tick">이 틱의 번호 — <c>BattleSim.Ticks</c>. 관측의 시각이 여기서 나온다.</param>
-    public void Resolve(int tick)
+    public bool Resolve(int tick)
     {
         _tick = tick;
+        _parried = false;
         _tested.Clear();
         var at = new Placement(_boss.X, _boss.Y, _boss.Facing);
 
@@ -100,6 +108,24 @@ public sealed class BossSwings
         }
 
         _live.RemoveRange(kept, _live.Count - kept);
+        return _parried;
+    }
+
+    /// <summary>
+    /// 열린 창을 <b>관측 없이</b> 버린다 (#72 · 설계 §3.5 5). 보스가 탈진해 패턴이 끊기면 그 판정에는 결과가 없다 —
+    /// 지어내면 창이 열린 첫 틱의 빗나간 이유(대개 거리)가 그대로 나가, 모양 안에 서 있던 사람도 "거리로 빗나갔다" 로
+    /// 계측에 들어간다. 그 한 줄이 곧 시도 기록이라 망의 입력으로 간다. 그래서 로그 한 줄만 남긴다.
+    /// </summary>
+    /// <param name="tick">끊는 틱.</param>
+    /// <param name="reason">왜 끊나 — <c>exhaust</c>(보스가 탈진했다).</param>
+    public void Cut(int tick, string reason)
+    {
+        foreach (LiveSwing swing in _live)
+        {
+            Log.Debug("boss", $"cut_swing id={swing.PatternId} tick={tick} reason={reason}");
+        }
+
+        _live.Clear();
     }
 
     /// <summary>
@@ -167,25 +193,10 @@ public sealed class BossSwings
                 break;
 
             case HitVerdict.Parried:
+                // **어느 타든** 받아치면 보스가 탈진한다 (#72 · 설계 §4.3) — 전에는 마무리를 받아쳤을 때만 굳었다(이슈 #53).
+                // 탈진은 여기서 안 건다: 같은 틱에 파이터의 칼이 먼저 돌아야 하고(설계 §3.5 5), 탈진 루틴은 BattleSim 하나다.
                 _fighter.ParryPrecise();
-
-                // **굳히는 것은 마무리를 받아쳤을 때뿐이다** (이슈 #53). 앞의 연타를 받아쳐도
-                // 타임라인이 서지 않으므로 마무리까지의 시간이 언제나 같다 — 그 고정이 이 계열을
-                // 외울 수 있게 만든다. 전에는 1·2타 패리가 0.5초 경직 + 히트스톱 7프레임을
-                // 붙여 같은 패턴의 3타가 0.90초 뒤에 오기도, 1.52초 뒤에 오기도 했다.
-                //
-                // 마무리에 거는 것이 안전한 이유이기도 하다: 그 뒤에는 올 판정이 없어서
-                // 타임라인이 서도 미룰 것이 없다. 앞의 연타에 걸면 **남은 대들이 통째로 밀린다.**
-                //
-                // 읽는 칸은 guard_break 가 아니라 **마무리**다. 데이터에서는 늘 같은 대이지만
-                // (PatternDataTests), 손으로 단 깃발은 판정을 끼워 넣는 날 옛 자리에 남을 수 있고
-                // 타임라인의 마지막 자리는 그러지 않는다 (<see cref="HitBox.Finisher"/>).
-                // 보스를 굳히는 것이 여기인 이유는 그대로다 — 파이터는 보스를 모른다.
-                if (box.Finisher)
-                {
-                    _boss.Stagger();
-                }
-
+                _parried = true;
                 break;
 
             case HitVerdict.Guarded:

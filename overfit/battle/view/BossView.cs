@@ -39,7 +39,7 @@ public partial class BossView : Node2D
     /// 였고(이슈 #27), 그때는 붉은색을 다른 뜻에 못 썼다 — 두 뜻이 정반대라 같은 색이면
     /// 플레이어가 거꾸로 반응한다. 그 주인(점프 강타)이 이슈 #48 에서 사라져 빨강이 비었고,
     /// 이제 <b>빨강 = 가드로 못 막는다 = 받아쳐라</b> 다. 마무리가 아홉 변종 전부 가드 불가라
-    /// 이 색은 모든 패턴의 마지막 한 대에 뜨고, 받아치면 보스가 굳어 거기 2연격이 들어간다.
+    /// 이 색은 모든 패턴의 마지막 한 대에 뜬다.
     /// </para>
     ///
     /// <para>
@@ -59,10 +59,11 @@ public partial class BossView : Node2D
     private static readonly Color _recoverTint = new(0.70f, 0.70f, 0.78f);
 
     /// <summary>
-    /// <b>굳어 있는</b> 동안의 몸 색 (이슈 #53). 후딜(<see cref="_recoverTint"/>)보다 더 식는다 —
-    /// 팩에 지친 모션이 없어서, 느려진 idle 과 이 색 둘이 "숨이 찼다" 를 나눠 진다.
+    /// <b>탈진</b>한 동안의 몸 색 — 푸른 톤 (#72 · 설계 §4.3 · §6). 그림은 take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선
+    /// 자세이고, 이 색이 "지금은 아무것도 안 온다 — 내 차례다" 를 말한다. 전에는 경직을 식은 회색 + 느린 idle 로 그렸다
+    /// (팩에 지친 모션이 없다고 봤다) — 스펙이 take-hit 를 탈진의 그림으로 정했다.
     /// </summary>
-    private static readonly Color _staggerTint = new(0.52f, 0.50f, 0.60f);
+    private static readonly Color _exhaustTint = new(0.56f, 0.70f, 1.35f);
 
     private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
 
@@ -83,9 +84,14 @@ public partial class BossView : Node2D
     private double _hitPoseLeft;
     private bool _dead;
 
-    /// <summary>히트스톱으로 그림이 멈춰 있나. 경직의 느린 재생과 <b>한 자리에서</b> 정해야 한다 —
-    /// 둘이 각자 <c>SpeedScale</c> 을 쓰면 나중에 쓰는 쪽이 이겨서 히트스톱 중에도 그림이 돈다.</summary>
+    /// <summary>히트스톱으로 그림이 멈춰 있나.</summary>
     private bool _frozen;
+
+    /// <summary>
+    /// 이번 탈진에 <c>hit</c> 를 이미 틀었나. 틀었으면 돌아올 때(탈진한 보스를 때려 <c>hit_white</c> 가 끼었다 끝날 때) 처음부터
+    /// 다시 돌지 않고 마지막 장에 선다 — 탈진 자세로 돌아오는 것이다(설계 §4.3).
+    /// </summary>
+    private bool _exhaustShown;
 
     public override void _Ready()
     {
@@ -157,10 +163,8 @@ public partial class BossView : Node2D
         _hitPoseLeft = System.Math.Max(0, _hitPoseLeft - dt);
         HoldLastFrameWhenDead();
 
-        // **굳은 동안에는 예고를 안 그린다** (이슈 #53). 경직 중에는 타임라인이 안 밀리므로
-        // NextActiveIn 이 그대로 멈춰 있고, 그러면 링도 표지도 얼어붙은 채 "곧 온다" 를
-        // 2.3초 내내 거짓말한다 — 지금 오는 것은 아무것도 없다.
-        float ripeness = frame.Staggered ? 0 : Ripeness(phase, frame.NextActiveIn);
+        // 탈진하면 패턴이 끊겨 Phase 가 Idle 이므로 예고는 저절로 안 그려진다 (#72 · 설계 §4.3).
+        float ripeness = Ripeness(phase, frame.NextActiveIn);
 
         // **빨강은 가드 불가 하나를 말한다** (이슈 #53). 몸 색 · 링 · 표지가 전부 이 한 칸을 읽는다 —
         // 셋 중 하나라도 다른 칸을 읽으면 같은 순간에 화면이 두 말을 한다.
@@ -175,20 +179,24 @@ public partial class BossView : Node2D
         // 표지는 선딜 **내내** 보인다. 무르익음에만 묶으면 tell_lead_seconds 밖의 선딜이
         // 통째로 무표지가 되는데, 백장의 올려베기가 정확히 그 구간이 가장 긴 패턴이다 —
         // "크게 예고한다" 가 설계인 패턴이 예고를 제일 늦게 받는 것은 뒤집힌 것이다.
-        if (phase == BossPhase.Windup && !frame.Staggered && frame.Tell is { } mark)
+        if (phase == BossPhase.Windup && frame.Tell is { } mark)
         {
             _tell.Show(mark, new Color(tellColor.R, tellColor.G, tellColor.B, 0.45f + (0.55f * ripeness)));
         }
 
-        Animate(AnimationFor(phase, frame.Anim, frame.Staggered));
+        string anim = AnimationFor(phase, frame.Anim, frame.Exhausted);
+        if (anim == "hit" && _exhaustShown && _sprite.Animation != "hit")
+        {
+            HoldLastFrame("hit");
+        }
+        else
+        {
+            Animate(anim);
+        }
 
-        // 재생 속도를 **여기 한 자리에서** 정한다. 히트스톱이 이기고(그건 시간을 세운 것이다),
-        // 아니면 굳은 동안 idle 이 느려진다 — 팩에 지친 모션이 없어서 고른 방법이다.
-        _sprite.SpeedScale = _frozen ? 0.0f
-            : frame.Staggered ? (float)_feel.StaggerAnimSpeed
-            : 1.0f;
-
-        _sprite.Modulate = Tint(phase, ripeness, guardBreak, frame.Staggered);
+        _exhaustShown = frame.Exhausted && (_exhaustShown || anim == "hit");
+        _sprite.SpeedScale = _frozen ? 0.0f : 1.0f;
+        _sprite.Modulate = Tint(phase, ripeness, guardBreak, frame.Exhausted);
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -252,8 +260,7 @@ public partial class BossView : Node2D
 
     /// <summary>
     /// 히트스톱. 그림만 세운다 — 시뮬레이션의 시계는 <c>Battle</c> 이 따로 멈춘다.
-    /// 실제로 <c>SpeedScale</c> 을 정하는 것은 <see cref="Show"/> 한 자리다(경직의 느린 재생과
-    /// 다투지 않게), 다만 히트스톱은 <see cref="Show"/> 를 못 기다린다 — 같은 프레임에 걸려야 한다.
+    /// <see cref="Show"/> 를 못 기다린다 — 같은 프레임에 걸려야 한다.
     /// </summary>
     public void Freeze(bool frozen)
     {
@@ -272,7 +279,7 @@ public partial class BossView : Node2D
         return Mathf.Clamp(1.0f - (float)(left / _feel.TellLeadSeconds), 0.0f, 1.0f);
     }
 
-    private string AnimationFor(BossPhase phase, string? anim, bool staggered)
+    private string AnimationFor(BossPhase phase, string? anim, bool exhausted)
     {
         if (_dead)
         {
@@ -284,14 +291,12 @@ public partial class BossView : Node2D
             return "hit_white";
         }
 
-        // **굳은 동안은 idle 이다** (이슈 #53). Medieval King Pack 2 에는 지친 모션이 없다 —
-        // 시트가 열뿐이고(idle · run · jump · fall · attack1~3 · take-hit · take-hit-white · death)
-        // 그중 어느 것도 "숨이 차 서 있다" 가 아니다. 없는 이름으로 Play 하면 아래 Animate 가
-        // [W] 한 줄 남기고 **아무것도 안 바꾸므로**, 칼을 든 공격 자세가 2.3초 동안 그대로 선다.
-        // 그래서 지어내지 않고 있는 것을 느리게 돌린다(Show 가 SpeedScale 을 깎는다).
-        if (staggered)
+        // **탈진은 take-hit 다** (#72 · 설계 §4.3 · §6) — 흰 실루엣(hit_white)이 아니다. 제 속도(10fps · 0.4초)로 한 번 돌고
+        // 마지막 장에 선다: 반복하지 않는 애니메이션이라 엔진이 마지막 장에서 멈춘다. 패리로든 경직 게이지로든(4번 PR)
+        // 같은 그림이다.
+        if (exhausted)
         {
-            return "idle";
+            return "hit";
         }
 
         // 선딜에만 공격 모션이다. 후딜까지 두면 "아직 온다" 와 "끝났다" 가 같은 그림이 된다.
@@ -308,7 +313,7 @@ public partial class BossView : Node2D
         _flashLeft = seconds;
     }
 
-    private Color Tint(BossPhase phase, float ripeness, bool guardBreak, bool staggered)
+    private Color Tint(BossPhase phase, float ripeness, bool guardBreak, bool exhausted)
     {
         // 흰 피격 실루엣은 **작가가 그린 픽셀 그대로** 나가야 한다. 선딜 틴트를 그 위에 얹으면
         // 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 되어, 정작 흰색이라는 것이 안 보인다 —
@@ -319,11 +324,9 @@ public partial class BossView : Node2D
             return Colors.White;
         }
 
-        // 굳은 것이 예고를 이긴다. 경직 중에도 CurrentPattern 은 살아 있어 Phase 는 Windup 인데,
-        // 그 색(호박·빨강)은 "곧 온다" 는 뜻이라 굳은 보스에게는 거짓말이다.
-        if (staggered)
+        if (exhausted)
         {
-            return _staggerTint;
+            return _exhaustTint;
         }
 
         Color baseTint = phase switch
@@ -346,6 +349,20 @@ public partial class BossView : Node2D
         if (_dead && _sprite.SpriteFrames is { } frames && frames.HasAnimation(_sprite.Animation)
             && _sprite.Frame >= frames.GetFrameCount(_sprite.Animation) - 1)
         {
+            _sprite.Pause();
+        }
+    }
+
+    /// <summary>
+    /// 그 애니메이션의 <b>마지막 장에 세운다</b> — 탈진한 보스를 때려 <c>hit_white</c> 가 끼었다 끝나면 take-hit 를 처음부터
+    /// 다시 돌지 않고 서 있던 자세로 돌아온다.
+    /// </summary>
+    private void HoldLastFrame(string name)
+    {
+        Animate(name);
+        if (_sprite.SpriteFrames is { } frames && frames.HasAnimation(name))
+        {
+            _sprite.Frame = frames.GetFrameCount(name) - 1;
             _sprite.Pause();
         }
     }
