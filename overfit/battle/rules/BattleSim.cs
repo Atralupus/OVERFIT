@@ -582,14 +582,16 @@ public sealed class BattleSim
 
     /// <summary>
     /// 초를 틱으로. <b>규칙의 초→틱 반올림은 여기 한 곳이다</b> (설계 §3.5 · §3.6 ⑤) — 반 틱은 0 에서 먼 쪽으로 간다.
-    /// 쓰는 곳은 다섯이다: 판정 창의 길이(<see cref="BossSwings.Open"/> · <see cref="BossHits"/> 의 점프 가능), 타임라인 단계의
-    /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>).
+    /// 쓰는 곳은 여덟이다: 판정 창의 길이(<see cref="BossSwings.Open"/> · <see cref="BossHits"/> 의 점프 가능), 타임라인 단계의
+    /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 보스의 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>),
+    /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>).
     /// 8fps 한 장은 0.125초 = 7.5틱이라, 이 중 둘이 각자 반올림하면 반 틱씩 어긋난다.
     ///
     /// <para>
-    /// 한 틱보다 짧은 값은 0 이하까지 전부 <b>한 틱</b>이다 — 어느 쓰임에도 0 틱이 안 나온다. 타임라인에서는 그래서 T = 0 인
-    /// 첫 단계가 틱 1 이고, 러너는 제 첫 틱을 1 로 세므로(<see cref="PatternRunner.Ticks"/>) 그 단계는 <b>러너의 첫 틱</b>에 든다
-    /// (설계 §3.6 ⑤). 한 틱(1/60초) 아래의 T 도 같은 틱이다.
+    /// 한 틱보다 짧은 값은 0 이하까지 전부 <b>한 틱</b>이다 — 어느 쓰임에도 0 틱이 안 나온다(행동 뒤 경직만 0 을 "경직 없음" 으로 읽어
+    /// 여기 오기 전에 거른다 — <c>Fighter.StiffTicks</c>). 타임라인에서는 그래서 T = 0 인 첫 단계가 틱 1 이고, 러너는 제 첫 틱을
+    /// 1 로 세므로(<see cref="PatternRunner.Ticks"/>) 그 단계는 <b>러너의 첫 틱</b>에 든다(설계 §3.6 ⑤). 한 틱(1/60초) 아래의 T 도
+    /// 같은 틱이다.
     /// </para>
     /// </summary>
     public static int TicksFor(double seconds) =>

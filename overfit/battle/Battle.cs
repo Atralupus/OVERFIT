@@ -129,8 +129,9 @@ public partial class Battle : Node2D
     public bool FighterGuarding => !_broken && !_over && _sim.Fighter.Guarding;
 
     /// <summary>
-    /// 지금 패리 커밋 중인가. 디버그 전용 읽기다 — 패리는 이제 누르는 것 한 번이라(설계 §5.3) 스크린샷이
-    /// 그 0.33초를 노리려면 규칙에게 물어야 한다.
+    /// 지금 패리 행동 중인가 — 커밋(0.333초)과 그 뒤 패리 뒤 경직(0.25초 · #82)을 합친 0.583초다. 디버그 전용 읽기다 —
+    /// 패리는 이제 누르는 것 한 번이라(설계 §5.3) 스크린샷이 그 사이를 노리려면 규칙에게 물어야 한다(<c>battle-4-parry</c> 는
+    /// 참이 된 뒤 10프레임 — 커밋의 한가운데다).
     /// </summary>
     public bool FighterParrying => !_broken && !_over && _sim.Fighter.Action == FighterAction.Parry;
 
