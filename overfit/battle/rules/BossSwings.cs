@@ -279,11 +279,9 @@ public sealed class BossSwings
             // 실으면 3연격의 2 · 3타까지 "점프도 됐다" 로 실려 점프 의존도의 분모가 부푼다.
             JumpAvailable: box.Jumpable,
 
-            // 뒤의 둘만 **태그가 아니라 판정**에서 온다 (이슈 #53). guard_break 도 마무리도
-            // 판정 단위라 같은 패턴 안에서 대마다 값이 다르다 — 태그(has_guard_break)를 읽으면
-            // 1·2타까지 "못 막는 판정" 으로 실려 계측이 거짓말을 한다.
-            GuardAvailable: !box.GuardBreak,
-            Finisher: box.Finisher);
+            // 가드는 지금 모든 판정에서 된다 (#72 · 설계 §7.2) — 가드 불가 판정을 걷었다. 5번 PR 의 잡기가 판정 단위의 답으로
+            // 처음 거짓을 싣는다(설계 §7.3).
+            GuardAvailable: true);
     }
 
     /// <summary>관측을 확정한다 — 스트림에 남기고 로그 한 줄을 찍는다. <see cref="_events"/> 에 붙는 곳은 여기뿐이다.</summary>

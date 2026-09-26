@@ -113,19 +113,6 @@ public static class TestConfigs
     /// </summary>
     public static double CounterLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
 
-    /// <summary>
-    /// 손으로 세우는 패턴의 예고. <b>내용은 아무 뜻이 없다</b> — 규칙 층은 이 값을 읽지 않고,
-    /// 그리는 것은 뷰다. 여기 있는 이유는 <c>PatternDef.Tell</c> 이 required 이기 때문뿐이다.
-    /// </summary>
-    public static PatternTell Tell() => new()
-    {
-        Id = "test_mark",
-        Anim = "attack",
-        X = 0,
-        Y = 0,
-        Length = 100,
-    };
-
     /// <summary>시험 패턴 <see cref="Sweep"/> 의 id.</summary>
     public const string SweepId = "쓸기";
 
@@ -136,7 +123,6 @@ public static class TestConfigs
     /// </summary>
     public static PatternDef Sweep(double maxDistance, double activeSeconds, double endAt = 2.0) => new()
     {
-        Tell = Tell(),
         Tags = new PatternTags
         {
             DashWindow = 1.0,
@@ -147,10 +133,8 @@ public static class TestConfigs
             ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
-            Feint = false,
             MultiHit = 1,
             Tracking = false,
-            HasGuardBreak = false,
         },
         Timeline = new List<PatternStep>
         {

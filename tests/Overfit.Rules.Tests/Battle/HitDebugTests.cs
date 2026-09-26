@@ -41,7 +41,6 @@ public class HitDebugTests
         HitShape swing = TestConfigs.HitShapes()["medieval_king/attack/2"];
         var pattern = new PatternDef
         {
-            Tell = TestConfigs.Tell(),
             Tags = TestConfigs.Sweep(100, 0).Tags,
             Timeline = new List<PatternStep>
             {

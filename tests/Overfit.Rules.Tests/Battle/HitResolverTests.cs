@@ -25,10 +25,8 @@ public class HitResolverTests
         ParryWindow = parryWindow ?? (parryable ? 0.12 : 0),
         PunishGreed = false,
         Reach = "mid",
-        Feint = false,
         MultiHit = 1,
         Tracking = false,
-        HasGuardBreak = false,
     };
 
     /// <summary>
@@ -61,7 +59,7 @@ public class HitResolverTests
     private static HitBox High() => new(HitShape.Band(0, 300, 140, 420), 20);
 
     /// <summary>
-    /// 안쪽 190px 이 비어 있는 판정 (II-끌기 의 마무리와 같은 모양 — 그쪽은 290px 이다).
+    /// 안쪽 190px 이 비어 있는 판정 (옛 끌기의 마무리가 이 모양이었다 — 실제 데이터에서는 3타의 초승달 안쪽이 이런 빈 곳이다).
     /// <b>이 박스가 있어야 "너무 가까워서 안 맞았다" 를 물어볼 수 있다</b> — 안쪽이 0 이면
     /// 그 갈래는 값으로 도달할 수 없는 자리라 테스트가 못 선다.
     /// </summary>
@@ -157,8 +155,8 @@ public class HitResolverTests
     public void 거리로_빗나간_것이_안인지_밖인지까지_말한다()
     {
         // 한 갈래(MissedByRange)였을 때는 **파고들어 피한 것과 도망쳐 피한 것이 같은 한 점**이었다.
-        // 그 둘은 봉인할 것이 정반대라(안쪽 주머니를 덮는 변종 · 도주로를 덮는 변종),
-        // 계측이 못 가르면 2단계가 정반대 변종을 뽑는다.
+        // 그 둘은 겨냥할 것이 정반대라(안쪽을 덮는 패턴 · 도주로를 덮는 패턴),
+        // 계측이 못 가르면 2단계가 정반대 패턴을 뽑는다.
         HitResolver.Resolve(Spawn(_bossX + 100), _at, Pocket(), Tags(false))
             .ShouldBe(HitVerdict.MissedByGap);
         HitResolver.Resolve(Spawn(_bossX + 900), _at, Pocket(), Tags(false))
@@ -285,9 +283,6 @@ public class HitResolverTests
         return f;
     }
 
-    /// <summary><c>guard_break</c> 가 붙은 판정. 마무리 한 대만 이것을 단다 (판정 단위다).</summary>
-    private static HitBox Unguardable() => new(HitShape.Band(0, 260, 0, 200), 18, GuardBreak: true);
-
     [Fact]
     public void 창_밖에서_막고_있으면_깎여서_막는다()
     {
@@ -297,8 +292,8 @@ public class HitResolverTests
     [Fact]
     public void 패리_불가_패턴도_붙들고_있으면_막는다()
     {
-        // 가드는 패리가 아니다. 크림슨(parryable:false)은 "받아치지 마라" 이지 "막지 마라" 가 아니라,
-        // 가드 갈래는 그 태그를 안 본다 — 못 막게 하는 것은 판정 쪽의 guard_break 하나뿐이다.
+        // 가드는 패리가 아니다. 패리 불가(parryable:false)는 "받아치지 마라" 이지 "막지 마라" 가 아니라,
+        // 가드 갈래는 그 태그를 안 본다 — 점프 공격의 착지가 이 모양이다(설계 §4.2: 가드 · 점프로 피한다).
         HitResolver.Resolve(Guarding(), _at, Mid(), Tags(parryable: false)).ShouldBe(HitVerdict.Guarded);
     }
 
@@ -309,37 +304,6 @@ public class HitResolverTests
         f.Spend(f.Stamina - 1);   // 1 남는다. Mid() 는 18피해라 32.4 가 든다
 
         HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
-    }
-
-    [Fact]
-    public void 가드_불가는_스태미나가_남아도_깨진다()
-    {
-        Fighter f = Guarding();
-
-        f.Stamina.ShouldBeGreaterThan(f.GuardStaminaCost(Unguardable().Damage),
-            "스태미나가 모자라 이 테스트가 고갈 갈래를 본다");
-        HitResolver.Resolve(f, _at, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.GuardBroken);
-    }
-
-    [Fact]
-    public void 가드_불가도_패리_창_안이면_받아친다()
-    {
-        // 빨강의 답은 받아치는 것이다. 패리는 가드와 다른 행동이라(설계 §5.3) 가드 불가 깃발과 무관하게 창 안이면
-        // 받아친다. 이 테스트가 잡는 것은 **guard_break 판정이 패리 갈래를 앞지르지 않는가** 다 — 깃발을 먼저 보고
-        // 깨짐으로 떨어뜨리면 3타를 받아치는 일이 한 번도 안 일어난다. 패리 갈래와 가드 갈래의 순서 자체는 여기서
-        // 못 잰다: 둘이 같은 틱에 참일 수 없어 순서를 바꿔도 판정이 같다.
-        Fighter f = Spawn(_bossX + 100);
-        f.Tick(new InputFrame(0, false, false, true, false), _dt);
-
-        f.Parrying.ShouldBeTrue();
-        HitResolver.Resolve(f, _at, Unguardable(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
-    }
-
-    [Fact]
-    public void 가드_불가도_아무것도_안_하면_평범한_판정이다()
-    {
-        HitResolver.Resolve(Spawn(_bossX + 100), _at, Unguardable(), Tags(parryable: false))
-            .ShouldBe(HitVerdict.Hit);
     }
 
     [Fact]
@@ -407,5 +371,22 @@ public class HitResolverTests
         HitResolver.Effective(parrying, Tags(parryable: false)).ShouldBe(Defense.None, "패리 불가 판정 앞의 패리 창을 칠한다");
 
         HitResolver.Effective(Guarding(), Tags(parryable: false)).ShouldBe(Defense.Guarding, "패리를 못 받는 판정도 가드로는 막는다");
+    }
+
+    [Fact]
+    public void 실제_3타는_초승달_안쪽만_틈이고_땅의_등_뒤와_앞끝_너머는_거리다()
+    {
+        // 설계 §2 — attack3 f2 의 궤적은 땅에서 앞만 친다: 보스 중심 +80 안(초승달 안쪽)과 등 뒤는 땅에 선 사람에게 안전하다
+        // (등 뒤 궤적은 높이 412.5 위에만 있다). 셋 다 모양의 외곽 상자 안이지만 이유가 다르다(#72 · ShapeHit.Test):
+        //   · +40 — 보스 중심과 앞 궤적 사이, 품 안이다. 틈이다(설계 §3.6 ② · §7.1).
+        //   · −150 — 몸 높이에 등 뒤를 치는 궤적이 없고 몸이 보스 중심 뒤다. 보스를 돌아 나간 것이라 거리다.
+        //   · +420 — 몸 높이(0 ~ 120)의 궤적은 +374 에서 끝나고 그 위의 궤적만 +418 까지 뻗는다. 몸 왼끝(+390)이 그 너머라 거리다.
+        // 외곽 상자만 보면 셋 다 틈이고, 거리 축이 −150 · +420 을 "보스에 붙었다" 로 읽는다. 궤적 한가운데는 맞는다.
+        var third = new HitBox(TestConfigs.HitShapes()["medieval_king/attack3/2"], 14);
+
+        HitResolver.Resolve(Spawn(_bossX + 40), _at, third, Tags(false)).ShouldBe(HitVerdict.MissedByGap, "초승달 안쪽이 틈이 아니다");
+        HitResolver.Resolve(Spawn(_bossX - 150), _at, third, Tags(false)).ShouldBe(HitVerdict.MissedTooFar, "땅의 등 뒤가 거리가 아니다");
+        HitResolver.Resolve(Spawn(_bossX + 420), _at, third, Tags(false)).ShouldBe(HitVerdict.MissedTooFar, "앞끝 너머가 거리가 아니다");
+        HitResolver.Resolve(Spawn(_bossX + 200), _at, third, Tags(false)).ShouldBe(HitVerdict.Hit, "궤적 한가운데가 안 맞는다");
     }
 }

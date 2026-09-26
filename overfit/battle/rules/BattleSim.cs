@@ -26,7 +26,7 @@ public sealed class BattleSetup
     /// </summary>
     public required IReadOnlyDictionary<string, HitShape> HitShapes { get; set; }
 
-    /// <summary>이 단계의 보스가 쓰는 패턴 id 들. 단계가 오를수록 길어진다 (2 · 3 · 5 · 7 · 10).</summary>
+    /// <summary>이 단계의 보스가 쓰는 패턴 id 들 — <c>stages.json</c> 의 명부. 이 순서가 곧 뽑기 좌표다.</summary>
     public required IReadOnlyList<string> PatternIds { get; set; }
 
     public required IReadOnlyDictionary<string, PatternDef> Patterns { get; set; }
@@ -178,19 +178,6 @@ public sealed class BattleSim
     public IReadOnlyList<DodgeEvent> Events => _swings.Events;
 
     /// <summary>
-    /// 이 판에서 지나간 <b>헛스윙</b> 수 (이슈 #48). <b>관측이 아니다</b> — 판정이 없으므로
-    /// <see cref="DodgeEvent"/> 도 없고 축도 안 움직인다.
-    ///
-    /// <para>
-    /// 그런데도 세는 이유는 <b>화면</b> 때문이다. 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이고,
-    /// 그러면 <c>III-역린</c> 은 아무도 안 무는 함정이 된다. 규칙 층은 뷰를 모르므로
-    /// (콜백을 두면 헤드리스 봇이 그것을 들고 다닌다) 뷰가 <see cref="Events"/> 개수를 보는 것과
-    /// 같은 규약으로 <b>값의 차이</b>를 읽게 한다.
-    /// </para>
-    /// </summary>
-    public int Feints { get; private set; }
-
-    /// <summary>
     /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
     ///
     /// <para>
@@ -208,39 +195,10 @@ public sealed class BattleSim
     public double? NextActiveIn => _runner?.NextActiveIn;
 
     /// <summary>
-    /// 아직 안 든 첫 <c>active</c> 단계 — <b>다음 판정</b>이다. 없거나 패턴이 없으면 null.
-    ///
-    /// <para>
-    /// 두 조회가 이 한 자리를 본다(<see cref="NextActiveIn"/> · <see cref="NextActiveGuardBreak"/>) — 둘 다
-    /// 러너가 센 틱에서 온다(<see cref="PatternRunner.NextActive"/>). 각자 타임라인을 훑게 두면 "다음 판정" 의 뜻이
-    /// 조용히 갈리고, 그러면 링의 크기와 색이 서로 다른 대를 가리킨다.
-    /// </para>
+    /// 보스 패턴이 지금 들어 있는 단계 — 뷰가 그 단계의 그림(<see cref="PatternStep.Anim"/> · <see cref="PatternStep.Frame"/>)을
+    /// 그대로 붙든다(설계 §6). 패턴이 안 돌면 null. 규칙은 이 값을 안 읽는다.
     /// </summary>
-    private PatternStep? NextActive() => _runner?.NextActive;
-
-    /// <summary>
-    /// <b>다음</b> active 판정이 가드 불가인가 (이슈 #53). 더 올 판정이 없거나 패턴이 없으면 false.
-    /// 화면의 <b>빨강</b>이 이 값이다 — 빨강은 한 가지 뜻, "가드로 못 막는다 = 받아쳐라" 다.
-    ///
-    /// <para>
-    /// <see cref="NextActiveIn"/> 과 같은 자리이고 같은 이유로 있다 — 화면이 "지금 오는 이 한 대를
-    /// 막을 수 있나" 를 말해야 하기 때문이다. <c>PatternTags.HasGuardBreak</c> 로는 그 말을 못 한다:
-    /// 그건 <b>패턴 단위 요약</b>이라 선딜 내내 참이고(이제 아홉 변종 전부 참이다), 그러면
-    /// <b>1·2타도 빨갛게</b> 뜬다. 실제로 그렇게 떴고, 스크린샷에서 보고 고쳤다 — 막을 수 있는
-    /// 판정을 "못 막는다" 고 말하는 예고는 없는 예고보다 나쁘다.
-    /// </para>
-    ///
-    /// <para>
-    /// 빨강을 마무리(<see cref="HitBox.Finisher"/>)가 아니라 이 깃발에 매다는 이유: 색이 말하는 것이
-    /// "가드로 못 막는다" 이기 때문이다. 데이터에서는 둘이 언제나 같은 대다(PatternDataTests 가 양쪽에서 못박는다).
-    /// </para>
-    ///
-    /// <para>
-    /// 규칙 층은 이 값을 <b>안 읽는다</b>. 판정이 실제로 가드를 깨는지는 <see cref="HitBox.GuardBreak"/> 이
-    /// 정하고(<see cref="BossSwings"/>), 여기 있는 것은 그 사실을 <b>미리</b> 말해 주는 예고용 조회다.
-    /// </para>
-    /// </summary>
-    public bool NextActiveGuardBreak => NextActive() is { GuardBreak: true };
+    public PatternStep? BossStep => _runner?.Step;
 
     /// <summary>
     /// 이 틱에 규칙이 파이터에게 <b>대 본</b> 보스 판정 사각형 (월드) — 디버그 표시용 (이슈 #59 · 설계 §6.1).
@@ -384,9 +342,6 @@ public sealed class BattleSim
             return;
         }
 
-        // 헛스윙은 러너가 누적으로 센다 (이슈 #48). 차이를 여기서 옮기는 것은 판이 패턴을
-        // 여러 번 돌기 때문이다 — 러너는 패턴마다 새로 서므로 그 값은 이번 패턴의 것뿐이다.
-        int feintsBefore = _runner.Feints;
         foreach (HitBox box in _runner.Tick(_holdClock))
         {
             // 판정은 여기서 대지 않고 **살려 둔다** (이슈 #59) — 대는 곳은 BossSwings.Resolve 하나다.
@@ -399,12 +354,6 @@ public sealed class BattleSim
         }
 
         Move();
-
-        if (_runner.Feints > feintsBefore)
-        {
-            Feints += _runner.Feints - feintsBefore;
-            Log.Debug("boss", () => $"feint id={Boss.CurrentPattern} n={Feints} tick={Ticks}");
-        }
 
         if (_runner.Finished)
         {
@@ -548,7 +497,7 @@ public sealed class BattleSim
 
         // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
         // 람다가 지역 값(damage · gap)을 붙잡으면 컴파일러는 그 클로저를 이 블록이 아니라 **메서드 입구에서**
-        // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 3단계 · 1840틱)의 규칙 쪽
+        // 만든다: 공격하든 안 하든 매 틱 40B 다. 입력 없이 끝까지 간 한 판(시드 51 · 옛 3단계 · 1840틱)의 규칙 쪽
         // 할당 96,016B 중 73,600B 가 이것이었고, 봇은 그런 판을 수백만 번 돈다. 두 지역 값을 이 블록 안에서
         // 선언해도 안 없어진다 — 재 보니 그대로 매 틱 40B 였다(컴파일러가 클로저 범위를 메서드 몸통으로 합친다).
         if (Log.IsEnabled(LogLevel.Debug))

@@ -81,59 +81,12 @@ public readonly record struct FighterFrame(
 public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame, int BladeFrame);
 
 /// <summary>
-/// 한 프레임에 보스의 <b>예고 표지</b>를 그리는 데 필요한 전부.
-///
-/// <para>
-/// <c>PatternTell</c>(규칙 층의 DTO)을 그대로 안 넘긴다. 뷰가 규칙 타입에 묶이면 그 타입을 쪼개는
-/// 리팩터가 그림까지 끌고 다니고, 무엇보다 <c>X</c> 의 뜻이 여기서 <b>달라진다</b>:
-/// 데이터의 <c>x</c> 는 "보스 앞/뒤" 이고 화면의 X 는 "왼/오른쪽" 이다. 그 뒤집기는 보스가
-/// 어디를 보는지를 아는 <c>Battle</c> 만 할 수 있다 — 뷰에 맡기면 뷰가 다시 규칙을 읽게 된다.
-/// </para>
-/// </summary>
-/// <param name="ShapeId">예고 모양 id. <see cref="BossTellShapes"/> 가 이것으로 구현을 찾는다.</param>
-/// <param name="X">보스 발밑 기준 가로 오프셋(px). <b>이미 보스가 보는 쪽으로 뒤집혀 있다.</b></param>
-/// <param name="Y">바닥에서의 높이(px, 위가 +). <b>이 숫자 하나가 "칼이 땅에 있나" 를 말한다.</b></param>
-/// <param name="Length">모양의 주된 크기(px). 칼이면 날 길이, 고리면 반지름이다.</param>
-/// <param name="GuardBreak">지금 오는 판정이 <b>가드 불가</b>인가 (이슈 #47 · #53). 참이면 예고가
-/// <b>빨강</b>이고 그 위에 <c>危</c> 가 뜬다 — 둘은 <b>같은 한 가지 뜻</b>을 말한다:
-/// "가드로 못 막는다 = 받아쳐라".
-///
-/// <para>
-/// <b>빨강은 한 가지 뜻이다</b> (유저 결정). 원래 빨강은 "패리 불가 · 대시해라" 였고 그 주인
-/// (점프 강타)이 이슈 #48 에서 사라져 비었다. 한때 빨강을 "마무리 — 받아칠 값이 있다" 로,
-/// 危 를 "게다가 막을 수조차 없다" 로 갈라 쓴 적이 있는데, 그러면 빨강이 1·2단계에서는
-/// "막힌다" · 3단계에서는 "안 막힌다" 를 말해 **한 색이 두 뜻**이 된다 — 빨강이 "패리 불가" 이던
-/// 시절에 설계로 없앤 바로 그 충돌이다. 그래서 마무리가 아홉 전부 가드 불가가 됐고, 이 칸 하나가
-/// 색과 글자를 같이 정한다.
-/// </para>
-///
-/// <para>
-/// <b>危 는 뜻으로는 빨강과 겹치지만 통로가 다르다.</b> 빨강과 호박은 적록 색각 이상(남성의 수
-/// 퍼센트)에서 가장 먼저 무너지는 짝이다 — 완전형 제2색각으로 흉내 내 보면(Machado 2009) 둘이
-/// **같은 겨자색**(색상각 95.9° 대 95.6°)이 되고 남는 것은 밝기 차이뿐이다(링에서 ΔE2000 12). 링은 한 번에
-/// 하나만 뜨므로 "이게 밝은 쪽인가 어두운 쪽인가" 를 절대 판단으로 맞혀야 하는데, 그건 싸우는
-/// 도중에 믿을 수 있는 신호가 아니다. 제1색각이상에서는 빨강이 오히려 **더 어둡고 덜 눈에 띄는**
-/// 쪽이 된다. 그 사람들에게 이 대가 다르다고 말하는 것은 글자의 **모양**뿐이다 — 색만으로 정보를
-/// 나르지 않는다는 원칙(WCAG 1.4.1)이 이것이다.
-/// </para>
-///
-/// <para>
-/// ⚠ <b>패턴이 아니라 판정 단위다.</b> 패턴 단위로 칠하면 선딜 내내 참이라 막아도 되는
-/// 앞의 연타까지 빨개진다 — 실제로 그렇게 떴고 스크린샷에서 보고 고쳤다.
-/// </para></param>
-public readonly record struct BossTell(
-    string ShapeId,
-    double X,
-    double Y,
-    double Length,
-    bool GuardBreak);
-
-/// <summary>
 /// 한 렌더 프레임에 보스를 그리는 데 필요한 전부. <see cref="FighterFrame"/> 과 같은 규약이다 —
 /// <b>순간(판정이 섰다 · 맞았다 · 죽었다)은 여기 없다.</b> 그건 상태가 아니라 사건이라
 /// <c>BossView</c> 의 메서드 호출로 들어온다.
 /// </summary>
 /// <param name="X">보스의 규칙 좌표 x.</param>
+/// <param name="Y">보스의 발바닥 높이 (규칙 좌표 · 위가 +). 도약(설계 §4.2)이 움직인다 — 뷰가 y = 0 을 박지 않는다.</param>
 /// <param name="Facing">-1 왼쪽 · +1 오른쪽. <b>규칙이 정한 값을 그대로 싣는다</b> —
 /// 뷰가 보스와 파이터의 x 를 보고 스스로 정하면 "같은 시드면 같은 결과" 가 그림까지 덮지 못하고,
 /// 무엇보다 <b>패턴 중 잠금</b>(<c>Boss.Face</c>)이 뷰에서 풀려 예고가 스윙 도중에 뒤집힌다.</param>
@@ -141,14 +94,13 @@ public readonly record struct BossTell(
 /// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
 /// <param name="Exhausted">탈진했나 (#72 · 설계 §4.3). take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선 채 푸른 톤이다 —
 /// 패리로든 경직 게이지로든(4번 PR) 같은 그림이다.</param>
-/// <param name="Anim">선딜에 재생할 모션 이름. 패턴마다 다르다(<c>patterns.json</c> 의 <c>tell.anim</c>).
-/// 패턴이 안 돌면 null.</param>
-/// <param name="Tell">이 패턴의 예고 표지. 패턴이 안 돌거나 후딜이면 null.</param>
+/// <param name="Anim">선딜에 재생할 모션 이름 — 지금 든 타임라인 단계의 <c>anim</c>(<c>patterns.json</c> · 설계 §8.1).
+/// 패턴이 안 돌면 null. 옛 예고 표지(칼 · 끌기 · 危)는 변종과 같이 걷었다(#72 · 설계 §6).</param>
 public readonly record struct BossFrame(
     double X,
+    double Y,
     int Facing,
     BossPhase Phase,
     double? NextActiveIn,
     bool Exhausted,
-    string? Anim,
-    BossTell? Tell);
+    string? Anim);

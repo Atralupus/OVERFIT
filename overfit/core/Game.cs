@@ -37,13 +37,16 @@ public partial class Game : Node
     private const double _tourStepSeconds = 0.3;
 
     /// <summary>
-    /// 단계 점프 디버그 액션의 접두어 (이슈 #54). <c>project.godot</c> 의 <c>debug_stage_1..3</c> 이고
+    /// 단계 점프 디버그 액션의 접두어 (이슈 #54). <c>project.godot</c> 의 <c>debug_stage_1..2</c> 이고
     /// 끝의 숫자가 곧 단계다. 타이틀의 조작 안내는 <c>debug_</c> 로 시작하는 액션을 안 싣는다(Title).
     /// </summary>
     private const string _stageJumpPrefix = "debug_stage_";
 
-    /// <summary>순회가 전투에서 눌러 보는 단계 점프 — 가장 먼 단계라 1 에서 옮겨 간 것이 로그에서 갈린다.</summary>
-    private const string _tourStageJump = "debug_stage_3";
+    /// <summary>
+    /// 순회가 전투에서 눌러 보는 단계 점프 — 마지막 단계(2)라 1 에서 옮겨 간 것이 로그에서 갈린다. 3단계가 없어져(#72)
+    /// 3 을 누르면 전투가 2단계로 잘려 서고 <c>[W]</c> 를 남기므로 smoke 가 "3단계 전투가 섰다" 를 못 본다.
+    /// </summary>
+    private const string _tourStageJump = "debug_stage_2";
 
     public static Game Instance { get; private set; } = null!;
 
@@ -54,8 +57,8 @@ public partial class Game : Node
     ///
     /// <para>
     /// <b>이것이 남은 유일한 진행 상태다.</b> 캐릭터 3택과 스탯 강화는 만들지 않는다(이슈 #22) —
-    /// 단계 진행은 성장 루프가 아니라 보스 설계의 축이라 남긴다: 단계가 오를수록 보스가 쓰는
-    /// 패턴이 늘고(2·3·5·7·10), 그 "패턴이 늘어난다" 가 게임 자체다.
+    /// 단계 진행은 성장 루프가 아니라 보스 설계의 축이라 남긴다: 보스는 두 단계이고(#72 · 설계 §4),
+    /// 2단계가 1단계에서 쓴 답을 겨냥하게 된다(5번 PR — 지금은 두 단계가 같은 명부다). 그 "나를 보고 바뀐다" 가 게임 자체다.
     /// </para>
     ///
     /// <para>
@@ -139,7 +142,7 @@ public partial class Game : Node
             return;
         }
 
-        // 전투 중 1 · 2 · 3 → 그 단계를 바로 시작한다 (이슈 #54). 유저가 3단계를 보려고 두 판을
+        // 전투 중 1 · 2 → 그 단계를 바로 시작한다 (이슈 #54). 유저가 2단계를 보려고 한 판을
         // 이기고 올라가지 않게 하는 디버그 키다. **위의 IsDebugBuild 가드가 릴리즈 빌드를 이미 걸렀다** —
         // 그 한 줄이 이 키를 릴리즈에서 죽이는 전부라, 이 갈래를 그 가드 위로 올리지 않는다.
         if (Current == Scene.Battle && StageJump(e) is (string action, int stage))

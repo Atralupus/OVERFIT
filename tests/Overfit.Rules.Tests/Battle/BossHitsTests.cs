@@ -35,7 +35,6 @@ public class BossHitsTests
 
         HitBox Hit(double activeSeconds) => BossHits.Of(new PatternDef
         {
-            Tell = TestConfigs.Tell(),
             Tags = TestConfigs.Sweep(100, 0).Tags,
             Timeline = new List<PatternStep>
             {
@@ -56,7 +55,6 @@ public class BossHitsTests
         // 가만히 선 파이터가 둘 다 맞는다 — 관측의 JumpAvailable 은 판정마다 참 · 거짓이다. 태그를 실으면 둘 다 참이다.
         var pattern = new PatternDef
         {
-            Tell = TestConfigs.Tell(),
             Tags = new PatternTags
             {
                 DashWindow = 0.2,
@@ -67,10 +65,8 @@ public class BossHitsTests
                 ParryWindow = 0,
                 PunishGreed = false,
                 Reach = "far",
-                Feint = false,
                 MultiHit = 2,
                 Tracking = false,
-                HasGuardBreak = false,
             },
             Timeline = new List<PatternStep>
             {

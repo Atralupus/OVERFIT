@@ -21,40 +21,15 @@ namespace Overfit.Battle.View;
 /// </para>
 ///
 /// <para>
-/// 색은 <b>둘</b>이고 뜻은 하나씩이다 (이슈 #53). 호박은 앞의 연타 — 막아도 된다.
-/// 빨강은 마무리 — <b>가드로 못 막는다 = 받아쳐라</b>. 빨강 위의 <c>危</c> 는 같은 말을 색이 아닌
-/// 모양으로 한 번 더 한다(색각 이상에서는 빨강과 호박이 같은 색이 된다 — <c>BossTell</c>).
+/// <b>무엇이 오는지는 그림이 말한다</b> (#72 · 설계 §6). 옛 변종의 예고 표지(칼 · 끌기 · 도약 표지 아홉)와 빨간 가드 불가
+/// 마무리(크림슨 · 링 · <c>危</c>)는 변종과 같이 걷었다 — 새 두 패턴에는 가드 불가 판정이 없어 빨강이 말할 것이 없다.
+/// 남은 링과 선딜 틴트는 "언제" 를 말하고, 5번 PR(링의 조임 · 틴트의 무르익음) · 6번 PR(링 전부)이 걷는다.
 /// </para>
 /// </summary>
 public partial class BossView : Node2D
 {
     /// <summary>선딜이 무르익었을 때의 몸 색. 판정이 가까울수록 이쪽으로 간다.</summary>
     private static readonly Color _windupTint = new(2.00f, 0.72f, 0.30f);
-
-    /// <summary>
-    /// <b>가드 불가</b>(마무리) 선딜의 몸 색 — 크림슨 (이슈 #53).
-    ///
-    /// <para>
-    /// <b>이 색은 주인이 바뀌었다.</b> 원래는 <c>parryable: false</c> 의 "받아치지 마라 · 대시해라"
-    /// 였고(이슈 #27), 그때는 붉은색을 다른 뜻에 못 썼다 — 두 뜻이 정반대라 같은 색이면
-    /// 플레이어가 거꾸로 반응한다. 그 주인(점프 강타)이 이슈 #48 에서 사라져 빨강이 비었고,
-    /// 이제 <b>빨강 = 가드로 못 막는다 = 받아쳐라</b> 다. 마무리가 아홉 변종 전부 가드 불가라
-    /// 이 색은 모든 패턴의 마지막 한 대에 뜬다.
-    /// </para>
-    ///
-    /// <para>
-    /// <b>한 가지 뜻이어야 한다.</b> 한때 빨강을 "마무리" 에, 危 를 "가드 불가" 에 따로 매단 적이
-    /// 있는데 그러면 빨강이 단계에 따라 "막힌다" 와 "안 막힌다" 를 다 말했다 — 위에 적은 바로 그
-    /// 색-뜻 충돌이다(유저가 짚었다).
-    /// </para>
-    ///
-    /// <para>
-    /// ⚠ <b>패리 불가 패턴이 돌아오면 이 색을 나눠 쓸 수 없다.</b> 그때는 그쪽에 다른 신호를
-    /// 줘야 한다 — 값은 <c>parryable</c> 태그로 규칙에 그대로 살아 있으니 그림만 정하면 된다.
-    /// 여기 다시 크림슨을 얹는 것만은 안 된다: 한 색이 "피해라" 와 "받아쳐라" 를 동시에 말한다.
-    /// </para>
-    /// </summary>
-    private static readonly Color _guardBreakTint = new(2.40f, 0.10f, 0.22f);
 
     private static readonly Color _recoverTint = new(0.70f, 0.70f, 0.78f);
 
@@ -66,16 +41,11 @@ public partial class BossView : Node2D
     private static readonly Color _exhaustTint = new(0.56f, 0.70f, 1.35f);
 
     private static readonly Color _tellRingColor = new(1.00f, 0.74f, 0.30f, 0.85f);
-
-    /// <summary>가드 불가 예고의 링 색. 몸 색(<see cref="_guardBreakTint"/>)과 같은 빨강이다 —
-    /// 링과 몸이 갈리면 둘 중 하나는 안 읽힌다.</summary>
-    private static readonly Color _guardBreakRingColor = new(1.00f, 0.06f, 0.20f, 0.95f);
     private static readonly Color _shockRingColor = new(1.00f, 0.80f, 0.35f, 1.00f);
     private static readonly Color _activeFlash = new(2.60f, 2.30f, 1.60f);
 
     private AnimatedSprite2D _sprite = null!;
     private RingBurst _ring = null!;
-    private BossTellLayer _tell = null!;
     private FeelBalance _feel = null!;
 
     private double _flashLeft;
@@ -104,20 +74,6 @@ public partial class BossView : Node2D
             LineWidth = (float)_feel.RingWidth * 1.6f,
         };
         AddChild(_ring);
-
-        // 예고 표지는 링과 **다른 노드**다. 링은 "언제" 를 말하고 표지는 "무엇" 을 말하므로
-        // 수명이 다르다 — 한 노드에서 둘 다 그리면 링을 끄는 프레임에 표지도 같이 사라진다.
-        //
-        // 危 표지는 보스 **머리 위**에 선다 (이슈 #47). 몸에 겹치면 획이 실루엣에 먹혀
-        // "무슨 글자인가" 가 안 읽힌다. 높이는 링이 도는 자리(boss_ring_offset_y)의 두 배 남짓이라
-        // 보스 키(297px)를 넘고, 크기는 링 굵기에서 끌어온다 — 숫자를 여기 박으면 feel 을 고쳐도 안 따라온다.
-        _tell = new BossTellLayer
-        {
-            LineWidth = (float)_feel.RingWidth * 1.3f,
-            MarkHeight = (float)_feel.BossRingOffsetY * 2.4f,
-            MarkSize = (float)_feel.RingWidth * 14.0f,
-        };
-        AddChild(_tell);
     }
 
     public void Load(string spriteId)
@@ -149,12 +105,11 @@ public partial class BossView : Node2D
     public void Show(BossFrame frame)
     {
         double dt = GetProcessDeltaTime();
-        Position = new Vector2((float)frame.X, 0);
+        // 규칙은 위가 + 이고 화면은 아래가 + 다 — 도약(설계 §4.2)하는 보스의 발이 규칙의 Y 에 선다.
+        Position = new Vector2((float)frame.X, (float)-frame.Y);
 
         // 스프라이트 원본은 오른쪽을 본다 — 팩의 규약이고 FighterView 도 같다.
-        // **뒤집어도 자리가 안 어긋난다**: Offset 의 x 는 0 이고(AlignToGround 는 y 만 건드린다)
-        // 링도 x=0 에 선다. 좌우가 비대칭인 것은 예고 표지 하나뿐이고, 그건 Battle 이
-        // 이 Facing 으로 이미 뒤집어 넘긴다.
+        // **뒤집어도 자리가 안 어긋난다**: Offset 의 x 는 0 이고(AlignToGround 는 y 만 건드린다) 링도 x=0 에 선다.
         _sprite.FlipH = frame.Facing < 0;
 
         BossPhase phase = frame.Phase;
@@ -163,25 +118,12 @@ public partial class BossView : Node2D
         _hitPoseLeft = System.Math.Max(0, _hitPoseLeft - dt);
         HoldLastFrameWhenDead();
 
-        // 탈진하면 패턴이 끊겨 Phase 가 Idle 이므로 예고는 저절로 안 그려진다 (#72 · 설계 §4.3).
+        // 탈진하면 패턴이 끊겨 Phase 가 Idle 이므로 링은 저절로 안 그려진다 (#72 · 설계 §4.3).
         float ripeness = Ripeness(phase, frame.NextActiveIn);
-
-        // **빨강은 가드 불가 하나를 말한다** (이슈 #53). 몸 색 · 링 · 표지가 전부 이 한 칸을 읽는다 —
-        // 셋 중 하나라도 다른 칸을 읽으면 같은 순간에 화면이 두 말을 한다.
-        bool guardBreak = frame.Tell is { GuardBreak: true };
-        Color tellColor = guardBreak ? _guardBreakRingColor : _tellRingColor;
         if (ripeness > 0)
         {
             // 판정이 가까울수록 링이 **조여 든다.** 퍼지는 충격파와 방향이 반대라 둘을 헷갈릴 수 없다.
-            _ring.Charge(Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness), tellColor);
-        }
-
-        // 표지는 선딜 **내내** 보인다. 무르익음에만 묶으면 tell_lead_seconds 밖의 선딜이
-        // 통째로 무표지가 되는데, 백장의 올려베기가 정확히 그 구간이 가장 긴 패턴이다 —
-        // "크게 예고한다" 가 설계인 패턴이 예고를 제일 늦게 받는 것은 뒤집힌 것이다.
-        if (phase == BossPhase.Windup && frame.Tell is { } mark)
-        {
-            _tell.Show(mark, new Color(tellColor.R, tellColor.G, tellColor.B, 0.45f + (0.55f * ripeness)));
+            _ring.Charge(Mathf.Lerp((float)_feel.TellRingFrom, (float)_feel.TellRingTo, ripeness), _tellRingColor);
         }
 
         string anim = AnimationFor(phase, frame.Anim, frame.Exhausted);
@@ -196,7 +138,7 @@ public partial class BossView : Node2D
 
         _exhaustShown = frame.Exhausted && (_exhaustShown || anim == "hit");
         _sprite.SpeedScale = _frozen ? 0.0f : 1.0f;
-        _sprite.Modulate = Tint(phase, ripeness, guardBreak, frame.Exhausted);
+        _sprite.Modulate = Tint(phase, ripeness, frame.Exhausted);
     }
 
     /// <summary>판정이 선 틱. 충격파가 <b>퍼진다</b> — 선딜과 방향이 반대다.</summary>
@@ -211,25 +153,6 @@ public partial class BossView : Node2D
             _feel.SparkCount,
             (float)_feel.SparkLength);
     }
-
-    /// <summary>
-    /// <b>헛스윙이 지나갔다</b> (이슈 #48). 판정이 <b>없는</b> 박자라 <see cref="ActiveNow"/> 와
-    /// 같은 그림이면 안 된다 — 같으면 화면이 거짓말을 하고, 플레이어는 그 변종을 배울 길이 없다.
-    ///
-    /// <para>
-    /// 그래서 셋을 뺀다: 몸의 섬광 · 스파크 · 링의 진하기. 남는 것은 <b>비어서 퍼지는 고리</b>
-    /// 하나이고, 그것이 "칼은 지나갔는데 아무것도 안 나왔다" 의 그림이다.
-    /// 안 그리는 쪽은 답이 아니다 — 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이다.
-    /// </para>
-    /// </summary>
-    public void FeintNow() =>
-        _ring.Burst(
-            (float)_feel.TellRingTo,
-            (float)_feel.BossRingTo * 0.6f,
-            _feel.BurstSeconds,
-            new Color(_shockRingColor.R, _shockRingColor.G, _shockRingColor.B, 0.35f),
-            sparks: 0,
-            sparkLength: 0);
 
     /// <summary>
     /// 플레이어의 칼이 닿았다. 때린 것이 닿았는지가 보여야 공격에 값이 붙는다.
@@ -313,7 +236,7 @@ public partial class BossView : Node2D
         _flashLeft = seconds;
     }
 
-    private Color Tint(BossPhase phase, float ripeness, bool guardBreak, bool exhausted)
+    private Color Tint(BossPhase phase, float ripeness, bool exhausted)
     {
         // 흰 피격 실루엣은 **작가가 그린 픽셀 그대로** 나가야 한다. 선딜 틴트를 그 위에 얹으면
         // 크림슨 선딜 중의 피격이 "붉은 실루엣" 이 되어, 정작 흰색이라는 것이 안 보인다 —
@@ -331,7 +254,7 @@ public partial class BossView : Node2D
 
         Color baseTint = phase switch
         {
-            BossPhase.Windup => Colors.White.Lerp(guardBreak ? _guardBreakTint : _windupTint, ripeness),
+            BossPhase.Windup => Colors.White.Lerp(_windupTint, ripeness),
             BossPhase.Recover => _recoverTint,
             _ => Colors.White,
         };

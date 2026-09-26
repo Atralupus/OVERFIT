@@ -16,7 +16,7 @@ public class BotPolicyTests
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
         Boss = TestConfigs.Boss(),
-        PatternIds = StageRoster.For(TestConfigs.Stages(), 3),
+        PatternIds = StageRoster.For(TestConfigs.Stages(), 1),
         Patterns = JsonData<PatternDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
         Seed = seed,
@@ -44,6 +44,34 @@ public class BotPolicyTests
 
         outcome.ShouldBeOneOf(BattleOutcome.Win, BattleOutcome.Lose);
         sim.Ticks.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void 데모의_봇이_실제_1단계를_이긴다()
+    {
+        // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 1단계 명부 · 시드 51 (#72 · 설계 §9).
+        // "봇이 1단계를 이길 수 있다" 가 데모의 전제인데 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 —
+        // 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이 실제 데이터다.
+        BalanceData balance = TestConfigs.Balance();
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
+            PatternIds = StageRoster.For(TestConfigs.Stages(), 1),
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            MaxTicks = balance.Battle.MaxTicks,
+        });
+        var bot = new BotPolicy(51);
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(bot.Next(sim));
+        }
+
+        outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 1단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
     }
 
     [Fact]

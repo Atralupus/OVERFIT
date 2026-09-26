@@ -16,7 +16,7 @@ public partial class Title : Control
     ///
     /// <para>
     /// <b>InputMap 을 통째로 훑지 않고 이 목록만 싣는다</b> — 그것이 디버그 키를 안내에서 가르는 자리다
-    /// (이슈 #54). <c>debug_stage_1..3</c> 은 릴리즈 빌드에서 안 먹으므로(Game._UnhandledInput) 안내에 적히면
+    /// (이슈 #54). <c>debug_stage_1..2</c> 는 릴리즈 빌드에서 안 먹으므로(Game._UnhandledInput) 안내에 적히면
     /// 안내가 거짓말이 된다. 누가 이 목록에 <c>debug_</c> 액션을 적어도 <see cref="Keys"/> 가 건너뛰고 [W] 를 남긴다.
     /// </para>
     /// </summary>

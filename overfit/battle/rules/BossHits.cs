@@ -108,7 +108,7 @@ public static class BossHits
             // 점프로 넘을 수 있나 = 발이 모양 윗끝 위에 있는 틱이 창의 틱 수 이상인가 (설계 §7.3). 태그(jumpable)가 아니라
             // 판정마다 잰다 — 3연격은 1타만 넘고 2 · 3타는 못 넘는데, 태그를 실으면 둘까지 "점프도 됐다" 로 실려 분모가 부푼다.
             bool jumpable = TicksAbove(fighter, shape.Bounds.Y1) >= BattleSim.TicksFor(step.ActiveSeconds);
-            hits[i] = new HitBox(shape, step.Damage, step.GuardBreak, ActiveSeconds: step.ActiveSeconds, Jumpable: jumpable);
+            hits[i] = new HitBox(shape, step.Damage, step.ActiveSeconds, jumpable);
         }
 
         return hits;

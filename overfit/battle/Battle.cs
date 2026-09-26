@@ -41,8 +41,6 @@ public partial class Battle : Node2D
     private FighterConfig _fighterConfig = null!;
     private BossConfig _bossConfig = null!;
 
-    /// <summary>패턴 표. 뷰가 <b>태그</b>(지금은 has_guard_break)와 예고를 그리는 데만 쓴다 — 규칙은 시뮬레이션이 본다.</summary>
-    private Dictionary<string, PatternDef> _patterns = null!;
     private FeelBalance _feel = null!;
 
     private int _stage;
@@ -80,9 +78,6 @@ public partial class Battle : Node2D
     private int _lastBossHealth;
     private int _lastEventCount;
 
-    /// <summary>지난 프레임까지 지나간 헛스윙 수 (이슈 #48). 관측 수와 <b>같은 규약</b>이다 —
-    /// 규칙 층은 뷰를 모르므로 사건을 값의 차이로 읽는다.</summary>
-    private int _lastFeintCount;
     private bool _lastAttackActive;
 
     /// <summary>지난 틱에 칼질 중이었나. 꺼졌다 켜진 틱이 새 칼질이다 (이슈 #54).</summary>
@@ -159,18 +154,6 @@ public partial class Battle : Node2D
     public int FighterParries => _parries;
 
     /// <summary>
-    /// <b>다음 판정</b>이 가드 불가인가. 위와 같이 디버그 전용 읽기다 — 빨강 · 危 예고가 화면에서
-    /// 구별되는지를 증명하려면 그것이 실제로 떠 있는 순간을 기다려야 한다.
-    ///
-    /// <para>
-    /// <b>패턴 태그가 아니라 다음 판정을 본다</b> (이슈 #53). 태그(<c>has_guard_break</c>)로 기다리면
-    /// 이제 아홉 변종 전부의 선딜 어디서나 참이라 1·2타 앞에서 셔터가 눌리고, 그 장은 "빨간 3타
-    /// 예고" 라는 이름으로 호박색 1타를 찍는다.
-    /// </para>
-    /// </summary>
-    public bool BossGuardBreak => !_broken && !_over && _sim.NextActiveGuardBreak;
-
-    /// <summary>
     /// 보스가 <b>탈진했나</b> (#72 · 설계 §4.3). 위와 같이 디버그 전용 읽기다 — 받아친 상이 화면에서 "무너졌다" 로
     /// 읽히는지를 증명하려면 그 1.5초 안에서 셔터를 눌러야 한다. 프레임을 세지 않는 이유는 늘 같다: 탈진 길이는
     /// 데이터라 세어 두면 그 값을 고치는 날 이 장이 조용히 다른 순간을 찍는다.
@@ -182,12 +165,6 @@ public partial class Battle : Node2D
     /// 순간이고(이슈 #28), 그건 0.2초뿐이라 벽시계로 노리면 대부분 놓친다.
     /// </summary>
     public int BossHealth => _broken ? 0 : _sim.Boss.Health;
-
-    /// <summary>
-    /// 지금까지 지나간 <b>헛스윙</b> 수 (이슈 #48). 위와 같이 디버그 전용 읽기다 — 헛스윙은
-    /// 0.34초짜리 <b>사건</b>이라 상태로는 못 노린다. 늘어난 그 순간이 셔터를 누를 때다.
-    /// </summary>
-    public int BossFeints => _sim.Feints;
 
     /// <summary>
     /// 지금 도는 패턴 id. 위와 같이 디버그 전용 읽기다 — 스크린샷이 <b>패턴마다 다른 예고</b>를
@@ -239,7 +216,6 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
-        _patterns = data.Patterns;
 
         // 단계는 Autoload 가 들고 있다 — 씬은 다시 시작할 때마다 새로 만들어지므로 여기 두면 사라진다.
         _stage = Game.Instance.Stage;
@@ -429,15 +405,6 @@ public partial class Battle : Node2D
             _lastEventCount = _sim.Events.Count;
         }
 
-        // 헛스윙은 관측을 안 남기므로 위 갈래에 안 걸린다 (이슈 #48) — 그런데 **화면에는 있어야 한다.**
-        // 안 보이는 헛스윙은 미끼가 아니라 그냥 빈 시간이고, 그러면 III-역린 은 아무도 안 무는 함정이다.
-        // 그림은 판정과 **다르다**: 빈 고리만 퍼지고 섬광도 흔들림도 없다(BossView.FeintNow).
-        if (_sim.Feints > _lastFeintCount)
-        {
-            _bossView.FeintNow();
-            _lastFeintCount = _sim.Feints;
-        }
-
         if (_sim.Fighter.Health < _lastFighterHealth)
         {
             _fighterView.Hit();
@@ -526,7 +493,8 @@ public partial class Battle : Node2D
     ///
     /// <para>
     /// 단계 진행만 남기고 캐릭터 3택 · 스탯 강화는 만들지 않는다(이슈 #22). 단계는 성장 루프가 아니라
-    /// 보스 설계의 축이다 — 단계가 오를수록 보스가 쓰는 패턴이 늘고, 그것이 게임 자체다.
+    /// 보스 설계의 축이다 — 보스는 두 단계이고(#72 · 설계 §4) 2단계를 이기면 클리어다. 다음 단계가
+    /// <c>stages.json</c> 에 없으면 클리어라, 단계 수를 여기 적지 않는다.
     /// </para>
     /// </summary>
     private void Reveal()
@@ -544,7 +512,7 @@ public partial class Battle : Node2D
         string detail = cleared
             ? $"{_stage}단계까지 전부 넘었다"
             : won
-                ? $"{_stage}단계 돌파 — 다음 단계는 패턴이 늘어난다"
+                ? $"{_stage}단계 돌파 — 다음은 {_stage + 1}단계"
                 : $"{_stage}단계 · 보스 체력 {_sim.Boss.Health}/{_bossConfig.MaxHealth} 남음";
 
         // 이긴 판에서 [다시] 는 거짓말이다 — 단계가 이미 올랐으므로 같은 판이 아니다.
@@ -555,7 +523,7 @@ public partial class Battle : Node2D
 
     private void OnAgain()
     {
-        // 클리어했으면 판을 처음으로 되돌린다 — 안 그러면 없는 6단계를 달라고 하게 된다.
+        // 클리어했으면 판을 처음으로 되돌린다 — 안 그러면 없는 3단계를 달라고 하게 된다.
         if (_outcome == BattleOutcome.Win && !_hasNextStage)
         {
             Game.Instance.ResetRun();
@@ -618,12 +586,12 @@ public partial class Battle : Node2D
 
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
+            _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
             _sim.NextActiveIn,
             _sim.Boss.Exhausted,
-            CurrentAnim(),
-            CurrentTell()));
+            _sim.BossStep?.Anim));
 
         _hud.Show(_sim.Fighter.Health, _fighterConfig.MaxHealth, _sim.Fighter.Stamina, _fighterConfig.MaxStamina,
             _sim.Boss.Health, _bossConfig.MaxHealth);
@@ -654,46 +622,6 @@ public partial class Battle : Node2D
             _ => _walking ? FighterPose.Run : FighterPose.Idle,
         };
     }
-
-    /// <summary>지금 도는 패턴의 선딜 모션 이름. 패턴이 안 돌면 null.</summary>
-    private string? CurrentAnim() => Current()?.Tell.Anim;
-
-    /// <summary>
-    /// 지금 도는 패턴의 예고 표지를 <b>화면 좌표로</b> 옮긴다.
-    ///
-    /// <para>
-    /// 데이터의 <c>x</c> 는 "보스의 앞(+) 인가 뒤(-) 인가" 다. 화면의 왼/오른쪽으로 옮기려면
-    /// 보스가 <b>어디를 보는지</b>를 알아야 하고, 그 답은 <see cref="Boss.Facing"/> 하나다.
-    /// 안 뒤집으면 파이터가 보스 왼쪽에 설 때 "앞에 끌리는 칼" 이 등 뒤에 그려진다.
-    /// </para>
-    ///
-    /// <para>
-    /// ⚠ <b>두 x 를 견줘 여기서 다시 계산하면 안 된다</b>(이슈 #36 전에는 그랬다). 그러면 파이터가
-    /// 스윙 도중에 보스를 지나가는 순간 <b>표지가 한 프레임에 반대쪽으로 튄다</b> — 몸은 잠겨 그대로인데
-    /// 칼만 등 뒤로 간다. 방향을 아는 곳은 규칙 한 곳이어야 한다.
-    /// </para>
-    /// </summary>
-    private BossTell? CurrentTell()
-    {
-        if (Current() is not PatternDef def)
-        {
-            return null;
-        }
-
-        // **다음 판정**에서 온다 (이슈 #53). 가드 불가면 예고가 호박에서 **빨강**이 되고 그 위에
-        // 危 가 뜬다 — 둘은 같은 뜻("가드로 못 막는다")을 색과 모양 두 통로로 나른다(BossTell).
-        //
-        // ⚠ 이슈 #47 은 여기서 패턴 태그(has_guard_break)를 읽었다. 그때는 그 요약이 "무엇이
-        // 오는가" 를 말하는 유일한 값이었지만, 계열이 연속타뿐인 지금 그 요약은 **선딜 내내 참**이라
-        // 1·2타까지 빨갛게 칠한다 — 막을 수 있는 판정을 "못 막는다" 고 말하는 예고다.
-        // 다음 판정 하나만 보면 색이 1·2타에 호박 · 3타에 빨강으로 제때 갈린다.
-        return new BossTell(
-            def.Tell.Id, def.Tell.X * _sim.Boss.Facing, def.Tell.Y, def.Tell.Length, _sim.NextActiveGuardBreak);
-    }
-
-    /// <summary>지금 도는 패턴의 정의. 패턴이 안 돌거나 표에 없으면 null.</summary>
-    private PatternDef? Current() =>
-        _sim.Boss.CurrentPattern is string id && _patterns.TryGetValue(id, out PatternDef? def) ? def : null;
 
     /// <summary>
     /// 보스가 패턴의 어디쯤인가. 더 올 판정이 있으면 선딜, 없으면 후딜이다 —

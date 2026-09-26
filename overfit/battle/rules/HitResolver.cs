@@ -13,7 +13,7 @@ public enum HitVerdict
     /// <para>
     /// 모양 <b>안쪽의 빈 곳</b>(<see cref="MissedByGap"/>)과 <b>따로</b> 둔다 (이슈 #46 · #59). 한 갈래였을 때는
     /// 파고들어 피한 것과 도망쳐 피한 것이 계측에서 같은 한 점이었다 — 그 둘은 성향이 정반대고
-    /// 봉인할 것도 정반대라, 뭉개면 정반대 변종이 뽑힌다.
+    /// 봉인할 것도 정반대라, 뭉개면 정반대 패턴이 뽑힌다.
     /// </para>
     /// </summary>
     MissedTooFar,
@@ -52,10 +52,8 @@ public enum HitVerdict
     Guarded,
 
     /// <summary>
-    /// 닿았고 가드가 <b>깨졌다</b> (이슈 #47). 두 길로 온다 — 스태미나가 모자랐거나,
-    /// <c>guard_break</c> 판정이었거나. 어느 쪽이든 <b>전액</b>이고 <c>guard_break_lock</c> 동안 굳는다.
-    /// 둘을 한 값으로 두는 것은 일부러다: 플레이어가 겪는 것도 화면이 말하는 것도 같은 "깨졌다" 이고,
-    /// 왜 깨졌는지는 그 순간의 스태미나가 이미 말한다.
+    /// 닿았고 가드가 <b>깨졌다</b> (이슈 #47). 스태미나가 모자랐다 — 가드가 깨지는 길은 그것 하나다(설계 §5.2 · 옛
+    /// <c>guard_break</c> 판정은 #72 에서 걷었다). <b>전액</b>이고 <c>guard_break_lock</c> 동안 굳는다.
     /// </summary>
     GuardBroken,
 }
@@ -120,8 +118,8 @@ public static class HitResolver
                 return HitVerdict.Parried;
 
             case Defense.Guarding:
-                // 깨지는 길이 둘이다. 스태미나가 모자라거나, 애초에 가드로는 못 막는 판정이거나.
-                return box.GuardBreak || fighter.Stamina < fighter.GuardStaminaCost(box.Damage)
+                // 가드가 깨지는 길은 **스태미나 하나**다 (설계 §5.2) — 옛 guard_break 판정(빨간 마무리)은 걷었다(#72).
+                return fighter.Stamina < fighter.GuardStaminaCost(box.Damage)
                     ? HitVerdict.GuardBroken
                     : HitVerdict.Guarded;
 
@@ -164,8 +162,7 @@ public static class HitResolver
         // ↓ 를 누르고 있으면 막는다 (설계 §5.2). 창을 놓친 패리는 여기 안 온다 — 패리와 가드는 다른 행동이라
         // 패리 커밋 중에는 가드가 아니고, 그 판정은 맨몸에 떨어진다(설계 §5.3).
         //
-        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2) —
-        // 가드를 막는 것은 판정 쪽의 guard_break 하나뿐이다.
+        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2).
         return fighter.Guarding ? Defense.Guarding : Defense.None;
     }
 

@@ -23,10 +23,9 @@ public class PlayerAxesTests
         bool dashAvailable = true,
         bool jumpAvailable = true,
         bool parryAvailable = true,
-        bool guardAvailable = true,
-        bool finisher = false) =>
-        new("내려찍기 I", verb, verdict, timingError, direction, airborne, distance, greedWindow,
-            dashAvailable, jumpAvailable, parryAvailable, guardAvailable, finisher);
+        bool guardAvailable = true) =>
+        new("3연격", verb, verdict, timingError, direction, airborne, distance, greedWindow,
+            dashAvailable, jumpAvailable, parryAvailable, guardAvailable);
 
     [Fact]
     public void 이벤트가_없으면_축이_전부_0_이다()
@@ -280,7 +279,7 @@ public class PlayerAxesTests
     public void 가드는_축이_아니라_개수로_실린다()
     {
         // **10축 계약을 안 깬다** (이슈 #47). 지금 가드에는 의존도 축이 될 분모가 없다 —
-        // guard_break 가 아닌 모든 판정에서 가드가 되므로 "고를 수 있었는데 골랐나" 가 사실상
+        // 지금 모든 판정에서 가드가 되므로(#72 — 가드 불가 판정을 걷었다) "고를 수 있었는데 골랐나" 가 사실상
         // 사용 비율이고, 그건 JumpReliance · ParryReliance 가 피하려고 만들어진 바로 그 값이다.
         // 그래서 **개수**로 싣는다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>

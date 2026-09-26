@@ -24,7 +24,7 @@ public class StageRosterTests
 
     /// <summary>
     /// 정의된 마지막 단계. <b>숫자를 안 베낀다</b> — 단계 수는 설계가 바뀌면 같이 바뀐다
-    /// (이슈 #48 이 다섯을 셋으로 줄였다). 베껴 두면 그때마다 무관한 테스트가 빨개지고,
+    /// (이슈 #48 이 다섯을 셋으로, #72 가 둘로 줄였다). 베껴 두면 그때마다 무관한 테스트가 빨개지고,
     /// 더 나쁘게는 "5단계" 를 물어보는 테스트가 <b>잘린 3단계</b>를 보면서 통과한다.
     /// </summary>
     private static int LastStage()
@@ -51,7 +51,7 @@ public class StageRosterTests
     public void 명부가_적힌_그대로_순서까지_나온다()
     {
         // 순서가 계약이다 — Det 의 뽑기 좌표가 이 리스트의 인덱스다.
-        StageRoster.For(Stages(), 1).ShouldBe(new[] { "내려찍기 I" });
+        StageRoster.For(Stages(), 1).ShouldBe(new[] { "3연격", "점프 공격" });
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class StageRosterTests
     [Fact]
     public void 명부가_설계한_패턴_수를_넘지_않는다()
     {
-        // want 는 설계가 정한 단계별 변종 수(1·3·5 · 이슈 #48)다. 모자란 것은 로그로 드러나지만
+        // want 는 설계가 정한 단계별 패턴 수(설계 §4 — 1단계 2 · 2단계는 5번 PR 부터 5)다. 모자란 것은 로그로 드러나지만
         // 넘치는 것은 아무 데도 안 남는다 — 새 패턴을 명부에 끼워 넣을 때 아직 자리가 없는
         // 낮은 단계에 얹으면 그 단계의 난이도 곡선이 조용히 달라진다.
         foreach ((string stage, StageDef def) in Stages())
@@ -102,34 +102,19 @@ public class StageRosterTests
     }
 
     [Fact]
-    public void 안으로_파고들어야_안전한_패턴이_마지막_단계_명부에_있다()
-    {
-        // dash_direction_bias 축은 "안으로 파고들었나 밖으로 도망갔나" 를 잰다. 안쪽이 안전한
-        // 패턴이 **명부에 없으면** 안으로 가는 것이 정답인 상황이 아예 없어 축이 상수가 된다 —
-        // 죽은 입력은 망의 용량만 먹고 아무것도 가르치지 않는다.
-        // patterns.json 에 있는 것만으로는 부족하다. 실제로 뽑히는 명부에 있어야 한다.
-        Dictionary<string, PatternDef> patterns = Patterns();
-        IReadOnlyList<string> roster = StageRoster.For(Stages(), LastStage());
-
-        roster.ShouldContain(
-            id => patterns[id].Timeline.Any(s => s.Kind == "active" && s.Band != null && s.Band[0] > 0),
-            "마지막 단계 명부에 안쪽 안전지대를 가진 패턴이 없다 — dash_direction_bias 가 상수가 된다");
-    }
-
-    [Fact]
     public void 설계보다_짧은_단계는_조용히_넘어가지_않는다()
     {
         // 모자람을 조용히 삼키면 나중에 "단계가 올라도 왜 안 어려워지지" 를 로그에서 찾을 수 없다.
         //
         // ⚠ **손으로 세운 명부로 본다.** 전에는 진짜 stages.json 의 5단계를 물어봤다 — 백장의 패턴이
-        // 셋뿐이라 3~5단계가 설계(5·7·10)에 늘 못 미쳤기 때문이다. 이슈 #48 이 단계를 셋으로 줄이면서
-        // **세 단계 모두 want 를 정확히 채운다**(1·3·5). 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
+        // 셋뿐이라 3~5단계가 설계(5·7·10)에 늘 못 미쳤기 때문이다. 지금은 **두 단계 모두 want 를 정확히
+        // 채운다**(2·2 · #72). 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
         // 그렇다고 이 가드를 지우면 다음에 모자란 단계가 생겼을 때 아무 데도 안 남는다.
         // 단언은 그대로 두고 **보는 대상만** 옮긴다.
         using var log = new LogCapture();
         var shortened = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 5, Patterns = new[] { "내려찍기 I" } },
+            ["1"] = new() { Want = 5, Patterns = new[] { "3연격" } },
         };
 
         StageRoster.For(shortened, 1);
@@ -140,7 +125,7 @@ public class StageRosterTests
     [Fact]
     public void 지금_명부는_설계한_수를_정확히_채운다()
     {
-        // 위 가드가 진짜 데이터에서 떠난 이유를 **데이터로** 못박는다 (이슈 #48). 세 단계가
+        // 위 가드가 진짜 데이터에서 떠난 이유를 **데이터로** 못박는다 (이슈 #48). 두 단계가
         // want 를 정확히 채우는 것이 지금의 사실이고, 그게 깨지면 위 가드가 아니라 여기가 빨개진다 —
         // "모자란 단계가 생겼다" 를 아무도 안 보는 채로 두지 않기 위해서다.
         foreach ((string stage, StageDef def) in Stages())
@@ -158,8 +143,8 @@ public class StageRosterTests
         using var log = new LogCapture();
         var holed = new Dictionary<string, StageDef>
         {
-            ["1"] = new() { Want = 1, Patterns = new[] { "내려찍기 I" } },
-            ["3"] = new() { Want = 5, Patterns = new[] { "내려찍기 III-역린" } },
+            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" } },
+            ["3"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" } },
         };
 
         StageRoster.For(holed, 2).ShouldBeEmpty();
