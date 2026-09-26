@@ -100,6 +100,15 @@ public class JumpClearanceTests
         // 경계 — 몸이 빈 틱이 창의 틱과 같으면 넘는다("창 내내"). 53틱은 첫 테스트가 잰 ClearRun 이다.
         jump.Clears(band, _boss, _bossX + 115, 53).ShouldBeTrue("몸이 창 53틱 내내 비는데 못 넘는다고 한다");
         jump.Clears(band, _boss, _bossX + 115, 54).ShouldBeFalse();
+
+        // "창 내내" 는 **끊기지 않고** 다 — 몸이 빈 틱을 다 더한 수가 아니라 가장 길게 이어진 수다. 위의 띠는 빈 틱이 한 줄이라 둘을 못
+        // 가른다(다 더하는 변이가 439건을 다 통과했다 · Task 1 리뷰). 발 높이 150 ~ 160 의 얇은 막은 몸(120)이 오를 때 한 틱 · 내릴 때 두
+        // 틱 막 밑으로 비고, 막을 뚫고 지나는 틱들을 사이에 두고 위로 41틱 빈다. 다 더하면 44 라 창 42틱도 넘는다고 한다 — 막 밑의 틱과
+        // 위의 틱 사이에 몸이 막에 닿는다.
+        var film = new HitShape(new[] { new HitRect(-2000, 2000, 150, 160) });
+        jump.ClearRun(film, _boss, _bossX + 115).ShouldBe(41);
+        jump.Clears(film, _boss, _bossX + 115, 41).ShouldBeTrue();
+        jump.Clears(film, _boss, _bossX + 115, 42).ShouldBeFalse("몸이 빈 틱이 막을 뚫는 틱으로 끊겼는데 창 42틱을 넘는다고 한다 — 창은 끊김 없이 덮여야 한다");
     }
 
     [Fact]
@@ -169,7 +178,7 @@ public class JumpClearanceTests
     [Fact]
     public void 관측의_점프_가능은_창_안에서_걸어_든_자리가_아니라_창이_열린_자리의_것이다()
     {
-        // 창이 열린 틱의 자리다(BossSwings.Open) — 결과가 갈린 틱의 자리가 아니다. 분모는 "그 판정이 설 때 무엇을 고를 수 있었나" 라서다.
+        // 창이 열린 틱의 자리다(BossSwings 의 첫 판정) — 결과가 갈린 틱의 자리가 아니다. 분모는 "그 판정이 설 때 무엇을 고를 수 있었나" 라서다.
         // 보스 앞 500 까지 높이 400 인 모양(기준 파이터의 정점 176 으로는 어디서도 못 넘는다)의 창을 0.25초(15틱)로 둔다. 파이터는 사거리
         // 바로 밖(보스에서 561 — 몸의 앞끝이 모양 끝 500 에서 31 모자라다)에 서 있다가 창이 열리면 걸어 들어가 창 안에서 맞는다. 창이 열린
         // 자리는 사거리 밖이라 뛰어도 산다(참) — 맞은 자리에서 재면 거짓이다. 선 채로 맞는 위 테스트는 두 틱의 자리가 같아 이것을 못 가른다.
@@ -223,6 +232,50 @@ public class JumpClearanceTests
             .Clears(high, new Placement(sim.Boss.X, 0, sim.Boss.Facing), sim.Fighter.X, BattleSim.TicksFor(0.25))
             .ShouldBeFalse("맞은 자리에서도 뛰어 넘을 수 있다 — 이 테스트가 두 자리를 못 가른다");
         e.JumpAvailable.ShouldBeTrue("창이 열린 자리(사거리 밖)가 아니라 걸어 든 자리에서 쟀다");
+
+        // 보스 쪽 자리도 **창이 열린 틱의 첫 판정이 선 자리**다 (Task 1 리뷰). 도약은 착지 판정이 서는 바로 그 틱에 내리는데(설계 §4.2),
+        // 러너가 판정을 내는 것은 그 틱의 움직임 앞이다 — 그때 재면 보스는 아직 앞 틱의 공중(발 ≈ 30)에 있어 띠가 30 ~ 90 이고, 판정은
+        // 내린 자리(띠 0 ~ 60)에 선다. 창을 실제 캐릭터가 바닥 띠 위로 몸이 비는 53틱으로 두면 두 자리가 갈린다: 내린 자리는 53틱이라
+        // 넘고 공중 자리는 51틱이라 못 넘는다. 창 8틱 · 바닥 전체 띠인 지금 데이터는 둘 다 넘어 골든이 이것을 못 봤다.
+        FighterConfig real = TestConfigs.Fighters().Values.Single();
+        var leap = new PatternDef
+        {
+            Tags = TestConfigs.Sweep(100, 0).Tags,
+            Timeline = new List<PatternStep>
+            {
+                new() { T = 0, Kind = "windup" },
+                new() { T = 0.4, Kind = "windup", Motion = new MotionDef { Id = "leap", Height = 280, Air = 0.6 } },
+                new() { T = 1.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 53 / 60.0 },
+                new() { T = 2.0, Kind = "end" },
+            },
+        };
+        var landing = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = real,
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            PatternIds = new[] { "도약" },
+            Patterns = new Dictionary<string, PatternDef> { ["도약"] = leap },
+            Seed = 1,
+            MaxTicks = 60 * 10,
+        });
+
+        // 가만히 선 파이터는 착지 띠에 첫 틱에 맞는다 — 관측이 나온 틱이 판정이 선 틱이고, 그 틱 앞의 보스 자리가 움직이기 전의 자리다.
+        var air = new Placement(0, 0, 0);
+        for (int i = 0; i < 300 && landing.Events.Count == 0; i++)
+        {
+            air = new Placement(landing.Boss.X, landing.Boss.Y, landing.Boss.Facing);
+            landing.Tick(default);
+        }
+
+        DodgeEvent landed = landing.Events.Single();
+        landed.Verdict.ShouldBe(HitVerdict.Hit);
+        landing.Boss.Y.ShouldBe(0);
+        air.Y.ShouldBeGreaterThan(0, "판정이 선 틱 앞에 보스가 이미 땅에 있었다 — 이 테스트가 두 자리를 못 가른다");
+        new JumpClearance(real).Clears(HitShape.Band(0, 1920, 0, 60), air, landing.Fighter.X, BattleSim.TicksFor(53 / 60.0))
+            .ShouldBeFalse("공중 자리에서도 넘는다 — 이 테스트가 두 자리를 못 가른다");
+        landed.JumpAvailable.ShouldBeTrue("착지 판정을 내린 자리가 아니라 움직이기 전의 공중 자리에서 쟀다");
     }
 
     [Fact]

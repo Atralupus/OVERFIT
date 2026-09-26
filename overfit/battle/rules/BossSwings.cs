@@ -23,7 +23,7 @@ public sealed class BossSwings
     /// <summary>회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 관측을 지을 때 묻는다.</summary>
     private readonly DodgeCredit _credit;
 
-    /// <summary>이 판의 파이터가 한 번 뛰어 몸이 비는 틱 (<see cref="JumpClearance"/> · #85). 창이 열릴 때 점프 가능을 잰다.</summary>
+    /// <summary>이 판의 파이터가 한 번 뛰어 몸이 비는 틱 (<see cref="JumpClearance"/> · #85). 첫 판정이 점프 가능을 잰다(<see cref="Step"/>).</summary>
     private readonly JumpClearance _jump;
 
     private readonly List<DodgeEvent> _events = new();
@@ -102,21 +102,18 @@ public sealed class BossSwings
     /// 지워지기 때문이다 — 마지막 판정이 end 와 같은 틱에 서면 그 관측이 "?" 패턴으로 남는다.
     ///
     /// <para>
-    /// <b>점프로 넘을 수 있었나도 지금 잰다</b> (#85 · 설계 §7.3) — 창이 열린 이 틱에 파이터가 선 자리에서 제자리로 뛰었다면 창 내내 몸이
-    /// 모양 밖에 있을 수 있나(<see cref="JumpClearance"/>). 관측을 짓는 틱(닿은 틱 · 무적이 먹은 틱)이 아니라 여는 틱인 까닭은 "그 판정이
-    /// 설 때 무엇을 고를 수 있었나" 가 분모이기 때문이다. 파이터는 이번 틱을 이미 움직였고 보스는 창 동안 안 움직인다(설계 §3.5 6).
+    /// <b>점프로 넘을 수 있었나는 여기서 안 잰다</b> (#85 · #78 Task 1 리뷰) — 창이 열린 이 틱의 <b>첫 판정</b>(<see cref="Step"/>)이 잰다.
+    /// 러너가 판정을 내는 것은 이 틱의 움직임 <b>앞</b>이다(<c>BattleSim.AdvanceBoss</c>: 러너 → 여기 → 움직임 → <see cref="Resolve"/>).
+    /// 도약은 착지 판정이 서는 바로 그 틱에 내리므로, 여기서 재면 보스는 아직 앞 틱의 공중(발 ≈ 30)에 있다 — 판정이 한 번도 안 서는
+    /// 자리다. 창 53틱 · 바닥 띠에서 그 자리는 51틱이라 "못 넘는다" 였고, 판정이 선 자리는 53틱이라 넘는다(<c>JumpClearanceTests</c>).
     /// </para>
     /// </summary>
     /// <param name="box">판정.</param>
     /// <param name="tags">그 패턴의 태그.</param>
     /// <param name="patternId">그 패턴의 id.</param>
     /// <param name="tick">창이 열리는 틱 — 칼이 선 틱이다. 관측의 타이밍 오차가 이 틱을 기준으로 잰다(설계 §3.6 ①).</param>
-    public void Open(HitBox box, PatternTags tags, string patternId, int tick)
-    {
-        int ticks = BattleSim.TicksFor(box.ActiveSeconds);
-        bool jumpable = _jump.Clears(box.Shape, new Placement(_boss.X, _boss.Y, _boss.Facing), _fighter.X, ticks);
-        _live.Add(new LiveSwing(box, tags, patternId, tick, ticks, jumpable));
-    }
+    public void Open(HitBox box, PatternTags tags, string patternId, int tick) =>
+        _live.Add(new LiveSwing(box, tags, patternId, tick, BattleSim.TicksFor(box.ActiveSeconds)));
 
     /// <summary>
     /// 살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다. <b>받아친 판정이 있었으면 true</b> —
@@ -188,6 +185,16 @@ public sealed class BossSwings
     /// </summary>
     private bool Step(LiveSwing swing, Placement at)
     {
+        if (swing.TicksLeft == swing.Ticks)
+        {
+            // **점프로 넘을 수 있었나는 첫 판정이 선 자리에서 잰다** (#85 · 설계 §7.3) — 창이 열린 이 틱에 파이터가 선 자리에서 제자리로
+            // 뛰었다면 창 내내 몸이 모양 밖에 있을 수 있나(JumpClearance). 관측을 짓는 틱(닿은 틱 · 무적이 먹은 틱)이 아니라 여는 틱인 까닭은
+            // "그 판정이 설 때 무엇을 고를 수 있었나" 가 분모이기 때문이다. 보스 자리는 이 판정이 대는 at 그대로다 — Open 에서 재면 도약이
+            // 내리기 전의 공중 자리를 잰다(Open 의 주석 · #78 Task 1 리뷰가 밟았다). 파이터는 이번 틱을 보스보다 먼저 움직였으므로
+            // (BattleSim.Tick) Open 때와 같은 자리다.
+            swing.Jumpable = _jump.Clears(swing.Box.Shape, at, _fighter.X, swing.Ticks);
+        }
+
         HitVerdict verdict = HitResolver.Resolve(_fighter, at, swing.Box, swing.Tags);
         swing.TicksLeft--;
 
@@ -293,7 +300,7 @@ public sealed class BossSwings
             DashAvailable: swing.Tags.DashWindow > 0,
             ParryAvailable: swing.Tags.Parryable,
 
-            // 점프만은 **판정과 자리 단위**다 (#85 · 설계 §7.3) — 창이 열린 틱에 파이터가 선 자리에서 잰 값이다(Open). 태그(jumpable)를
+            // 점프만은 **판정과 자리 단위**다 (#85 · 설계 §7.3) — 창이 열린 틱에 첫 판정이 선 자리에서 잰 값이다(Step). 태그(jumpable)를
             // 실으면 판정마다의 답이 뭉개지고, 모양 전체의 윗끝으로 재면(#72) 보스 앞에서 넘는 2타 · 바짝 붙어 넘는 3타가 "못 넘었다" 로 실린다.
             JumpAvailable: swing.Jumpable,
 
@@ -339,7 +346,7 @@ public sealed class BossSwings
     /// </summary>
     private sealed class LiveSwing
     {
-        public LiveSwing(HitBox box, PatternTags tags, string patternId, int openedTick, int ticks, bool jumpable)
+        public LiveSwing(HitBox box, PatternTags tags, string patternId, int openedTick, int ticks)
         {
             Box = box;
             Tags = tags;
@@ -347,7 +354,6 @@ public sealed class BossSwings
             OpenedTick = openedTick;
             Ticks = ticks;
             TicksLeft = ticks;
-            Jumpable = jumpable;
         }
 
         public HitBox Box { get; }
@@ -365,8 +371,11 @@ public sealed class BossSwings
         /// <summary>남은 틱. 대 볼 때마다 하나씩 준다.</summary>
         public int TicksLeft { get; set; }
 
-        /// <summary>창이 열린 틱의 자리에서 점프로 넘을 수 있었나 (#85) — 관측의 <c>JumpAvailable</c>.</summary>
-        public bool Jumpable { get; }
+        /// <summary>
+        /// 창이 열린 틱의 자리에서 점프로 넘을 수 있었나 (#85) — 관측의 <c>JumpAvailable</c>. 첫 판정(<see cref="Step"/>)이 적는다 — 관측은
+        /// 그 뒤에만 지으므로 안 적힌 값을 읽을 일이 없다.
+        /// </summary>
+        public bool Jumpable { get; set; }
 
         /// <summary>
         /// 무적이 <b>처음</b> 먹은 틱에 지어 둔 관측 (이슈 #59 · 리뷰 라운드 1). 창이 안 닿고 닫히면

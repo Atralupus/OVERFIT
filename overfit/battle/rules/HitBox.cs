@@ -7,7 +7,7 @@ namespace Overfit.Battle.Rules;
 ///
 /// <para>
 /// <b>점프로 넘을 수 있나는 여기 없다</b> (#85). 판을 세울 때 모양의 윗끝 하나로 재 두던 칸(<c>Jumpable</c>)이었는데, 넘을 수 있나는
-/// 판정이 아니라 <b>그 판정이 선 자리</b>의 것이다 — 창이 열린 틱에 파이터의 자리에서 잰다(<see cref="JumpClearance"/> · <c>BossSwings.Open</c>).
+/// 판정이 아니라 <b>그 판정이 선 자리</b>의 것이다 — 창이 열린 틱의 첫 판정이 선 자리에서 잰다(<see cref="JumpClearance"/> · <c>BossSwings.Step</c>).
 /// </para>
 /// </summary>
 /// <param name="Shape">판정 모양 (공격자 기준 사각형들).</param>
