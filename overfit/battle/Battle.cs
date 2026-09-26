@@ -154,8 +154,8 @@ public partial class Battle : Node2D
     public bool BossExhausted => !_broken && !_over && _sim.Boss.Exhausted;
 
     /// <summary>
-    /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 <b>흰 피격 실루엣</b>이 뜨는
-    /// 순간이고(이슈 #28), 그건 0.2초뿐이라 벽시계로 노리면 대부분 놓친다.
+    /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 보스가 <b>희게 번쩍이는</b> 순간이고(#71 ·
+    /// <c>hit_flash.gdshader</c>), 그건 <c>feel.boss_hit_flash_seconds</c>(0.12초)뿐이라 벽시계로 노리면 대부분 놓친다.
     /// </summary>
     public int BossHealth => _broken ? 0 : _sim.Boss.Health;
 

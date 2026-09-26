@@ -11,7 +11,7 @@
 #                                      dotnet test 가 테스트 0개를 찾고 조용히 통과하기 때문이다
 #                                      cover → 커버리지(cobertura) 까지. 나머지 인자는 dotnet test 로 그대로
 #                                      (예: --filter FullyQualifiedName~Det)
-#   tools/build.sh uids                .cs 마다 .uid 가 짝을 이루는지. check 가 부른다
+#   tools/build.sh uids                .cs · .gdshader 마다 .uid 가 짝을 이루는지. check 가 부른다
 #   tools/build.sh hitboxes            hitboxes.json 이 그림과 같은지 (extract_hitboxes.py --check). check 가 부른다
 #                                      그림(PNG)이 안 깔린 체크아웃이면 경고하고 건너뛴다 — 실패가 아니다
 #   tools/build.sh run [씬]            C# 빌드 후 게임 실행
@@ -281,20 +281,22 @@ cmd_test() {
   return 0
 }
 
-# .cs 마다 .uid 가 짝을 이루는지. 빠지면 체크아웃마다 UID 가 갈리고 엔진은 WARNING 으로만 알린다 —
+# .cs · .gdshader 마다 .uid 가 짝을 이루는지. 빠지면 체크아웃마다 UID 가 갈리고 엔진은 WARNING 으로만 알린다 —
 # .tscn 이 uid:// 로 스크립트를 가리키는 순간 그게 조용한 깨짐이 된다.
 # .uid 는 Godot 이 임포트할 때 만든다. 없으면 tools/build.sh import 를 한 번 돌린다.
+# Godot 4.7 은 제 안에 uid 를 적을 자리가 없는 텍스트 자원에 옆 파일(.uid)을 만든다 — 스크립트와 셰이더다. 이 저장소의 첫
+# 셰이더(battle/view/hit_flash.gdshader · #71)를 임포트했더니 hit_flash.gdshader.uid 가 생겼다. .tres · .tscn 은 uid 를 제 머리에 적는다.
 cmd_uids() {
   local missing=0 f
   while IFS= read -r f; do
     [[ -f "$f.uid" ]] && continue
     bad "uid 없음 — ${f#"$ROOT"/}"
     missing=1
-  done < <(find "$PROJECT" -name '*.cs' \
+  done < <(find "$PROJECT" \( -name '*.cs' -o -name '*.gdshader' \) \
     -not -path "*/.godot/*" -not -path "*/obj/*" -not -path "*/bin/*" -not -path "*/addons/*" | sort)
 
   if [[ $missing -eq 1 ]]; then
-    die "위 .cs 에 .uid 짝이 없습니다. tools/build.sh import 를 돌리고 생긴 .uid 를 같이 커밋하세요."
+    die "위 파일에 .uid 짝이 없습니다. tools/build.sh import 를 돌리고 생긴 .uid 를 같이 커밋하세요."
   fi
   ok ".uid 짝 — 전부 있음"
 }

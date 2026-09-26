@@ -93,7 +93,7 @@ public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame
 /// <param name="Phase">패턴의 어디쯤인가 — 선딜 · 후딜 · 쉬는 중.</param>
 /// <param name="NextActiveIn">다음 판정까지 남은 시간(초). 더 올 판정이 없으면 null.</param>
 /// <param name="Exhausted">탈진했나 (#72 · 설계 §4.3). take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선 채 푸른 톤이다 —
-/// 패리로든 경직 게이지로든(4번 PR) 같은 그림이다.</param>
+/// 패리로든 경직 게이지로든(#71) 같은 그림이다. 맞으면 흰 플래시가 그 위에 얹힐 뿐 자세는 안 끊긴다.</param>
 /// <param name="Anim">
 /// 지금 든 타임라인 단계의 그림 — 보스 팩 <c>.tres</c> 의 애니메이션 이름(<c>patterns.json</c> 의 <c>anim</c> · 설계 §8.1).
 /// 패턴이 안 돌면 null. <b>이것이 예고다</b> (#72 · 설계 §6): 옛 예고 표지(칼 · 끌기 · 危)를 걷었고, 3연격의 칼을 든 f0 ·

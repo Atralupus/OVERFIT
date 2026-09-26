@@ -131,21 +131,22 @@ public partial class ShotRunner : Node
         Tap("attack");
         await CaptureOn("battle-5-attack", () => _battle is { FighterSwingTested: true }, _pollTimeout);
 
-        // ── 보스 피격: 작가가 그린 흰 실루엣 (이슈 #28) ───────────────────
-        // 0.2초(12프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다 —
-        // 때린 것이 닿았는지가 안 보이면 공격에 값이 안 붙는다는 것이 이 연출의 이유이고,
-        // 그 증명은 "흰가" 가 아니라 "맞은 그 프레임에 흰가" 다.
+        // ── 보스 피격: 선딜 도중에 맞아도 공격 자세 그대로 희게 번쩍인다 (#71 · 설계 §6 · §9) ────────
+        // 셰이더 흰 플래시는 0.12초(7프레임)뿐이라 벽시계로 노리면 거의 놓친다. **체력이 준 것을 보고** 셔터를 누른다.
+        // 증명할 것은 "흰가" 가 아니라 "공격 자세 그대로 흰가" 다 — 그래서 3연격의 선딜(칼을 든 f0 를 0.725초 붙든다)에 칼을 넣는다.
+        // 판정까지 0.3초 넘게 남은 선딜만 고른다: 1타는 누른 뒤 5틱에 서므로 칼이 f0 에 선 보스에 닿는다. 번쩍인 장은
+        // [view][D] boss_flash anim=… frame=… 로도 남는다(BossView.Hit).
         //
-        // **닿을 때까지 0.4초마다 다시 누른다** (#72). 첫 판은 시도 1 의 순서라 점프 공격으로 열고, 이 칼은 착지하는 보스와
-        // 겹친다 — 1타의 판정 창(5틱)이 착지 틱(246)에 걸려야 닿는데 벽시계로 기다린 0.4초가 몇 틱 이르면 공중의 보스를 긋고
-        // 끝난다. 한 번만 누르던 때 실제로 다섯 번에 한 번 그랬다: 8초를 기다리다 흰 번쩍임 없이 찍혔다([shots][W] timeout).
-        // 다시 누르는 간격 0.4초는 1타 한 바퀴(0.25초)보다 길어 2타로 이어지지 않는다.
+        // **닿을 때까지 0.4초마다 다시 누른다** (#72) — 보스와 겹친 채 서 있어도 첫 칼이 빗나갈 수 있다. 0.4초는 1타 한 바퀴(0.25초)보다
+        // 길어 2타로 이어지지 않는다.
         const double strikeEvery = 0.4;
-        await Wait(strikeEvery);
+        await Until(
+            () => _battle is { BossPattern: "3연격", BossWindingUp: true } && _battle.BossNextActiveIn > 0.3,
+            _patternTimeout);
         int bossBefore = _battle?.BossHealth ?? 0;
         bool BossHit() => (_battle?.BossHealth ?? 0) < bossBefore;
         int every = (int)(strikeEvery * Engine.PhysicsTicksPerSecond);
-        for (int f = 0; !BossHit() && f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
+        for (int f = 0; f < _pollTimeout * Engine.PhysicsTicksPerSecond; f++)
         {
             if (f % every == 0)
             {
@@ -153,6 +154,10 @@ public partial class ShotRunner : Node
             }
 
             await Frames(1);
+            if (BossHit() && Pause())
+            {
+                break;
+            }
         }
 
         if (!BossHit())
@@ -160,11 +165,11 @@ public partial class ShotRunner : Node
             Log.Warn("shots", "boss_hit_not_seen");
         }
 
-        // **7프레임 뒤다(≈0.117초).** 팩의 take-hit-white 는 4프레임 10fps 이고 흰 프레임은
-        // 그중 두 번째라, 맞은 그 프레임을 찍으면 흰색이 아니라 평범한 피격 자세가 나온다 —
-        // 실제로 그렇게 찍혔고 "흰 플래시가 없다" 로 잘못 읽힐 뻔했다.
-        await Frames(7);
+        // **맞은 틱 바로 뒤에 멈춰 찍는다** (CaptureOn 과 같은 자리). 플래시는 맞은 틱에 1 이고 0.12초(7프레임)에 0 이 된다 —
+        // 멈추면 그림(Battle._Process 의 BossView.Show)도 멈춰 맞은 뒤 첫 프레임의 세기(≈ 0.86)가 찍힌다. 멈추지 않고 두 프레임 뒤를 찍었더니
+        // 셔터가 그리기를 두 번 더 기다려 절반쯤 꺼진 흰색이 찍혔다. 옛 흰 실루엣은 4장 중 둘째가 흰 장이라 7프레임 뒤를 찍었다.
         await Screenshot.CaptureAsync(this, "battle-5b-boss-hit");
+        GetTree().Paused = false;
 
         // ── 보스 선딜: 예고 링이 조여 드는 중 ─────────────────────────────
         await Until(() => _battle?.BossWindingUp == true, _pollTimeout);

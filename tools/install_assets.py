@@ -87,8 +87,9 @@ SPRITES = "Sprites/"
 
 PACKS = (
     Pack(
-        # 플레이어. `Take Hit - white silhouette` 이 **피격 흰 실루엣**이다 —
-        # 셰이더나 modulate 로 흉내 내지 않고 작가가 그린 것을 그대로 쓴다.
+        # 플레이어. `Take Hit - white silhouette`(hit_white)은 피격 흰 실루엣이다 — 두 팩 다 뷰가 더 안 튼다: 보스의 피격은
+        # 셰이더 흰 플래시다(#71 · battle/view/hit_flash.gdshader). 풀고 SpriteFrames 에 남기는 것은 그대로 둔다 — 팩 전체의
+        # 불투명 세로 범위(region)는 이 시트가 있든 없든 같다(보스 2..105 · 플레이어 53..122).
         zip_name="Martial Hero.zip",
         dest="martial_hero",
         sprite_id="martial_hero",
