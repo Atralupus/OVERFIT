@@ -8,9 +8,9 @@
 #   ② 검사 게이트   — tools/build.sh check (포맷 · 빌드 · 규칙 테스트 · uid · 판정 모양)
 # 를 차례로 돌리고, 어긋나면 커밋을 막는다.
 #
-# ⚠ 어느 체크아웃을 볼 것인가 — 훅 입력의 cwd 다, 스크립트 위치가 아니다.
-#   워크트리에서 커밋하면 스크립트는 주 체크아웃의 것이 돌 수 있다. 그때 스크립트 위치로 git 을
-#   때리면 남의 인덱스와 남의 브랜치를 보게 된다 — 게이트가 통째로 헛돈다.
+# ⚠ 어느 체크아웃을 볼 것인가 — **명령이 가리키는 곳**이다(`cd <경로> &&` · `git -C <경로>`). 없으면 훅 입력의 cwd,
+#   스크립트 위치는 마지막 수단이다. 워크트리에서 커밋하면 스크립트는 주 체크아웃의 것이 돌 수 있다. 그때 스크립트
+#   위치로 git 을 때리면 남의 인덱스와 남의 브랜치를 보게 된다 — 게이트가 통째로 헛돈다. cwd 만 봐도 같다(#86).
 #
 # 사람이 손으로 쓸 일은 없다. 검사만 돌려보려면 tools/build.sh check.
 
@@ -79,22 +79,95 @@ command="$(read_payload command)"
 # 또는 `(` `{`) 바로 뒤여야 한다. heredoc 본문의 글은 그 앞에 구분자가 아니라 텍스트가 있으므로 안 걸린다.
 # 완벽하지는 않다(본문 줄이 마침 `git commit` 으로 시작하면 걸린다). 그건 받아들인다 —
 # 거짓 통과보다 거짓 차단이 낫고, 거짓 차단은 검사가 한 번 더 도는 것으로 끝난다.
+#
+# git 과 commit 사이의 전역 옵션도 건너뛴다. 값을 따로 받는 것(-C <경로> · -c k=v · --git-dir <경로> · --work-tree <경로>)은
+# 그 값까지 한 덩어리다. 예전엔 `-옵션` 꼴만 건너뛰어서 `git -C <작업 트리> commit` 이 커밋으로 안 보였다 — 게이트가 통째로
+# 빠진다. 실제로 밟았다(#86): 작업 트리의 기능 브랜치 커밋이 세션 폴더(main) 탓에 막히자, 그 형태로 커밋해 게이트가 안 돌았다.
 is_git_commit() {
-  grep -qE '(^|[&|;(){}]|[[:space:]]&&|[[:space:]]\|\||^[[:space:]]*)[[:space:]]*git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*commit([[:space:]]|$)' <<< "$1"
+  grep -qE '(^|[&|;(){}]|[[:space:]]&&|[[:space:]]\|\||^[[:space:]]*)[[:space:]]*git[[:space:]]+((-C|-c|--git-dir|--work-tree|--namespace|--exec-path|--config-env)[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]+)[[:space:]]+|-[^[:space:]]+[[:space:]]+)*commit([[:space:]]|$)' <<< "$1"
 }
 
 is_git_commit "$command" || pass
 
 # ── 어느 체크아웃인가 ──────────────────────────────────────────────────────
-# 훅 입력의 cwd 가 진짜 커밋이 일어나는 곳이다. 스크립트 위치($ROOT)는 워크트리에서 어긋난다.
+# 커밋이 일어나는 곳은 **명령이 가리키는 곳**이다. 훅 입력의 cwd 는 명령이 시작하는 자리일 뿐이다 —
+# 명령 안에서 `cd <경로> &&` 로 옮기거나 `git -C <경로>` 로 가리키면 커밋은 거기서 난다.
+# 예전엔 cwd 만 봐서, 작업 트리의 커밋이 세션 폴더로 검사됐다(#86): 그 폴더가 기능 브랜치면 엉뚱한 트리를 보고
+# 통과했고, main 이면 기능 브랜치 커밋을 "main 에 직접 커밋" 으로 막았다. 둘 다 틀린 판정이다.
+# 명령에서 못 읽으면(변수 · 따옴표가 깨진 heredoc) cwd 로 돌아간다 — 지금까지와 같다.
+# 스크립트 위치($ROOT)는 워크트리에서 어긋나므로 마지막 수단이다.
 REPO="$ROOT"
 cwd="$(read_payload cwd)"
-if [[ -n "$cwd" && -d "$cwd" ]]; then
-  top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)"
+target="$(python3 - "$command" "$cwd" <<'PY'
+import os, re, shlex, sys
+
+command, cwd = sys.argv[1], sys.argv[2]
+cur = cwd if cwd and os.path.isdir(cwd) else ""
+env = {}
+VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
+
+
+def expand(tok):
+    # 같은 명령 안에서 앞서 둔 NAME=값 만 푼다. 나머지 $X 는 못 푼 채 둔다 — 없는 경로라 아래에서 걸러진다.
+    return re.sub(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", lambda m: env.get(m.group(1), m.group(0)), tok)
+
+
+def resolve(base, path):
+    path = os.path.expanduser(expand(path))
+    return os.path.normpath(path if os.path.isabs(path) else os.path.join(base or ".", path))
+
+
+try:
+    lex = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=";&|()")
+    lex.whitespace_split = True
+    toks = list(lex)
+except ValueError:
+    raise SystemExit(print(""))
+
+segs, seg = [], []
+for t in toks:
+    if t and set(t) <= set(";&|()"):
+        segs.append(seg)
+        seg = []
+    else:
+        seg.append(t)
+segs.append(seg)
+
+for seg in segs:
+    while seg and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", seg[0]):
+        name, _, value = seg[0].partition("=")
+        env[name] = expand(value)
+        seg = seg[1:]
+    if not seg:
+        continue
+    if seg[0] == "cd" and len(seg) > 1:
+        cur = resolve(cur, seg[1])
+        continue
+    if seg[0] != "git":
+        continue
+    here, i = cur, 1
+    while i < len(seg) and seg[i].startswith("-"):
+        if seg[i] == "-C" and i + 1 < len(seg):
+            here = resolve(here, seg[i + 1])
+            i += 2
+        elif seg[i] in VALUED and i + 1 < len(seg):
+            i += 2
+        else:
+            i += 1
+    if i < len(seg) and seg[i] == "commit":
+        print(here if here and os.path.isdir(here) else "")
+        raise SystemExit
+print("")
+PY
+)"
+for where in "$target" "$cwd"; do
+  [[ -n "$where" && -d "$where" ]] || continue
+  top="$(git -C "$where" rev-parse --show-toplevel 2>/dev/null)"
   if [[ -n "$top" && -f "$top/tools/precommit_check.sh" ]]; then
     REPO="$top"
+    break
   fi
-fi
+done
 
 staged="$(git -C "$REPO" diff --cached --name-only 2>/dev/null)"
 branch="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)"
