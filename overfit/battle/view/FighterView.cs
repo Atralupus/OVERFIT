@@ -147,6 +147,12 @@ public partial class FighterView : Node2D
     /// <summary>새 칼질이 시작됐나 (<see cref="SwingBegan"/>). 선딜 그림을 시작하는 장부터 다시 세운다.</summary>
     private bool _windupFresh;
 
+    /// <summary>
+    /// 칼질 뒤 경직이라 <c>idle</c> 첫 장에 멈춰 세워 두었나 (<see cref="StandAfterSwing"/>). 푸는 쪽(<see cref="Unstand"/>)이
+    /// <b>이 파일이 멈춘 것만</b> 다시 흘리려고 든다.
+    /// </summary>
+    private bool _standing;
+
     private double _flashLeft;
     private double _flashTotal;
     private Color _flashColor;
@@ -230,21 +236,25 @@ public partial class FighterView : Node2D
         bool swinging = frame.Pose == FighterPose.Attack && !_dead && _hitPoseLeft <= 0;
         if (swinging && frame.Stiff)
         {
-            HoldLast();
-        }
-        else if (swinging && !_bladeOut)
-        {
-            HoldWindup();
-        }
-        else if (swinging)
-        {
-            FollowBlade();
+            StandAfterSwing();
         }
         else
         {
-            Animate(AnimationFor(frame.Pose));
-            HoldDash(frame);
-            HoldParry(frame);
+            Unstand();
+            if (swinging && !_bladeOut)
+            {
+                HoldWindup();
+            }
+            else if (swinging)
+            {
+                FollowBlade();
+            }
+            else
+            {
+                Animate(AnimationFor(frame.Pose));
+                HoldDash(frame);
+                HoldParry(frame);
+            }
         }
 
         _sprite.Modulate = Tint(frame);
@@ -527,30 +537,62 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 칼질 뒤 경직 (#82) — 이 칼질 시트의 <b>마지막 장</b>을 붙든다. 시트가 반복하지 않아(<c>.tres</c> 의 loop false) 흘려 두어도 마지막
-    /// 장에 서지만 그 플래그에 기대지 않는다: 반복으로 바뀌는 날 경직 동안 칼을 다시 뒤로 빼는 그림이 된다. 피격 자세에 끊겼다 돌아와도
-    /// 여기로 선다 — 칼은 이미 지나갔다(<see cref="FollowBlade"/> 와 같은 이유). 1타의 경직 중 J 로 이은 2타는 <see cref="SwingBegan"/> 이
-    /// 선딜부터 다시 세운다.
+    /// 칼질 뒤 경직 (#82) — 시트는 <b>제 속도로 끝까지</b> 흐르게 두고(칼 → 잔상), 다 돌면 <b><c>idle</c> 의 첫 장에 멈춰 선다</b>.
+    /// 칼은 끝났고 서 있는 것이 경직이라, 그림도 그 말만 한다.
+    ///
+    /// <para>
+    /// <b>마지막 장을 붙들지 않는다 — 실제로 밟았다.</b> 처음에는 시트의 마지막 장(f5)을 경직 내내 붙들었는데, 두 시트 다 f5 가 흩어지는
+    /// 흰 궤적이다. 판정은 이미 꺼졌는데 큰 흰 호가 1타 뒤 0.40초 · 2타 뒤 0.50초 동안 얼어붙어 살아 있는 칼로 읽혔다(<c>battle-6-windup</c> ·
+    /// <c>10e</c> · <c>12b</c> · #82 리뷰). 대시 · 패리처럼 그 행동의 마지막 자세를 붙들 수 없는 까닭이 그것이다 — 칼질의 마지막 자세가
+    /// 곧 궤적이다. 팩에 칼을 거둔 장이 따로 없어 선 자세(<c>idle</c> f0)를 빌리고, 흘리지 않고 멈춰 둔다: 경직 동안은 가만히 서 있고,
+    /// 풀리면 숨 쉬는 <c>idle</c> 이 다시 흐른다(<see cref="Unstand"/>).
+    /// </para>
+    ///
+    /// <para>
+    /// 시트가 <b>칼 장부터 뒤로 흐르는 동안만</b> 기다린다 — 끝나면 엔진이 마지막 장에서 멈춘다(<c>.tres</c> 의 loop false). 그 플래그에
+    /// 기대지는 않는다: 반복하는 시트로 바뀌는 날에도 첫 장으로 감기는 순간 서므로 경직 동안 칼을 다시 빼는 그림이 되지 않는다. 피격 자세에
+    /// 끊겼다 돌아오면 곧장 선다 — 칼은 이미 지나갔다(<see cref="FollowBlade"/> 와 같은 이유). 1타의 경직 중 J 로 이은 2타는
+    /// <see cref="SwingBegan"/> 이 선딜부터 다시 세운다.
+    /// </para>
     /// </summary>
-    private void HoldLast()
+    private void StandAfterSwing()
     {
         SwingSheet sheet = Sheet;
-        if (!HasSheet(sheet))
+        bool trailing = HasSheet(sheet) && _sprite.Animation == sheet.Anim && _sprite.IsPlaying()
+            && _sprite.Frame >= sheet.BladeFrame;
+        if (trailing || _sprite.SpriteFrames is not { } frames || !frames.HasAnimation("idle"))
         {
             return;
         }
 
-        if (_sprite.Animation != sheet.Anim)
+        if (_sprite.Animation == "idle" && !_sprite.IsPlaying() && _sprite.Frame == 0)
         {
-            _sprite.Play(sheet.Anim, SpeedFor(sheet));
-            AlignToGround(sheet.Anim);
+            return;
         }
 
-        int last = _sprite.SpriteFrames!.GetFrameCount(sheet.Anim) - 1;
-        if (_sprite.Frame != last || _sprite.IsPlaying())
+        _sprite.Play("idle");
+        _sprite.SetFrameAndProgress(0, 0.0f);
+        _sprite.Pause();
+        AlignToGround("idle");
+        _standing = true;
+    }
+
+    /// <summary>
+    /// 칼질 뒤 경직에서 멈춰 둔 <c>idle</c> 을 다시 흘린다(<see cref="StandAfterSwing"/>). 경직이 끝나면 자세는 대개 Idle 이나 가드라 둘 다 같은
+    /// <c>idle</c> 이고, <see cref="Animate"/> 는 이름이 안 바뀌었다고 보고 다시 안 튼다 — 대시 뒤 걸음의 멈춘 <c>run</c> 과 같은 함정이다
+    /// (<see cref="HoldDash"/>). 이 파일이 멈춘 것만 푼다(<see cref="_standing"/>) — 다른 까닭으로 멈춘 시트는 제 주인이 푼다.
+    /// </summary>
+    private void Unstand()
+    {
+        if (!_standing)
         {
-            _sprite.Frame = last;
-            _sprite.Pause();
+            return;
+        }
+
+        _standing = false;
+        if (_sprite.Animation == "idle" && !_sprite.IsPlaying())
+        {
+            _sprite.Play();
         }
     }
 
