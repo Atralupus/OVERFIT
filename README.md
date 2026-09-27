@@ -46,7 +46,7 @@ GIF 는 `tools/build.sh gifs` 가 고정된 대본으로 다시 찍는다 — �
 ## 해보기
 
 **[Releases](https://github.com/Atralupus/OVERFIT/releases/latest)** 에 macOS 빌드가 있다.
-서명하지 않은 빌드라 처음 열 때 막히면 시스템 설정 → 개인정보 보호 및 보안 맨 아래에서 그래도 열기 를 누른다(macOS 14 이하는 우클릭 → 열기).
+서명하지 않은 빌드라 처음 열 때 막히면 **시스템 설정 → 개인정보 보호 및 보안** 맨 아래의 **그래도 열기** 를 누른다(macOS 14 이하는 우클릭 → 열기).
 
 소스에서 돌리려면 Godot 4.7 (mono) 과 .NET 8 이 필요하다.
 에셋 zip 은 itch.io 에서 손으로 받는다 — 받는 곳과 전체 준비(`GODOT_PATH` 등)는 [CONTRIBUTING.md](CONTRIBUTING.md) 에 있다.
@@ -87,7 +87,8 @@ tools/build.sh run
 축마다 **몇 건의 근거로 나온 값인지**를 같이 싣는다. "3건으로 낸 0.5" 와 "300건으로 낸 0.5" 는 다르고,
 망이 그 차이를 알아야 한다.
 
-의존도의 분모인 "그 수단으로 피할 수 있었나" 는 패턴에 붙은 태그가 아니라 **판정마다** 잰다. 점프는 한 겹 더 —
+의존도의 분모인 "그 수단으로 피할 수 있었나" 는 패턴에 붙은 태그만으로 정하지 않고 **판정마다** 좁혀 잰다 —
+한 패턴 안에서도 타마다 답이 다를 수 있어서다. 점프는 한 겹 더 —
 그 판정이 선 순간 **당신이 선 자리에서** 잰다. 같은 칼이라도 선 자리에 따라 뛰어넘을 수 있기도 없기도 해서,
 패턴 하나에 답 하나를 붙이면 분모가 거짓을 싣는다.
 
@@ -187,14 +188,15 @@ Godot 참조가 없어서, Godot 을 끌고 오는 파일이 섞이면 빌드가
 (`T` `D` `I` `W` `E`)로 거른다([`Log.cs`](overfit/core/Log.cs)). `E` 는 규칙 위반에만 쓰고 헤드리스 판정이 그 한 줄을 실패로 본다 —
 공짜 불변식이다. `LOG_LEVEL=trace tools/build.sh …` 로 매 틱 값까지 켠다.
 
-**규칙은 TDD 로 고친다.** 실패하는 테스트 먼저, 통과할 만큼만, 그다음 정리. 커밋 훅
-([`precommit_check.sh`](tools/precommit_check.sh))이 main 직접 커밋을 막고, 규칙 파일(테스트 csproj 가 링크한 파일)을 고친 커밋에
-`tests/` 변경이 없으면 막고, 마지막에 `check` 를 돌린다.
+**규칙은 TDD 로 고친다.** 실패하는 테스트 먼저, 통과할 만큼만, 그다음 정리. 개발은 개발자와 Claude Code 가 대화로 같이 하고,
+에이전트의 커밋은 Claude Code 의 커밋 훅(PreToolUse — [`.claude/settings.json`](.claude/settings.json) →
+[`precommit_check.sh`](tools/precommit_check.sh))을 지난다. 훅은 main 직접 커밋을 막고, 규칙 파일(테스트 csproj 가 링크한 파일)을
+고친 커밋에 `tests/` 변경이 없으면 막고, 마지막에 `check` 를 돌린다. git 훅이 아니라서 손으로 한 커밋은 거르지 않는다.
 
 **설계와 계획은 문서로 남긴다.** 큰 작업마다 설계([`docs/superpowers/specs`](docs/superpowers/specs))를 먼저 쓰고, 그것을
-태스크 단위의 계획([`docs/superpowers/plans`](docs/superpowers/plans))으로 쪼개 구현한다. 설계는 유저가 한 말 · 대화로 정한 것 ·
-가정한 것을 나눠 적고, 뒤집은 결정은 개정 기록으로 남긴다. 지금의 보스전은
-[보스전 재설계](docs/superpowers/specs/2026-09-24-보스전-재설계-design.md)가 정한다. 코드 규칙은 [`CLAUDE.md`](CLAUDE.md) 에 있다.
+태스크 단위의 계획([`docs/superpowers/plans`](docs/superpowers/plans))으로 쪼개 구현한다. 지금의 보스전을 정한
+[보스전 재설계](docs/superpowers/specs/2026-09-24-보스전-재설계-design.md)는 개발자가 한 말 · 대화로 정한 것 · 가정한 것을
+나눠 적고, 뒤집은 결정은 개정 기록으로 남긴다. 코드 규칙은 [`CLAUDE.md`](CLAUDE.md) 에 있다.
 
 ---
 
