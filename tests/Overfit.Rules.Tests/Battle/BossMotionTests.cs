@@ -206,16 +206,31 @@ public class BossMotionTests
     [Theory]
     [InlineData(0)]
     [InlineData(-3600)]
-    public void 빠르기가_0_이하면_돌진은_그_틱에_끝나고_시계를_안_세운다(double speed)
+    public void 빠르기가_0_이하면_돌진은_규칙_위반을_남기고_그_틱에_끝나고_시계를_안_세운다(double speed)
     {
         // 빠르기가 0 이하면 멀리 있는 파이터에게도 그 틱에 끝난다 — 안 막으면 남은 틱(⌈남은 거리 / 0⌉)이 쓰레기가 되고 시계가 영영 서
         // 패턴이 안 끝난다. 뒤로도 안 간다. 데이터의 빠르기는 데이터 테스트가 보지만 그것은 patterns.json 만 막는다 — 움직임 자신의 약속은
-        // 여기서 못박는다.
+        // 여기서 못박는다. 조용히 끝나면 안 된다: 0 이하의 빠르기는 규칙 위반이라(CLAUDE.md §5 — 음수 값) 등록표에 없는 움직임(motion_missing)과
+        // 같이 [E] 를 한 줄 남긴다(#96). 헤드리스 판정이 그 한 줄로 떨어진다.
+        using var log = new LogCapture();
         MotionStep step = Rush(speed: speed).Tick(new MotionContext(1312, 0, -1, 480, 0));
 
         step.Finished.ShouldBeTrue("빠르기가 0 이하인 돌진이 안 끝났다");
         step.HoldClock.ShouldBeFalse("빠르기가 0 이하인 돌진이 시계를 세웠다");
         step.X.ShouldBe(1312, "빠르기가 0 이하인 돌진이 움직였다");
+        log.Lines.Where(l => l.StartsWith("[boss][E] ", StringComparison.Ordinal))
+            .ShouldBe(new[] { $"[boss][E] rush_speed_invalid speed={speed} stop=280 boss_x=1312 fighter_x=480" }, "빠르기가 0 이하인 돌진이 조용히 끝났다");
+    }
+
+    [Fact]
+    public void 제대로_된_돌진은_규칙_위반을_안_남긴다()
+    {
+        // 위 [E] 의 대조군 — 이미 닿은 돌진(0틱)도 끝까지 달린 돌진도 [E] 가 아니다. 0틱은 붙어 있던 사람 · 등 뒤로 간 사람에게 늘 난다(설계 §4.6).
+        using var log = new LogCapture();
+        RushAll(Rush(), 1312, -1, 480);
+        Rush().Tick(new MotionContext(1100, 0, -1, 900, 0)).Finished.ShouldBeTrue();
+
+        log.Lines.ShouldNotContain(l => l.StartsWith("[boss][E] ", StringComparison.Ordinal));
     }
 
     [Fact]

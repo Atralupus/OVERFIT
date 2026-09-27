@@ -1,4 +1,5 @@
 using System;
+using Overfit.Core;
 
 namespace Overfit.Battle.Rules;
 
@@ -20,11 +21,21 @@ namespace Overfit.Battle.Rules;
 /// 짧으면) 보스는 경계까지 가서 끝난다. 안 자르면 <c>Boss.Move</c> 가 자리를 경계로 되돌리는 동안 이 움직임은 매 틱 "아직 멀다" 를 내고,
 /// 시계가 영영 선다 — 패턴이 끝나지 않는다(#59 의 3/6 넘김). 실제 수치(3600 · 280)에서는 멈출 자리가 늘 310 ~ 1610 이라 안 걸린다.
 /// </para>
+///
+/// <para>
+/// <b>빠르기가 0 이하면 규칙 위반이다</b> (#96 · CLAUDE.md §5 — 음수 값). 닿을 수 없어 남은 틱(⌈남은 거리 / 0⌉)이 쓰레기가 되고 시계가 영영
+/// 선다 — 그래서 움직이지 않고 그 틱에 끝내되, 조용히 끝내지 않고 <c>[E] rush_speed_invalid</c> 를 한 줄 남긴다. 등록표에 없는 움직임
+/// (<c>motion_missing</c>)과 같은 대우다: 데이터 테스트가 <c>patterns.json</c> 을 먼저 막고, 여기까지 오면 보스는 제자리에서 패턴을 끝까지 돈다.
+/// 전에는 "이미 닿았다" 와 같은 갈래로 말없이 끝나 헤드리스 판정이 못 봤다.
+/// </para>
 /// </summary>
 public sealed class RushMotion : IBossMotion
 {
     /// <summary>한 틱에 가는 거리(px) — <c>speed</c> × 1/60. 3600 이면 정확히 60 이라 틱마다 같은 거리다.</summary>
     private readonly double _step;
+
+    /// <summary>데이터의 빠르기(px/s) — 0 이하일 때 <c>[E]</c> 에 싣는다.</summary>
+    private readonly double _speed;
 
     private readonly double _stop;
     private readonly MotionBounds _bounds;
@@ -32,6 +43,7 @@ public sealed class RushMotion : IBossMotion
     public RushMotion(MotionDef def, MotionBounds bounds)
     {
         ArgumentNullException.ThrowIfNull(def);
+        _speed = def.Speed;
         _step = def.Speed * BattleSim.Dt;
         _stop = def.Stop;
         _bounds = bounds;
@@ -39,11 +51,20 @@ public sealed class RushMotion : IBossMotion
 
     public MotionStep Tick(MotionContext context)
     {
+        // 닿을 수 없는 돌진 — 규칙 위반이다(클래스 머리의 마지막 문단). 움직이지 않고 이 틱에 끝나므로 이 줄은 한 돌진에 한 번이다.
+        if (_step <= 0)
+        {
+            Log.Error(
+                "boss",
+                $"rush_speed_invalid speed={_speed:0.###} stop={_stop:0.###} boss_x={context.BossX:0} fighter_x={context.FighterX:0}");
+            return new MotionStep(context.BossX, 0, 0, Finished: true, HoldClock: false, GoalX: context.BossX);
+        }
+
         double goal = Math.Clamp(context.FighterX - (context.Facing * _stop), _bounds.MinX, _bounds.MaxX);
 
         // 목표까지 앞으로 남은 거리 — d − stop 이다(목표가 잘리지 않았으면). 0 이하면 이미 닿았거나 목표가 등 뒤다: 움직이지 않고 끝난다.
         double ahead = (goal - context.BossX) * context.Facing;
-        if (ahead <= 0 || _step <= 0)
+        if (ahead <= 0)
         {
             return new MotionStep(context.BossX, 0, 0, Finished: true, HoldClock: false, GoalX: context.BossX);
         }
