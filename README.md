@@ -141,7 +141,8 @@ tools/build.sh run
 재시도마다 보스의 순서가 바뀐다. 한 판을 다시 보려면 게임 로그의 `[run][I] attempt=… stage=S seed=X` 를
 헤드리스 데모에 넘긴다 — `EXTRA=--stage=S tools/build.sh demo X` 가 그 시도의 보스 순서로 봇 한 판을 돈다.
 
-아래의 패턴별 GIF 는 `tools/build.sh gifs` 가 다시 찍는다 — 창을 띄우고 `ffmpeg` 이 필요하다(`brew install ffmpeg`).
+아래의 패턴별 GIF 는 `tools/build.sh gifs` 가 다시 찍는다 — Godot 이 창을 띄워 찍으므로 창을 앞에 둔 채 돌린다(가려지면 엔진이
+장을 건너뛰어 도구가 실패로 멈춘다). `ffmpeg` 도 필요하다(`brew install ffmpeg`).
 
 ---
 
@@ -248,7 +249,7 @@ tools/build.sh run
 | 멀리 서서 지켜보다 후딜에만 찔끔 친다 | **1타 → 돌진 → 3타** — 1타가 멀리서 헛치자 후딜을 노려 걸어 들어가다, 달려오는 보스를 한 번 찌른 사람이 1타 뒤 경직에 선 채 3타를 맞는다 | <img src="docs/gifs/rush.gif" width="360"> |
 | 대시로만 피한다 | **1타 → 잡기** — 1타를 대시로 흘리고, 잡기 창 직전에 또 대시해 **무적인 채로** 흰 구에 붙들린다 | <img src="docs/gifs/grab.gif" width="360"> |
 | 패리를 많이 한다 | **엇박 3연격** — 3연격의 박자에 K 를 누른 사람이 받아치는 창이 지난 뒤 늦은 1타에 맞고, 헛친 패리가 풀린 뒤 3연격의 간격으로 다시 누른 K 로 늦은 2타에도 또 맞는다 | <img src="docs/gifs/offbeat.gif" width="360"> |
-| 가드로 버틴다 | **점프 ×3** — ↓ 를 놓지 않는 사람이 3연격을 막고(스태미나 54) 곧장 온 점프 ×3 의 셋째 착지에서 가드가 깨진다(GIF 는 둘째 도약부터) | <img src="docs/gifs/jump3.gif" width="360"> |
+| 가드로 버틴다 | **점프 ×3** — ↓ 를 놓지 않는 사람이 3연격을 막느라 스태미나 54 를 쓰고(100 → 46) 곧장 온 점프 ×3 의 셋째 착지에서 가드가 깨진다(GIF 는 둘째 도약부터) | <img src="docs/gifs/jump3.gif" width="360"> |
 
 ### 그래서 지금이 무작위다
 
