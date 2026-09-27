@@ -123,7 +123,7 @@ public partial class FighterView : Node2D
     private FeelBalance _feel = null!;
     private int _facing = 1;
 
-    /// <summary>시트를 어느 장에 세우고 언제 흘리나 — 칼질 · 대시 · 패리의 장은 그쪽이 안다(<see cref="FighterAnimator"/>).</summary>
+    /// <summary>시트를 어느 장에 세우고 언제 흘리나 — 칼질 · 대시 · 패리 · 가드의 장은 그쪽이 안다(<see cref="FighterAnimator"/>).</summary>
     private FighterAnimator _animator = null!;
 
     private double _flashLeft;

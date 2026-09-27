@@ -152,7 +152,10 @@ public sealed class FeelBalance
     /// <summary>성공 섬광(링 + 스파크)이 퍼지는 시간(초).</summary>
     public required double BurstSeconds { get; init; }
 
-    /// <summary>패리 성공 스파크 개수.</summary>
+    /// <summary>
+    /// 섬광에 싣는 스파크 개수. 싣는 곳은 둘이다 — 2타(무거운 칼질)의 칼 섬광과 가드 붕괴의 고리(<c>FighterView</c>). 패리 성공과 깎인 가드는
+    /// 일부러 약해(#53 · #47) 스파크 없이 고리만 튼다 — 전에는 이 칸이 "패리 성공 스파크" 였는데, 패리가 약해진 뒤로 패리는 이것을 안 쓴다(#96).
+    /// </summary>
     public required int SparkCount { get; init; }
 
     /// <summary>스파크 한 가닥의 길이(px).</summary>
@@ -238,8 +241,9 @@ public sealed class FeelBalance
     public required double GrabOrbRadius { get; init; }
 
     /// <summary>
-    /// 흰 구가 흩어지는 시간(초 · #78). 붙들림이 풀리거나 창이 닫히면 그 자리에서 부풀며 사라진다. 0.3 은 잡기 GIF 가 풀린 뒤 더 보여 주는
-    /// 길이(설계 §6.2 — 풀리는 틱 + 18)다.
+    /// 흰 구가 흩어지는 시간(초 · #78). 붙들림이 풀리거나 창이 닫히면 그 자리에서 부풀며 사라진다. <b>이 키가 원본이다</b> — 잡기 GIF 가
+    /// 풀린 뒤 더 보여 주는 길이(설계 §6.2 — 풀리는 틱 + 18 = 0.3초 × 60)가 이 값을 따른다. 값을 고치면 <c>GifRunner</c> 의 <c>grab</c> 대본의
+    /// 끝(<c>To</c>)도 같이 고친다 — 전에는 이 주석이 거꾸로 GIF 의 구간을 까닭으로 들었다(#96).
     /// </summary>
     public required double GrabOrbFadeSeconds { get; init; }
 }

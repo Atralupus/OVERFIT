@@ -177,8 +177,8 @@ public sealed class FighterAnimator
         if (!_sprite.SpriteFrames.HasAnimation(name))
         {
             // 없는 이름으로 Play 하면 엔진이 ERROR: 를 찍고, 그건 헤드리스 판정(judge_headless)을
-            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 여섯을 확인한다 — 2타와
-            // 패리의 attack2 까지) 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
+            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 여섯을 확인한다 — 2타 · 패리 ·
+            // 가드의 attack2 까지) 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
             Log.Warn("view", $"anim_missing name={name}");
             return;
         }
