@@ -21,29 +21,6 @@ public class BossExhaustTests
     private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
     private static readonly InputFrame _right = new(1, false, false, false, false);
 
-    /// <summary>1타 한 대로 게이지가 끝까지 차는 기준 파이터 — 무너지는 순간을 한 틱으로 만든다.</summary>
-    private static FighterConfig Breaker()
-    {
-        FighterConfig c = TestConfigs.Fighter();
-        ComboStepDef s = c.Combo[0];
-        c.Combo[0] = new ComboStepDef
-        {
-            Anim = s.Anim,
-            Fps = s.Fps,
-            Frames = s.Frames,
-            StartFrame = s.StartFrame,
-            BladeFrame = s.BladeFrame,
-            Windup = s.Windup,
-            Active = s.Active,
-            Recover = s.Recover,
-            Stiff = s.Stiff,
-            Damage = s.Damage,
-            Hitbox = s.Hitbox,
-            Poise = 100,
-        };
-        return c;
-    }
-
     /// <summary>
     /// 떠 있는 보스가 칼 끝(<see cref="BattleSim.FighterReach"/>)에 들어왔나 — 도약이 파이터 쪽으로 날아오는 동안 <b>한 번</b> 휘두를 자리다.
     /// 들어오기 전에 휘두르면 빗나가고, 1타는 경직까지 0.68초 커밋이라(#82) 36틱짜리 도약 안에서 다시 못 휘두른다 — 전에는 빗나가도
@@ -70,7 +47,7 @@ public class BossExhaustTests
         // 설계 §4.3 — 탈진한 보스는 아무것도 안 한다. 쉬는 보스는 파이터를 향해 돌아서고 다가가는데(BattleSim.AdvanceBoss 의 쉬는
         // 갈래), 탈진 동안 그 갈래가 돌면 무너진 보스가 파이터를 쫓아 돈다 — 반격 창이 "보스가 멈춘 자리" 가 아니게 된다. 전에는 골든만
         // 이것을 잡았다(#59 의 3/6 넘김). 파이터가 보스를 가로질러 반대편으로 가도 보스는 안 돌고 안 움직여야 한다.
-        BattleSim sim = Sim(Breaker(), TestConfigs.Boss(maxHealth: 999_999, patternGap: 1000), "3연격");
+        BattleSim sim = Sim(TestConfigs.Breaker(), TestConfigs.Boss(maxHealth: 999_999, patternGap: 1000), "3연격");
         double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
         for (int i = 0; i < 600 && Math.Abs(sim.Boss.X - sim.Fighter.X) > standoff; i++)
         {
@@ -117,7 +94,7 @@ public class BossExhaustTests
         // 준다. 규칙의 게이지는 무너질 때 0 이라 그것을 그리면 "꽉 찼다" 가 한 프레임도 안 보인다. 몫은 규칙이 낸다 — 탈진의 틱 수를
         // 뷰가 따로 세면 탈진 길이를 고치는 날 바가 거짓말한다. 그래서 실제 보스(1.5초 = 90틱)가 아닌 길이(1.0초 = 60틱)로 잰다 — 90 을
         // 박은 몫도 실제 보스로는 초록이다.
-        BattleSim sim = Sim(Breaker(), TestConfigs.Boss(maxHealth: 999_999, patternGap: 1000, exhaustSeconds: 1.0), "3연격");
+        BattleSim sim = Sim(TestConfigs.Breaker(), TestConfigs.Boss(maxHealth: 999_999, patternGap: 1000, exhaustSeconds: 1.0), "3연격");
         int total = BattleSim.TicksFor(1.0);
         total.ShouldNotBe(BattleSim.TicksFor(TestConfigs.Boss().ExhaustSeconds), "실제 보스와 같은 길이다 — 이 테스트가 분모를 어디서 읽는지 못 가른다");
         double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
@@ -155,8 +132,8 @@ public class BossExhaustTests
         // 그 자리에 내린다(가로는 멈춘다). 전에는 탈진이 움직임을 버려 보스가 무너진 높이에 떠 있었다(#59 의 3/6 넘김).
         // 견줄 판(control)은 같은 판에서 칼만 안 휘두른다 — 도약의 높이는 시각에만 달려 두 판이 같은 틱에 같은 높이다.
         BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0);
-        BattleSim sim = Sim(Breaker(), boss, "점프 공격");
-        BattleSim control = Sim(Breaker(), boss, "점프 공격");
+        BattleSim sim = Sim(TestConfigs.Breaker(), boss, "점프 공격");
+        BattleSim control = Sim(TestConfigs.Breaker(), boss, "점프 공격");
 
         // 보스에게서 몸 둘 폭보다 조금 먼 자리(≈ 205)까지 걸어가 선다 — 도약이 파이터 쪽으로 90px 남짓 날아오는 동안 칼(±90)이 몸(±85)에 닿는다.
         for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > 205; i++)
@@ -203,7 +180,7 @@ public class BossExhaustTests
     {
         // CLAUDE.md §5 — 판단과 전이는 [D] 로 남긴다. 공중 탈진은 끊긴 착지 판정이 관측도 안 남기므로(설계 §3.5 5) 로그가 유일한 흔적이다.
         BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.0);
-        BattleSim sim = Sim(Breaker(), boss, "점프 공격");
+        BattleSim sim = Sim(TestConfigs.Breaker(), boss, "점프 공격");
         for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > 205; i++)
         {
             sim.Tick(_right);
@@ -232,7 +209,7 @@ public class BossExhaustTests
         bool found = false;
         for (int lead = 0; lead <= 40 && !found; lead++)
         {
-            BattleSim sim = Sim(Breaker(), boss, "점프 공격");
+            BattleSim sim = Sim(TestConfigs.Breaker(), boss, "점프 공격");
             double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
             for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > standoff; i++)
             {

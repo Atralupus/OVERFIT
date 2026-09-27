@@ -93,6 +93,42 @@ public static class TestConfigs
         };
     }
 
+    /// <summary>
+    /// 칼질 한 칸을 베끼며 몇 값만 바꾼다. <see cref="ComboStepDef"/> 는 record 가 아니라 <c>with</c> 가 없다 — 테스트마다 열두 줄을 옮겨 적으면
+    /// 칸에 키가 느는 날 베낀 곳마다 따라 고쳐야 하고, 하나를 빠뜨리면 그 테스트만 다른 칼질을 잰다. 그래서 베끼는 곳은 여기 하나다(#96 —
+    /// 전에는 BossExhaustTests · BossMotionTests · Stage2BattleTests 가 <c>Breaker</c> 를, BossPoiseTests · SwordTests 가 제 사본을 들고 있었다).
+    /// </summary>
+    public static ComboStepDef Step(ComboStepDef s, double? stiff = null, int? poise = null, string? hitbox = null)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        return new ComboStepDef
+        {
+            Anim = s.Anim,
+            Fps = s.Fps,
+            Frames = s.Frames,
+            StartFrame = s.StartFrame,
+            BladeFrame = s.BladeFrame,
+            Windup = s.Windup,
+            Active = s.Active,
+            Recover = s.Recover,
+            Stiff = stiff ?? s.Stiff,
+            Damage = s.Damage,
+            Poise = poise ?? s.Poise,
+            Hitbox = hitbox ?? s.Hitbox,
+        };
+    }
+
+    /// <summary>
+    /// 1타 한 대로 보스의 경직 게이지가 끝까지 차는 기준 파이터 — 무너지는 순간을 한 틱으로 만든다. 1타의 경직도만 실제 보스의 끝
+    /// (<c>bosses.json</c> 의 <c>poise_max</c>)이고 나머지는 기준 파이터 그대로다.
+    /// </summary>
+    public static FighterConfig Breaker()
+    {
+        FighterConfig c = Fighter();
+        c.Combo[0] = Step(c.Combo[0], poise: (int)Math.Ceiling(Boss().PoiseMax));
+        return c;
+    }
+
     /// <summary>기준 파이터의 칼 id. <c>hitboxes.json</c> 에는 없다 — <see cref="HitShapes"/> 가 더해 준다.</summary>
     public const string TestSwordId = "test/sword";
 
@@ -178,16 +214,31 @@ public static class TestConfigs
     /// 12 + 30 = 42틱에 선다. <paramref name="maxTicks"/> 는 판을 창 한가운데서 끝내 보는 테스트만 준다.
     /// </summary>
     public static BattleSim SweepSim(double maxDistance, double activeSeconds, double endAt = 2.0, int maxTicks = 60 * 30) =>
+        PatternSim(SweepId, Sweep(maxDistance, activeSeconds, endAt), maxTicks: maxTicks);
+
+    /// <summary>
+    /// 보스가 서서 패턴 하나(<paramref name="pattern"/>)만 되풀이하는 판 — 보스는 안 움직이고 안 죽는다(체력 999_999 · 속도 0) · 간격 0.2초(12틱)
+    /// · 시드 1. 시험 패턴을 손으로 지어 규칙 하나를 재는 테스트들이 이 차림을 테스트마다 옮겨 적었다(#96). 파이터 · 모양 표 · 상한 · 움직임
+    /// 등록표는 그것을 바꿔야 하는 테스트만 준다 — 없으면 기준 파이터 · 실제 모양 표 · 10초 · 실제 등록표다.
+    /// </summary>
+    public static BattleSim PatternSim(
+        string id,
+        PatternDef pattern,
+        FighterConfig? fighter = null,
+        IReadOnlyDictionary<string, HitShape>? shapes = null,
+        int maxTicks = 60 * 10,
+        Func<MotionDef, MotionBounds, IBossMotion?>? motions = null) =>
         new(new BattleSetup
         {
             Arena = Arena(),
-            Fighter = Fighter(),
-            HitShapes = HitShapes(),
+            Fighter = fighter ?? Fighter(),
+            HitShapes = shapes ?? HitShapes(),
             Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { SweepId },
-            Patterns = new Dictionary<string, PatternDef> { [SweepId] = Sweep(maxDistance, activeSeconds, endAt) },
+            PatternIds = new[] { id },
+            Patterns = new Dictionary<string, PatternDef> { [id] = pattern },
             Seed = 1,
             MaxTicks = maxTicks,
+            Motions = motions,
         });
 
     /// <summary>패턴이 설 때까지(선딜이 시작될 때까지) 민다 — <c>NextActiveIn</c> 이 null 이 아니게 되는 틱이다.</summary>
@@ -212,10 +263,29 @@ public static class TestConfigs
     public static void UntilNear(BattleSim sim)
     {
         UntilWindup(sim);
-        while (sim.NextActiveIn is { } left && left > 2 * BattleSim.Dt)
+        for (int i = 0; i < 600 && sim.NextActiveIn is { } left && left > 2 * BattleSim.Dt; i++)
         {
             sim.Tick(default);
         }
+
+        sim.NextActiveIn.ShouldNotBeNull("판정이 두 틱 앞으로 오기 전에 섰다");
+        sim.NextActiveIn.Value.ShouldBeLessThanOrEqualTo(2 * BattleSim.Dt, "600틱 안에 판정이 두 틱 앞으로 안 왔다");
+    }
+
+    /// <summary>
+    /// 판의 <paramref name="tick"/> 틱까지(그 틱 포함) <paramref name="input"/> 을 넣으며 민다. 상한을 두고, 끝나면 그 틱에 섰는지 단언한다 —
+    /// 판은 결과가 난 뒤에도 틱을 받아서, 묶지 않거나 빠져나온 까닭을 안 보는 기다림은 규칙이 깨진 날 실패하지 않고 게이트를 멈춰 세우거나
+    /// 엉뚱한 틱을 잰다(#71 계획의 결정 27 · #96).
+    /// </summary>
+    public static void UntilTick(BattleSim sim, int tick, InputFrame input = default)
+    {
+        ArgumentNullException.ThrowIfNull(sim);
+        for (int i = 0; i < 60 * 60 && sim.Ticks < tick; i++)
+        {
+            sim.Tick(input);
+        }
+
+        sim.Ticks.ShouldBe(tick, $"{tick}틱까지 못 밀었다");
     }
 
     /// <summary>

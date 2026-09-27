@@ -97,22 +97,7 @@ public class Stage2BattleTests
     private static FighterConfig RealWithFirstStiff(double stiff)
     {
         FighterConfig c = Real();
-        ComboStepDef s = c.Combo[0];
-        c.Combo[0] = new ComboStepDef
-        {
-            Anim = s.Anim,
-            Fps = s.Fps,
-            Frames = s.Frames,
-            StartFrame = s.StartFrame,
-            BladeFrame = s.BladeFrame,
-            Windup = s.Windup,
-            Active = s.Active,
-            Recover = s.Recover,
-            Stiff = stiff,
-            Damage = s.Damage,
-            Hitbox = s.Hitbox,
-            Poise = s.Poise,
-        };
+        c.Combo[0] = TestConfigs.Step(c.Combo[0], stiff: stiff);
         return c;
     }
 
@@ -203,6 +188,7 @@ public class Stage2BattleTests
                 (sim.BossHitAhead is { Hit.GrabHoldSeconds: > 0 } || sim.GrabLive).ShouldBeFalse($"{pattern} · {p}틱: 받아쳤는데 잡기가 남았다");
             }
 
+            sim.Ticks.ShouldBe(begun + 170, $"{pattern}: 대본이 다시 세우기 전(170틱)까지 못 밀었다 — 뒤의 단언이 짧은 판을 본다");
             sim.Events.Select(e => e.Verdict).ShouldBe(new[] { HitVerdict.Parried }, $"{pattern}: 받아친 뒤에 3타나 잡기가 섰다");
             log.Lines.ShouldNotContain(l => l.StartsWith("[boss][D] motion_begin id=rush ", StringComparison.Ordinal), $"{pattern}: 받아쳤는데 달렸다");
             sim.Fighter.Held.ShouldBeFalse();
@@ -413,7 +399,7 @@ public class Stage2BattleTests
         // 끊겨 날 자리(BossHitAhead)가 그 틱에 사라지고 잡기 창은 안 선다 — 뷰의 흰 구는 그 자리에서 흩어진다(GrabOrb). 뷰가 앞 틱의 값을 붙들면
         // 무너진 보스 앞에 흰 구가 날아와 파이터를 감싼다. 칼 한 번에 게이지가 차는 기준 파이터가 보스(1312) 앞 150 까지 걸어가 1타를 맞고 서
         // 있다가, idle 에 들면 칼을 넣는다.
-        BattleSim sim = Sim(Breaker(), "1타 잡기");
+        BattleSim sim = Sim(TestConfigs.Breaker(), "1타 잡기");
         int begun = UntilBegins(sim, "1타 잡기", _ => sim.Boss.X - sim.Fighter.X > 150 ? _right : default);
         UntilTick(sim, begun, 78, _ => sim.Boss.X - sim.Fighter.X > 150 ? _right : default);
         sim.BossHitAhead.ShouldNotBeNull("idle 에 들었는데 날 자리가 없다 — 이 테스트가 나는 동안을 안 본다");
@@ -466,36 +452,13 @@ public class Stage2BattleTests
         leaps.BossTestedGrab.ShouldBeFalse("착지를 붙드는 판정이라고 한다 — 충격파가 안 선다");
     }
 
-    /// <summary>칼 한 번에 게이지가 끝까지 차는 기준 파이터 — 공중에서 무너지는 순간을 한 틱으로 만든다(<c>BossExhaustTests.Breaker</c> 와 같다).</summary>
-    private static FighterConfig Breaker()
-    {
-        FighterConfig c = TestConfigs.Fighter();
-        ComboStepDef s = c.Combo[0];
-        c.Combo[0] = new ComboStepDef
-        {
-            Anim = s.Anim,
-            Fps = s.Fps,
-            Frames = s.Frames,
-            StartFrame = s.StartFrame,
-            BladeFrame = s.BladeFrame,
-            Windup = s.Windup,
-            Active = s.Active,
-            Recover = s.Recover,
-            Stiff = s.Stiff,
-            Damage = s.Damage,
-            Hitbox = s.Hitbox,
-            Poise = 100,
-        };
-        return c;
-    }
-
     [Fact]
     public void 점프_3연속의_둘째_도약에서_무너지면_그_자리에_내리고_셋째_도약은_없다()
     {
         // #59 의 4/6 넘김 — 점프 ×3 의 공중 탈진은 _fall 이 내리고 EndPattern 이 남은 도약을 걷는다. 확인만 하면 된다(설계 §4.8 · §4.2).
         // 가만히 선 파이터(480)에게 첫 도약이 내려(595) 착지를 맞히고, 둘째 도약은 같은 자리를 겨냥해 제자리에서 솟는다. 떠 있는 동안 칼을 넣어
         // 게이지로 무너뜨리면: 공중에서 무너지고(cause=poise) · 포물선의 높이만 따라 그 자리에 내리고 · 둘째 착지도 셋째 도약도 없다.
-        BattleSim sim = Sim(Breaker(), "점프 3연속");
+        BattleSim sim = Sim(TestConfigs.Breaker(), "점프 3연속");
         int begun = UntilBegins(sim, "점프 3연속");
         using var log = new LogCapture();
         UntilTick(sim, begun, 60);
@@ -516,6 +479,7 @@ public class Stage2BattleTests
             sim.Boss.X.ShouldBe(x, "무너진 보스가 가로로 움직였다");
         }
 
+        sim.Boss.Exhausted.ShouldBeFalse("120틱 안에 탈진이 안 풀렸다 — 아래의 단언이 탈진 도중을 본다");
         sim.Boss.Y.ShouldBe(0, "탈진 안에 안 내렸다");
         log.Lines.Count(l => l.StartsWith("[boss][D] motion_begin id=leap ", StringComparison.Ordinal)).ShouldBe(2, "무너진 뒤에 셋째 도약이 섰다");
         log.Lines.ShouldContain(l => l.StartsWith("[boss][D] exhaust cause=poise id=점프 3연속 ", StringComparison.Ordinal));

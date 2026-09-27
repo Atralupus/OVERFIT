@@ -130,22 +130,7 @@ public class SwordTests
         shapes[longId] = longSword;
 
         FighterConfig fighter = TestConfigs.Fighter();
-        ComboStepDef second = fighter.Combo[1];
-        fighter.Combo[1] = new ComboStepDef
-        {
-            Anim = second.Anim,
-            Fps = second.Fps,
-            Frames = second.Frames,
-            StartFrame = second.StartFrame,
-            BladeFrame = second.BladeFrame,
-            Windup = second.Windup,
-            Active = second.Active,
-            Recover = second.Recover,
-            Stiff = second.Stiff,
-            Damage = second.Damage,
-            Poise = second.Poise,
-            Hitbox = longId,
-        };
+        fighter.Combo[1] = TestConfigs.Step(fighter.Combo[1], hitbox: longId);
 
         var sim = new BattleSim(new BattleSetup
         {
@@ -174,7 +159,7 @@ public class SwordTests
         sim.FighterTestedRects.ShouldBe(
             longSword.Place(new Placement(sim.Fighter.X, sim.Fighter.Y, sim.Fighter.Facing)),
             "2타가 제 칼(2타 칸의 hitbox)이 아닌 모양을 댔다");
-        (before - sim.Boss.Health).ShouldBe(second.Damage,
+        (before - sim.Boss.Health).ShouldBe(fighter.Combo[1].Damage,
             "1타의 칼로는 못 닿는 자리에서 2타가 안 닿았다(또는 1타가 닿았다)");
     }
 

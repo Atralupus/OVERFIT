@@ -144,17 +144,7 @@ public class JumpClearanceTests
                     new() { T = 2.5, Kind = "end" },
                 },
             };
-            var sim = new BattleSim(new BattleSetup
-            {
-                Arena = TestConfigs.Arena(),
-                Fighter = TestConfigs.Fighter(),
-                HitShapes = shapes,
-                Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-                PatternIds = new[] { "계단" },
-                Patterns = new Dictionary<string, PatternDef> { ["계단"] = pattern },
-                Seed = 1,
-                MaxTicks = 60 * 10,
-            });
+            BattleSim sim = TestConfigs.PatternSim("계단", pattern, shapes: shapes);
 
             for (int i = 0; i < 300 && sim.Events.Count == 0; i++)
             {
@@ -195,17 +185,7 @@ public class JumpClearanceTests
                 new() { T = 2.5, Kind = "end" },
             },
         };
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            HitShapes = shapes,
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "높은 칼" },
-            Patterns = new Dictionary<string, PatternDef> { ["높은 칼"] = pattern },
-            Seed = 1,
-            MaxTicks = 60 * 10,
-        });
+        BattleSim sim = TestConfigs.PatternSim("높은 칼", pattern, shapes: shapes);
 
         // 480 → 879 (57틱 × 7px). 보스는 1440 에서 왼쪽을 본다 — 모양은 940 ~ 1440 이고 몸의 앞끝은 909 다.
         var right = new InputFrame(1, false, false, false, false);
@@ -232,11 +212,15 @@ public class JumpClearanceTests
             .Clears(high, new Placement(sim.Boss.X, 0, sim.Boss.Facing), sim.Fighter.X, BattleSim.TicksFor(0.25))
             .ShouldBeFalse("맞은 자리에서도 뛰어 넘을 수 있다 — 이 테스트가 두 자리를 못 가른다");
         e.JumpAvailable.ShouldBeTrue("창이 열린 자리(사거리 밖)가 아니라 걸어 든 자리에서 쟀다");
+    }
 
-        // 보스 쪽 자리도 **창이 열린 틱의 첫 판정이 선 자리**다 (Task 1 리뷰). 도약은 착지 판정이 서는 바로 그 틱에 내리는데(설계 §4.2),
-        // 러너가 판정을 내는 것은 그 틱의 움직임 앞이다 — 그때 재면 보스는 아직 앞 틱의 공중(발 ≈ 30)에 있어 띠가 30 ~ 90 이고, 판정은
-        // 내린 자리(띠 0 ~ 60)에 선다. 창을 실제 캐릭터가 바닥 띠 위로 몸이 비는 53틱으로 두면 두 자리가 갈린다: 내린 자리는 53틱이라
-        // 넘고 공중 자리는 51틱이라 못 넘는다. 창 8틱 · 바닥 전체 띠인 지금 데이터는 둘 다 넘어 골든이 이것을 못 봤다.
+    [Fact]
+    public void 관측의_점프_가능은_도약의_착지를_보스가_내린_자리에서_잰다()
+    {
+        // 보스 쪽 자리도 **창이 열린 틱의 첫 판정이 선 자리**다 (#85 Task 1 리뷰 — 위 테스트의 파이터 쪽 자리와 짝이다). 도약은 착지 판정이 서는
+        // 바로 그 틱에 내리는데(설계 §4.2), 러너가 판정을 내는 것은 그 틱의 움직임 앞이다 — 그때 재면 보스는 아직 앞 틱의 공중(발 ≈ 30)에 있어
+        // 띠가 30 ~ 90 이고, 판정은 내린 자리(띠 0 ~ 60)에 선다. 창을 실제 캐릭터가 바닥 띠 위로 몸이 비는 53틱으로 두면 두 자리가 갈린다: 내린
+        // 자리는 53틱이라 넘고 공중 자리는 51틱이라 못 넘는다. 창 8틱 · 바닥 전체 띠인 지금 데이터는 둘 다 넘어 골든이 이것을 못 봤다.
         FighterConfig real = TestConfigs.Fighters().Values.Single();
         var leap = new PatternDef
         {
@@ -249,17 +233,7 @@ public class JumpClearanceTests
                 new() { T = 2.0, Kind = "end" },
             },
         };
-        var landing = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = real,
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "도약" },
-            Patterns = new Dictionary<string, PatternDef> { ["도약"] = leap },
-            Seed = 1,
-            MaxTicks = 60 * 10,
-        });
+        BattleSim landing = TestConfigs.PatternSim("도약", leap, real);
 
         // 가만히 선 파이터는 착지 띠에 첫 틱에 맞는다 — 관측이 나온 틱이 판정이 선 틱이고, 그 틱 앞의 보스 자리가 움직이기 전의 자리다.
         var air = new Placement(0, 0, 0);
@@ -297,17 +271,7 @@ public class JumpClearanceTests
                     new() { T = 3.5, Kind = "end" },
                 },
             };
-            var sim = new BattleSim(new BattleSetup
-            {
-                Arena = TestConfigs.Arena(),
-                Fighter = TestConfigs.Fighters().Values.Single(),
-                HitShapes = TestConfigs.HitShapes(),
-                Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-                PatternIds = new[] { "2타" },
-                Patterns = new Dictionary<string, PatternDef> { ["2타"] = pattern },
-                Seed = 1,
-                MaxTicks = 60 * 10,
-            });
+            BattleSim sim = TestConfigs.PatternSim("2타", pattern, TestConfigs.Fighters().Values.Single());
 
             // 판정이 서기 10틱 앞에 뛴다 — 보스 앞 115 에서 2타 위로 몸이 비는 49틱 안에 창 8틱이 든다.
             for (int i = 0; i < 400 && sim.Events.Count == 0; i++)
@@ -333,9 +297,13 @@ public class JumpClearanceTests
         far.Airborne.ShouldBeTrue();
         far.Verdict.ShouldBe(HitVerdict.MissedTooFar);
         far.Verb.ShouldBe(DodgeVerb.Spacing, "사거리 밖에서 뛴 것이 점프의 공이 됐다");
+    }
 
+    [Fact]
+    public void 떠서_밖으로_대시해_거리로_빗나가면_대시의_반사실이_먼저라_대시의_공이다()
+    {
         // 대시의 반사실이 먼저다 (#46 · #85). 뛰어 오른 채 밖으로 대시해 거리로 빗나갔으면, 같은 자리의 땅에서는 닿았어도 대시를 시작한
-        // 자리에서 닿았으면 그 거리를 만든 것은 대시다. 두 반사실이 **다 참인 자리**라야 순서가 갈린다 — 위의 둘은 대시가 없어 순서를
+        // 자리에서 닿았으면 그 거리를 만든 것은 대시다. 두 반사실이 **다 참인 자리**라야 순서가 갈린다 — 위 테스트의 둘은 대시가 없어 순서를
         // 뒤집어도 초록이었다(점프를 먼저 묻는 변이가 이 테스트 전에는 살았다). 보스 앞 400 까지 높이 400 · 그 너머 1100 까지 높이 60 인
         // 모양이다. 보스에서 302 에 서서 뛰고, 떠 있는 채 밖으로 대시해 676 에서 창을 맞는다 — 몸은 낮은 칸 위에 떠 있고, 땅에 서 있었으면
         // 낮은 칸에 닿았고, 대시를 시작한 자리(309 · 발 높이 167)는 높은 칸 안이다.
@@ -352,17 +320,7 @@ public class JumpClearanceTests
                 new() { T = 3.5, Kind = "end" },
             },
         };
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighters().Values.Single(),
-            HitShapes = shapes,
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "턱" },
-            Patterns = new Dictionary<string, PatternDef> { ["턱"] = ledgePattern },
-            Seed = 1,
-            MaxTicks = 60 * 10,
-        });
+        BattleSim sim = TestConfigs.PatternSim("턱", ledgePattern, TestConfigs.Fighters().Values.Single(), shapes);
 
         // 480 → 1138 (94틱 × 7px). 판정 20틱 앞에 뛰고, 9틱 뒤 밖을 보고, 10틱 뒤 공중 대시(착지 전 한 번은 된다)로 빠진다.
         int jumpedAt = -1;

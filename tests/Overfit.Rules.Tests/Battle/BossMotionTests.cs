@@ -91,18 +91,7 @@ public class BossMotionTests
     {
         PatternDef def = TestConfigs.Sweep(maxDistance: 50, activeSeconds: 0);
         def.Timeline.Insert(1, new PatternStep { T = 0.5, Kind = "windup", Motion = new MotionDef { Id = motionId } });
-        return new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { TestConfigs.SweepId },
-            Patterns = new Dictionary<string, PatternDef> { [TestConfigs.SweepId] = def },
-            Seed = 1,
-            MaxTicks = 60 * 30,
-            Motions = motions,
-        });
+        return TestConfigs.PatternSim(TestConfigs.SweepId, def, maxTicks: 60 * 30, motions: motions);
     }
 
     [Theory]
@@ -136,10 +125,7 @@ public class BossMotionTests
         // (held 0 · 43틱)과 같은 틱에 판정이 서야 한다. 남은 틱(HoldTicks)도 다음 판정까지 남은 시간에 안 들어간다.
         BattleSim sim = MotionBeforeSweep("가짜", (_, _) => new FinishedButHolding());
         TestConfigs.UntilWindup(sim);
-        for (int i = 0; i < 600 && sim.Ticks < 42; i++)
-        {
-            sim.Tick(default);
-        }
+        TestConfigs.UntilTick(sim, 42);
 
         sim.NextActiveIn.ShouldNotBeNull();
         sim.NextActiveIn.Value.ShouldBeLessThan(2 * BattleSim.Dt, "끝난 움직임의 남은 틱(99)이 다음 판정까지 남은 시간에 들었다");
@@ -181,6 +167,7 @@ public class BossMotionTests
             }
         }
 
+        steps[^1].Finished.ShouldBeTrue("돌진이 200틱 안에 안 끝났다");
         return steps;
     }
 
@@ -264,17 +251,7 @@ public class BossMotionTests
             ActiveSeconds = 0.125,
         });
         def.Timeline.Add(new PatternStep { T = 1.25, Kind = "end" });
-        return new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = fighter ?? TestConfigs.Fighter(),
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { TestConfigs.SweepId },
-            Patterns = new Dictionary<string, PatternDef> { [TestConfigs.SweepId] = def },
-            Seed = 1,
-            MaxTicks = 60 * 30,
-        });
+        return TestConfigs.PatternSim(TestConfigs.SweepId, def, fighter, maxTicks: 60 * 30);
     }
 
     [Fact]
@@ -284,10 +261,7 @@ public class BossMotionTests
         // 가만히 서 있으면 추정이 곧 사실이다: 판 42틱(간격 12 + 러너 30)에 돌진이 서고 d = 960 − 280 = 680 은 ⌈680 / 60⌉ = 12틱이다 — 11번 걸음
         // 뒤 53틱에 닿고, 3타는 그 15틱 뒤 68틱에 선다. 돌진이 서는 틱부터 틱마다 남은 시간이 정확히 한 틱씩 준다.
         BattleSim sim = RushSim();
-        for (int i = 0; i < 600 && sim.Ticks < 42; i++)
-        {
-            sim.Tick(default);
-        }
+        TestConfigs.UntilTick(sim, 42);
 
         for (int i = 0; i < 40 && sim.NextActiveIn is not null; i++)
         {
@@ -308,10 +282,7 @@ public class BossMotionTests
         for (int lead = 0; lead < 12; lead++)
         {
             BattleSim sim = RushSim();
-            for (int i = 0; i < 600 && sim.Ticks < 42 + lead; i++)
-            {
-                sim.Tick(default);
-            }
+            TestConfigs.UntilTick(sim, 42 + lead);
 
             sim.Tick(new InputFrame(0, false, Dash: true, false, false));
             for (int i = 0; i < 40 && sim.Boss.CurrentPattern is not null && sim.NextActiveIn is > 15 * BattleSim.Dt + 1e-9; i++)
@@ -319,6 +290,8 @@ public class BossMotionTests
                 sim.Tick(default);
             }
 
+            sim.NextActiveIn.ShouldNotBeNull($"{lead}틱 뒤의 대시 — 돌진이 닿기 전에 패턴이 끝났다");
+            sim.NextActiveIn.Value.ShouldBeLessThanOrEqualTo(15 * BattleSim.Dt + 1e-9, $"{lead}틱 뒤의 대시 — 40틱 안에 돌진이 안 닿았다");
             double d = sim.Boss.X - sim.Fighter.X;
             d.ShouldBeInRange(280 - (2200 * BattleSim.Dt) - 1e-9, 280 + 1e-9, $"{lead}틱 뒤의 대시 — 돌진이 d = {d} 에 멈췄다");
         }
@@ -331,10 +304,7 @@ public class BossMotionTests
         // 곳이 아니라 **움직임이 끝날 곳**이다: 도약은 뛰는 틱에 정한 착지 자리의 땅, 돌진은 지금 파이터 앞 280 의 땅. 지금 자리에 놓으면
         // 도약의 착지 띠가 공중에 뜨고 돌진의 3타가 달리는 보스를 따라 미끄러진다. 움직임이 없으면 보스 자리 그대로다.
         BattleSim sim = RushSim();
-        for (int i = 0; i < 600 && sim.Ticks < 43; i++)
-        {
-            sim.Tick(default);
-        }
+        TestConfigs.UntilTick(sim, 43);
 
         HitShape third = TestConfigs.HitShapes()["medieval_king/attack3/2"];
         sim.Boss.X.ShouldBeGreaterThan(sim.Fighter.X + 280, "돌진이 벌써 닿았다 — 이 테스트가 움직이는 동안을 안 본다");
@@ -362,29 +332,6 @@ public class BossMotionTests
         leap.BossNextRects.Min(r => r.X0).ShouldBe(leap.Fighter.X + 115 - 1920, 1e-9, "착지 띠가 착지 자리에 안 섰다");
     }
 
-    /// <summary>1타 한 대로 게이지가 끝까지 차는 기준 파이터 — 무너지는 순간을 한 틱으로 만든다(BossExhaustTests 의 것과 같다).</summary>
-    private static FighterConfig Breaker()
-    {
-        FighterConfig c = TestConfigs.Fighter();
-        ComboStepDef s = c.Combo[0];
-        c.Combo[0] = new ComboStepDef
-        {
-            Anim = s.Anim,
-            Fps = s.Fps,
-            Frames = s.Frames,
-            StartFrame = s.StartFrame,
-            BladeFrame = s.BladeFrame,
-            Windup = s.Windup,
-            Active = s.Active,
-            Recover = s.Recover,
-            Stiff = s.Stiff,
-            Damage = s.Damage,
-            Poise = 100,
-            Hitbox = s.Hitbox,
-        };
-        return c;
-    }
-
     [Fact]
     public void 돌진_도중_게이지로_무너지면_그_자리에_서고_다음_패턴은_간격_뒤에_처음부터_선다()
     {
@@ -392,7 +339,7 @@ public class BossMotionTests
         // 자리에서 멈추고(공중이 아니라 내릴 것이 없다 · #71 계획 결정 6), 3타는 안 온다. 세웠던 패턴 시계는 같이 걷힌다 — 남으면 풀린 뒤 고른
         // 다음 패턴의 러너가 한 틱도 못 가 판정이 영영 안 선다. 멈출 거리를 100 으로 줄인 판이다: 기준 파이터의 칼(±90)이 닿으려면 보스가
         // 파이터 앞 175 안으로 와야 한다. 칼이 선 틱에 보스가 아직 멈출 자리(파이터 앞 100)에 안 닿았어야 이 테스트가 달리는 보스를 본다.
-        BattleSim sim = RushSim(Breaker(), stop: 100);
+        BattleSim sim = RushSim(TestConfigs.Breaker(), stop: 100);
         bool pressed = false;
         for (int i = 0; i < 600 && !sim.Boss.Exhausted; i++)
         {
@@ -417,6 +364,8 @@ public class BossMotionTests
             sim.Tick(default);
         }
 
+        sim.Boss.Exhausted.ShouldBeFalse("600틱 안에 탈진이 안 풀렸다");
+
         // 간격(0.2초 = 12틱)을 처음부터 세어 새 패턴이 서고(탈진이 풀리는 틱이 간격의 첫 틱이다 · BossPoiseTests 와 같은 규약), 그다음 틱부터
         // 시계가 간다 — 판정(0.75초 = 45틱)까지 44틱이 남는다.
         int free = sim.Ticks;
@@ -425,6 +374,7 @@ public class BossMotionTests
             sim.Tick(default);
         }
 
+        sim.Boss.CurrentPattern.ShouldNotBeNull("풀린 뒤 600틱 안에 새 패턴이 안 섰다");
         (sim.Ticks - free + 1).ShouldBe(BattleSim.TicksFor(0.2), "풀린 뒤 간격을 처음부터 안 셌다");
         sim.Tick(default);
         sim.NextActiveIn.ShouldNotBeNull();
