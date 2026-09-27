@@ -59,25 +59,18 @@ public sealed class JumpClearance
 
     /// <summary>
     /// <paramref name="fighterX"/> 에서 제자리로 뛰면, 떠 있는 동안 몸이 <paramref name="at"/> 에 놓인 모양의 어느 사각형과도 안
-    /// 겹치는 틱이 <b>가장 길게 몇 틱 이어지나</b>. 겹침은 가장자리도 친다(<see cref="HitRect.Overlaps"/>) — 발이 사각형 윗끝과 같으면 닿은
-    /// 것이다.
+    /// 겹치는 틱이 <b>가장 길게 몇 틱 이어지나</b>. 겹침은 판정이 묻는 그 함수(<see cref="ShapeHit.Overlaps"/>)로 잰다 — 가장자리도 친다:
+    /// 발이 사각형 윗끝과 같으면 닿은 것이다.
     /// </summary>
     public int ClearRun(HitShape shape, Placement at, double fighterX)
     {
         ArgumentNullException.ThrowIfNull(shape);
 
-        IReadOnlyList<HitRect> local = shape.Local;
         int best = 0, run = 0;
         foreach (double y in _feet)
         {
             var body = new HitRect(fighterX - _halfWidth, fighterX + _halfWidth, y, y + _height);
-            bool clear = true;
-            for (int i = 0; i < local.Count && clear; i++)
-            {
-                clear = !HitShape.ToWorld(local[i], at).Overlaps(body);
-            }
-
-            run = clear ? run + 1 : 0;
+            run = ShapeHit.Overlaps(shape, at, body) ? 0 : run + 1;
             best = Math.Max(best, run);
         }
 
