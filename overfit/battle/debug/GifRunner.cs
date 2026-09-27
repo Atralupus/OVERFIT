@@ -49,15 +49,17 @@ public partial class GifRunner : Node
     private static readonly GifScript[] _scripts =
     {
         // 멀리 서서 지켜보다 후딜에만 찔끔 친다 → 1타 → 돌진 → 3타 (설계 §4.6). 1타(51틱)가 멀리서 헛치자 후딜을 노려 걸어 들어가고(60 ~ 77틱),
-        // 보스가 달리기 시작하는 78틱에 J 를 누른다 — 칼은 달려오는 보스에 닿지만(84틱) 1타 뒤 경직(0.40초 · #82)이 118틱까지 묶어 도착(85틱)
-        // 15틱 뒤의 3타(100틱)를 맞는다. 3타 + 30 까지 잡는다.
+        // 보스가 달리기 시작하는 78틱에 J 를 누른다 — 칼은 달려오는 보스에 닿지만(84틱) 1타 뒤 경직(0.40초 · #82)이 118틱까지 묶어, 1타가 끝난
+        // 95틱에 대시로 빠지려 한 누름이 버려지고 도착(85틱) 15틱 뒤의 3타(100틱)를 맞는다. 3타 + 30 까지 잡는다. 입력은 짝 테스트
+        // (Stage2BattleTests.일타_돌진은_달려오는_보스를_찌른_사람을_1타_뒤_경직에서_3타로_맞힌다)와 같다 — 그 테스트의 대조군(경직 0)은 같은
+        // 95틱의 대시로 3타를 흘린다. 전에는 대본이 그 대시를 빼 두어 GIF 의 사람이 테스트의 사람과 달랐다(#96).
         new("rush", Stage: 2, Patterns: new[] { "1타 돌진" }, Target: "1타 돌진",
-            Inputs: new[] { new GifInput(60, 77, "move_right"), new GifInput(78, 78, "attack") },
+            Inputs: new[] { new GifInput(60, 77, "move_right"), new GifInput(78, 78, "attack"), new GifInput(95, 95, "dash") },
             From: 1, To: 130),
 
         // 대시로만 피한다 → 1타 → 잡기 (설계 §4.7). 판이 서면 1타 사거리 안(보스와 356 떨어진 956)으로 걸어 들어가, 1타 창이 열리는 틱(51)에
         // 대시로 흘리고(보스를 뚫고 등 뒤로 빠진다 · 대시와 그 뒤 경직 0.10초가 68틱에 풀린다), 잡기 창(102)이 열리기 4틱 앞(98)에 또 대시해 **무적인
-        // 채로** 흰 구에 붙들린다. 풀리는 틱(162) 뒤 흰 구가 흩어지는 0.3초(18틱)까지 잡는다.
+        // 채로** 흰 구에 붙들린다. 풀리는 틱(162) 뒤 흰 구가 흩어지는 0.3초(18틱 · feel.grab_orb_fade_seconds)까지 잡는다 — 그 값을 고치면 To 도 같이 고친다.
         new("grab", Stage: 2, Patterns: new[] { "1타 잡기" }, Target: "1타 잡기",
             Inputs: new[]
             {
@@ -98,7 +100,11 @@ public partial class GifRunner : Node
     /// <summary>돌릴 대본의 id — <c>Game</c> 이 <c>--gif=</c> 에서 읽어 세운다.</summary>
     public string ScriptId { get; set; } = "";
 
-    /// <summary>등록된 대본 id 들 — 도구가 인자 없이 돌면 이것을 다 찍는다.</summary>
+    /// <summary>
+    /// 등록된 대본 id 들 — 모르는 id 를 받았을 때 로그에 싣는다. 대본 목록은 위의 표(<see cref="_scripts"/>) 하나다: <c>tools/build.sh gifs</c> 는
+    /// 인자 없이 돌면 이 파일에서 표의 줄(<c>new("&lt;id&gt;", Stage: …</c>)을 읽어 다 찍는다(<c>gif_ids</c>). 전에는 build.sh 가 제 목록
+    /// (<c>GIF_IDS</c>)을 따로 들어 대본을 더하는 날 한쪽만 늘 수 있었다(#96). 줄의 꼴을 바꾸면 <c>gif_ids</c> 도 같이 고친다.
+    /// </summary>
     public static IEnumerable<string> Ids
     {
         get
