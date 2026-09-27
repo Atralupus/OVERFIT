@@ -37,6 +37,38 @@ public class BotPolicyTests
         return (outcome.Value, sim);
     }
 
+    /// <summary>
+    /// <c>tools/build.sh demo</c> 가 도는 바로 그 판 — 실제 캐릭터 · 실제 보스 · <paramref name="stage"/> 단계의 명부와 고르기 · 시드 51 을 봇으로 끝까지
+    /// 민다. 명부와 고르기는 데모처럼 <see cref="StageRoster.Setup"/> 에서 받고, 판과 봇에 같은 시드를 준다(데모의 차림). 두 단계의 데모 테스트가
+    /// 같은 스무 줄을 따로 들고 있었다(#96) — 한쪽만 고치면 두 판이 다른 차림을 잰다.
+    /// </summary>
+    private static (BattleOutcome Outcome, BattleSim Sim) PlayDemo(int stage)
+    {
+        BalanceData balance = TestConfigs.Balance();
+        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), stage, 51, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException($"stages.json 에 {stage}단계가 안 선다");
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
+            PatternIds = setup.PatternIds,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Picker = setup.Picker,
+            MaxTicks = balance.Battle.MaxTicks,
+        });
+        var bot = new BotPolicy(51);
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            outcome = sim.Tick(bot.Next(sim));
+        }
+
+        return (outcome.Value, sim);
+    }
+
     [Fact]
     public void 봇이_한_판을_끝낸다()
     {
@@ -54,27 +86,7 @@ public class BotPolicyTests
         // "봇이 1단계를 이길 수 있다" 가 데모의 전제인데 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 —
         // 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이 실제 데이터다. 명부와 고르기는 데모처럼
         // StageRoster.Setup 에서 받는다 — 따로 세우면 1단계의 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
-        BalanceData balance = TestConfigs.Balance();
-        StageSetup stage = StageRoster.Setup(TestConfigs.Stages(), 1, 51, Array.Empty<AttemptRecord>())
-            ?? throw new InvalidOperationException("stages.json 에 1단계가 안 선다");
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
-            PatternIds = stage.PatternIds,
-            Patterns = TestConfigs.Patterns(),
-            Seed = 51,
-            Picker = stage.Picker,
-            MaxTicks = balance.Battle.MaxTicks,
-        });
-        var bot = new BotPolicy(51);
-        BattleOutcome? outcome = null;
-        while (outcome is null)
-        {
-            outcome = sim.Tick(bot.Next(sim));
-        }
+        (BattleOutcome outcome, BattleSim sim) = PlayDemo(1);
 
         outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 1단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
     }
@@ -89,27 +101,7 @@ public class BotPolicyTests
         // 돌리면 2단계는 열 판을 이기고(31337 · 12345 · 1 · 3 · 5 · 9 에 진다) 1단계는 열네 판을 이긴다(12345 · 2 에 진다) — #78 이 쟀고 PR 설명에
         // 이 값을 적는다. 계획이 적은 아홉 · 열다섯은 잰 값이 아니었다(최종 리뷰 F-I4). 여기서는 데모의 한 판만 못박는다: 지면 규칙이 아니라 봇의
         // 성향을 고친다(설계 §9 · #82).
-        BalanceData balance = TestConfigs.Balance();
-        StageSetup stage = StageRoster.Setup(TestConfigs.Stages(), 2, 51, Array.Empty<AttemptRecord>())
-            ?? throw new InvalidOperationException("stages.json 에 2단계가 안 선다");
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
-            PatternIds = stage.PatternIds,
-            Patterns = TestConfigs.Patterns(),
-            Seed = 51,
-            Picker = stage.Picker,
-            MaxTicks = balance.Battle.MaxTicks,
-        });
-        var bot = new BotPolicy(51);
-        BattleOutcome? outcome = null;
-        while (outcome is null)
-        {
-            outcome = sim.Tick(bot.Next(sim));
-        }
+        (BattleOutcome outcome, BattleSim sim) = PlayDemo(2);
 
         outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 2단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
     }

@@ -170,6 +170,17 @@ public sealed class FighterConfig
     /// </summary>
     public required double ExhaustSeconds { get; init; }
 
+    /// <summary>
+    /// 가드의 그림 — 이 시트의 <see cref="GuardFrame"/> 장에 <b>멈춰 선다</b> (#96 · 설계 §6). 팩에 막는 모션이 없어 칼을 사선으로 세운
+    /// <c>attack2</c> f1 을 빌린다. 패리가 같은 시트의 f0~f3 을 도는데 네 장은 칼과 몸이 같은 자세라(스카프와 2~4px 의 옆 밀림만 다르다)
+    /// 가드와 패리는 실루엣이 같다 — 둘을 가르는 것은 가드의 색과 링이다(패리는 칠하지 않는다). <b>규칙은 안 읽는다</b> — 뷰가
+    /// 그리고 <c>FighterDataTests</c> 가 팩의 <c>.tres</c> · 패리의 장과 맞대어 본다.
+    /// </summary>
+    public required string GuardAnim { get; init; }
+
+    /// <summary>가드가 멈춰 서는 장(0부터) — <see cref="GuardAnim"/> 의 몇 번 장인가.</summary>
+    public required int GuardFrame { get; init; }
+
     /// <summary>초당 회복량. 행동 중에는 회복하지 않는다 — <b>가드 중에도 안 찬다.</b></summary>
     public required double StaminaRegen { get; init; }
 

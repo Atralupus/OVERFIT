@@ -63,6 +63,10 @@ public partial class GrabOrb : Node2D
         Vector2 floor = new((float)frame.FighterX, (float)-radius);
         Vector2 boss = new((float)frame.BossX, (float)-(frame.BossY + frame.BossBodyHeight / 2));
 
+        // 셋은 차례로 오지 겹치지 않는다 — 나는 것은 잡기 창 바로 앞 단계 · 기다리는 것은 그 창이 산 동안 · 붙드는 것은 잡힌 뒤다(잡은 창은 그
+        // 틱에 닫힌다 · 설계 §3.5). 그래도 순서를 둔 것은 흰 구가 하나라서다: 붙든 것이 가장 강한 사실이라 먼저다 — 붙들린 파이터는 규칙에서
+        // 못 움직이는데 흰 구가 다른 자리(다음 잡기로 날아가는 중 · 바닥)에 있으면 풀려난 그림이 된다. 날기가 기다리기보다 앞인 것은 날기가 그
+        // 창보다 앞선 단계라서다 — 한 패턴에 잡기가 둘이면 앞 창이 산 채 다음 날기가 올 수 없다(러너는 단계를 차례로 민다).
         (string? state, Vector2 at) = frame.Held ? ("hold", fighter)
             : frame.Flying ? ("fly", boss.Lerp(floor, (float)frame.Progress))
             : frame.GrabLive ? ("wait", floor)

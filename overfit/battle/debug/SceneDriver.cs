@@ -7,24 +7,26 @@ namespace Overfit.Battle.Debug;
 
 /// <summary>
 /// 창을 띄운 판을 <b>손으로</b> 모는 도구 — 새 판을 세우고, 액션을 누르고, 프레임과 상태를 기다린다. 스크린샷 대본
-/// (<see cref="ShotRunner"/>)이 쓴다.
+/// (<see cref="ShotRunner"/>)과 GIF 러너(<see cref="GifRunner"/> · 설계 §6.2)가 쓴다.
 ///
 /// <para>
-/// <see cref="ShotRunner"/> 에서 떼어 냈다 (#78). 그 파일은 주석 빼고 376줄이었고, 이 PR 이 2단계 장면 넷 · 다시 찍는 선딜 · 판정 보기
-/// 두 장을 얹는다(CLAUDE.md §7). 대본(어느 장면을 언제 찍나)과 손(누르기 · 기다리기 · 판 세우기)은 따로 바뀐다 — 새 장면은 대본만 늘리고,
-/// 손은 GIF 러너(#78 · 설계 §6.2)도 같이 쓴다.
+/// #78 에서 <see cref="ShotRunner"/> 로부터 떼어 냈다. 그 파일은 주석 빼고 376줄이었고, #78 이 2단계 장면 넷 · 다시 찍는 선딜 · 판정 보기 두 장을
+/// 더했다(CLAUDE.md §7). 대본(어느 장면을 언제 찍나)과 손(누르기 · 기다리기 · 판 세우기)은 따로 바뀐다 — 새 장면은 대본만 늘린다.
+/// 누르기가 왜 엔진의 입력 큐를 타는지는 <see cref="Tap"/> 에 있다.
 /// </para>
 ///
 /// <para>
-/// 누르기는 <b>엔진의 입력 큐</b>로 넣는다(<see cref="Input.ParseInputEvent"/> · <see cref="Input.ActionPress"/>) — <c>Battle</c> 은
-/// 사람이 누른 것과 구별할 수 없다. 합성 경로를 따로 만들지 않는 이유다.
+/// <b>무게는 부르는 쪽이 정한다.</b> 판이 안 섰거나 기다린 순간이 안 왔을 때 여기는 null · 거짓을 돌려줄 뿐 그것이 경고인지 규칙 위반인지
+/// 말하지 않는다 — 같은 사건이 스크린샷에는 <c>[W]</c>(사진 한 장이 못 찍혔다)이고 GIF 에는 <c>[E]</c>(GIF 가 안 나왔다 — 도구의 실패)다.
+/// 전에는 여기서 <c>[W] battle_scene_missing</c> 을 남기고 GIF 러너가 같은 사건에 <c>[E] battle_missing</c> 을 또 남겨 한 사건이 두 무게였다(#96).
+/// 기다림의 상한(<see cref="Until"/>)만은 여기서 <c>[W]</c> 를 남긴다 — 그것은 어느 대본에서든 "그 순간이 안 와서 그냥 간다" 다.
 /// </para>
 /// </summary>
 public sealed class SceneDriver
 {
     private readonly Node _host;
 
-    /// <summary>로그 태그 — 부르는 쪽의 이름(<c>shots</c>)이다. 기다림이 넘치거나 판이 안 섰을 때 그 이름으로 남긴다.</summary>
+    /// <summary>로그 태그 — 부르는 쪽의 이름(<c>shots</c> · <c>gif</c>)이다. 기다림이 넘쳤을 때 그 이름으로 남긴다.</summary>
     private readonly string _tag;
 
     /// <param name="host">트리에 붙은 노드 — 신호와 타이머를 여기서 받는다.</param>
@@ -37,8 +39,7 @@ public sealed class SceneDriver
     }
 
     /// <summary>
-    /// 그 단계의 새 판을 세우고 씬이 설 때까지 기다린다. 판을 못 찾으면 <c>[W]</c> 를 남기고 null 이다 — 스크린샷이 못 찍힌 것은
-    /// 게임의 규칙 위반이 아니다(<c>shots</c> 는 PNG 개수를 세어 0장이면 실패시킨다).
+    /// 그 단계의 새 판을 세우고 씬이 설 때까지 기다린다. 판을 못 찾으면 null 이다 — 로그는 부르는 쪽이 제 무게로 남긴다(클래스 주석).
     ///
     /// <para>
     /// 한 자리다 (#78 · #59 의 3/6 넘김). 전에는 대본의 네 곳이 같은 네 줄(단계 · 씬 전환 · 네 프레임 · 씬 읽기)을 따로 들고 있었고, 그중
@@ -61,13 +62,7 @@ public sealed class SceneDriver
         Game.Instance.SetStage(stage);
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
-        var battle = _host.GetTree().CurrentScene as Overfit.Battle.Battle;
-        if (battle is null)
-        {
-            Log.Warn(_tag, "battle_scene_missing");
-        }
-
-        return battle;
+        return _host.GetTree().CurrentScene as Overfit.Battle.Battle;
     }
 
     /// <summary>
@@ -114,22 +109,31 @@ public sealed class SceneDriver
     /// <summary>
     /// 조건이 참이 될 때까지 프레임 단위로 기다린다. <b>상한이 있다</b> —
     /// 안 오는 상태를 영원히 기다리면 완료 표지가 안 찍혀 <c>shots</c> 가 "끝까지 못 갔다" 로 죽는데,
-    /// 진짜 이유(그 상태가 안 왔다)는 로그에 안 남는다.
+    /// 진짜 이유(그 상태가 안 왔다)는 로그에 안 남는다. 왔으면 참이다 — 그 순간이 없던 것을 제 이름으로 남길 대본이 쓴다.
+    ///
+    /// <para>
+    /// <b>조건은 한 프레임에 한 번만 부른다.</b> 조건이 상태를 쥐는 자리가 있다 — 정점(<c>ShotRunner.Apex</c>)은 앞 프레임의 높이와 견주고,
+    /// 조건 안에서 트리를 멈춘다(<see cref="Pause"/>). 전에는 빠져나온 뒤 한 번 더 물어(경고를 낼지) 같은 프레임에 조건이 두 번 돌았다 — 정점은
+    /// 앞 높이가 방금 높이로 바뀐 채 두 번째 답을 냈고, 우연히 같은 답이라 드러나지 않았을 뿐이다(#96 · #93 리뷰 T10-M1).
+    /// </para>
     /// </summary>
-    public async Task Until(Func<bool> ready, double timeout)
+    public async Task<bool> Until(Func<bool> ready, double timeout)
     {
         ArgumentNullException.ThrowIfNull(ready);
         double waited = 0;
-        while (!ready() && waited < timeout)
+        bool done;
+        while (!(done = ready()) && waited < timeout)
         {
             await _host.ToSignal(_host.GetTree(), SceneTree.SignalName.PhysicsFrame);
             waited += 1.0 / Engine.PhysicsTicksPerSecond;
         }
 
-        if (!ready())
+        if (!done)
         {
-            Log.Warn(_tag, $"timeout waited={waited:0.0}s — 그 순간이 안 와서 그냥 찍는다");
+            Log.Warn(_tag, $"timeout waited={waited:0.0}s — 그 순간이 안 와서 그냥 간다");
         }
+
+        return done;
     }
 
     /// <summary>트리를 멈춘다. 기다림의 조건 안에서 부르려고 참을 돌려준다 — 조건이 참인 그 틱에 판을 세워 찍는 자리가 쓴다.</summary>

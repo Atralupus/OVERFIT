@@ -197,11 +197,13 @@ public partial class Battle : Node2D
     public string? BossStepAnim => _broken || _over ? null : _sim.BossStep?.Anim;
 
     /// <summary>
-    /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82)도 탈진도 아니다. 위와 같이 디버그 전용 읽기다 — 스크린샷이
-    /// 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자 둘째 J 가 1타의 경직에 떨어져 2타가 됐다.
+    /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82) 중이 아니고 굳어 있지도(탈진 · 붙들림 — <c>Fighter.Locked</c>) 않다.
+    /// 위와 같이 디버그 전용 읽기다 — 스크린샷이 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자
+    /// 둘째 J 가 1타의 경직에 떨어져 2타가 됐다. 굳음은 탈진만 보던 것을 <c>Locked</c> 로 넓혔다(#96) — 붙들린 파이터도 선 자세(Idle)라, 탈진만
+    /// 보면 흰 구에 잡힌 동안을 "받는다" 고 했다. 누른 것은 버려지고 스크린샷 대본은 그 누름이 먹기를 헛되이 기다린다.
     /// </summary>
     public bool FighterFree =>
-        !_broken && !_over && _sim.Fighter.Action == FighterAction.Idle && !_sim.Fighter.Exhausted;
+        !_broken && !_over && _sim.Fighter.Action == FighterAction.Idle && !_sim.Fighter.Locked;
 
     /// <summary>
     /// 보스의 남은 체력. 위와 같이 디버그 전용 읽기다 — 줄어든 직후가 보스가 <b>희게 번쩍이는</b> 순간이고(#71 ·
@@ -307,12 +309,13 @@ public partial class Battle : Node2D
         // 바닥 충격파는 판정이 바닥 전체를 덮었는지를 아레나 폭으로 잰다(#83) — 판을 세운 바로 그 폭이다.
         _cues = new BattleCues(_sim, _fighterView, _bossView, _landingWave, battle.ArenaWidth, ShakeFor, StartHitstop);
 
-        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59).
+        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59). 가드가 멈춰 서는 장도 데이터다(#96).
         _fighterView.Load(
             _fighterConfig.Sprite,
             Swings(_fighterConfig),
             new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
-            _fighterConfig.ParryAnimFrames);
+            _fighterConfig.ParryAnimFrames,
+            new StillFrame(_fighterConfig.GuardAnim, _fighterConfig.GuardFrame));
         _bossView.Load(_bossConfig.Sprite);
 
         _grabOrb = new GrabOrb();
@@ -593,8 +596,11 @@ public partial class Battle : Node2D
                 ? speed(_feel)
                 : 1.0));
 
-        // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림)이 그 틱에 멈춰 남는다. 거르지 않으면 흰 구가
-        // 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 거르면 그 자리에서 흩어진다(GrabOrb).
+        // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림 · 산 창)이 그 틱에 멈춰 남는다. 거르지 않으면
+        // 흰 구가 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 잡기에 죽은 판도 같다: 판은 그 잡기가 닿은 틱에 끝나고
+        // (붙들림 60틱을 안 기다린다 · Stage2BattleTests) 파이터는 규칙에서 붙들린 채라, 안 거르면 흰 구가 죽는 모션 위에 결과 화면까지 감싸 있다.
+        // 셋(날기 · 붙듦 · 기다림)을 다 거른다 — 하나라도 남으면 그 상태로 멈춘다. 거르면 그 자리에서 흩어진다(GrabOrb 의 흩어짐 · 끝난 판도
+        // 그리기는 계속 부른다).
         bool live = !_over;
         (HitBox Hit, double Progress)? ahead = live ? _sim.BossHitAhead : null;
         _grabOrb.Show(new OrbFrame(

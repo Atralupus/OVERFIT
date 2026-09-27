@@ -40,17 +40,7 @@ public class BossHitsTests
                 new() { T = 1.5, Kind = "end" },
             },
         };
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "둘" },
-            Patterns = new Dictionary<string, PatternDef> { ["둘"] = pattern },
-            Seed = 1,
-            MaxTicks = 60 * 10,
-        });
+        BattleSim sim = TestConfigs.PatternSim("둘", pattern);
 
         for (int i = 0; i < 180 && sim.Events.Count < 2; i++)
         {
@@ -106,7 +96,7 @@ public class BossHitsTests
             ParryWindow = 0.18,
             PunishGreed = false,
             Reach = "far",
-            MultiHit = 2,
+            MultiHit = 4,
             Tracking = false,
         };
         var pattern = new PatternDef
@@ -121,17 +111,7 @@ public class BossHitsTests
                 new() { T = 2.5, Kind = "end" },
             },
         };
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "넷" },
-            Patterns = new Dictionary<string, PatternDef> { ["넷"] = pattern },
-            Seed = 1,
-            MaxTicks = 60 * 10,
-        });
+        BattleSim sim = TestConfigs.PatternSim("넷", pattern);
 
         for (int i = 0; i < 300 && sim.Events.Count < 4; i++)
         {
@@ -173,17 +153,7 @@ public class BossHitsTests
                 new() { T = 1.0, Kind = "end" },
             },
         };
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
-            PatternIds = new[] { "하나" },
-            Patterns = new Dictionary<string, PatternDef> { ["하나"] = pattern },
-            Seed = 1,
-            MaxTicks = 60 * 10,
-        });
+        BattleSim sim = TestConfigs.PatternSim("하나", pattern);
 
         // 가드는 판이 설 때부터 붙든다. 대시는 창이 열리기 한 틱 앞에 누른다 — 창의 첫 틱이 무적 창 한가운데다.
         var hold = new InputFrame(0, false, false, false, false, GuardHeld: action == FighterAction.Guard);
@@ -192,6 +162,8 @@ public class BossHitsTests
             sim.Tick(hold);
         }
 
+        sim.NextActiveIn.ShouldNotBeNull("600틱 안에 패턴이 안 섰다");
+        sim.NextActiveIn.Value.ShouldBeLessThanOrEqualTo(2 * BattleSim.Dt, "600틱 안에 판정이 두 틱 앞으로 안 왔다");
         sim.Tick(action == FighterAction.Dash ? new InputFrame(0, false, Dash: true, false, false) : hold);
         for (int i = 0; i < 10 && sim.Events.Count == 0; i++)
         {

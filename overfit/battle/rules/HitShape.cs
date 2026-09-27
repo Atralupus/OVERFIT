@@ -153,17 +153,12 @@ public static class ShapeHit
     /// </summary>
     public static ShapeContact Test(HitShape shape, Placement at, HitRect body)
     {
-        ArgumentNullException.ThrowIfNull(shape);
-
-        IReadOnlyList<HitRect> local = shape.Local;
-        for (int i = 0; i < local.Count; i++)
+        if (Overlaps(shape, at, body))
         {
-            if (HitShape.ToWorld(local[i], at).Overlaps(body))
-            {
-                return ShapeContact.Overlap;
-            }
+            return ShapeContact.Overlap;
         }
 
+        IReadOnlyList<HitRect> local = shape.Local;
         HitRect bounds = HitShape.ToWorld(shape.Bounds, at);
         if (body.X1 < bounds.X0 || body.X0 > bounds.X1)
         {
@@ -176,6 +171,28 @@ public static class ShapeHit
         }
 
         return BeyondAtHeight(local, at, body) ? ShapeContact.TooFar : ShapeContact.ByGap;
+    }
+
+    /// <summary>
+    /// 몸이 모양의 사각형 하나 이상과 겹치나 — 가장자리만 닿아도 겹친 것이다(<see cref="HitRect.Overlaps"/>). <see cref="Test"/> 의 첫 물음이고,
+    /// 점프로 넘을 수 있었나(<see cref="JumpClearance"/>)가 떠 있는 틱마다 묻는 것이다. <b>겹침을 훑는 곳은 여기 하나다</b> (#96) — 전에는
+    /// <c>JumpClearance.ClearRun</c> 이 같은 훑기를 따로 들어, 한쪽만 고치는 날 "넘을 수 있었다" 와 "맞았다" 가 다른 몸을 잴 수 있었다.
+    /// 목록을 만들지 않고 한 장씩 놓아 본다 — 판정 하나에 떠 있는 틱마다 불린다.
+    /// </summary>
+    public static bool Overlaps(HitShape shape, Placement at, HitRect body)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+
+        IReadOnlyList<HitRect> local = shape.Local;
+        for (int i = 0; i < local.Count; i++)
+        {
+            if (HitShape.ToWorld(local[i], at).Overlaps(body))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

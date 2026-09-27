@@ -23,7 +23,7 @@
 #                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
 #                                      엔진 안에서 뷰포트를 직접 찍는다 — 화면 기록 권한이 필요 없고 다른 창이 안 겹친다
-#   tools/build.sh gifs [id…]          README 의 패턴별 GIF → docs/gifs/<id>.gif (기본: rush grab offbeat jump3)
+#   tools/build.sh gifs [id…]          README 의 패턴별 GIF → docs/gifs/<id>.gif (기본: GifRunner.cs 의 대본 전부)
 #                                      창과 Movie Maker 로 모든 프레임을 받고 대본이 남긴 구간만 ffmpeg 로 엮는다(480px · 15fps)
 #                                      잡은 구간 4초 · 1MB 를 넘으면 실패다. ffmpeg 가 필요하다(brew install ffmpeg)
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
@@ -33,7 +33,8 @@
 #                                        규칙이 이 틱에 댄 판정 사각형이 그려진다. shots 는 그 사진을 docs/shots/ 로 안 넘긴다
 #   tools/build.sh clean               빌드 산출물 삭제
 #
-# 헤드리스 판정 — 창 없이 도는 서브커맨드(지금은 smoke 하나)는 판정 함수 하나(judge_headless)를 공유한다.
+# 로그 판정 — Godot 을 띄우는 서브커맨드 넷(smoke · demo · shots · gifs)은 판정 함수 하나(judge_headless)를 공유한다.
+#   이름의 "headless" 는 처음 부른 곳(smoke)에서 왔다 — 창을 띄우는 shots · gifs 도 같은 로그 규약으로 판정한다.
 #   ① 로그에 ^[tag][E] 가 있으면 실패 (CLAUDE.md: Error = 규칙 위반)
 #   ①′ 엔진이 찍은 ERROR: 블록이 있으면 실패 — C# 예외는 여기로만 나온다. WARNING: 은 세기만 한다
 #      에셋(res://assets/) 자원 로딩 실패만 면제하고(그림은 저장소에 없다) 면제 건수를 경고로 찍는다
@@ -394,10 +395,12 @@ cmd_smoke() {
   expect_log "$log" debug '^\[scene\]\[D\] input action=debug_stage_2 stage_jump from=[0-9]+ to=2$' "단계 점프 키(2)가 안 먹었습니다."
   expect_log "$log" info '^\[scene\]\[I\] battle ready stage=2 fighter=' "단계 점프 뒤에 2단계 전투가 안 섰습니다."
   # 시도마다 시드 (#72 · 설계 §4.4). 세션 시드 51 에서 첫 전투(1단계)와 단계 점프로 선 전투(2단계)가 시도 1 · 2 이고, 시드는
-  # Hash64(51, attempt, k1: 번호) 다 — RunHistoryTests 가 첫 값을 박아 뒀다. 둘째 줄이 "전투가 설 때마다 시드가 바뀐다" 를 본다.
+  # Hash64(51, attempt, k1: 번호) 다 — RunHistoryTests 가 첫 값을 박아 뒀다. 시도 2 의 줄이 "전투가 설 때마다 시드가 바뀐다" 를 본다.
   expect_log "$log" info '^\[run\]\[I\] session_seed=51$' "세션 시드 51 이 안 넘어갔습니다 — 스모크가 실행마다 다른 판을 돕니다."
-  expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=uniform history=0$' "첫 전투가 시도 1 의 시드로 안 섰습니다."
-  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었습니다."
+  # 대본 칸 (#96 · 설계 §4.4). 순회가 첫 전투에만 대본을 넣는다(Game._tourScript) — 첫 줄의 picker=script 가 칸이 전투에 닿은 것이고,
+  # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 단계 점프로 선 전투도 script 로 선다.
+  expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=script history=0$' "첫 전투가 시도 1 의 시드와 순회의 대본으로 안 섰습니다."
+  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."
@@ -460,7 +463,7 @@ cmd_shots() {
     return
   fi
 
-  # 문서용 축소본. 원본은 1920x1080 이라 README 에 그대로 넣으면 무겁다.
+  # 문서용 축소본. 원본은 창 크기(1280x720 — project.godot 의 window_*_override)라 README 에 그대로 넣으면 무겁다.
   mkdir -p "$ROOT/docs/shots"
   local f
   for f in "$out"/*.png; do
@@ -474,12 +477,18 @@ cmd_shots() {
 # 받는다 — 엔진이 모든 프레임을 고정 간격으로 쓰므로 빠지는 장이 없고, 같은 대본이면 장의 틱 · 로그 · 관측이 같다(화면 흔들림만 뷰의 난수
 # GD.Randf 라 장마다 흔들린다 — 그래서 다시 찍으면 GIF 의 바이트가 조금 다르다). 러너가 로그로 남긴 잡을 구간
 # ([gif][I] capture_from frame=… · capture_to frame=…)의 장만 ffmpeg 에 넘긴다: 판의 앞머리(걸어 들어오기)와 앞 패턴은 돌되 안 잡는다.
-# 60fps → 15fps 로 솎고 · 가로 480px(1920 의 1/4) · 팔레트를 떠서(바뀐 사각형만 싣는다) docs/gifs/<id>.gif 로 쓴다.
+# 60fps → 15fps 로 솎고 · 가로 480px(Movie Maker 는 창 크기 1280×720 으로 받는다 — 그 3/8) · 팔레트를 떠서(바뀐 사각형만 싣는다)
+# docs/gifs/<id>.gif 로 쓴다.
 #
 # 예산은 잡은 구간에 건다 — 4초(60fps 로 240장) · 1MB. 넘으면 실패다: README 가 무거워지는 것을 조용히 두지 않는다. 판정 보기와 섞지
 # 않는다(HITBOXES=1 이면 거절한다) — 채운 사각형이 README 에 실린다. 세션 시드는 51 이다(smoke · shots 와 같은 이유 — 대본은 패턴을
 # 고정하지만 스크린샷처럼 실행마다 같은 판이어야 한다).
-GIF_IDS=(rush grab offbeat jump3)
+#
+# 대본 목록은 GifRunner.cs 의 표(_scripts) 하나다 — 여기 따로 적어 두면 대본을 더하는 날 한쪽만 는다(#96 · 전에는 GIF_IDS 가 따로 있었다).
+# 인자 없이 돌면 그 표의 줄 `new("<id>", Stage: …` 에서 id 를 읽는다. 줄의 꼴을 바꾸면 여기도 같이 고친다(GifRunner.Ids 의 주석).
+gif_ids() {
+  sed -n 's/^[[:space:]]*new("\([a-z0-9]*\)", Stage:.*/\1/p' "$PROJECT/battle/debug/GifRunner.cs"
+}
 GIF_MAX_FRAMES=240
 GIF_MAX_BYTES=1048576
 FFMPEG="${FFMPEG:-/opt/homebrew/bin/ffmpeg}"
@@ -492,7 +501,9 @@ brew install ffmpeg 로 깔거나 FFMPEG 환경변수로 경로를 알려주세�
   cmd_build
   say "GIF"
   local ids=("$@")
-  [[ ${#ids[@]} -gt 0 ]] || ids=("${GIF_IDS[@]}")
+  # 낱말로 갈라 담는다 — id 는 ASCII 소문자 · 숫자라 안전하다(macOS 의 bash 3.2 에는 mapfile 이 없다).
+  [[ ${#ids[@]} -gt 0 ]] || ids=($(gif_ids))
+  [[ ${#ids[@]} -gt 0 ]] || die "GifRunner.cs 에서 대본 id 를 못 읽었습니다 — 표의 줄 꼴(new(\"<id>\", Stage: …)이 바뀌었나요? gif_ids 를 고치세요."
   mkdir -p "$ROOT/docs/gifs" "$OUT/gifs"
 
   local id
@@ -518,9 +529,12 @@ brew install ffmpeg 로 깔거나 FFMPEG 환경변수로 경로를 알려주세�
             - $(sed -n 's/^\[gif\]\[I\] capture_from frame=[0-9]* tick=\([0-9]*\).*/\1/p' "$log" | head -1) ))
     (( n >= ticks )) || die "GIF $id: ${ticks}틱이 ${n}장에 담겼습니다 — 엔진이 그리기를 건너뛰었습니다(창이 가려졌나요?). 창을 앞에 두고 다시 도세요."
 
+    # 입력을 잡을 구간 [from, to) 의 n 장으로 자른다 — trim 은 fps 로 솎기 **전**의 입력 장을 센다. 전에는 -frames:v n 을 걸었는데, 그것은
+    # 출력(15fps 로 솎은 뒤)의 장 수라 입력을 안 묶었다: n 장이 n/4 장으로 솎이므로 상한에 닿지 않고, 입력은 러너가 끝난 뒤의 장(to 너머)까지
+    # 흘러들었다(#96 · #93 리뷰 T11-M1 — grab 은 한 장이었다).
     local gif="$ROOT/docs/gifs/$id.gif"
-    "$FFMPEG" -y -loglevel error -framerate 60 -start_number "$from" -i "$dir/f%08d.png" -frames:v "$n" \
-      -vf "fps=15,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=diff_mode=rectangle" \
+    "$FFMPEG" -y -loglevel error -framerate 60 -start_number "$from" -i "$dir/f%08d.png" \
+      -vf "trim=end_frame=$n,fps=15,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=diff_mode=rectangle" \
       "$gif" || die "GIF $id: ffmpeg 이 멈췄습니다. 프레임: $dir"
 
     local size

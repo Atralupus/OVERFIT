@@ -26,26 +26,10 @@ public class BossPoiseTests
     private static FighterConfig Fighter(int first, int second)
     {
         FighterConfig c = TestConfigs.Fighter();
-        c.Combo[0] = Step(c.Combo[0], first);
-        c.Combo[1] = Step(c.Combo[1], second);
+        c.Combo[0] = TestConfigs.Step(c.Combo[0], poise: first);
+        c.Combo[1] = TestConfigs.Step(c.Combo[1], poise: second);
         return c;
     }
-
-    private static ComboStepDef Step(ComboStepDef s, int poise) => new()
-    {
-        Anim = s.Anim,
-        Fps = s.Fps,
-        Frames = s.Frames,
-        StartFrame = s.StartFrame,
-        BladeFrame = s.BladeFrame,
-        Windup = s.Windup,
-        Active = s.Active,
-        Recover = s.Recover,
-        Stiff = s.Stiff,
-        Damage = s.Damage,
-        Hitbox = s.Hitbox,
-        Poise = poise,
-    };
 
     /// <summary>
     /// 선딜이 긴 패턴 하나 — <paramref name="at"/> 초에 판정 하나가 선다(패리를 받는다). 보스가 그동안 "하던 것" 이 있어야

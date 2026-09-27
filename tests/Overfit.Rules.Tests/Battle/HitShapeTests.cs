@@ -157,8 +157,21 @@ public class HitShapeTests
                     bool drawn = shape.Place(at).Any(r => r.Overlaps(body));
                     bool ruled = ShapeHit.Test(shape, at, body) == ShapeContact.Overlap;
                     ruled.ShouldBe(drawn, $"facing={at.Facing} x={x} y={y}");
+                    ShapeHit.Overlaps(shape, at, body).ShouldBe(drawn, $"겹침만 묻는 길이 판정과 다른 답을 냈다 — facing={at.Facing} x={x} y={y}");
                 }
             }
         }
+    }
+
+    [Fact]
+    public void 겹침만_묻는_길도_가장자리를_친다()
+    {
+        // ShapeHit.Overlaps 는 판정(Test)의 첫 물음이자 점프로 넘을 수 있었나(JumpClearance)가 떠 있는 틱마다 묻는 것이다 — 두 곳이 같은 훑기를
+        // 따로 들던 것을 하나로 모았다(#96). 가장자리만 닿아도 겹친 것이다(HitRect.Overlaps): 발이 사각형 윗끝(200)과 같으면 닿았고, 한 점 위면
+        // 안 닿았다. 앞끝(300)도 같다 — 몸의 뒤끝(x − 30)이 300 이면 닿았다.
+        ShapeHit.Overlaps(Front(), _right, Body(1200, y: 200)).ShouldBeTrue("발이 윗끝과 같은데 안 닿았다고 한다");
+        ShapeHit.Overlaps(Front(), _right, Body(1200, y: 200.001)).ShouldBeFalse();
+        ShapeHit.Overlaps(Front(), _right, Body(1330)).ShouldBeTrue("몸의 뒤끝이 앞끝과 같은데 안 닿았다고 한다");
+        ShapeHit.Overlaps(Front(), _right, Body(1330.001)).ShouldBeFalse();
     }
 }

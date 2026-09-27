@@ -14,7 +14,10 @@ namespace Overfit.Battle.Rules;
 /// <param name="Tick">움직임이 시작된 뒤의 틱 — 시작한 틱이 0 이다.</param>
 public readonly record struct MotionContext(double BossX, double BossY, int Facing, double FighterX, int Tick);
 
-/// <summary>움직임이 한 틱에 내는 것 — 보스가 설 자리와 보는 쪽, 끝났나, 패턴 시계를 세우나.</summary>
+/// <summary>
+/// 움직임이 한 틱에 내는 것 — 보스가 설 자리와 보는 쪽, 끝났나, 패턴 시계를 세우나, 그 뒤로 시계를 몇 틱 더 세울 것 같나(추정),
+/// 끝나면 어디에 서나.
+/// </summary>
 /// <param name="X">보스 발 중심 x.</param>
 /// <param name="Y">보스 발바닥 높이.</param>
 /// <param name="Facing">보스가 볼 쪽. 0 이면 그대로 둔다.</param>
