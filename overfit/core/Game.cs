@@ -49,6 +49,13 @@ public partial class Game : Node
     /// </summary>
     private const string _tourStageJump = "debug_stage_2";
 
+    /// <summary>
+    /// 순회가 첫 전투에만 넣는 대본 (#96 · 설계 §4.4 「대본이 전투에 닿는 길」) — 1단계 명부 안의 한 칸이면 된다. smoke 가 그 전투의
+    /// <c>picker=script</c> 와, 단계 점프로 선 다음 전투의 <c>picker=uniform</c> 을 같이 본다. 둘째 줄이 <see cref="TakeScript"/> 가 가져가며
+    /// 비운다는 증명이다 — 칸이 남으면 다음 전투도 <c>script</c> 로 선다. 규칙 테스트로는 못 본다: 칸은 Autoload(Godot 쪽)에 있다.
+    /// </summary>
+    private static readonly string[] _tourScript = { "3연격" };
+
     public static Game Instance { get; private set; } = null!;
 
     public Scene Current { get; private set; } = Scene.Title;
@@ -76,10 +83,10 @@ public partial class Game : Node
     public RunHistory History { get; private set; } = null!;
 
     /// <summary>
-    /// <b>다음 전투 하나에만</b> 쓰는 대본 — 패턴 id 의 순서 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). GIF 러너와 스크린샷 대본이 채우고
-    /// 전투로 가면, <c>Battle</c> 이 가져가며(<see cref="TakeScript"/>) 그 전투의 고르기를 단계의 <c>picker</c> 대신 <c>script</c> 로 세운다.
-    /// 단계처럼 여기(Autoload)에 두는 이유는 같다 — 전투 씬은 설 때마다 새로 만들어진다. <c>stages.json</c> 은 안 건드린다: 데이터에
-    /// <c>picker: script</c> 를 적는 길을 안 만든다.
+    /// <b>다음 전투 하나에만</b> 쓰는 대본 — 패턴 id 의 순서 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). GIF 러너와 스크린샷 대본이(smoke
+    /// 순회도 첫 전투에 · <see cref="_tourScript"/>) 채우고 전투로 가면, <c>Battle</c> 이 가져가며(<see cref="TakeScript"/>) 그 전투의 고르기를
+    /// 단계의 <c>picker</c> 대신 <c>script</c> 로 세운다. 단계처럼 여기(Autoload)에 두는 이유는 같다 — 전투 씬은 설 때마다 새로 만들어진다.
+    /// <c>stages.json</c> 은 안 건드린다: 데이터에 <c>picker: script</c> 를 적는 길을 안 만든다.
     /// </summary>
     private IReadOnlyList<string>? _nextScript;
 
@@ -261,6 +268,13 @@ public partial class Game : Node
         foreach (Scene scene in new[] { Scene.Play, Scene.Battle, Scene.Credits, Scene.Title })
         {
             Log.Trace("scene", $"tour step={scene} frame={Engine.GetProcessFrames()}");
+
+            // 첫 전투만 대본으로 세운다(_tourScript) — 단계 점프로 다시 선 전투가 단계의 고르기로 돌아갔는지를 smoke 가 본다.
+            if (scene == Scene.Battle)
+            {
+                SetNextScript(_tourScript);
+            }
+
             GoTo(scene);
             await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
 
