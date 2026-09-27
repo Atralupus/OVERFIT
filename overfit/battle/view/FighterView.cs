@@ -75,8 +75,9 @@ public partial class FighterView : Node2D
     /// <b>가드</b>의 몸 색 (이슈 #47 · 설계 §5.2). 차갑고 단단한 쪽이다.
     ///
     /// <para>
-    /// 패리와 가드가 다시 다른 행동이 됐지만(설계 §5.3) 패리는 색이 아니라 움직임(attack2 f0~f3)으로 갈린다 —
-    /// 색은 가드 하나다. 가드는 같은 시트의 f1 에 멈춰 선다(#96).
+    /// 패리와 가드가 다시 다른 행동이 됐고(설계 §5.3) 색은 가드 하나다 — 패리는 칠하지 않는다. #96 부터 <b>이 색이 둘을 가른다</b>:
+    /// 가드가 패리와 같은 시트의 f1 에 멈춰 서는데, <c>attack2</c> f0~f3 은 칼과 몸이 같은 자세라(스카프와 몇 px 의 옆 밀림만 다르다 ·
+    /// <see cref="FighterAnimator"/>) 둘의 실루엣이 같다. 한 장면에서 가드를 말하는 것은 이 색과 가드 링이다.
     /// </para>
     /// </summary>
     private static readonly Color _guardTint = new(0.80f, 0.78f, 1.32f);
@@ -85,6 +86,7 @@ public partial class FighterView : Node2D
     /// 가드 링의 색 — <b>보라 쪽</b>이다. 몸 색과 같은 계열이라 "지금 막고 있다" 가
     /// 한 덩어리로 읽힌다. 이 링은 가드 내내 하나다 —
     /// 크기가 <b>안 변한 채 버티는</b> 것이, 멈춰 선 자세(#96)와 함께 "누르고 있는 동안" 을 말한다.
+    /// 가드와 패리는 실루엣이 같아(#96 · <see cref="_guardTint"/>) 몸 색과 이 링이 둘을 가른다 — 걷으면 색 하나만 남는다.
     /// </summary>
     private static readonly Color _guardRingColor = new(0.68f, 0.58f, 1.00f, 0.95f);
 
@@ -405,7 +407,7 @@ public partial class FighterView : Node2D
         Color baseTint = frame.Exhausted ? _exhaustTint
             : frame.Invulnerable ? _invulnerableTint
             : frame.Pose == FighterPose.Dash ? _dashTailTint
-            // 가드는 색 하나다. 패리는 칠하지 않는다 — 칼을 세우는 움직임이 그 그림이다(설계 §5.3).
+            // 가드는 색 하나다. 패리는 칠하지 않는다 — 둘이 같은 칼 세운 실루엣이라(#96) 이 색과 가드 링이 둘을 가른다.
             : frame.Pose == FighterPose.Guard ? _guardTint
             : Colors.White;
 
@@ -426,7 +428,9 @@ public partial class FighterView : Node2D
     /// 있는 것은 <c>idle · run · jump · fall · attack · attack2 · hit · hit_white · death</c> 뿐이고 막는 자세는 없다. 처음(#47)에는
     /// 후보가 <c>fall</c>(웅크린 자세)과 <c>idle</c> 이었는데 <c>fall</c> 은 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽혀 <c>idle</c> 을
     /// 빌렸고, 갈라 보이게 하는 일은 색과 멈춘 링이 맡았다 — 서 있는 자세 그대로라 "막고 있다" 를 몸이 말하지 않았다. 칼을 세운 장은 패리가
-    /// 이미 쓰는 그림이라, 둘은 <b>움직임</b>으로 갈린다: 패리는 f0~f3 을 움직이며 돌고 가드는 f1 에 멈춰 있다(<see cref="FighterAnimator"/>).
+    /// 이미 쓰는 그림이고, <c>attack2</c> f0~f3 은 칼과 몸이 같은 자세다(스카프가 날리고 몸이 옆으로 2~4px 밀리는 것만 다르다) — 그래서
+    /// 가드와 패리는 <b>실루엣이 같다</b>. 가드가 얻은 것은 "칼을 세우고 버틴다" 는 몸이고, 패리와 갈라 보이는 일은 #96 전처럼 가드 색과
+    /// 가드 링이 한다(<see cref="Tint"/> · 패리는 칠하지 않는다 · <see cref="FighterAnimator"/>).
     /// 팩에 그 시트가 없으면 <c>idle</c> 로 물러선다(<see cref="FighterAnimator.GuardAnim"/>).
     /// </para>
     /// </summary>

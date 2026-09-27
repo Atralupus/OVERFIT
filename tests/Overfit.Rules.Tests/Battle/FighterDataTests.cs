@@ -84,12 +84,13 @@ public class FighterDataTests
     [Fact]
     public void 가드_자세는_패리가_칼을_세우는_장_하나다()
     {
-        // 설계 §6 — 가드는 attack2 f1(칼을 사선으로 세운 정지 자세)이고, 패리는 같은 시트의 f0~f3 을 움직이며 돈다: 둘은 **움직임으로**
-        // 갈린다. 패리의 장 밖(f4 · f5)은 칼이 나가는 흰 궤적이라, 가드가 거기 서면 휘두르지 않은 칼이 버티는 내내 얼어붙는다 — 패리 뒤
-        // 경직이 f5 가 아니라 f3 을 붙드는 것과 같은 까닭이다(#82).
+        // 설계 §6 — 팩에 막는 모션이 없어 가드는 패리가 칼을 세우는 장 하나(attack2 f1)를 빌려 멈춰 선다. 네 장(f0~f3)은 칼과 몸이
+        // 같은 자세라 가드와 패리는 실루엣이 같고, 둘을 가르는 것은 뷰의 가드 색과 링이다(#96 에서 시트를 쟀다). 패리의 장 밖(f4 · f5)은
+        // 칼이 나가는 흰 궤적이라, 가드가 거기 서면 휘두르지 않은 칼이 버티는 내내 얼어붙는다 — 패리 뒤 경직이 f5 가 아니라 f3 을 붙드는
+        // 것과 같은 까닭이다(#82).
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.GuardAnim.ShouldBe(c.ParryAnim, $"{id}: 가드와 패리가 다른 시트다 — 설계 §6 은 같은 시트를 움직임으로 가른다");
+            c.GuardAnim.ShouldBe(c.ParryAnim, $"{id}: 가드와 패리가 다른 시트다 — 설계 §6 은 가드가 패리의 칼 세운 장을 빌린다");
             c.GuardFrame.ShouldBeInRange(0, c.ParryAnimFrames - 1,
                 $"{id}: 가드의 장 {c.GuardFrame} 이 패리가 칼을 세우는 장(0 ~ {c.ParryAnimFrames - 1}) 밖이다");
         }
