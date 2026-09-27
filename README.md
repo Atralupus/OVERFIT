@@ -49,9 +49,11 @@ GIF 는 `tools/build.sh gifs` 가 고정된 대본으로 다시 찍는다 — �
 서명하지 않은 빌드라 처음 열 때 막히면 시스템 설정 → 개인정보 보호 및 보안 맨 아래에서 그래도 열기 를 누른다(macOS 14 이하는 우클릭 → 열기).
 
 소스에서 돌리려면 Godot 4.7 (mono) 과 .NET 8 이 필요하다.
+에셋 zip 은 itch.io 에서 손으로 받는다 — 받는 곳과 전체 준비(`GODOT_PATH` 등)는 [CONTRIBUTING.md](CONTRIBUTING.md) 에 있다.
 
 ```bash
 python3 tools/install_assets.py    # 그림은 저장소에 없다 — 받아둔 zip 에서 푼다
+tools/build.sh import              # 한 번 — 임포트 캐시를 만든다
 tools/build.sh run
 ```
 
