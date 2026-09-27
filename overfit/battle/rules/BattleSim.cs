@@ -63,9 +63,9 @@ public sealed class BattleSetup
 /// </para>
 ///
 /// <para>
-/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 게임의 단계는 지금 <b>무작위</b>(<c>uniform</c>)뿐이다 — 대본
-/// (<c>script</c> · #78)은 GIF · 스크린샷이 패턴을 고정하는 데만 쓴다. 일부러다 — 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다.
-/// 망이 정말 일하는지 증명할 방법이 그것 말고 없다. 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 순서를 낸다.
+/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 게임의 단계는 지금 <b>무작위</b>(<c>uniform</c>)뿐이다. 일부러다 —
+/// 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다. 무작위지만 <see cref="Det"/> 로
+/// 뽑으므로 같은 시드는 같은 순서를 낸다. 대본(<c>script</c> · #78)은 단계의 고르기가 아니다 — GIF · 스크린샷이 패턴을 고정하는 데만 쓴다.
 /// </para>
 /// </summary>
 public sealed class BattleSim
@@ -109,7 +109,13 @@ public sealed class BattleSim
     /// <summary>지난 틱의 움직임이 이 틱의 패턴 시계를 세웠나 (<see cref="MotionStep.HoldClock"/>).</summary>
     private bool _holdClock;
 
-    /// <summary>시계를 세운 움직임이 그 뒤로 더 세울 것 같은 틱 — 추정이다 (<see cref="MotionStep.HoldTicks"/> · #78). <see cref="NextActiveIn"/> 이 더한다.</summary>
+    /// <summary>
+    /// 시계를 세운 움직임이 그 뒤로 더 세울 것 같은 틱 — 추정이다 (<see cref="MotionStep.HoldTicks"/> · #78). <see cref="NextActiveIn"/> 이 더한다.
+    /// <b>시계를 안 세우면 0 이다</b> — <see cref="_holdClock"/> 을 거짓으로 두는 곳(<see cref="Move"/> · <see cref="EndPattern"/>)이 같이 0 으로 둔다.
+    /// 그래서 읽는 쪽(<see cref="NextActiveIn"/>)은 <see cref="_holdClock"/> 을 다시 안 본다 — 전에는 둘이 따로 거르고(쓸 때 · 읽을 때) 끊긴 패턴은
+    /// 이 값을 남겨 두었다(#96 · #93 리뷰 T5-M1). 읽을 때의 거름만 걷고 걷는 곳을 빠뜨리면 끊긴 돌진의 남은 틱이 다음 패턴이 선 틱의 남은 시간에
+    /// 든다(BossMotionTests 가 본다).
+    /// </summary>
     private int _holdTicks;
 
     /// <summary>도는 움직임이 끝나면 설 자리(x) — 판정 보기의 "다음 판정" 이 거기 땅에 선다 (<see cref="MotionStep.GoalX"/> · #78). 움직임이 없으면 null.</summary>
@@ -247,7 +253,7 @@ public sealed class BattleSim
     /// "지금 자리에서 닿기까지 남은 틱 ⌈max(0, d − S) / 60⌉ + 3타의 선딜" 이다. 도착 시각이 파이터 자리에 달려 있어 <b>추정</b>이다(설계 §11).
     /// </para>
     /// </summary>
-    public double? NextActiveIn => _runner?.NextActiveIn + (_holdClock ? _holdTicks * Dt : 0);
+    public double? NextActiveIn => _runner?.NextActiveIn + (_holdTicks * Dt);
 
     /// <summary>
     /// 보스 패턴이 지금 들어 있는 단계 — 뷰가 그 단계의 그림(<see cref="PatternStep.Anim"/> · <see cref="PatternStep.Frame"/>)을
@@ -467,7 +473,7 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 일곱 줄이다 (#71 · #59 의 3/6 넘김 —
+    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 여덟 줄이다 (#71 · #59 의 3/6 넘김 —
     /// 둘이 따로 적혀 있으면 하나만 고치는 날 끊긴 패턴이 무언가를 남긴다). 다음 패턴은 간격을 처음부터 센 뒤에 고른다.
     /// </summary>
     private void EndPattern()
@@ -477,6 +483,7 @@ public sealed class BattleSim
         Boss.CurrentPattern = null;
         _motion = null;
         _holdClock = false;
+        _holdTicks = 0;
         _goalX = null;
         _gapLeft = GapTicks;
     }
@@ -529,6 +536,7 @@ public sealed class BattleSim
         if (_motion is null)
         {
             _holdClock = false;
+            _holdTicks = 0;
             return;
         }
 

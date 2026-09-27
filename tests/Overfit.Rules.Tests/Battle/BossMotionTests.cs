@@ -391,6 +391,11 @@ public class BossMotionTests
 
         sim.Boss.CurrentPattern.ShouldNotBeNull("풀린 뒤 600틱 안에 새 패턴이 안 섰다");
         (sim.Ticks - free + 1).ShouldBe(BattleSim.TicksFor(0.2), "풀린 뒤 간격을 처음부터 안 셌다");
+
+        // 새 패턴이 선 그 틱에는 움직임이 한 번도 안 돌았다(패턴이 서는 틱은 러너도 움직임도 안 민다) — 남은 시간은 러너의 것뿐이다. 끊긴 돌진이
+        // 세운 시계의 남은 틱(HoldTicks)이 걷히지 않고 남으면 여기서 더해진다(#96 — 시계는 EndPattern 이 걷고 남은 틱도 같이 걷는다).
+        sim.NextActiveIn.ShouldNotBeNull();
+        sim.NextActiveIn.Value.ShouldBe(45 * BattleSim.Dt, 1e-9, "새 패턴이 선 틱의 남은 시간에 끊긴 돌진이 세웠던 남은 틱이 들었다");
         sim.Tick(default);
         sim.NextActiveIn.ShouldNotBeNull();
         sim.NextActiveIn.Value.ShouldBe(44 * BattleSim.Dt, 1e-9, "새 패턴의 첫 틱에 시계가 안 갔다 — 끊긴 돌진이 세웠던 시계가 남았다");
