@@ -19,10 +19,15 @@ public class Stage2DataTests
     /// <summary>단계가 드는 틱 — 러너와 같은 반올림이다(<see cref="BattleSim.TicksFor"/> · 패턴의 첫 틱이 1).</summary>
     private static int TickOf(PatternStep step) => BattleSim.TicksFor(step.T);
 
-    /// <summary>뷰와 규칙이 읽는 단계의 전부 — 둘이 같으면 그 틱에 두 패턴은 그림도 판정도 같다.</summary>
+    /// <summary>
+    /// 뷰와 규칙이 읽는 단계의 전부 — 둘이 같으면 그 틱에 두 패턴은 그림도 판정도 움직임도 같다. 움직임은 id 만이 아니라 수치까지 본다
+    /// (도약의 높이 · 체공 · 돌진의 속도 · 설 거리) — id 만 보던 때는 점프 3연속의 둘째 도약 높이를 280 → 200 으로 바꿔도 2단계 테스트가
+    /// 다 초록이었다(최종 리뷰 F-I5). "점프공격은 2단계에선 그냥 3번" 의 "그냥" 이 그 수치다.
+    /// </summary>
     private static string Sig(PatternStep s) =>
         $"{TickOf(s)}|{s.Kind}|{s.Anim}|{s.Frame}|{s.Hitbox}|{string.Join(',', s.Band ?? Array.Empty<double>())}|{s.Damage}|{s.ActiveSeconds}"
-        + $"|{s.Dash}|{s.Guard}|{s.Parry}|{s.GrabHoldSeconds}|{s.Motion?.Id}";
+        + $"|{s.Dash}|{s.Guard}|{s.Parry}|{s.GrabHoldSeconds}|{s.Motion?.Id}"
+        + $"|{s.Motion?.Height}|{s.Motion?.Air}|{s.Motion?.Speed}|{s.Motion?.Stop}";
 
     [Fact]
     public void 이단계_명부는_바탕_3연격에_1단계의_습관을_겨냥한_넷을_더한_다섯이다()
