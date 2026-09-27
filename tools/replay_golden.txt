@@ -471,4 +471,8 @@
 # (→ BattleSim.GrabLive · 흰 구가 기다리는 창) · BattleSim.BossTestedGrab(착지 충격파가 잡기를 거른다) — 규칙은 셋 다 안 읽는다. BalanceData.cs 에는
 # 연출 키 셋(feel.rush_anim_speed · grab_orb_radius · grab_orb_fade_seconds)이 들었다. 새로 링크한 뷰의 순수 절반 BossStepDraw.cs(보스 그림의 장
 # 고르기)는 규칙이 안 부른다. 여기가 움직였다면 읽기가 상태를 바꿨다.
+# 2026-09-27 **안 움직였다** (#78 · 최종 리뷰의 고침 — 주석만): 51 2024 12 0 19 2d5b1d281a8f35bb 그대로다.
+# 링크된 파일에서 바꾼 것은 HitResolver.cs 의 주석 셋이다(맨몸이 잡히는 것 · Resolve 의 부작용에 잡힘 · DashAvailable 이 판정의 답도 읽는다).
+# 블록을 빠뜨린 8a9ac2e(명부 밖의 대본은 [E] script_rejected · StageRoster.cs · PatternPickers.cs)도 여기 적는다 — 대본이 명부 밖일 때만
+# 도는 갈래라 대본 없이 1단계의 uniform 으로 서는 이 판을 안 바꿨다. 여기가 움직였다면 주석 아닌 것이 섞였다.
 51 2024 12 0 19 2d5b1d281a8f35bb

@@ -250,7 +250,7 @@ public class HitResolverTests
     public void Dash_window_0_은_길이가_0_인_창이_아니라_대시_불가다()
     {
         // 두 해석이 값으로는 같은 곳에 떨어지지만 뜻이 다르다. DodgeEvent.DashAvailable 이
-        // dash_window > 0 으로 "대시가 가능했나" 를 싣고, 의존도 축의 분모가 그것이다 —
+        // dash_window > 0 && 판정의 답(HitBox.Dashable · #78)으로 "대시가 가능했나" 를 싣고, 의존도 축의 분모가 그것이다 —
         // 0 을 "아주 짧은 창" 으로 읽으면 그 분모가 거짓이 된다.
         Fighter f = Acting(new InputFrame(0, false, true, false, false), 1);
 

@@ -71,7 +71,7 @@ public enum HitVerdict
 /// </summary>
 public enum Defense
 {
-    /// <summary>맨몸 — 닿으면 맞는다.</summary>
+    /// <summary>맨몸 — 닿으면 맞는다. 붙드는 판정(<see cref="HitBox.GrabHoldSeconds"/> &gt; 0 · #78)이면 잡힌다(<see cref="HitVerdict.Grabbed"/>).</summary>
     None,
 
     /// <summary>대시 무적 — 파이터의 무적과 판정의 대시 창 중 좁은 쪽 안이다.</summary>
@@ -85,7 +85,7 @@ public enum Defense
 }
 
 /// <summary>
-/// 판정 하나를 파이터에게 대본다. <b>상태를 안 바꾼다</b> — 판단만 하고 체력을 깎는 것(과 패리 · 가드 · 붕괴의 부작용)은
+/// 판정 하나를 파이터에게 대본다. <b>상태를 안 바꾼다</b> — 판단만 하고 체력을 깎는 것(과 패리 · 가드 · 붕괴 · 잡힘의 부작용)은
 /// <c>BossSwings.ApplyVerdict</c> 다. 그래야 같은 판정을 여러 번 물어봐도 답이 같고 테스트가 쉽다.
 ///
 /// <para>
@@ -189,8 +189,8 @@ public static class HitResolver
     /// <para>
     /// 창이 0 이면 <b>한 번도 안이 아니다</b> — <c>dash_window: 0</c> 의 "대시로 못 피한다" 가
     /// 그렇게 값과 뜻이 같은 자리에 떨어진다. 길이 0 인 창으로 읽어도 결과가 같지만,
-    /// 뜻은 다르다: <c>DodgeEvent.DashAvailable</c> 이 <c>dash_window &gt; 0</c> 으로
-    /// "대시가 가능했나" 를 싣고 의존도 축의 분모가 그것이다.
+    /// 뜻은 다르다: <c>DodgeEvent.DashAvailable</c> 이 <c>dash_window &gt; 0</c> 과 판정의 답
+    /// (<see cref="HitBox.Dashable"/> · #78)이 둘 다 참인지로 "대시가 가능했나" 를 싣고 의존도 축의 분모가 그것이다.
     /// </para>
     /// </summary>
     private static bool Within(double elapsed, double fighterWindow, double patternWindow) =>
