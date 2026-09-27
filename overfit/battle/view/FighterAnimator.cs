@@ -403,7 +403,8 @@ public sealed class FighterAnimator
     ///
     /// <para>
     /// 시트가 가드의 것일 때만 선다 — 맞은 자세 · 탈진(<c>hit</c>)이 이기고, 팩에 그 시트가 없으면 <see cref="GuardAnim"/> 이 <c>idle</c> 로
-    /// 물러서 여기는 아무것도 안 한다. 장이 모자라면 있는 마지막 장이다 — 데이터가 팩에 있는 장을 가리키는지는 <c>FighterDataTests</c> 가 본다.
+    /// 물러서 여기는 아무것도 안 한다. 장이 모자라면 있는 마지막 장이고, 한 장도 없으면 세우지 않는다 — 데이터가 팩에 있는 장을 가리키는지는
+    /// <c>FighterDataTests</c> 가 본다.
     /// </para>
     /// </summary>
     private void HoldGuard(FighterFrame frame)
@@ -413,7 +414,15 @@ public sealed class FighterAnimator
             return;
         }
 
-        int still = System.Math.Clamp(_guard.Frame, 0, _sprite.SpriteFrames!.GetFrameCount(_guard.Anim) - 1);
+        // 장이 없는 시트는 세울 장이 없다 — 전에는 Math.Clamp 로 잘랐는데, 그것은 상한(count − 1 = −1)이 하한(0)보다 작으면 던지고 그 예외는
+        // 우리 로그가 아니라 엔진의 ERROR: 블록으로만 나온다(CLAUDE.md §6 · #96). 그래서 먼저 빠지고, 자르기는 Min/Max 로 한다.
+        int count = _sprite.SpriteFrames!.GetFrameCount(_guard.Anim);
+        if (count <= 0)
+        {
+            return;
+        }
+
+        int still = System.Math.Max(0, System.Math.Min(_guard.Frame, count - 1));
         if (_sprite.Frame != still || _sprite.IsPlaying())
         {
             _sprite.Frame = still;
