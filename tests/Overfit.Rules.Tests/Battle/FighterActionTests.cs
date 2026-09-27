@@ -704,7 +704,7 @@ public class FighterActionTests
         f.Guarding.ShouldBeFalse();
 
         // 굳은 동안에는 아무것도 못 한다 — 그게 붕괴의 값이다. (부정확 패리가 지던 이 검사가
-        // 이슈 #53 으로 여기 왔다. 굳는 길은 탈진 하나다 — 붕괴도 탈진이다(#71).)
+        // 이슈 #53 으로 여기 왔다. 붕괴도 탈진이다(#71) — 굳는 길은 탈진과 붙들림(잡기 · #78) 둘이고, 붕괴는 앞의 것이다.)
         f.Tick(_dash, _dt);
         f.Action.ShouldBe(FighterAction.Idle, "굳었는데 대시가 나갔다");
         double x = f.X;

@@ -736,10 +736,11 @@ public partial class FighterView : Node2D
             FighterPose.Parry => _parry.Anim,
             // 가드 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 가드를 가른다.
             FighterPose.Guard => "idle",
-            FighterPose.Hit => "hit",
             // 탈진은 take-hit 를 제 속도로 한 번 돌고 마지막 장에 선다(#71 · 설계 §6) — 반복하지 않는 애니메이션이라 엔진이 거기서
-            // 멈춘다. 이름이 바뀔 때만 틀므로(Animate) 탈진 동안 맞아도 처음부터 다시 돌지 않는다.
-            FighterPose.Exhausted => "hit",
+            // 멈춘다. 이름이 바뀔 때만 틀므로(Animate) 탈진 동안 맞아도 처음부터 다시 돌지 않는다. 붙들림(#78 · 설계 §6 「잡힌 파이터」)도
+            // 같은 장이다 — 같은 이름이라 붙들림 뒤에 탈진이 남아 넘어가도 처음부터 다시 안 돈다. 가르는 것은 흰 구와 색이다(Battle 이
+            // 붙들린 동안 탈진을 거짓으로 싣는다). 피격 · 탈진 · 붙들림이 한 그림이라 한 갈래다.
+            FighterPose.Hit or FighterPose.Exhausted or FighterPose.Held => "hit",
             FighterPose.Death => "death",
             _ => "idle",
         };

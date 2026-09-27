@@ -92,7 +92,7 @@ public class StageRosterTests
     [Fact]
     public void 명부가_설계한_패턴_수를_넘지_않는다()
     {
-        // want 는 설계가 정한 단계별 패턴 수(설계 §4 — 1단계 2 · 2단계는 5번 PR 부터 5)다. 모자란 것은 로그로 드러나지만
+        // want 는 설계가 정한 단계별 패턴 수(설계 §4 — 1단계 2 · 2단계 5 · #78)다. 모자란 것은 로그로 드러나지만
         // 넘치는 것은 아무 데도 안 남는다 — 새 패턴을 명부에 끼워 넣을 때 아직 자리가 없는
         // 낮은 단계에 얹으면 그 단계의 난이도 곡선이 조용히 달라진다.
         foreach ((string stage, StageDef def) in Stages())
@@ -108,7 +108,7 @@ public class StageRosterTests
         //
         // ⚠ **손으로 세운 명부로 본다.** 전에는 진짜 stages.json 의 5단계를 물어봤다 — 백장의 패턴이
         // 셋뿐이라 3~5단계가 설계(5·7·10)에 늘 못 미쳤기 때문이다. 지금은 **두 단계 모두 want 를 정확히
-        // 채운다**(2·2 · #72). 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
+        // 채운다**(2 · 5 · #78). 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
         // 그렇다고 이 가드를 지우면 다음에 모자란 단계가 생겼을 때 아무 데도 안 남는다.
         // 단언은 그대로 두고 **보는 대상만** 옮긴다.
         using var log = new LogCapture();
@@ -146,6 +146,60 @@ public class StageRosterTests
         }
 
         Stages()["1"].Picker.ShouldBe("uniform");
+    }
+
+    [Fact]
+    public void 데이터의_단계는_대본_고르기를_안_쓴다()
+    {
+        // 설계 §4.4 「대본이 전투에 닿는 길」 — 대본은 Game 의 다음 전투 한 칸으로만 전투에 닿는다. stages.json 에 picker: script 를 적는 길을
+        // 안 만든다: 적으면 그 단계가 대본 없이 서 판을 세울 때 멈추고, 설령 선다 해도 무작위를 재야 할 단계가 정해진 순서로 돈다.
+        foreach ((string stage, StageDef def) in Stages())
+        {
+            def.Picker.ShouldNotBe("script", $"{stage}단계가 데이터에서 대본 고르기를 쓴다");
+        }
+    }
+
+    [Fact]
+    public void 대본을_주면_그_전투만_단계의_고르기_대신_대본으로_선다()
+    {
+        // 설계 §4.4 — Battle 은 Game 의 대본 칸이 차 있으면 그 전투의 고르기를 단계의 picker 대신 script 로 세운다(로그 picker=script). 명부는
+        // 그대로 그 단계의 것이다 — 대본은 명부 안의 순서만 정한다. 안 주면 전처럼 단계의 고르기다.
+        ulong seed = Det.Hash64(51, Det.Domain.Attempt, k1: 1);
+
+        StageSetup scripted = StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>(), new[] { "점프 공격" })
+            .ShouldNotBeNull();
+        scripted.PickerId.ShouldBe("script");
+        scripted.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
+        Enumerable.Range(0, 5).Select(scripted.Picker.Pick).ShouldAllBe(i => scripted.PatternIds[i] == "점프 공격");
+
+        StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>()).ShouldNotBeNull().PickerId.ShouldBe("uniform");
+    }
+
+    [Fact]
+    public void 명부_밖의_대본은_판을_세우지_않고_규칙_위반을_남긴다()
+    {
+        // ScriptPicker 는 명부 밖의 id 를 세울 때 던진다. 그 예외가 Setup 을 빠져나가면 Battle._Ready 안에서 터지고, Godot 은 예외를
+        // 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매 프레임 NRE 가 나 진짜 원인 한 줄이 그 밑에 묻혔다
+        // (#78 T6-I1). 다른 실패와 같이 [E] 를 남기고 null 을 돌려줘야 Battle 이 판을 깨진 채로 멈춘다. data 에 picker: script 를 적어
+        // 대본 없이 선 것도 같은 길이다.
+        using var log = new LogCapture();
+
+        StageRoster.Setup(Stages(), 1, 51, System.Array.Empty<AttemptRecord>(), new[] { "3연격", "없는패턴" }).ShouldBeNull();
+
+        log.Lines.ShouldContain(l =>
+            l.StartsWith("[stage][E] script_rejected stage=1 reason=", System.StringComparison.Ordinal)
+            && l.Contains("없는패턴", System.StringComparison.Ordinal));
+
+        var scriptedData = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "script" },
+        };
+
+        StageRoster.Setup(scriptedData, 1, 51, System.Array.Empty<AttemptRecord>()).ShouldBeNull();
+
+        log.Lines.ShouldContain(l =>
+            l.StartsWith("[stage][E] script_rejected stage=1 reason=", System.StringComparison.Ordinal)
+            && l.Contains("대본이 없다", System.StringComparison.Ordinal));
     }
 
     [Fact]

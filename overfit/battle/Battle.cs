@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Godot;
 using Overfit.Battle.Rules;
@@ -20,6 +21,16 @@ namespace Overfit.Battle;
 /// </summary>
 public partial class Battle : Node2D
 {
+    /// <summary>
+    /// 움직임마다의 그림 배속 (#78 · 설계 §4.6) — 단계가 단 움직임의 id → <c>feel</c> 의 값. 없는 움직임은 제 속도다(도약). 움직임의 등록표는
+    /// 규칙의 것(<see cref="BossMotions"/>)이고 배속은 그림의 것이라 여기 따로 둔다 — 규칙은 배속을 모른다. 움직임이 늘면 줄 하나를 더한다
+    /// (CLAUDE.md §2 — 늘어나는 곳에 갈래를 안 둔다).
+    /// </summary>
+    private static readonly Dictionary<string, Func<FeelBalance, double>> _motionAnimSpeed = new(StringComparer.Ordinal)
+    {
+        ["rush"] = feel => feel.RushAnimSpeed,
+    };
+
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
@@ -29,6 +40,9 @@ public partial class Battle : Node2D
 
     private BattleHud _hud = null!;
     private BattleResult _result = null!;
+
+    /// <summary>잡기의 흰 구 (#78 · 설계 §4.7) — World 안에 세운다(두 몸과 같이 흔들린다). 규칙의 단계와 잡힘을 받아 그리기만 한다.</summary>
+    private GrabOrb _grabOrb = null!;
     private Node2D _world = null!;
     private Vector2 _worldHome;
 
@@ -168,6 +182,21 @@ public partial class Battle : Node2D
     public bool FighterExhausted => !_broken && !_over && _sim.Fighter.Exhausted;
 
     /// <summary>
+    /// 지금까지 민 규칙의 틱 (#78). 위와 같이 디버그 전용 읽기다 — GIF 러너가 겨냥한 패턴의 틱을 세고(패턴이 선 틱에서) 그 틱에 누른다. 벽시계로
+    /// 기다리면 히트스톱과 프레임의 흔들림이 박자를 민다(설계 §6.2 — "규칙의 틱을 보고").
+    /// </summary>
+    public int SimTicks => _broken ? 0 : _sim.Ticks;
+
+    /// <summary>파이터가 붙들렸나 (#78 · 설계 §4.7). 위와 같이 디버그 전용 읽기다 — 흰 구가 붙든 장은 규칙에게 물어 찍는다.</summary>
+    public bool FighterHeld => !_broken && !_over && _sim.Fighter.Held;
+
+    /// <summary>
+    /// 보스가 지금 든 단계의 그림 이름 (#78). 위와 같이 디버그 전용 읽기다 — 돌진 중(<c>run</c>)을 찍으려면 그 단계에 든 것을 규칙에게 물어야 한다.
+    /// 돌진이 서는 시각은 1타 뒤 1.30초지만 끝나는 시각은 파이터 자리에 달려 있다.
+    /// </summary>
+    public string? BossStepAnim => _broken || _over ? null : _sim.BossStep?.Anim;
+
+    /// <summary>
     /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82)도 탈진도 아니다. 위와 같이 디버그 전용 읽기다 — 스크린샷이
     /// 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자 둘째 J 가 1타의 경직에 떨어져 2타가 됐다.
     /// </summary>
@@ -250,10 +279,11 @@ public partial class Battle : Node2D
         _hasNextStage = data.Stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
 
         // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
-        // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup).
+        // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup). 대본 칸이 차
+        // 있으면(GIF · 스크린샷 · #78) 이 전투만 그 대본으로 선다 — 가져가며 비우므로 다음 전투는 단계의 고르기로 돌아간다.
         RunHistory history = Game.Instance.History;
         _attempt = history.Open();
-        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records) is not { } stage)
+        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript()) is not { } stage)
         {
             _broken = true; // [E] 는 StageRoster 가 남겼다
             return;
@@ -284,6 +314,9 @@ public partial class Battle : Node2D
             new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
             _fighterConfig.ParryAnimFrames);
         _bossView.Load(_bossConfig.Sprite);
+
+        _grabOrb = new GrabOrb();
+        _world.AddChild(_grabOrb);
 
         if (GetTree().DebugCollisionsHint)
         {
@@ -540,7 +573,8 @@ public partial class Battle : Node2D
             _sim.Fighter.Facing,
             Pose(),
             _sim.Fighter.Invulnerable,
-            _sim.Fighter.Exhausted,
+            // 붙들린 동안은 탈진이 겹쳐도 탈진 색을 안 칠한다 (#78 · 설계 §4.7) — 흰 구가 감싸고, 흰 구가 흩어진 뒤 남은 탈진이 탈진 색으로 넘어간다.
+            _sim.Fighter.Exhausted && !_sim.Fighter.Held,
             // 남은 스태미나를 **비율로** 넘긴다 (이슈 #47) — 최대값의 사본을 뷰에 두면
             // fighters.json 이 움직이는 순간 가드 링이 거짓말을 한다.
             _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina,
@@ -551,10 +585,28 @@ public partial class Battle : Node2D
             _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
-            _sim.NextActiveIn,
             _sim.Boss.Exhausted,
             _sim.BossStep?.Anim,
-            _sim.BossStep?.Frame));
+            _sim.BossStep?.Frame,
+            // 돌진의 run 만 빠르다 (#78 · 설계 §4.6) — 단계가 단 움직임의 배속이다(_motionAnimSpeed). 규칙은 이 배속을 모른다.
+            _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
+                ? speed(_feel)
+                : 1.0));
+
+        // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림)이 그 틱에 멈춰 남는다. 거르지 않으면 흰 구가
+        // 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 거르면 그 자리에서 흩어진다(GrabOrb).
+        bool live = !_over;
+        (HitBox Hit, double Progress)? ahead = live ? _sim.BossHitAhead : null;
+        _grabOrb.Show(new OrbFrame(
+            ahead is { Hit.GrabHoldSeconds: > 0 },
+            ahead?.Progress ?? 0,
+            live && _sim.Fighter.Held,
+            live && _sim.GrabLive,
+            _sim.Boss.X,
+            _sim.Boss.Y,
+            _bossConfig.Height,
+            _sim.Fighter.X,
+            _sim.Fighter.Y));
 
         _hud.Show(new HudFrame(
             _sim.Fighter.Health,
@@ -584,7 +636,12 @@ public partial class Battle : Node2D
             return FighterPose.Death;
         }
 
-        // 탈진은 행동보다 먼저다(#71) — 탈진한 파이터는 Idle 이지만 서 있는 것이 아니라 굳어 있다.
+        // 붙들림과 탈진은 행동보다 먼저다(#71 · #78) — 둘 다 Idle 이지만 서 있는 것이 아니라 굳어 있다. 겹치면 붙들림이 먼저다(설계 §4.7).
+        if (_sim.Fighter.Held)
+        {
+            return FighterPose.Held;
+        }
+
         if (_sim.Fighter.Exhausted)
         {
             return FighterPose.Exhausted;

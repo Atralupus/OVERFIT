@@ -23,6 +23,9 @@ public sealed class BossSwings
     /// <summary>회피 수단마다의 시작 시각과 공 돌리기 (<see cref="DodgeCredit"/>). 관측을 지을 때 묻는다.</summary>
     private readonly DodgeCredit _credit;
 
+    /// <summary>이 판의 파이터가 한 번 뛰어 몸이 비는 틱 (<see cref="JumpClearance"/> · #85). 첫 판정이 점프 가능을 잰다(<see cref="Step"/>).</summary>
+    private readonly JumpClearance _jump;
+
     private readonly List<DodgeEvent> _events = new();
 
     /// <summary>
@@ -44,14 +47,19 @@ public sealed class BossSwings
     /// <summary>이 틱에 대 본 판정의 태그 — <see cref="TestedTags"/>.</summary>
     private PatternTags? _testedTags;
 
-    public BossSwings(Fighter fighter, Boss boss, DodgeCredit credit)
+    /// <summary>이 틱에 대 본 판정 — <see cref="TestedBox"/>.</summary>
+    private HitBox? _testedBox;
+
+    public BossSwings(Fighter fighter, Boss boss, DodgeCredit credit, JumpClearance jump)
     {
         ArgumentNullException.ThrowIfNull(fighter);
         ArgumentNullException.ThrowIfNull(boss);
         ArgumentNullException.ThrowIfNull(credit);
+        ArgumentNullException.ThrowIfNull(jump);
         _fighter = fighter;
         _boss = boss;
         _credit = credit;
+        _jump = jump;
     }
 
     /// <summary>이 판에서 일어난 회피 관측 전부. <see cref="PlayerAxes.From"/> 에 그대로 넣는다.</summary>
@@ -80,6 +88,26 @@ public sealed class BossSwings
     public bool Live => _live.Count > 0;
 
     /// <summary>
+    /// 산 판정 중에 붙드는 판정(잡기)이 있나 (#78 · 설계 §4.7) — 뷰의 흰 구가 창이 산 동안 바닥에서 기다리다 창이 닫히면 흩어진다. 잡으면 그
+    /// 틱에 창이 끝나므로(한 번 휘두르면 한 번만) 잡힌 뒤에는 거짓이다 — 흰 구는 그때부터 붙들림을 따라간다.
+    /// </summary>
+    public bool LiveGrab
+    {
+        get
+        {
+            foreach (LiveSwing swing in _live)
+            {
+                if (swing.Box.GrabHoldSeconds > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// 이 틱에 <b>대 본</b> 판정의 태그 — 판정 보기의 실효 몸통 색이 읽는다(설계 §6.1). 대 본 판정이 없으면 null. 둘 이상이면
     /// 먼저 선 것이다 — 지금 데이터에서 창은 겹치지 않는다(<c>PatternDataTests</c>: 다음 단계는 창이 닫힌 뒤다).
     ///
@@ -91,10 +119,20 @@ public sealed class BossSwings
     /// </summary>
     public PatternTags? TestedTags => _testedTags;
 
+    /// <summary>이 틱에 <b>대 본</b> 판정 — 그 판정의 답(대시 · 가드 · 패리 · #78)을 몸통 색이 같이 본다. <see cref="TestedTags"/> 와 같은 판정이다.</summary>
+    public HitBox? TestedBox => _testedBox;
+
     /// <summary>
     /// 러너가 방금 낸 판정을 <b>살려 둔다</b> (이슈 #59). 창이 몇 틱이든 대는 곳은 <see cref="Resolve"/> 하나다.
     /// 태그와 패턴 id 를 지금 받아 두는 것은 러너가 이 틱 끝에 끝나면 패턴과 <c>CurrentPattern</c> 이
     /// 지워지기 때문이다 — 마지막 판정이 end 와 같은 틱에 서면 그 관측이 "?" 패턴으로 남는다.
+    ///
+    /// <para>
+    /// <b>점프로 넘을 수 있었나는 여기서 안 잰다</b> (#85 · #78 Task 1 리뷰) — 창이 열린 이 틱의 <b>첫 판정</b>(<see cref="Step"/>)이 잰다.
+    /// 러너가 판정을 내는 것은 이 틱의 움직임 <b>앞</b>이다(<c>BattleSim.AdvanceBoss</c>: 러너 → 여기 → 움직임 → <see cref="Resolve"/>).
+    /// 도약은 착지 판정이 서는 바로 그 틱에 내리므로, 여기서 재면 보스는 아직 앞 틱의 공중(발 ≈ 30)에 있다 — 판정이 한 번도 안 서는
+    /// 자리다. 창 53틱 · 바닥 띠에서 그 자리는 51틱이라 "못 넘는다" 였고, 판정이 선 자리는 53틱이라 넘는다(<c>JumpClearanceTests</c>).
+    /// </para>
     /// </summary>
     /// <param name="box">판정.</param>
     /// <param name="tags">그 패턴의 태그.</param>
@@ -118,6 +156,7 @@ public sealed class BossSwings
         _parried = false;
         _tested.Clear();
         _testedTags = _live.Count > 0 ? _live[0].Tags : null;
+        _testedBox = _live.Count > 0 ? _live[0].Box : null;
         var at = new Placement(_boss.X, _boss.Y, _boss.Facing);
 
         int kept = 0;
@@ -159,7 +198,7 @@ public sealed class BossSwings
     /// 살아 있는 판정 하나를 이 틱에 대 본다. 끝났으면 true.
     ///
     /// <para>
-    /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
+    /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴 · 잡힘) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
     /// 무적이 먹은 틱은 넘어가고 창은 계속 산다: 무적이 창보다 먼저 풀리면 그 뒤 틱에 맞는다(다크소울과 같다).
     /// 창이 닫힐 때까지 안 닿았으면 관측을 <b>하나</b> 남긴다 — 무적이 먹었으면 <b>처음 먹은 틱에 지어 둔</b>
     /// 관측(<see cref="LiveSwing.DodgeSnapshot"/>), 아니면 <b>창이 열린 틱에 지어 둔</b> 빗나감(<see cref="LiveSwing.MissSnapshot"/>)이다.
@@ -173,12 +212,22 @@ public sealed class BossSwings
     /// </summary>
     private bool Step(LiveSwing swing, Placement at)
     {
+        if (swing.TicksLeft == swing.Ticks)
+        {
+            // **점프로 넘을 수 있었나는 첫 판정이 선 자리에서 잰다** (#85 · 설계 §7.3) — 창이 열린 이 틱에 파이터가 선 자리에서 제자리로
+            // 뛰었다면 창 내내 몸이 모양 밖에 있을 수 있나(JumpClearance). 관측을 짓는 틱(닿은 틱 · 무적이 먹은 틱)이 아니라 여는 틱인 까닭은
+            // "그 판정이 설 때 무엇을 고를 수 있었나" 가 분모이기 때문이다. 보스 자리는 이 판정이 대는 at 그대로다 — Open 에서 재면 도약이
+            // 내리기 전의 공중 자리를 잰다(Open 의 주석 · #78 Task 1 리뷰가 밟았다). 파이터는 이번 틱을 보스보다 먼저 움직였으므로
+            // (BattleSim.Tick) Open 때와 같은 자리다.
+            swing.Jumpable = _jump.Clears(swing.Box.Shape, at, _fighter.X, swing.Ticks);
+        }
+
         HitVerdict verdict = HitResolver.Resolve(_fighter, at, swing.Box, swing.Tags);
         swing.TicksLeft--;
 
         switch (verdict)
         {
-            case HitVerdict.Hit or HitVerdict.Parried or HitVerdict.Guarded or HitVerdict.GuardBroken:
+            case HitVerdict.Hit or HitVerdict.Parried or HitVerdict.Guarded or HitVerdict.GuardBroken or HitVerdict.Grabbed:
                 Land(swing, verdict);
                 return true;
 
@@ -211,7 +260,7 @@ public sealed class BossSwings
     }
 
     /// <summary>
-    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
+    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴 · 잡힘의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
     /// <b>닿은</b> 결과로만 부른다. 무적(Dodged)과 빗나감에는 부작용이 없어 <see cref="Step"/> 이 관측만 지어 두므로
     /// <c>default</c> 갈래는 지금 안 온다. <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔 것은 그래서다 — 무적 · 빗나감의
     /// 관측은 부작용 없이 지어야 한다.
@@ -239,6 +288,11 @@ public sealed class BossSwings
                 _fighter.GuardBreak(box.Damage);
                 break;
 
+            // 잡혔다 (#78 · 설계 §4.7) — 피해를 받고 붙들린다. 하던 행동이 그 자리에서 끝난다(Fighter.Grab).
+            case HitVerdict.Grabbed:
+                _fighter.Grab(box.Damage, BattleSim.TicksFor(box.GrabHoldSeconds));
+                break;
+
             default:
                 break;
         }
@@ -257,7 +311,7 @@ public sealed class BossSwings
     private DodgeEvent BuildEvent(LiveSwing swing, HitBox box, HitVerdict verdict)
     {
         double opened = swing.OpenedTick * BattleSim.Dt;
-        (DodgeVerb verb, double startedAt) = _credit.Credit(verdict, box, _boss);
+        (DodgeVerb verb, double startedAt) = _credit.Credit(verdict, box, _boss, _fighter);
         double error = double.IsNaN(startedAt) ? 0 : startedAt - opened;
         int direction = verb == DodgeVerb.Dash ? _credit.DashDirection : 0;
 
@@ -274,17 +328,18 @@ public sealed class BossSwings
             GreedWindow: _fighter.Action == FighterAction.Attack,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
-            // 이 셋이 없으면 만들어지지 않는다.
-            DashAvailable: swing.Tags.DashWindow > 0,
-            ParryAvailable: swing.Tags.Parryable,
+            // 이 셋이 없으면 만들어지지 않는다. 대시 · 패리는 태그를 판정의 답이 좁힌다 (#78 · 설계 §7.3) — 규칙(HitResolver.Effective)과
+            // 같은 두 값이다. 태그만 실으면 1타는 다 되고 잡기는 점프만 되는 한 패턴(1타 잡기)에서 잡기가 "대시도 됐다" 로 실린다.
+            DashAvailable: swing.Tags.DashWindow > 0 && box.Dashable,
+            ParryAvailable: swing.Tags.Parryable && box.Parryable,
 
-            // 점프만은 **판정 단위**다 (#72 · 설계 §7.3) — 모양의 윗끝과 파이터의 점프로 판을 세울 때 잰 값이다. 태그(jumpable)를
-            // 실으면 3연격의 2 · 3타까지 "점프도 됐다" 로 실려 점프 의존도의 분모가 부푼다.
-            JumpAvailable: box.Jumpable,
+            // 점프만은 **판정과 자리 단위**다 (#85 · 설계 §7.3) — 창이 열린 틱에 첫 판정이 선 자리에서 잰 값이다(Step). 태그(jumpable)를
+            // 실으면 판정마다의 답이 뭉개지고, 모양 전체의 윗끝으로 재면(#72) 보스 앞에서 넘는 2타 · 바짝 붙어 넘는 3타가 "못 넘었다" 로 실린다.
+            JumpAvailable: swing.Jumpable,
 
-            // 가드는 지금 모든 판정에서 된다 (#72 · 설계 §7.2) — 가드 불가 판정을 걷었다. 5번 PR 의 잡기가 판정 단위의 답으로
-            // 처음 거짓을 싣는다(설계 §7.3).
-            GuardAvailable: true);
+            // 가드는 판정의 답 하나다 (#78 · 설계 §7.3) — 태그가 없다. 옛 가드 불가 판정(guard_break)은 #72 에서 걷었고, 잡기가
+            // 판정 단위의 답으로 처음 거짓을 싣는다.
+            GuardAvailable: box.Guardable);
     }
 
     /// <summary>관측을 확정한다 — 스트림에 남기고 로그 한 줄을 찍는다. <see cref="_events"/> 에 붙는 곳은 여기뿐이다.</summary>
@@ -311,11 +366,17 @@ public sealed class BossSwings
             + $" stam={_fighter.Stamina:0}");
     }
 
-    /// <summary>판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다.</summary>
+    /// <summary>
+    /// 판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다. 관측은 싣기 <b>전</b>의 몸으로 짓는다 (#78): 잡힘은 하던 행동을 끝내므로
+    /// (<c>Fighter.Grab</c>) 실은 뒤에 지으면 칼질 중에 잡힌 사람의 욕심(<c>GreedWindow</c>)이 지워진다. 다른 결과는 행동도 자리도 안
+    /// 바꾸거나(맞음 · 받아침 · 막음) 가드를 끝낼 뿐이라(붕괴 — 가드는 욕심이 아니다) 순서가 관측을 안 바꾼다. 로그의 잔량(hp · stam)은
+    /// 실은 뒤다(<see cref="Commit"/>).
+    /// </summary>
     private void Land(LiveSwing swing, HitVerdict verdict)
     {
+        DodgeEvent evt = BuildEvent(swing, swing.Box, verdict);
         ApplyVerdict(swing.Box, verdict);
-        Commit(BuildEvent(swing, swing.Box, verdict));
+        Commit(evt);
     }
 
     /// <summary>
@@ -348,6 +409,12 @@ public sealed class BossSwings
 
         /// <summary>남은 틱. 대 볼 때마다 하나씩 준다.</summary>
         public int TicksLeft { get; set; }
+
+        /// <summary>
+        /// 창이 열린 틱의 자리에서 점프로 넘을 수 있었나 (#85) — 관측의 <c>JumpAvailable</c>. 첫 판정(<see cref="Step"/>)이 적는다 — 관측은
+        /// 그 뒤에만 지으므로 안 적힌 값을 읽을 일이 없다.
+        /// </summary>
+        public bool Jumpable { get; set; }
 
         /// <summary>
         /// 무적이 <b>처음</b> 먹은 틱에 지어 둔 관측 (이슈 #59 · 리뷰 라운드 1). 창이 안 닿고 닫히면

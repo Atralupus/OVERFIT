@@ -11,7 +11,8 @@ namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
 /// 패턴 고르기 (#72 · 설계 §4.4). <c>BattleSim.Begin</c> 이 부르는 자리 하나이고, 등록표(<see cref="PatternPickers"/>)가
-/// <c>stages.json</c> 의 <c>picker</c> id 로 구현을 세운다. 3번 PR 에는 <c>uniform</c> 하나다 — 망은 나중에 구현 하나를 더한다.
+/// <c>stages.json</c> 의 <c>picker</c> id 로 구현을 세운다. <c>uniform</c>(3번 PR)과 <c>script</c>(대본 · #78)가 있다 — 망은 나중에 구현
+/// 하나를 더한다.
 /// </summary>
 public class PatternPickerTests
 {
@@ -44,9 +45,68 @@ public class PatternPickerTests
     }
 
     [Fact]
+    public void 대본은_정한_순서를_돌고_끝나면_처음부터_다시_돈다()
+    {
+        // 설계 §4.4 — script 는 대본(패턴 id 의 순서)을 돌고, 끝나면 처음부터 다시 돈다. GIF 도구와 스크린샷이 패턴을 고정하는 데 쓴다.
+        // 몇 번째로 뽑는지(draw)는 BattleSim 이 세고 고르기는 그 번호로 조회만 한다 — uniform 과 같이 상태가 없다.
+        string[] roster = { "3연격", "점프 3연속", "1타 돌진" };
+        IPatternPicker picker = PatternPickers.Create("script",
+            new PickerInputs(roster, Array.Empty<AttemptRecord>(), 51, 2, Script: new[] { "1타 돌진", "3연격" })).ShouldNotBeNull();
+
+        Enumerable.Range(0, 6).Select(picker.Pick).ShouldBe(new[] { 2, 0, 2, 0, 2, 0 });
+    }
+
+    [Fact]
+    public void 명부에_없는_패턴이_든_대본은_세울_때_거절한다()
+    {
+        // 설계 §4.4 — 명부에 없는 id 는 세울 때 거절한다. 판 도중에 명부 밖을 내면 BattleSim 이 [E] 를 남기며 간격마다 다시 고르는데(아래
+        // 테스트), 대본은 사람이 손으로 쓰는 것이라 틀리면 대본(GifRunner · ShotRunner 가 넘긴다)으로 판을 세우는 자리에서 바로 멈춰야 한다 —
+        // 이 예외를 StageRoster.Setup 이 [E] 로 바꿔 판을 세우지 않는다(StageRosterTests). 빠진 것은 전부 싣는다.
+        string[] roster = { "3연격", "점프 3연속" };
+        Should.Throw<ArgumentException>(() => new ScriptPicker(roster, new[] { "3연격", "돌진", "잡기" }))
+            .Message.ShouldContain("돌진, 잡기");
+        Should.Throw<ArgumentException>(() => new ScriptPicker(roster, Array.Empty<string>()));
+        Should.Throw<ArgumentException>(() => PatternPickers.Create("script", Inputs(51)), "대본 없이 script 를 세웠다");
+    }
+
+    [Fact]
+    public void 대본으로_선_판은_대본의_순서로_패턴을_세운다()
+    {
+        // 대본이 BattleSim.Begin 의 한 자리를 그대로 탄다 — 판을 세울 때 넘기면 그 판의 패턴이 대본 순서대로 선다(시드와 무관하다).
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999),
+            PatternIds = _roster,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Picker = new ScriptPicker(_roster, new[] { "점프 공격", "점프 공격", "3연격" }),
+            MaxTicks = 60 * 30,
+        });
+
+        var begins = new List<string>();
+        string? last = null;
+        for (int i = 0; i < 60 * 30 && begins.Count < 6; i++)
+        {
+            sim.Tick(default);
+            if (sim.Boss.CurrentPattern is { } id && id != last)
+            {
+                begins.Add(id);
+            }
+
+            last = sim.Boss.CurrentPattern;
+        }
+
+        begins.ShouldBe(new[] { "점프 공격", "점프 공격", "3연격", "점프 공격", "점프 공격", "3연격" });
+    }
+
+    [Fact]
     public void 모르는_고르기는_세우지_않는다()
     {
         PatternPickers.Ids.ShouldContain("uniform");
+        PatternPickers.Ids.ShouldContain("script");
         PatternPickers.Create("없는고르기", Inputs(51)).ShouldBeNull();
     }
 

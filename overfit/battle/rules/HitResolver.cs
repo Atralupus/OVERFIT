@@ -56,6 +56,13 @@ public enum HitVerdict
     /// <c>guard_break</c> 판정은 #72 에서 걷었다). <b>전액</b>이고 파이터가 <b>탈진</b>한다(<c>exhaust_seconds</c> · #71 · 설계 §5.5).
     /// </summary>
     GuardBroken,
+
+    /// <summary>
+    /// <b>잡혔다</b> (#78 · 설계 §4.7) — 붙드는 판정(<see cref="HitBox.GrabHoldSeconds"/> &gt; 0)이 맨몸에 닿았다. 피해를 받고 붙들린다
+    /// (<c>Fighter.Held</c>). 맞음(<see cref="Hit"/>)과 가르는 이유: 뷰가 흰 구를 붙이고, 로그와 계측이 "잡혔다" 를 "맞았다" 와 따로
+    /// 센다. 계측에서는 맞음과 같이 실패다 — 아무 축도 성공으로 안 센다(설계 §7.3). 열거의 맨 뒤에 둔다 — 옛 값들의 정수가 그대로다.
+    /// </summary>
+    Grabbed,
 }
 
 /// <summary>
@@ -64,7 +71,7 @@ public enum HitVerdict
 /// </summary>
 public enum Defense
 {
-    /// <summary>맨몸 — 닿으면 맞는다.</summary>
+    /// <summary>맨몸 — 닿으면 맞는다. 붙드는 판정(<see cref="HitBox.GrabHoldSeconds"/> &gt; 0 · #78)이면 잡힌다(<see cref="HitVerdict.Grabbed"/>).</summary>
     None,
 
     /// <summary>대시 무적 — 파이터의 무적과 판정의 대시 창 중 좁은 쪽 안이다.</summary>
@@ -78,7 +85,7 @@ public enum Defense
 }
 
 /// <summary>
-/// 판정 하나를 파이터에게 대본다. <b>상태를 안 바꾼다</b> — 판단만 하고 체력을 깎는 것(과 패리 · 가드 · 붕괴의 부작용)은
+/// 판정 하나를 파이터에게 대본다. <b>상태를 안 바꾼다</b> — 판단만 하고 체력을 깎는 것(과 패리 · 가드 · 붕괴 · 잡힘의 부작용)은
 /// <c>BossSwings.ApplyVerdict</c> 다. 그래야 같은 판정을 여러 번 물어봐도 답이 같고 테스트가 쉽다.
 ///
 /// <para>
@@ -109,7 +116,7 @@ public static class HitResolver
                 break;
         }
 
-        switch (Effective(fighter, tags))
+        switch (Effective(fighter, tags, box))
         {
             case Defense.Invulnerable:
                 return HitVerdict.Dodged;
@@ -124,7 +131,8 @@ public static class HitResolver
                     : HitVerdict.Guarded;
 
             default:
-                return HitVerdict.Hit;
+                // 맨몸이다 — 붙드는 판정이면 잡힘, 아니면 맞음 (#78 · 설계 §4.7). 가르는 것은 판정의 깃발이다(패턴 이름이 아니다).
+                return box.GrabHoldSeconds > 0 ? HitVerdict.Grabbed : HitVerdict.Hit;
         }
     }
 
@@ -132,10 +140,18 @@ public static class HitResolver
     /// 이 파이터가 이 태그의 판정 앞에서 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1). <see cref="Resolve"/> 가 몸이 닿은 뒤
     /// 이것으로 갈래를 고르고, 판정 보기가 몸통 색을 이것으로 칠한다 — 한 자리에서 정해야 색과 판정이 다른 말을 안 한다.
     /// <paramref name="tags"/> 가 null(대 본 판정이 없다)이면 파이터 쪽 상태 그대로다.
+    ///
+    /// <para>
+    /// <paramref name="box"/> 는 그 판정의 답이다 (#78 · 설계 §7.3) — 대시 · 가드 · 패리를 받나. 태그를 <b>좁히기만</b> 한다: 답이 거짓인
+    /// 수단은 창 안이어도 없는 것과 같다. null 이면 답을 모르는 자리라 태그와 파이터의 창만 본다.
+    /// </para>
     /// </summary>
-    public static Defense Effective(Fighter fighter, PatternTags? tags)
+    public static Defense Effective(Fighter fighter, PatternTags? tags, HitBox? box = null)
     {
         ArgumentNullException.ThrowIfNull(fighter);
+        bool dashable = box?.Dashable ?? true;
+        bool parryable = box?.Parryable ?? true;
+        bool guardable = box?.Guardable ?? true;
 
         // 유효 창은 **패턴과 캐릭터 중 좁은 쪽**이다.
         //
@@ -143,7 +159,7 @@ public static class HitResolver
         // 선언해도 아무 일도 안 일어났는데 — 그 숫자는 망의 입력이 된다. 거짓말하는 숫자는
         // 없는 숫자보다 나쁘다. "빠른 공격은 패리하기 더 어렵다" 는 진짜 설계 레버라
         // 태그를 지우는 대신 물게 했다.
-        if (fighter.Action == FighterAction.Dash
+        if (dashable && fighter.Action == FighterAction.Dash
             && Within(fighter.ActionElapsed, fighter.DashIFrames, tags?.DashWindow ?? double.PositiveInfinity))
         {
             return Defense.Invulnerable;
@@ -153,7 +169,7 @@ public static class HitResolver
         // 무적 → 패리 → 가드 순을 고정해 둔다: 나중에 겹치는 수단이 생겨도 판정이 안 흔들린다.
         //
         // 이슈 #47 은 반대 순서였다 — 그때는 가드가 패리 뒤에 섰다.
-        if ((tags?.Parryable ?? true)
+        if (parryable && (tags?.Parryable ?? true)
             && Within(fighter.SinceParryPress, fighter.PreciseParryWindow, tags?.ParryWindow ?? double.PositiveInfinity))
         {
             return Defense.Parrying;
@@ -162,8 +178,9 @@ public static class HitResolver
         // ↓ 를 누르고 있으면 막는다 (설계 §5.2). 창을 놓친 패리는 여기 안 온다 — 패리와 가드는 다른 행동이라
         // 패리 커밋 중에는 가드가 아니고, 그 판정은 맨몸에 떨어진다(설계 §5.3).
         //
-        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2).
-        return fighter.Guarding ? Defense.Guarding : Defense.None;
+        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2). 가드를 안 받는
+        // 판정(잡기 · #78)은 가드 중이어도 맨몸이다 — 붕괴가 아니다(설계 §5.2).
+        return guardable && fighter.Guarding ? Defense.Guarding : Defense.None;
     }
 
     /// <summary>
@@ -172,8 +189,8 @@ public static class HitResolver
     /// <para>
     /// 창이 0 이면 <b>한 번도 안이 아니다</b> — <c>dash_window: 0</c> 의 "대시로 못 피한다" 가
     /// 그렇게 값과 뜻이 같은 자리에 떨어진다. 길이 0 인 창으로 읽어도 결과가 같지만,
-    /// 뜻은 다르다: <c>DodgeEvent.DashAvailable</c> 이 <c>dash_window &gt; 0</c> 으로
-    /// "대시가 가능했나" 를 싣고 의존도 축의 분모가 그것이다.
+    /// 뜻은 다르다: <c>DodgeEvent.DashAvailable</c> 이 <c>dash_window &gt; 0</c> 과 판정의 답
+    /// (<see cref="HitBox.Dashable"/> · #78)이 둘 다 참인지로 "대시가 가능했나" 를 싣고 의존도 축의 분모가 그것이다.
     /// </para>
     /// </summary>
     private static bool Within(double elapsed, double fighterWindow, double patternWindow) =>

@@ -250,7 +250,7 @@ public class HitResolverTests
     public void Dash_window_0_은_길이가_0_인_창이_아니라_대시_불가다()
     {
         // 두 해석이 값으로는 같은 곳에 떨어지지만 뜻이 다르다. DodgeEvent.DashAvailable 이
-        // dash_window > 0 으로 "대시가 가능했나" 를 싣고, 의존도 축의 분모가 그것이다 —
+        // dash_window > 0 && 판정의 답(HitBox.Dashable · #78)으로 "대시가 가능했나" 를 싣고, 의존도 축의 분모가 그것이다 —
         // 0 을 "아주 짧은 창" 으로 읽으면 그 분모가 거짓이 된다.
         Fighter f = Acting(new InputFrame(0, false, true, false, false), 1);
 
@@ -371,6 +371,74 @@ public class HitResolverTests
         HitResolver.Effective(parrying, Tags(parryable: false)).ShouldBe(Defense.None, "패리 불가 판정 앞의 패리 창을 칠한다");
 
         HitResolver.Effective(Guarding(), Tags(parryable: false)).ShouldBe(Defense.Guarding, "패리를 못 받는 판정도 가드로는 막는다");
+    }
+
+    [Fact]
+    public void 대시를_안_받는_판정은_무적_창_안이어도_맞는다()
+    {
+        // 설계 §7.3 · §4.7 — 판정의 답(dash: false)은 패턴 태그를 좁힌다. 태그로는 대시 창이 넓게(0.18) 열려 있고 파이터는 무적 창
+        // 한가운데지만 이 판정만은 맨몸이다 — 잡기가 "대시중에도 잡히는 공격" 인 자리다. 같은 몸에 답이 없는 판정은 무적이 먹는다.
+        Fighter f = Acting(new InputFrame(0, false, true, false, false), 3);
+        f.Invulnerable.ShouldBeTrue("무적 창 안이 아니다 — 이 테스트가 답을 안 본다");
+
+        HitResolver.Resolve(f, _at, Mid(), Tags(false)).ShouldBe(HitVerdict.Dodged);
+        HitResolver.Resolve(f, _at, Mid() with { Dashable = false }, Tags(false)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 가드를_안_받는_판정은_가드_중에도_맨몸이다()
+    {
+        // 설계 §5.2 · §7.3 — 가드로 못 막는 판정은 가드를 깨는 것이 아니라 가드를 **안 본다**: 붕괴(전액 + 탈진)가 아니라 맨몸에 떨어진다.
+        // 스태미나가 모자라 깨질 몸이어도 맨몸이다 — 옛 guard_break(빨간 마무리)가 흉내 내던 것과 다른 결과다(설계 §8 「지우는 것」).
+        HitResolver.Resolve(Guarding(), _at, Mid() with { Guardable = false }, Tags(parryable: true)).ShouldBe(HitVerdict.Hit);
+
+        Fighter spent = Guarding();
+        spent.Spend(spent.Stamina - 1);
+        HitResolver.Resolve(spent, _at, Mid() with { Guardable = false }, Tags(parryable: true))
+            .ShouldBe(HitVerdict.Hit, "가드를 안 받는 판정이 모자란 스태미나로 붕괴를 냈다 — 가드를 봤다");
+    }
+
+    [Fact]
+    public void 패리를_안_받는_판정은_패리_창_안이어도_맞는다()
+    {
+        // 설계 §5.3 · §7.3 — 태그로는 받아칠 수 있는 패턴(parryable: true)이라도 판정의 답(parry: false)이 그 판정만 좁힌다. 같은 누름에
+        // 답이 없는 판정은 받아친다 — 한 패턴 안에서 1타는 받아치고 잡기는 못 받아치는 자리다(설계 §4.7).
+        Fighter f = Acting(new InputFrame(0, false, false, true, false), 2);
+        f.Parrying.ShouldBeTrue("패리 창 안이 아니다 — 이 테스트가 답을 안 본다");
+
+        HitResolver.Resolve(f, _at, Mid(), Tags(parryable: true)).ShouldBe(HitVerdict.Parried);
+        HitResolver.Resolve(f, _at, Mid() with { Parryable = false }, Tags(parryable: true)).ShouldBe(HitVerdict.Hit);
+    }
+
+    [Fact]
+    public void 붙드는_판정이_맨몸에_닿으면_잡힘이다()
+    {
+        // 설계 §4.7 — 붙드는 판정(grab_hold_seconds > 0)이 닿은 결과는 맞음이 아니라 잡힘이다: 뷰가 흰 구를 붙이고 로그와 계측이 "잡혔다" 를
+        // 따로 센다. 가르는 것은 판정의 깃발과 결과다 — 패턴 이름이 아니다(CLAUDE.md §2). 안 닿으면 전처럼 빗나감이고, 답이 받는 수단
+        // (여기서는 대시)이면 전처럼 그 수단이 먹는다.
+        HitBox grab = Mid() with { GrabHoldSeconds = 1.0 };
+        HitResolver.Resolve(Spawn(_bossX + 100), _at, grab, Tags(false)).ShouldBe(HitVerdict.Grabbed);
+        HitResolver.Resolve(Spawn(_bossX + 400), _at, grab, Tags(false)).ShouldBe(HitVerdict.MissedTooFar);
+        HitResolver.Resolve(Acting(new InputFrame(0, false, true, false, false), 2), _at, grab, Tags(false))
+            .ShouldBe(HitVerdict.Dodged, "대시를 받는 붙드는 판정에 무적이 안 먹었다");
+    }
+
+    [Fact]
+    public void 실효_방어는_판정의_답도_본다()
+    {
+        // 설계 §6.1 — 5번 PR 부터 몸통 색은 판정 단위의 답으로 칠한다. 잡기 앞의 무적 · 가드가 "무적" · "가드" 색이면 그 색이 거짓말한다.
+        // 답을 모르는 자리(판정 없이 태그만)는 전처럼 태그와 파이터의 창만 본다.
+        Fighter dashing = Acting(new InputFrame(0, false, true, false, false), 1);
+        HitResolver.Effective(dashing, Tags(false), Mid()).ShouldBe(Defense.Invulnerable);
+        HitResolver.Effective(dashing, Tags(false), Mid() with { Dashable = false }).ShouldBe(Defense.None, "대시를 안 받는 판정 앞의 무적을 칠한다");
+
+        Fighter parrying = Acting(new InputFrame(0, false, false, true, false), 1);
+        HitResolver.Effective(parrying, Tags(parryable: true), Mid() with { Parryable = false })
+            .ShouldBe(Defense.None, "패리를 안 받는 판정 앞의 패리 창을 칠한다");
+
+        HitResolver.Effective(Guarding(), Tags(parryable: true), Mid() with { Guardable = false })
+            .ShouldBe(Defense.None, "가드를 안 받는 판정 앞의 가드를 칠한다");
+        HitResolver.Effective(Guarding(), Tags(parryable: true), Mid()).ShouldBe(Defense.Guarding);
     }
 
     [Fact]

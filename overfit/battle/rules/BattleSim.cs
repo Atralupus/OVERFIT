@@ -37,7 +37,8 @@ public sealed class BattleSetup
     /// <summary>
     /// 움직임 등록표 (#72 · 설계 §8.1) — <b>선택</b>이다. 비우면 <see cref="BossMotions.Create"/> 다. 테스트가 가짜 움직임을 넣는
     /// 자리다: 3번 PR 에는 패턴 시계를 세우는 움직임이 없어(도약의 <see cref="MotionStep.HoldClock"/> 은 늘 거짓이다), 움직임의
-    /// <c>HoldClock</c> 이 이 판을 거쳐 러너에 닿는지를 진짜 움직임으로는 못 잰다.
+    /// <c>HoldClock</c> 이 이 판을 거쳐 러너에 닿는지를 가짜로만 잴 수 있었다. 돌진(#78)이 그 첫 진짜 움직임이 된 뒤에도 남는 까닭은
+    /// 진짜 움직임이 안 내는 값 — 끝났다면서 시계를 세우는 한 걸음 — 을 판에 넣어 보는 자리여서다(<c>BossMotionTests</c>).
     /// </summary>
     public Func<MotionDef, MotionBounds, IBossMotion?>? Motions { get; set; }
 
@@ -62,9 +63,9 @@ public sealed class BattleSetup
 /// </para>
 ///
 /// <para>
-/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 지금은 <b>무작위</b>(<c>uniform</c>)뿐이다. 일부러다 —
-/// 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
-/// 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 순서를 낸다.
+/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 게임의 단계는 지금 <b>무작위</b>(<c>uniform</c>)뿐이다 — 대본
+/// (<c>script</c> · #78)은 GIF · 스크린샷이 패턴을 고정하는 데만 쓴다. 일부러다 — 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다.
+/// 망이 정말 일하는지 증명할 방법이 그것 말고 없다. 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 순서를 낸다.
 /// </para>
 /// </summary>
 public sealed class BattleSim
@@ -108,6 +109,12 @@ public sealed class BattleSim
     /// <summary>지난 틱의 움직임이 이 틱의 패턴 시계를 세웠나 (<see cref="MotionStep.HoldClock"/>).</summary>
     private bool _holdClock;
 
+    /// <summary>시계를 세운 움직임이 그 뒤로 더 세울 것 같은 틱 — 추정이다 (<see cref="MotionStep.HoldTicks"/> · #78). <see cref="NextActiveIn"/> 이 더한다.</summary>
+    private int _holdTicks;
+
+    /// <summary>도는 움직임이 끝나면 설 자리(x) — 판정 보기의 "다음 판정" 이 거기 땅에 선다 (<see cref="MotionStep.GoalX"/> · #78). 움직임이 없으면 null.</summary>
+    private double? _goalX;
+
     /// <summary>
     /// 공중에서 무너진 보스가 따라 내리는 움직임 (#71 · 설계 §4.2) — 끊긴 도약의 <b>높이만</b> 쓴다. 땅에서 무너졌으면 null 이다.
     /// 패턴의 움직임(<see cref="_motion"/>)과 따로 두는 이유: 패턴은 무너질 때 끊겨 러너 · 움직임 · 시계가 다 걷히는데(<see cref="EndPattern"/>)
@@ -150,10 +157,10 @@ public sealed class BattleSim
         _setup = setup;
         _picker = setup.Picker ?? new UniformPicker(setup.Seed, setup.PatternIds.Count);
         _swords = Swords(setup);
-        _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes, setup.Fighter);
+        _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
-        _swings = new BossSwings(Fighter, Boss, _credit);
+        _swings = new BossSwings(Fighter, Boss, _credit, new JumpClearance(setup.Fighter));
         _poise = PoiseGauge.For(setup.Boss);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
@@ -234,8 +241,13 @@ public sealed class BattleSim
     /// 반응 지연과 잡음을 반드시 넣어야 한다</b> — 안 그러면 망이 "초인이 어떻게 실패하는가" 를
     /// 배우고, 그건 사람에게 아무 의미가 없다.
     /// </para>
+    ///
+    /// <para>
+    /// 패턴 시계를 세운 움직임(돌진 · #78 · 설계 §4.6)이 도는 동안에는 러너의 남은 시간에 그 움직임이 더 세울 틱(추정)을 더한다 — 돌진이면
+    /// "지금 자리에서 닿기까지 남은 틱 ⌈max(0, d − S) / 60⌉ + 3타의 선딜" 이다. 도착 시각이 파이터 자리에 달려 있어 <b>추정</b>이다(설계 §11).
+    /// </para>
     /// </summary>
-    public double? NextActiveIn => _runner?.NextActiveIn;
+    public double? NextActiveIn => _runner?.NextActiveIn + (_holdClock ? _holdTicks * Dt : 0);
 
     /// <summary>
     /// 보스 패턴이 지금 들어 있는 단계 — 뷰가 그 단계의 그림(<see cref="PatternStep.Anim"/> · <see cref="PatternStep.Frame"/>)을
@@ -252,11 +264,13 @@ public sealed class BattleSim
 
     /// <summary>
     /// 선딜 중이면 <b>다음</b> 판정이 칠 자리 (월드) — 어디로 올지 미리 보인다. 러너가 낼 바로 그 판정(판을 세울 때 지은 것 ·
-    /// <see cref="PatternRunner.NextHit"/>)을 지금 자리에 놓는다. 더 올 판정이 없으면 빈 목록.
+    /// <see cref="PatternRunner.NextHit"/>)을 지금 자리에 놓는다 — 움직임이 도는 동안에는 그 움직임이 끝나면 설 자리의 땅이다(#78 · #59 의
+    /// 3/6 넘김 · <see cref="MotionStep.GoalX"/>): 도약은 착지 자리, 돌진은 지금 파이터 앞의 멈출 자리. 보스는 판정 창 동안 안 움직이므로
+    /// (설계 §3.5 6) 판정은 움직임이 끝난 자리에서 선다. 더 올 판정이 없으면 빈 목록.
     /// </summary>
     public IReadOnlyList<HitRect> BossNextRects =>
         _runner?.NextHit is { } hit
-            ? hit.Shape.Place(new Placement(Boss.X, Boss.Y, Boss.Facing))
+            ? hit.Shape.Place(_goalX is { } goal ? new Placement(goal, 0, Boss.Facing) : new Placement(Boss.X, Boss.Y, Boss.Facing))
             : Array.Empty<HitRect>();
 
     /// <summary>
@@ -266,13 +280,28 @@ public sealed class BattleSim
     /// </summary>
     public bool SwingLive => _swings.Live;
 
+    /// <summary>산 판정 중에 붙드는 판정(잡기)이 있나 (#78 · <see cref="BossSwings.LiveGrab"/>) — 뷰의 흰 구가 읽는다. 규칙은 안 읽는다.</summary>
+    public bool GrabLive => _swings.LiveGrab;
+
     /// <summary>
-    /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 견준 실효
-    /// 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가
+    /// 이 틱에 <b>대 본</b> 보스 판정이 붙드는 판정(잡기)인가 (#78 · #83) — 착지 충격파가 거른다: 잡기의 띠는 착지와 같은 바닥 전체 모양이지만
+    /// 그림은 흰 구다(<c>BattleCues</c>). <see cref="BossTestedRects"/> 와 같은 판정을 본다. 규칙은 안 읽는다.
+    /// </summary>
+    public bool BossTestedGrab => _swings.TestedBox is { GrabHoldSeconds: > 0 };
+
+    /// <summary>
+    /// 지금 단계 바로 다음이 판정이면 그 판정과 지난 몫 (#78 · <see cref="PatternRunner.HitAhead"/>) — 뷰가 잡기의 흰 구를 그 몫만큼 날린다.
+    /// 패턴이 안 돌면 null. 규칙은 안 읽는다.
+    /// </summary>
+    public (HitBox Hit, double Progress)? BossHitAhead => _runner?.HitAhead;
+
+    /// <summary>
+    /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 답(#78 · 대시 ·
+    /// 가드 · 패리)에 견준 실효 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가
     /// "패리 창" 색으로 칠해지면 그 색이 거짓말을 한다. 같은 틱의 사각형(<see cref="BossTestedRects"/>)과 같은 판정을 본다 —
     /// 닿아서 그 틱에 끝난 판정도 그 틱에는 이 색을 정한다. 대 본 판정이 없으면 파이터 쪽 상태 그대로다.
     /// </summary>
-    public Defense FighterDefense => HitResolver.Effective(Fighter, _swings.TestedTags);
+    public Defense FighterDefense => HitResolver.Effective(Fighter, _swings.TestedTags, _swings.TestedBox);
 
     /// <summary>이 틱에 규칙이 보스에게 <b>대 본</b> 파이터 칼 (월드). 안 댔으면 빈 목록.</summary>
     public IReadOnlyList<HitRect> FighterTestedRects =>
@@ -289,8 +318,9 @@ public sealed class BattleSim
         // 밀어 놓은 뒤라, 여기서 안 잡으면 "대시 전에는 어디 서 있었나" 를 되돌릴 수 없다.
         double wasX = Fighter.X;
         double wasY = Fighter.Y;
-        // 탈진에 드는 틱을 잡으려고 틱 시작의 탈진을 잡아 둔다 — 로그가 무엇이 바닥냈는지를 말한다(LogFighterExhaust).
+        // 탈진 · 붙들림에 드는 틱을 잡으려고 틱 시작의 둘을 잡아 둔다 — 로그가 무엇이 바닥냈는지 · 잡혔는지를 말한다(LogFighterExhaust · LogFighterHeld).
         bool wasExhausted = Fighter.Exhausted;
+        bool wasHeld = Fighter.Held;
         Fighter.Tick(input, Dt);
 
         // 보스 판정이 볼 가드 — 파이터를 민 **뒤**의 값이다. 막다가 든 탈진(딱 0 · 붕괴)은 판정이 이 가드를 봤을 때만 난다. 틱 시작에서
@@ -311,6 +341,11 @@ public sealed class BattleSim
         else if (broken)
         {
             Exhaust("poise");
+        }
+
+        if (Fighter.Held && !wasHeld)
+        {
+            LogFighterHeld();
         }
 
         if (Fighter.Exhausted && !wasExhausted)
@@ -432,7 +467,7 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 여섯 줄이다 (#71 · #59 의 3/6 넘김 —
+    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 일곱 줄이다 (#71 · #59 의 3/6 넘김 —
     /// 둘이 따로 적혀 있으면 하나만 고치는 날 끊긴 패턴이 무언가를 남긴다). 다음 패턴은 간격을 처음부터 센 뒤에 고른다.
     /// </summary>
     private void EndPattern()
@@ -442,6 +477,7 @@ public sealed class BattleSim
         Boss.CurrentPattern = null;
         _motion = null;
         _holdClock = false;
+        _goalX = null;
         _gapLeft = GapTicks;
     }
 
@@ -485,8 +521,8 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 도는 움직임을 한 틱 민다 — 보스를 옮기고, 다음 틱의 패턴 시계를 세울지 받아 둔다. 파이터는 이번 틱을 이미 민
-    /// 뒤다(<see cref="Tick"/> 의 순서) — 움직임이 읽는 파이터의 X 가 그 값이다(설계 §4.6).
+    /// 도는 움직임을 한 틱 민다 — 보스를 옮기고, 다음 틱의 패턴 시계를 세울지(와 더 세울 틱 · 끝나면 설 자리)를 받아 둔다.
+    /// 파이터는 이번 틱을 이미 민 뒤다(<see cref="Tick"/> 의 순서) — 움직임이 읽는 파이터의 X 가 그 값이다(설계 §4.6).
     /// </summary>
     private void Move()
     {
@@ -498,7 +534,12 @@ public sealed class BattleSim
 
         MotionStep step = _motion.Tick(new MotionContext(Boss.X, Boss.Y, Boss.Facing, Fighter.X, _motionTick++));
         Boss.Move(step.X, step.Y, step.Facing);
+
+        // 끝난 움직임의 HoldClock 은 안 따른다 — 끝난 움직임은 여기서 걷혀 다음 틱에 시계를 풀어 줄 자리가 없다(돌진이 시계를 세우는 첫
+        // 움직임이다 · #59 의 3/6 넘김 — BossMotionTests 가 못박는다).
         _holdClock = !step.Finished && step.HoldClock;
+        _holdTicks = _holdClock ? step.HoldTicks : 0;
+        _goalX = step.Finished ? null : step.GoalX;
         if (step.Finished)
         {
             _motion = null;
@@ -527,7 +568,7 @@ public sealed class BattleSim
         _swings.Cut(Ticks, "exhaust");
 
         // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
-        // 땅이면 남길 것이 없다: 돌진(5번 PR)처럼 땅을 가는 움직임은 그 자리에서 멈춘다.
+        // 땅이면 남길 것이 없다: 돌진(#78)처럼 땅을 가는 움직임은 그 자리에서 멈춘다.
         _fall = Boss.Y > 0 ? _motion : null;
         EndPattern();
         _poise.Empty();
@@ -548,6 +589,13 @@ public sealed class BattleSim
     /// </summary>
     private void LogFighterExhaust(bool guarding) =>
         Log.Debug("fighter", () => $"exhaust cause={(guarding ? "guard" : "action")} tick={Ticks}");
+
+    /// <summary>
+    /// 파이터가 붙들린 틱 (#78 · 설계 §4.7) — 그 틱에 탈진이 겹쳤나를 같이 남긴다. 겹치는 길은 둘이다: 탈진한 채 잡혔거나(이미 탈진),
+    /// 잡기가 마지막 스태미나의 행동을 끊었다(이 줄 다음에 <c>exhaust cause=action</c> 이 같은 틱으로 이어진다). 관측 줄(<c>[dodge]</c>)이
+    /// 결과 <c>Grabbed</c> 와 수단을 싣는다.
+    /// </summary>
+    private void LogFighterHeld() => Log.Debug("fighter", () => $"held exhausted={Fighter.Exhausted} tick={Ticks}");
 
     /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>
     private void Begin()
@@ -583,9 +631,10 @@ public sealed class BattleSim
 
     /// <summary>
     /// 초를 틱으로. <b>규칙의 초→틱 반올림은 여기 한 곳이다</b> (설계 §3.5 · §3.6 ⑤) — 반 틱은 0 에서 먼 쪽으로 간다.
-    /// 쓰는 곳은 여덟이다: 판정 창의 길이(<see cref="BossSwings.Open"/> · <see cref="BossHits"/> 의 점프 가능), 타임라인 단계의
+    /// 쓰는 곳은 아홉이다: 판정 창의 길이(<see cref="BossSwings.Open"/> — 점프 가능도 그 창의 틱 수로 잰다 · #85), 타임라인 단계의
     /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 보스의 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>),
-    /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>).
+    /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>),
+    /// 잡기가 붙드는 시간(1.0초 = 60틱 · #78 · <see cref="BossSwings"/> 가 <see cref="Fighter.Grab"/> 에 넘긴다).
     /// 8fps 한 장은 0.125초 = 7.5틱이라, 이 중 둘이 각자 반올림하면 반 틱씩 어긋난다.
     ///
     /// <para>

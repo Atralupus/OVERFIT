@@ -54,6 +54,12 @@ public sealed class Fighter
     private int _exhaustLeft;
 
     /// <summary>
+    /// 남은 붙들림 틱 (#78 · 설계 §4.7). 탈진과 <b>따로</b> 센다 — 둘은 같은 고정(<see cref="Locked"/>)의 다른 까닭이라 뷰가 흰 구와
+    /// 탈진 색을 가른다. 고정은 둘 중 하나라도 남아 있는 동안이라, 겹치면 길이는 저절로 남은 것과 새 것 중 긴 쪽이다.
+    /// </summary>
+    private int _heldLeft;
+
+    /// <summary>
     /// 칼질 칸마다 그 칼질 뒤 경직의 길이(틱) — <c>combo[].stiff</c> 를 세울 때 한 번 바꾼다 (#82). <b>초를 더해 가며 세지 않는다</b>:
     /// 1/60 을 더해 가는 칼질의 시계는 1타(0.25초)를 15틱이 아니라 16틱에 끝낸다(15번 더한 값이 0.24999999999999997 이다). 경직까지
     /// 그렇게 세면 데이터의 0.40 이 몇 틱인지를 부동소수가 정한다.
@@ -193,11 +199,18 @@ public sealed class Fighter
     public bool Exhausted => _exhaustLeft > 0;
 
     /// <summary>
-    /// 굳어 있나 — 행동 · 이동 · 점프 · 가드가 전부 막힌다. 지금 굳는 길은 탈진 하나다(<see cref="Exhausted"/>): 이 둘을 가르는 것은
-    /// "왜 굳었나" 와 "무엇이 막히나" 가 다른 질문이라서다 — 규칙의 막음은 이것을 보고, 그림은 까닭(탈진)을 본다. 행동 뒤 경직
-    /// (<see cref="Stiff"/> · #82)은 굳음이 아니다 — 행동이 아직 도는 것이라 행동의 커밋이 막는다.
+    /// 붙들려 있나 (#78 · 설계 §4.7) — 붙드는 판정(잡기)에 잡혔다. <see cref="Grab"/> 이 받은 틱 동안이다. 탈진과 <b>같은 고정</b>을 쓰는
+    /// <b>다른 상태</b>다: 뷰가 이것으로 흰 구 · take-hit 의 마지막 장을, 탈진으로 탈진 색을 그린다.
     /// </summary>
-    public bool Locked => Exhausted;
+    public bool Held => _heldLeft > 0;
+
+    /// <summary>
+    /// 굳어 있나 — 행동 · 이동 · 점프 · 가드가 전부 막힌다. 굳는 길은 둘이다 — 탈진(<see cref="Exhausted"/>)과 붙들림(<see cref="Held"/> · #78).
+    /// 까닭과 막음을 가르는 것은 "왜 굳었나" 와 "무엇이 막히나" 가 다른 질문이라서다 — 규칙의 막음은 이것을 보고, 그림은 까닭을 본다.
+    /// 둘은 따로 세므로 겹치면 고정은 남은 것과 새 것 중 긴 쪽이다(설계 §4.7) — 한 칸을 덮어쓰면 탈진이 막 든 뒤에 잡힌 사람이 일찍 풀린다.
+    /// 행동 뒤 경직(<see cref="Stiff"/> · #82)은 굳음이 아니다 — 행동이 아직 도는 것이라 행동의 커밋이 막는다.
+    /// </summary>
+    public bool Locked => Exhausted || Held;
 
     /// <summary>
     /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>) · 대시(<c>dash_recover</c>) · 패리(<c>parry_stiff</c>)가 제 시간을 다 돌고
@@ -300,6 +313,34 @@ public sealed class Fighter
     }
 
     /// <summary>
+    /// <b>잡혔다</b> (#78 · 설계 §4.7) — 피해를 받고 <paramref name="ticks"/> 동안 붙들린다. 하던 행동(칼질 · 대시 · 패리 · 가드 — 행동 뒤
+    /// 경직(#82)까지)이 그 자리에서 끝나고, 붙들린 동안 행동 · 이동 · 점프 · 가드가 다 막힌다(<see cref="Locked"/>). 공중이면 그대로 떨어진다
+    /// (중력은 안 막는다). 스태미나는 Idle 이라 찬다. 풀리면 그대로 선다 — 남은 경직도 없다: 경직은 그 행동의 끝자락이라 행동과 같이 끝났다.
+    ///
+    /// <para>
+    /// <b>잡기가 끊은 행동도 끝난 행동이다</b> (설계 §4.7 · §5.5). 그 행동의 값으로 스태미나가 0 이 됐으면 같은 틱에 탈진도 든다 —
+    /// 탈진을 판단하던 곳은 행동이 경직까지 끝나는 틱(<see cref="End"/>) 하나였고, 잡기는 그 틱을 기다리지 않고 끝낸다. 행동 중에는 경직까지
+    /// 스태미나가 안 차므로 행동 중의 0 은 곧 그 행동의 값이 만든 0 이다(#71 계획 결정 8). 가드는 값이 없고, 가드 중의 0 은 이미 탈진이다
+    /// (<see cref="GuardChip"/>).
+    /// </para>
+    /// </summary>
+    /// <param name="damage">잡기의 피해.</param>
+    /// <param name="ticks">붙드는 틱 — <c>grab_hold_seconds</c> 를 <c>BattleSim.TicksFor</c> 로 바꾼 값이다.</param>
+    public void Grab(int damage, int ticks)
+    {
+        TakeDamage(damage);
+        bool spent = Action is FighterAction.Dash or FighterAction.Attack or FighterAction.Parry && Stamina <= 0;
+        Stop();
+
+        // 긴 쪽을 남긴다 — 붙드는 시간은 판정의 값이라(grab_hold_seconds) 남은 붙들림보다 짧을 수 있다.
+        _heldLeft = Math.Max(_heldLeft, ticks);
+        if (spent)
+        {
+            Exhaust();
+        }
+    }
+
+    /// <summary>
     /// 패리가 받아쳤다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> — "잘 받아내면 다시 움직일 수
     /// 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈). 보스를 무너뜨리는 것은 여기가 아니다 — 이것을 부르는
     /// <c>BossSwings.ApplyVerdict</c> 가 받아쳤다는 답을 <see cref="BossSwings.Resolve"/> 로 돌려주고, 그 답으로 탈진 루틴
@@ -342,10 +383,15 @@ public sealed class Fighter
     /// </summary>
     private void Advance(double dt)
     {
-        // 탈진의 시계는 **Idle 이어도 돈다** — 탈진은 아예 Idle 상태에서 흐르므로 여기서 같이 멈추면 영영 안 풀린다.
+        // 탈진 · 붙들림의 시계는 **Idle 이어도 돈다** — 둘 다 아예 Idle 상태에서 흐르므로 여기서 같이 멈추면 영영 안 풀린다.
         if (_exhaustLeft > 0)
         {
             _exhaustLeft--;
+        }
+
+        if (_heldLeft > 0)
+        {
+            _heldLeft--;
         }
 
         if (Action == FighterAction.Idle)
@@ -432,14 +478,23 @@ public sealed class Fighter
     };
 
     /// <summary>
-    /// 탈진에 든다 (#71 · 설계 §5.5). 부르는 곳은 셋이다 — 행동의 값으로 0 이 된 행동이 경직까지 끝나는 틱(<see cref="End"/>) · 가드로
-    /// 막다가 딱 0 이 된 칩(<see cref="GuardChip"/>) · 가드 붕괴(<see cref="GuardBreak"/>). 하던 것이 그 자리에서 끝나고 서서
-    /// <c>exhaust_seconds</c> 를 보낸다. 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다: 새 행동을 세울 때
-    /// (<see cref="Start"/>) 지우던 것인데, 탈진은 행동을 세우지 않고 끝내는 자리다.
+    /// 탈진에 든다 (#71 · 설계 §5.5). 부르는 곳은 넷이다 — 행동의 값으로 0 이 된 행동이 경직까지 끝나는 틱(<see cref="End"/>) · 가드로
+    /// 막다가 딱 0 이 된 칩(<see cref="GuardChip"/>) · 가드 붕괴(<see cref="GuardBreak"/>) · 마지막 스태미나의 행동을 끊은 잡기(<see cref="Grab"/> · #78).
+    /// 하던 것이 그 자리에서 끝나고 서서 <c>exhaust_seconds</c> 를 보낸다. 덮어써도 "남은 것과 새 것 중 긴 쪽"(설계 §4.7)이다 — 탈진의
+    /// 길이는 늘 온 길이라 남은 몫보다 짧을 수 없다. 길이가 판정마다 다른 붙들림(<see cref="Grab"/>)은 긴 쪽을 따로 잡는다.
     /// </summary>
     private void Exhaust()
     {
         _exhaustLeft = _exhaustTicks;
+        Stop();
+    }
+
+    /// <summary>
+    /// 하던 행동을 그 자리에서 끝낸다 — 탈진과 잡힘이 같이 쓴다 (#78). 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다:
+    /// 새 행동을 세울 때(<see cref="Start"/>) 지우던 것인데, 둘은 행동을 세우지 않고 끝내는 자리다.
+    /// </summary>
+    private void Stop()
+    {
         Action = FighterAction.Idle;
         ActionElapsed = 0;
         _stiffLeft = 0;

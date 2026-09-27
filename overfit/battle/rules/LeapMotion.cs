@@ -55,13 +55,14 @@ public sealed class LeapMotion : IBossMotion
             _facing = toward != 0 ? toward : context.Facing;
         }
 
+        // 설 자리(GoalX)는 뛰는 틱에 정한 착지 자리다 — 판정 보기의 "다음 판정"(착지 띠)이 거기 땅에 선다(#78).
         if (context.Tick >= _airTicks)
         {
-            return new MotionStep(_toX, 0, _facing, Finished: true, HoldClock: false);
+            return new MotionStep(_toX, 0, _facing, Finished: true, HoldClock: false, GoalX: _toX);
         }
 
         double s = (double)context.Tick / _airTicks;
         return new MotionStep(
-            _fromX + ((_toX - _fromX) * s), 4 * _height * s * (1 - s), _facing, Finished: false, HoldClock: false);
+            _fromX + ((_toX - _fromX) * s), 4 * _height * s * (1 - s), _facing, Finished: false, HoldClock: false, GoalX: _toX);
     }
 }

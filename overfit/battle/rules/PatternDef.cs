@@ -15,8 +15,9 @@ public sealed class PatternTags
     public required string DashDirection { get; init; }
 
     /// <summary>
-    /// 점프로 넘을 수 있는 판정이 <b>하나라도</b> 있나 — 패턴의 요약(망의 입력)이다. 판정마다의 답은 모양과 캐릭터의 점프로
-    /// 판을 세울 때 잰다(<c>HitBox.Jumpable</c> · 설계 §7.3). 둘이 같은 말을 하는지는 <c>PatternDataTests</c> 가 본다.
+    /// 점프로 넘을 수 있는 판정이 <b>하나라도</b> 있나 — 서서는 맞는 자리에서 뛰어 넘을 수 있는 판정이다. 패턴의 요약(망의 입력)이다.
+    /// 관측의 답은 판정마다 · 자리마다 창이 열릴 때 잰다(<see cref="JumpClearance"/> · #85 · 설계 §7.3). 둘이 같은 말을 하는지는
+    /// <c>PatternDataTests</c> 가 본다.
     /// </summary>
     public required bool Jumpable { get; init; }
 
@@ -49,7 +50,8 @@ public sealed class PatternTags
 /// <para>
 /// <b>옛 판정 종류는 걷었다</b> (#72 · 설계 §8 「지우는 것」): 가드 불가(<c>guard_break</c>) · 헛스윙(<c>kind: "feint"</c>) ·
 /// 마무리 · 예고 표지. 옛 변종 아홉과 같이 없어졌다 — 새 두 단계에는 헛스윙도 빨간 마무리도 없고, 남겨 두면 아무도 안 쓰는
-/// 갈래가 규칙 층에서 테스트만 붙든 채 산다. 잡기(5번 PR)의 가드 불가는 붕괴가 아니라 잡힘이라 옛 깃발로 흉내 내지 않는다.
+/// 갈래가 규칙 층에서 테스트만 붙든 채 산다. 잡기(#78)의 가드 불가는 붕괴가 아니라 잡힘이라 옛 깃발로 흉내 내지 않는다 — 판정의 답
+/// (<see cref="Guard"/>)과 붙드는 시간(<see cref="GrabHoldSeconds"/>)이 대신한다.
 /// </para>
 /// </summary>
 public sealed class PatternStep
@@ -67,7 +69,7 @@ public sealed class PatternStep
 
     /// <summary>
     /// 이 단계가 붙드는 장(0부터). 뷰가 그 장에 세우고 멈춘다 — 장을 제 속도로 흘려 보내면 그림이 규칙의 창보다 먼저
-    /// 지나간다(설계 §6). null 이면 그 애니메이션을 제 속도로 돈다(<c>run</c> · <c>idle</c> — 5번 PR).
+    /// 지나간다(설계 §6). null 이면 그 애니메이션을 제 속도로 돈다(돌진의 <c>run</c> · 잡기의 <c>idle</c> — #78).
     /// </summary>
     public int? Frame { get; init; }
 
@@ -85,6 +87,25 @@ public sealed class PatternStep
     public IReadOnlyList<double>? Band { get; init; }
 
     public int Damage { get; init; }
+
+    /// <summary>
+    /// 판정의 답 — 이 판정을 <b>대시 무적</b>으로 흘릴 수 있나 (#78 · 설계 §7.3 · §8.1). 없으면(null) 패턴 태그(<c>dash_window</c>)대로 받고,
+    /// <c>false</c> 면 이 판정만 좁힌다: 무적 창 안이어도 맨몸이다. 규칙(<see cref="HitResolver"/>)과 관측(<c>DashAvailable</c>)이 같은 값을 읽는다 —
+    /// 판을 세울 때 판정에 싣는다(<c>BossHits</c> · <see cref="HitBox.Dashable"/>). 잡기가 "대시중에도 잡히는" 자리다(설계 §4.7).
+    /// </summary>
+    public bool? Dash { get; init; }
+
+    /// <summary>판정의 답 — <b>가드</b>로 막을 수 있나 (<see cref="Dash"/> 와 같은 규약). <c>false</c> 면 가드 중이어도 맨몸이다 — 붕괴가 아니다.</summary>
+    public bool? Guard { get; init; }
+
+    /// <summary>판정의 답 — <b>패리</b>로 받아칠 수 있나 (<see cref="Dash"/> 와 같은 규약). 태그(<c>parryable</c>)가 되는 패턴 안에서 이 판정만 막는다.</summary>
+    public bool? Parry { get; init; }
+
+    /// <summary>
+    /// 붙드는 시간(초) — 0 보다 크면 <b>붙드는 판정</b>이다 (#78 · 설계 §4.7). 맨몸에 닿은 결과가 맞음이 아니라 잡힘(<see cref="HitVerdict.Grabbed"/>)이고,
+    /// 파이터는 피해를 받고 이만큼 붙들린다(<c>Fighter.Held</c>). 없으면 0 — 붙들지 않는다. 가르는 것은 이 깃발과 결과다 — 패턴 이름이 아니다(CLAUDE.md §2).
+    /// </summary>
+    public double GrabHoldSeconds { get; init; }
 
     /// <summary>
     /// active 가 <b>몇 초 동안</b> 살아 있나 (이슈 #59 · 설계 §3.5). 0 이면 한 틱이다.
@@ -110,7 +131,7 @@ public sealed class PatternStep
 /// </summary>
 public sealed class MotionDef
 {
-    /// <summary>등록표의 id — <c>leap</c>.</summary>
+    /// <summary>등록표의 id — <c>leap</c> · <c>rush</c>.</summary>
     public required string Id { get; init; }
 
     /// <summary><c>leap</c>: 포물선의 정점 높이(px, 발바닥 기준).</summary>
@@ -118,6 +139,12 @@ public sealed class MotionDef
 
     /// <summary><c>leap</c>: 뜬 시간(초) — 도약하는 틱부터 내리는 틱까지. 틱으로는 <c>BattleSim.TicksFor</c> 로 바꾼다.</summary>
     public double Air { get; init; }
+
+    /// <summary><c>rush</c>: 달리는 빠르기(px/s · #78 · 설계 §4.6). 3600 이면 틱당 정확히 60px 다.</summary>
+    public double Speed { get; init; }
+
+    /// <summary><c>rush</c>: 파이터 앞 몇 px 에서 멈추나 — 앞쪽 거리 d 가 이 안이면 돌진이 끝난다(설계 §4.6).</summary>
+    public double Stop { get; init; }
 }
 
 /// <summary>패턴 하나. <c>data/patterns.json</c> 의 값 부분이다.</summary>

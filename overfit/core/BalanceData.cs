@@ -57,6 +57,12 @@ public sealed class BattleBalance
 /// 색은 여기 없다. 색은 "얼마나" 가 아니라 "무엇" 이라 뷰 쪽 이름 붙은 상수로 둔다 —
 /// JSON 의 <c>[1.6, 1.6, 1.0, 1]</c> 은 사람이 읽고 고칠 수 있는 형태가 아니다.
 /// </para>
+///
+/// <para>
+/// <b>걷은 키.</b> 보스 공격의 링(#81 — "적 공격에 동그라미 연출은 제거해주세요"): <c>tell_ring_from</c> · <c>tell_ring_to</c> ·
+/// <c>boss_ring_offset_y</c> · <c>boss_ring_to</c>. 선딜 틴트의 무르익음(#78 · 설계 §6): <c>tell_lead_seconds</c> — 다음 판정까지 남은
+/// 시간을 몸 색으로 그려 2단계의 미끼(1.30초까지 같은 그림 · 엇박)가 그림으로 샜다. 선딜 틴트는 한 색으로 남는다(<c>BossView</c>).
+/// </para>
 /// </summary>
 public sealed class FeelBalance
 {
@@ -168,18 +174,6 @@ public sealed class FeelBalance
     public required double AttackRingTo { get; init; }
 
     /// <summary>
-    /// 선딜 틴트가 무르익기 시작하는 시점 — 판정까지 <b>이만큼 남았을 때</b>부터 보스의 몸 색이 선딜 틴트 쪽으로 간다(초).
-    /// 선딜 길이는 패턴마다 다르므로(0.40~0.80) 뷰가 그 값을 알 필요가 없게 고정 리드로 잡는다.
-    ///
-    /// <para>
-    /// 같은 리드로 <b>조여 들던 예고 링</b>과 판정에 퍼지던 충격파는 걷었다 (#81 — 유저: "적 공격에 동그라미 연출은
-    /// 제거해주세요"). 그 둘만 읽던 키 넷(<c>tell_ring_from</c> · <c>tell_ring_to</c> · <c>boss_ring_offset_y</c> ·
-    /// <c>boss_ring_to</c>)도 같이 지웠다. 틴트의 무르익음은 동그라미가 아니라 남았고, 5번 PR 이 걷는다(설계 §6).
-    /// </para>
-    /// </summary>
-    public required double TellLeadSeconds { get; init; }
-
-    /// <summary>
     /// 착지의 흰 충격파가 발밑에서 판정의 양끝까지 퍼지는 시간(초) (#83). 유저: "점프공격때 하단영역에 데미지를 준다는 연출이
     /// 있어야겠네요 흰색영역이 퍼지면서 충격파를 주는듯한 연출을 추가해주세요." (2026-09-26)
     ///
@@ -232,6 +226,22 @@ public sealed class FeelBalance
 
     /// <summary>사망 애니메이션을 보여주고 결과 화면을 띄우기까지의 시간(초).</summary>
     public required double DeathHoldSeconds { get; init; }
+
+    /// <summary>
+    /// 돌진의 <c>run</c> 배속 (#78 · 설계 §4.6). 3 이면 10fps × 3 = 30fps — 한 장이 화면 두 프레임이고, 돌진(0 ~ 0.433초) 동안 0 ~ 13장(한 바퀴 8장의
+    /// 1.6바퀴)이 보인다. 제 속도(10fps)면 0 ~ 5장이라 다리가 반 바퀴도 안 돌고 미끄러지는 한 자세로 읽힌다. 6배(60fps)부터는 장이 화면
+    /// 프레임마다 바뀌어 다리가 번진다. 발은 어느 배속에서도 미끄러진다(30fps 에서 한 장에 120px) — 배속은 "달린다" 가 읽히는 만큼만 준다.
+    /// </summary>
+    public required double RushAnimSpeed { get; init; }
+
+    /// <summary>잡기의 흰 구 반지름(px · #78 · 설계 §6) — 파이터 키 120 의 3/4, 몸을 감쌀 만큼.</summary>
+    public required double GrabOrbRadius { get; init; }
+
+    /// <summary>
+    /// 흰 구가 흩어지는 시간(초 · #78). 붙들림이 풀리거나 창이 닫히면 그 자리에서 부풀며 사라진다. 0.3 은 잡기 GIF 가 풀린 뒤 더 보여 주는
+    /// 길이(설계 §6.2 — 풀리는 틱 + 18)다.
+    /// </summary>
+    public required double GrabOrbFadeSeconds { get; init; }
 }
 
 /// <summary>모든 수치의 진실 원천. <c>data/balance.json</c> 하나가 이 모양이다.</summary>

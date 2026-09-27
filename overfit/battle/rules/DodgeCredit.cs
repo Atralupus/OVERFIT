@@ -144,7 +144,7 @@ public sealed class DodgeCredit
 
     /// <summary>
     /// 이 판정을 <b>무엇이</b> 그렇게 만들었나. 결과가 이미 답을 들고 있다 —
-    /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다.
+    /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다. 거리로 빗나간 것만은 반사실로 가른다(<see cref="CreditDistance"/>).
     /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
     ///
     /// <para>
@@ -155,9 +155,10 @@ public sealed class DodgeCredit
     /// 그 스냅샷을 그대로 내보낸다(다시 묻지 않는다).
     /// </para>
     /// </summary>
-    public (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict, HitBox box, Boss boss)
+    public (DodgeVerb Verb, double StartedAt) Credit(HitVerdict verdict, HitBox box, Boss boss, Fighter fighter)
     {
         ArgumentNullException.ThrowIfNull(boss);
+        ArgumentNullException.ThrowIfNull(fighter);
 
         return verdict switch
         {
@@ -179,10 +180,10 @@ public sealed class DodgeCredit
                 : (DodgeVerb.Jump, _jumpStartedAt),
 
             // 거리로 빗나갔다 — 안이든 밖이든. 서 있던 자리가 피하게 했으면 간격이지만,
-            // **그 자리를 대시가 만들었으면 대시다** (이슈 #46).
-            HitVerdict.MissedTooFar or HitVerdict.MissedByGap => CreditDistance(box, boss),
+            // **그 자리를 대시가 만들었으면 대시다** (이슈 #46) — **그 몸을 점프가 띄웠으면 점프다** (#85).
+            HitVerdict.MissedTooFar or HitVerdict.MissedByGap => CreditDistance(box, boss, fighter),
 
-            // 맞았다 — 무엇을 시도했다 실패했는지를 남긴다.
+            // 맞았다 · 잡혔다(#78) — 무엇을 시도했다 실패했는지를 남긴다.
             _ => MostRecentAction(),
         };
     }
@@ -227,19 +228,45 @@ public sealed class DodgeCredit
     /// 유예 창과 다르다 — 새 수치가 아니라 데이터의 경직 그대로고, 그동안 파이터가 고를 수 있는 것이 없다. 늘어난 구간은 6틱이라
     /// 대시 하나(11 + 6틱)가 3연격의 두 판정(42틱 · 66틱 사이)을 같이 설명하는 일도 없다.
     /// </para>
+    ///
+    /// <para>
+    /// <b>점프도 같은 물음을 한다</b> (#85) — "같은 가로 자리의 땅에 서 있었으면 닿았나". 닿았으면 몸을 띄운 점프가 피한 것이다. 떠 있는 몸은
+    /// 모양의 외곽 상자 안이면 빗나간 이유가 높이(<c>MissedByHeight</c> — 외곽 상자 위)가 아니라 거리 · 틈이다(설계 §3.6 ②): 보스 앞 115 에서
+    /// 뛰어 넘은 3연격의 2타가 그렇다. 관측의 <c>JumpAvailable</c> 이 자리마다 그 2타를 "뛰어 넘을 수 있었다" 로 싣는데(#85) 공을 간격으로
+    /// 돌리면, 뛰어 넘은 사람이 "뛸 수 있었는데 안 뛰었다" 로 실려 점프 의존도가 뒤집힌다. 사거리 밖에서 뛴 것은 서서도 안 닿으므로 그대로
+    /// 간격이다. 대시가 먼저다 — 공중에서 뛴 대시의 반사실은 대시 시작의 높이로 잰다(<c>_dashStartBody</c>). 점프의 공도 행동이 도는 동안(떠
+    /// 있는 동안)이다 — 대시와 같은 경계다.
+    /// </para>
     /// </summary>
-    private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box, Boss boss) =>
-        !double.IsNaN(_dashStartedAt)
-        && _dashStartBody is { } before
-        && ShapeHit.Test(box.Shape, new Placement(_dashStartBossX, boss.Y, boss.Facing), before) == ShapeContact.Overlap
-            ? (DodgeVerb.Dash, _dashStartedAt)
-            : (DodgeVerb.Spacing, double.NaN);
+    private (DodgeVerb Verb, double StartedAt) CreditDistance(HitBox box, Boss boss, Fighter fighter)
+    {
+        if (!double.IsNaN(_dashStartedAt)
+            && _dashStartBody is { } before
+            && ShapeHit.Test(box.Shape, new Placement(_dashStartBossX, boss.Y, boss.Facing), before) == ShapeContact.Overlap)
+        {
+            return (DodgeVerb.Dash, _dashStartedAt);
+        }
+
+        var grounded = new HitRect(fighter.X - fighter.HalfWidth, fighter.X + fighter.HalfWidth, 0, fighter.BodyHeight);
+        if (!double.IsNaN(_jumpStartedAt)
+            && ShapeHit.Test(box.Shape, new Placement(boss.X, boss.Y, boss.Facing), grounded) == ShapeContact.Overlap)
+        {
+            return (DodgeVerb.Jump, _jumpStartedAt);
+        }
+
+        return (DodgeVerb.Spacing, double.NaN);
+    }
 
     /// <summary>
-    /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 판정에만 쓴다 —
+    /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 · 잡힌 판정에만 쓴다 —
     /// 겹쳐 있으면 그 판정을 겨냥한 쪽이 더 나중이다.
-    /// 동시 시작은 대시 → 패리 → 점프 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
+    /// 동시 시작은 대시 → 패리 → 점프 → 가드 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
     /// 다른 라벨을 내 학습 데이터가 재현되지 않는다.
+    ///
+    /// <para>
+    /// <b>가드도 든다</b> (#78 · 설계 §4.7 · §12 「잡힘」). 가드를 받는 판정은 가드 중이면 맞음이 아니라 막음 · 붕괴라 여기 안 온다 —
+    /// 가드 중에 여기 오는 것은 가드를 안 받는 판정(잡기)뿐이다. 빼면 가드로 버티다 잡힌 기록이 "아무것도 안 함" 이 된다.
+    /// </para>
     /// </summary>
     private (DodgeVerb Verb, double StartedAt) MostRecentAction()
     {
@@ -262,6 +289,12 @@ public sealed class DodgeCredit
         {
             verb = DodgeVerb.Jump;
             at = _jumpStartedAt;
+        }
+
+        if (!double.IsNaN(_guardStartedAt) && (double.IsNaN(at) || _guardStartedAt > at))
+        {
+            verb = DodgeVerb.Guard;
+            at = _guardStartedAt;
         }
 
         return (verb, at);

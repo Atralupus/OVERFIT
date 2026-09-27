@@ -18,8 +18,9 @@ namespace Overfit.Battle.Rules;
 ///
 /// <para>
 /// <b>점프 축 둘이 다시 산다</b> (#72 · 설계 §7.2). 내려찍기 한 계열(이슈 #48)이던 동안은 점프로 넘을 판정이 없어
-/// <see cref="JumpReliance"/> 의 분모가 0 이었고 <see cref="JumpTimingBias"/> 는 실패한 점프만 모았다. 이제 3연격의 1타와
-/// 바닥 띠(점프 공격의 착지)를 점프로 넘는다. <see cref="AirborneAtImpactRatio"/> 는 여전히 예측력이 없다 — 대공 판정이
+/// <see cref="JumpReliance"/> 의 분모가 0 이었고 <see cref="JumpTimingBias"/> 는 실패한 점프만 모았다. 이제 3연격(1타는 어디서든 ·
+/// 2타는 보스 앞에서 · 3타는 바짝 붙어서 — 창이 열린 자리마다 잰다 · #85)과 바닥 띠(점프 공격의 착지)를 점프로 넘는다.
+/// <see cref="AirborneAtImpactRatio"/> 는 여전히 예측력이 없다 — 대공 판정이
 /// 없다. 정의는 남긴다: 축을 뺐다 넣는 것은 망의 입력 <b>모양</b>을 두 번 바꾸는 일이라 그 편이 훨씬 비싸다.
 /// </para>
 ///
@@ -155,9 +156,8 @@ public sealed class PlayerAxes
     /// 모든 입력 벡터를 다른 길이로 만드는 일이다. 그럴 만한 값이 지금 가드에는 없다:
     /// 의존도 축(<see cref="JumpReliance"/> · <see cref="ParryReliance"/>)의 셈법은
     /// "그 수단이 가능했고 <b>다른 수단도</b> 가능했던" 판정을 분모로 삼는데, 가드는
-    /// 지금 <b>모든</b> 판정에서 가능하다(가드 불가 판정을 걷었다 · #72) — 분모가 전부라
+    /// 잡기(#78 · 설계 §7.3) 하나를 빼면 <b>모든</b> 판정에서 가능하다(옛 가드 불가 판정은 #72 에서 걷었다) — 분모가 거의 전부라
     /// "가드 의존도" 는 그냥 사용 비율이 되고, 그건 이 두 축이 피하려고 만들어진 바로 그 값이다.
-    /// 5번 PR 의 잡기가 처음으로 가드를 못 받는 판정이 된다(설계 §7.3).
     /// </para>
     ///
     /// <para>
@@ -175,9 +175,9 @@ public sealed class PlayerAxes
     public int GuardSamples { get; private init; }
 
     /// <summary>
-    /// 그중 <b>깨진</b> 가드의 수 (이슈 #47). 개수 하나가 없으면 "버텨냈다" 와 "버티다 무너졌다" 가
-    /// 한 점이 되는데, 그 둘은 결과가 정반대다 (흘린 피해 0.25 · 자세 유지 ↔ 전액 · 탈진 1.1초 — #71). 깨지는 길은
-    /// 이제 스태미나 고갈 하나다(#72).
+    /// 그중 <b>버텨 내지 못한</b> 가드의 수 (이슈 #47) — 깨졌거나(붕괴) 가드를 안 받는 판정에 잡혔다(#78 · 설계 §4.7). 개수 하나가 없으면
+    /// "버텨냈다" 와 "버티다 무너졌다" 가 한 점이 되는데, 그 둘은 결과가 정반대다 (흘린 피해 0.25 · 자세 유지 ↔ 전액 · 탈진 1.1초 — #71).
+    /// 가드가 깨지는 길은 이제 스태미나 고갈 하나다(#72). 가드 개수에서 이것을 빼면 막아 낸 수다.
     /// </summary>
     public int GuardBrokenSamples { get; private init; }
 
@@ -275,9 +275,10 @@ public sealed class PlayerAxes
 
                     break;
                 case DodgeVerb.Guard:
-                    // 막아냈든 깨졌든 **고른 것은 가드**다. 둘의 차이는 verb 가 아니라 Verdict 가 나른다.
+                    // 막아냈든 깨졌든 **고른 것은 가드**다. 둘의 차이는 verb 가 아니라 Verdict 가 나른다. 가드 중에 잡힌 것(#78 · 가드를
+                    // 안 받는 판정)도 버텨 내지 못한 가드다 — 막아 낸 가드(Guarded)만 버틴 것이다.
                     guards++;
-                    if (e.Verdict == HitVerdict.GuardBroken)
+                    if (e.Verdict != HitVerdict.Guarded)
                     {
                         guardsBroken++;
                     }

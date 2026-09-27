@@ -23,15 +23,17 @@ public enum DodgeVerb
     /// <para>
     /// ⚠ <b>그 자리를 대시가 만들었으면 여기가 아니라 <see cref="Dash"/> 다</b> (이슈 #46).
     /// 대시로 사거리를 벗어난 판정은 무적이 보이기도 전에 거리에서 빠지는데, 그것까지 간격으로 적으면
-    /// 대시 의존자가 간격 의존자로 기록된다. 판단은 <c>DodgeCredit</c> 의 거리 갈래(<c>CreditDistance</c>)에 있다.
+    /// 대시 의존자가 간격 의존자로 기록된다. <b>그 몸을 점프가 띄웠으면 <see cref="Jump"/> 다</b> (#85) — 같은 가로 자리의
+    /// 땅에서는 닿았을 판정을 떠서 거리 · 틈으로 흘린 것인데, 간격으로 적으면 뛰어 넘은 사람이 "뛸 수 있었는데 안 뛰었다" 로
+    /// 실린다. 둘 다 판단은 <c>DodgeCredit</c> 의 거리 갈래(<c>CreditDistance</c>)에 있고, 대시의 반사실이 먼저다.
     /// </para>
     /// </summary>
     Spacing,
 
     /// <summary>
-    /// <b>가드로 버텼다</b> (이슈 #47). 막아냈는지 깨졌는지는 verb 가 아니라
-    /// <c>Verdict</c>(<see cref="HitVerdict.Guarded"/> · <see cref="HitVerdict.GuardBroken"/>)가 나른다 —
-    /// 고른 것은 같고 결과가 다르다.
+    /// <b>가드로 버텼다</b> (이슈 #47). 막아냈는지 깨졌는지 · 가드를 안 받는 판정에 잡혔는지(#78 · 설계 §4.7)는 verb 가 아니라
+    /// <c>Verdict</c>(<see cref="HitVerdict.Guarded"/> · <see cref="HitVerdict.GuardBroken"/> · <see cref="HitVerdict.Grabbed"/>)가
+    /// 나른다 — 고른 것은 같고 결과가 다르다.
     ///
     /// <para>
     /// <see cref="Parry"/> 와 다시 다른 키 · 다른 행동이다 (설계 §5.2 · §5.3) — 셋(패리 · 가드 · 무반응)이 갈려야
@@ -71,19 +73,21 @@ public enum DodgeVerb
 /// <param name="Distance">보스와의 거리 — 공중과 같은 틱(결과를 가른 틱)의 값이다.</param>
 /// <param name="GreedWindow">결과를 가른 틱(공중과 같은 틱)에 공격 중이었나 — 보스의 선딜을 욕심내 파고든 흔적이다.
 /// 1타든 2타든 칼질 중이면 여기 든다 — 2타는 1초를 서 있는 칼이라 정확히 이 축의 이야기다 (설계 §7.2). 칼질 뒤 경직(#82)도 칼질이다.</param>
-/// <param name="DashAvailable">이 판정을 대시로 피할 수 있었나 (<c>dash_window &gt; 0</c>).</param>
-/// <param name="JumpAvailable">점프로 넘을 수 있었나 — <b>판정 단위</b>다 (#72 · 설계 §7.3): 그 판정의
-/// <see cref="HitBox.Jumpable"/>, 곧 판을 세울 때 모양의 윗끝과 이 판의 파이터 점프로 잰 값이다(<c>BossHits.TicksAbove</c>).
-/// 패턴 태그 <c>jumpable</c> 이 아니다 — 태그는 패턴의 요약이라, 실으면 3연격의 2 · 3타까지 "점프도 됐다" 로 실려 점프 의존도의
-/// 분모가 부푼다. 앞뒤의 대시 · 패리는 아직 태그에서 온다(판정 단위의 답은 5번 PR).</param>
-/// <param name="ParryAvailable">패리로 받을 수 있었나 (<c>parryable</c>).</param>
+/// <param name="DashAvailable">이 판정을 대시로 피할 수 있었나 — 태그(<c>dash_window &gt; 0</c>)를 판정의 답(<see cref="HitBox.Dashable"/> ·
+/// #78 · 설계 §7.3)이 좁힌 값이다. 규칙(<c>HitResolver.Effective</c>)이 무적을 볼 때 읽는 두 값과 같다.</param>
+/// <param name="JumpAvailable">점프로 넘을 수 있었나 — <b>판정과 자리 단위</b>다 (#85 · 설계 §7.3): 그 판정의 창이 열린 틱에 파이터가
+/// 선 자리에서 제자리로 한 번 뛰었다면 창 내내 몸이 모양의 어느 사각형과도 안 겹칠 수 있었나(<see cref="JumpClearance"/>). 3연격의 1타는
+/// 어디서든, 2타는 보스 앞에서, 3타는 바짝 붙어서(보스 중심 +167 안) 참이다. 패턴 태그 <c>jumpable</c> 이 아니다 — 태그는 패턴의
+/// 요약이라, 실으면 판정마다의 답이 뭉개진다. 모양 전체의 윗끝으로 재던 때(#72)는 "1타만 넘는다" 였다 — 보스 앞에서 넘는 2타가
+/// "못 넘었다" 로 실렸다. 앞뒤의 대시 · 패리 · 가드도 판정 단위다(#78 — 판정의 답).</param>
+/// <param name="ParryAvailable">패리로 받을 수 있었나 — 태그(<c>parryable</c>)를 판정의 답(<see cref="HitBox.Parryable"/>)이 좁힌 값이다.</param>
 /// <param name="GuardAvailable">가드로 막을 수 있었나 (이슈 #53).
 ///
 /// <para>
 /// 앞의 셋과 같은 자리다: <b>무엇을 골랐나</b>뿐 아니라 <b>무엇을 고를 수 있었나</b>를 같이 싣는다.
-/// 3 · 4번 PR 에서는 <b>모든 판정이 참</b>이다 — 가드 불가 판정(옛 빨간 마무리 · <c>guard_break</c>)을 걷었다(#72 · 설계 §7.2).
-/// 5번 PR 의 잡기가 처음으로 거짓을 싣는다(판정 단위의 답 · 설계 §7.3). 칸을 남기는 것은 그래서다 — 뺐다 넣으면 관측의
-/// 모양이 두 번 바뀐다.
+/// 태그가 없다 — 판정의 답(<see cref="HitBox.Guardable"/> · #78 · 설계 §7.3) 그대로다. 옛 가드 불가 판정(빨간 마무리 · <c>guard_break</c>)은
+/// #72 에서 걷었고, 3 · 4번 PR 동안은 모든 판정이 참이었다. 잡기가 처음으로 거짓을 싣는다. 칸을 남긴 것은 그래서다 — 뺐다 넣으면
+/// 관측의 모양이 두 번 바뀐다.
 /// </para>
 ///
 /// <para>

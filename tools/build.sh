@@ -23,6 +23,9 @@
 #                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
 #                                      엔진 안에서 뷰포트를 직접 찍는다 — 화면 기록 권한이 필요 없고 다른 창이 안 겹친다
+#   tools/build.sh gifs [id…]          README 의 패턴별 GIF → docs/gifs/<id>.gif (기본: rush grab offbeat jump3)
+#                                      창과 Movie Maker 로 모든 프레임을 받고 대본이 남긴 구간만 ffmpeg 로 엮는다(480px · 15fps)
+#                                      잡은 구간 4초 · 1MB 를 넘으면 실패다. ffmpeg 가 필요하다(brew install ffmpeg)
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
 #   EXTRA="--stage=2" tools/build.sh demo        단계 지정 (캐릭터는 하나라 --fighter= 는 그 하나만 가리킨다)
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
@@ -467,6 +470,67 @@ cmd_shots() {
   ok "스크린샷 ${n}장 — $out (축소본 docs/shots/)"
 }
 
+# README 의 패턴별 GIF (#78 · 설계 §6.2). 대본(battle/debug/GifRunner.cs)마다 창을 띄워 Movie Maker(--write-movie)로 모든 프레임을 PNG 로
+# 받는다 — 엔진이 모든 프레임을 고정 간격으로 쓰므로 빠지는 장이 없고, 같은 대본이면 장의 틱 · 로그 · 관측이 같다(화면 흔들림만 뷰의 난수
+# GD.Randf 라 장마다 흔들린다 — 그래서 다시 찍으면 GIF 의 바이트가 조금 다르다). 러너가 로그로 남긴 잡을 구간
+# ([gif][I] capture_from frame=… · capture_to frame=…)의 장만 ffmpeg 에 넘긴다: 판의 앞머리(걸어 들어오기)와 앞 패턴은 돌되 안 잡는다.
+# 60fps → 15fps 로 솎고 · 가로 480px(1920 의 1/4) · 팔레트를 떠서(바뀐 사각형만 싣는다) docs/gifs/<id>.gif 로 쓴다.
+#
+# 예산은 잡은 구간에 건다 — 4초(60fps 로 240장) · 1MB. 넘으면 실패다: README 가 무거워지는 것을 조용히 두지 않는다. 판정 보기와 섞지
+# 않는다(HITBOXES=1 이면 거절한다) — 채운 사각형이 README 에 실린다. 세션 시드는 51 이다(smoke · shots 와 같은 이유 — 대본은 패턴을
+# 고정하지만 스크린샷처럼 실행마다 같은 판이어야 한다).
+GIF_IDS=(rush grab offbeat jump3)
+GIF_MAX_FRAMES=240
+GIF_MAX_BYTES=1048576
+FFMPEG="${FFMPEG:-/opt/homebrew/bin/ffmpeg}"
+
+cmd_gifs() {
+  need_godot
+  [[ -z "$HITBOX_ARG" ]] || die "HITBOXES=1 로는 GIF 를 안 찍습니다 — 판정 사각형이 README 에 실린다. 판정 보기는 shots 로 보세요."
+  [[ -x "$FFMPEG" ]] || die "ffmpeg 이 없습니다 — $FFMPEG
+brew install ffmpeg 로 깔거나 FFMPEG 환경변수로 경로를 알려주세요."
+  cmd_build
+  say "GIF"
+  local ids=("$@")
+  [[ ${#ids[@]} -gt 0 ]] || ids=("${GIF_IDS[@]}")
+  mkdir -p "$ROOT/docs/gifs" "$OUT/gifs"
+
+  local id
+  for id in "${ids[@]}"; do
+    local dir="$OUT/gifs/$id" log="$OUT/gifs/$id.log" code=0
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    # --write-movie 의 경로는 절대 경로여야 한다 — 상대 경로는 --path 의 프로젝트 폴더 기준이라 폴더를 못 찾고 한 장도 안 쓴다(재 보니 그랬다).
+    # --quit-after 는 마지막 울타리다 — 러너가 30초(1800장)에 스스로 멈추고, 그 전에 끝난 판도 [E] 로 멈춘다(GifRunner).
+    "$GODOT" --path "$PROJECT" --write-movie "$dir/f.png" --fixed-fps 60 --quit-after 3600 -- "--gif=$id" $SESSION_ARG $LOG_ARG > "$log" 2>&1 || code=$?
+    judge_headless "GIF $id" "$log" "gif=done id=$id" "$code"
+
+    local from to ticks
+    from="$(sed -n 's/^\[gif\]\[I\] capture_from frame=\([0-9]*\) .*/\1/p' "$log" | head -1)"
+    to="$(sed -n 's/^\[gif\]\[I\] capture_to frame=\([0-9]*\) .*/\1/p' "$log" | head -1)"
+    [[ -n "$from" && -n "$to" ]] || die "GIF $id: 잡을 구간이 로그에 없습니다 — [gif][I] capture_from · capture_to. 전체 로그: $log"
+    local n=$(( to - from ))
+    (( n > 0 )) || die "GIF $id: 잡을 구간이 비었습니다 (${from} → ${to}). 전체 로그: $log"
+    (( n <= GIF_MAX_FRAMES )) || die "GIF $id: 잡은 구간이 ${n}장 — 4초(${GIF_MAX_FRAMES}장)를 넘습니다. 대본의 구간을 줄이세요."
+    # 장 수는 틱 수보다 적을 수 없다 — 틱마다 한 장을 그리고(--fixed-fps 60 · 물리 60Hz), 히트스톱은 틱 없이 장만 더한다. 적으면 엔진이 그리기를
+    # 건너뛴 것이다(가려진 창이 그랬다 — 재 보니 129틱이 45장에 담겨 GIF 가 세 배 빠르게 돌았다). 그런 GIF 는 박자가 거짓말이라 실패로 친다.
+    ticks=$(( $(sed -n 's/^\[gif\]\[I\] capture_to frame=[0-9]* tick=\([0-9]*\).*/\1/p' "$log" | head -1) \
+            - $(sed -n 's/^\[gif\]\[I\] capture_from frame=[0-9]* tick=\([0-9]*\).*/\1/p' "$log" | head -1) ))
+    (( n >= ticks )) || die "GIF $id: ${ticks}틱이 ${n}장에 담겼습니다 — 엔진이 그리기를 건너뛰었습니다(창이 가려졌나요?). 창을 앞에 두고 다시 도세요."
+
+    local gif="$ROOT/docs/gifs/$id.gif"
+    "$FFMPEG" -y -loglevel error -framerate 60 -start_number "$from" -i "$dir/f%08d.png" -frames:v "$n" \
+      -vf "fps=15,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=diff_mode=rectangle" \
+      "$gif" || die "GIF $id: ffmpeg 이 멈췄습니다. 프레임: $dir"
+
+    local size
+    size="$(stat -f%z "$gif")"
+    (( size <= GIF_MAX_BYTES )) || die "GIF $id: $(( size / 1024 ))KB — 1MB 를 넘습니다. 구간을 줄이거나 대본을 고치세요."
+    ok "$id.gif — ${n}장($(awk "BEGIN { printf \"%.2f\", $n / 60 }")초) · $(( size / 1024 ))KB"
+    rm -rf "$dir"
+  done
+}
+
 cmd_export() {
   need_godot
   local preset="${1:-macOS}"
@@ -541,6 +605,7 @@ case "${1:-}" in
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
+  gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;
   clean)     shift; cmd_clean "$@" ;;
   ""|-h|--help|help) usage ;;

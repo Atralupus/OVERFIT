@@ -302,6 +302,25 @@ public class PlayerAxesTests
     }
 
     [Fact]
+    public void 가드_중에_잡힌_관측은_버티지_못한_가드로_센다()
+    {
+        // 설계 §7.3 — 잡힘은 실패다: 맞음과 같이 아무 축도 성공으로 안 센다. 가드로 버티다 잡힌 관측(수단 Guard · 설계 §4.7)은 가드를 고른
+        // 것이라 가드 개수에 들고, 버텨 내지 못했으니 "버티다 무너진" 쪽에 든다 — 막아 낸 가드(Guarded)와 한 점이 되면 가드 개수에서
+        // 막은 수를 뺀 값이 거짓말한다. 잡기는 점프만 되는 판정이라(대시 · 패리 불가) 의존도의 분모에는 안 든다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Grabbed,
+                dashAvailable: false, parryAvailable: false, guardAvailable: false),
+        });
+
+        axes.GuardSamples.ShouldBe(2);
+        axes.GuardBrokenSamples.ShouldBe(1, "가드 중에 잡힌 것을 막아 낸 가드로 셌다");
+        axes.JumpChoiceSamples.ShouldBe(1, "잡기가 점프 의존도의 분모에 들었다 — 점프만 되는 판정이다");
+        axes.ParryChoiceSamples.ShouldBe(1);
+    }
+
+    [Fact]
     public void 축은_열_개_그대로다()
     {
         // 10축 계약은 **망의 입력 모양**이다. 축을 하나 늘리면 지금까지의 입력 벡터가 전부
