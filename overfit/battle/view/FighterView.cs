@@ -11,8 +11,9 @@ namespace Overfit.Battle.View;
 /// <para>
 /// 평생 <c>idle</c> 만 재생하던 것이 이 화면의 가장 큰 문제였다. 뷰가 부르는 것은
 /// <c>idle · run · attack · attack2 · hit · death</c> 여섯이고 대시·가드 전용 그림은 없다 —
-/// 그 둘은 <b>이펙트로 만든다</b>(잔상 · 링 · 섬광). 2D 액션에서 대시와 가드의 피드백은
-/// 원래 애니메이션이 아니라 이펙트가 결정하므로 대체품이 아니라 제 모양이다.
+/// 대시는 <c>run</c> 을 빌려 <b>이펙트가 말하고</b>(잔상 · 꼬리 색), 가드는 칼을 사선으로 세운 <c>attack2</c> 의 한 장에
+/// <b>멈춰 서고</b> 색과 링이 붙는다(#96). 2D 액션에서 대시와 가드의 피드백은 원래 이펙트가 크게 맡으므로 빌린 그림과
+/// 이펙트가 대체품이 아니라 제 모양이다. 시트를 어느 장에 세우고 흘리는지는 <see cref="FighterAnimator"/> 가 안다.
 /// </para>
 /// </summary>
 public partial class FighterView : Node2D
@@ -75,7 +76,7 @@ public partial class FighterView : Node2D
     ///
     /// <para>
     /// 패리와 가드가 다시 다른 행동이 됐지만(설계 §5.3) 패리는 색이 아니라 움직임(attack2 f0~f3)으로 갈린다 —
-    /// 색은 가드 하나다.
+    /// 색은 가드 하나다. 가드는 같은 시트의 f1 에 멈춰 선다(#96).
     /// </para>
     /// </summary>
     private static readonly Color _guardTint = new(0.80f, 0.78f, 1.32f);
@@ -83,7 +84,7 @@ public partial class FighterView : Node2D
     /// <summary>
     /// 가드 링의 색 — <b>보라 쪽</b>이다. 몸 색과 같은 계열이라 "지금 막고 있다" 가
     /// 한 덩어리로 읽힌다. 이 링은 가드 내내 하나다 —
-    /// 크기가 <b>안 변한 채 버티는</b> 것이 "누르고 있는 동안" 을 말하는 유일한 그림이다.
+    /// 크기가 <b>안 변한 채 버티는</b> 것이, 멈춰 선 자세(#96)와 함께 "누르고 있는 동안" 을 말한다.
     /// </summary>
     private static readonly Color _guardRingColor = new(0.68f, 0.58f, 1.00f, 0.95f);
 
@@ -156,10 +157,11 @@ public partial class FighterView : Node2D
     /// 뷰가 fighters.json 을 직접 읽으면 규칙과 뷰가 같은 파일을 두 번 읽는다.
     /// <paramref name="parry"/> 는 패리가 도는 시트다 — 칼이 나가는 장은 없다(<c>BladeFrame</c> 은 안 쓴다).
     /// <paramref name="parryFrames"/> 는 그 시트에서 패리가 도는 장 수다(<c>parry_anim_frames</c>).
+    /// <paramref name="guard"/> 는 가드가 멈춰 서는 장이다(<c>guard_anim</c> · <c>guard_frame</c> · #96).
     /// </summary>
-    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames)
+    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard)
     {
-        _animator.SetSheets(swings, parry, parryFrames);
+        _animator.SetSheets(swings, parry, parryFrames, guard);
 
         var frames = GD.Load<SpriteFrames>($"res://assets/spriteframes/{spriteId}.tres");
         if (frames is null)
@@ -174,6 +176,13 @@ public partial class FighterView : Node2D
         }
 
         _sprite.SpriteFrames = frames;
+        if (!frames.HasAnimation(guard.Anim))
+        {
+            // 가드는 옛 그림(idle 위의 색과 링)으로 물러선다(FighterAnimator.GuardAnim). 여기서 한 번만 알린다 — 없는 이름을
+            // 자세마다 틀려고 들면 가드 내내 매 프레임 [W] 가 찍힌다.
+            Log.Warn("view", $"guard_anim_missing name={guard.Anim} fallback=idle");
+        }
+
         // **이름이 같아도 재생하고 바닥을 맞춘다** (이슈 #62). 프레임을 끼우는 순간 엔진이 재생을 멈추고,
         // 지금 이름(처음엔 "default")이 새 프레임에 없으면 **첫 애니메이션으로 바꿔 둔다** — 이 팩의 첫
         // 애니메이션이 idle 이다. 그래서 그냥 Animate("idle") 이면 "이미 idle" 로 보고 아무것도 안 해,
@@ -409,15 +418,16 @@ public partial class FighterView : Node2D
     }
 
     /// <summary>
-    /// 자세 → 애니메이션 이름. 대시는 <c>run</c> 을 빌려 쓰고 나머지는 이펙트가 말한다 —
+    /// 자세 → 애니메이션 이름. 대시는 <c>run</c> 을, 가드는 <c>attack2</c> 의 한 장을 빌려 쓴다 —
     /// 팩에 대시·가드 그림이 없다. 패리는 <c>attack2</c> 의 앞 네 장이다(설계 §5.3).
     ///
     /// <para>
-    /// <b>가드는 <c>idle</c> 이다</b> (이슈 #47 · 설계 §5.2 — attack2 f1 자세는 6번 PR 이다). 팩(Martial Hero)에 있는 것은
-    /// <c>idle · run · jump · fall · attack · attack2 · hit · hit_white · death</c> 뿐이고
-    /// 막는 자세는 없다. 후보가 <c>fall</c>(웅크린 자세)과 <c>idle</c> 이었는데 <c>fall</c> 은
-    /// 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽힌다. 그래서 <c>idle</c> 을 빌리고 갈라 보이게 하는 일은
-    /// <b>색과 멈춘 링</b>이 맡는다 — 대시에서 이미 쓰는 규약이다.
+    /// <b>가드는 칼을 사선으로 세운 <c>attack2</c> f1 에 멈춰 선다</b> (#96 · 설계 §6 · <c>guard_anim</c> · <c>guard_frame</c>). 팩(Martial Hero)에
+    /// 있는 것은 <c>idle · run · jump · fall · attack · attack2 · hit · hit_white · death</c> 뿐이고 막는 자세는 없다. 처음(#47)에는
+    /// 후보가 <c>fall</c>(웅크린 자세)과 <c>idle</c> 이었는데 <c>fall</c> 은 공중 그림이라 땅에 붙어 버티는 것과 반대로 읽혀 <c>idle</c> 을
+    /// 빌렸고, 갈라 보이게 하는 일은 색과 멈춘 링이 맡았다 — 서 있는 자세 그대로라 "막고 있다" 를 몸이 말하지 않았다. 칼을 세운 장은 패리가
+    /// 이미 쓰는 그림이라, 둘은 <b>움직임</b>으로 갈린다: 패리는 f0~f3 을 움직이며 돌고 가드는 f1 에 멈춰 있다(<see cref="FighterAnimator"/>).
+    /// 팩에 그 시트가 없으면 <c>idle</c> 로 물러선다(<see cref="FighterAnimator.GuardAnim"/>).
     /// </para>
     /// </summary>
     private string AnimationFor(FighterPose pose)
@@ -438,8 +448,8 @@ public partial class FighterView : Node2D
             // 칼질이 맞은 자세에 끊겼다 돌아오면 이 갈래로 떨어진다 — 지금 칼질의 시트다.
             FighterPose.Attack => _animator.SwingAnim ?? "attack",
             FighterPose.Parry => _animator.ParryAnim,
-            // 가드 그림이 팩에 없다 — 위 주석을 보라. 색과 멈춘 링이 idle 과 가드를 가른다.
-            FighterPose.Guard => "idle",
+            // 가드 그림이 팩에 없다 — 위 주석을 보라. 칼을 세운 장에 멈춰 서는 것은 FighterAnimator 가 한다.
+            FighterPose.Guard => _animator.GuardAnim,
             // 탈진은 take-hit 를 제 속도로 한 번 돌고 마지막 장에 선다(#71 · 설계 §6) — 반복하지 않는 애니메이션이라 엔진이 거기서
             // 멈춘다. 이름이 바뀔 때만 틀므로(Animate) 탈진 동안 맞아도 처음부터 다시 돌지 않는다. 붙들림(#78 · 설계 §6 「잡힌 파이터」)도
             // 같은 장이다 — 같은 이름이라 붙들림 뒤에 탈진이 남아 넘어가도 처음부터 다시 안 돈다. 가르는 것은 흰 구와 색이다(Battle 이

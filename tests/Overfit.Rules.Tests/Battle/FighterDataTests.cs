@@ -66,6 +66,35 @@ public class FighterDataTests
         }
     }
 
+    [Fact]
+    public void 가드_자세는_파이터_팩에_있는_이름과_장이다()
+    {
+        // 가드는 guard_anim 의 guard_frame 장에 멈춰 선다 (#96 · 설계 §6). 이름이 팩에 없으면 뷰가 [W] 한 줄 남기고 옛 그림(idle)으로
+        // 물러서고, 장이 모자라면 뷰가 있는 마지막 장에 세운다 — 둘 다 조용히 다른 그림이 된다. JsonData 는 모르는 키를 조용히 버리므로
+        // 오타가 빌드를 그냥 지나간다 — 그래서 파이터 팩의 .tres 와 대 본다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            Dictionary<string, int> pack = TestConfigs.PackFrames(c.Sprite);
+            pack.ShouldContainKey("idle", $"{id}: 팩({c.Sprite})을 못 읽었다 — 이 가드가 아무것도 안 본다");
+            pack.ShouldContainKey(c.GuardAnim, $"{id}: 가드의 그림 {c.GuardAnim} 이 팩({c.Sprite})에 없다");
+            c.GuardFrame.ShouldBeInRange(0, pack[c.GuardAnim] - 1, $"{id}: {c.GuardAnim} 에 {c.GuardFrame} 번 장이 없다");
+        }
+    }
+
+    [Fact]
+    public void 가드_자세는_패리가_칼을_세우는_장_하나다()
+    {
+        // 설계 §6 — 가드는 attack2 f1(칼을 사선으로 세운 정지 자세)이고, 패리는 같은 시트의 f0~f3 을 움직이며 돈다: 둘은 **움직임으로**
+        // 갈린다. 패리의 장 밖(f4 · f5)은 칼이 나가는 흰 궤적이라, 가드가 거기 서면 휘두르지 않은 칼이 버티는 내내 얼어붙는다 — 패리 뒤
+        // 경직이 f5 가 아니라 f3 을 붙드는 것과 같은 까닭이다(#82).
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            c.GuardAnim.ShouldBe(c.ParryAnim, $"{id}: 가드와 패리가 다른 시트다 — 설계 §6 은 같은 시트를 움직임으로 가른다");
+            c.GuardFrame.ShouldBeInRange(0, c.ParryAnimFrames - 1,
+                $"{id}: 가드의 장 {c.GuardFrame} 이 패리가 칼을 세우는 장(0 ~ {c.ParryAnimFrames - 1}) 밖이다");
+        }
+    }
+
     /// <summary>
     /// 대시 한 번이 실제로 가는 거리(px). <b>속도 × 지속을 곱해 적지 않는다</b> —
     /// 행동이 끝나는 틱에는 <c>Move</c> 가 이미 Idle 을 보므로 실제 이동 틱은 하나 적고,

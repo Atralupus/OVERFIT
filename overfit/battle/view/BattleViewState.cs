@@ -19,8 +19,9 @@ public enum FighterPose
     Parry,
 
     /// <summary>
-    /// ↓ 를 누르고 있는 동안의 가드다 (설계 §5.2). 팩에 가드 그림이 없어 <c>idle</c> 을 빌리고, 갈라 보이게 하는 것은
-    /// <b>색과 멈춘 링</b>이다 — <c>attack2</c> 의 f1 자세로 바꾸는 것은 6번 PR(연출)이다.
+    /// ↓ 를 누르고 있는 동안의 가드다 (설계 §5.2). 팩에 가드 그림이 없어 칼을 사선으로 세운 <c>attack2</c> f1 에 <b>멈춰 선다</b>
+    /// (#96 · 설계 §6 · <c>fighters.json</c> 의 <c>guard_anim</c> · <c>guard_frame</c>) — 색과 멈춘 링이 그 위에 붙는다.
+    /// 패리는 같은 시트를 움직이며 돌아 둘은 움직임으로 갈린다.
     /// </summary>
     Guard,
     Hit,
@@ -120,6 +121,15 @@ public readonly record struct HudFrame(
 /// <param name="StartFrame">칼질이 시작하는 장.</param>
 /// <param name="BladeFrame">칼이 지나가는 장 — 판정이 서는 틱에 여기로 맞춰 세운다.</param>
 public readonly record struct SwingSheet(string Anim, double Fps, int StartFrame, int BladeFrame);
+
+/// <summary>
+/// 시트의 <b>한 장에 멈춰 선</b> 그림 — 가드가 칼을 사선으로 세운 자세(<c>attack2</c> f1 · #96 · 설계 §6)다. <see cref="SwingSheet"/> 을
+/// 빌려 쓰지 않는다: 멈춘 그림에는 속도도 칼이 나가는 장도 없어, 빈 칸을 둔 채 넘기면 읽는 쪽이 그 칸이 뜻이 있는지 모른다.
+/// <c>Battle</c> 이 데이터(<c>fighters.json</c> 의 <c>guard_anim</c> · <c>guard_frame</c>)에서 옮겨 준다.
+/// </summary>
+/// <param name="Anim"><c>.tres</c> 의 애니메이션 이름.</param>
+/// <param name="Frame">멈춰 서는 장(0부터).</param>
+public readonly record struct StillFrame(string Anim, int Frame);
 
 /// <summary>
 /// 한 렌더 프레임에 보스를 그리는 데 필요한 전부. <see cref="FighterFrame"/> 과 같은 규약이다 —

@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Overfit.Battle.Rules;
 using Overfit.Core;
 using Shouldly;
@@ -82,6 +85,9 @@ public static class TestConfigs
             GuardChipRatio = 0.25,
             GuardStaminaPerDamage = 1.8,
             ExhaustSeconds = 1.1,
+            // 가드의 그림은 규칙이 안 읽는다 — 패리의 그림 셋과 같이 실제 값을 둔다.
+            GuardAnim = "attack2",
+            GuardFrame = 1,
             StaminaRegen = 40,
             Sprite = "test_unit",
         };
@@ -270,6 +276,28 @@ public static class TestConfigs
             PoiseDecayPerSecond = data.PoiseDecayPerSecond,
             Sprite = data.Sprite,
         };
+    }
+
+    /// <summary>
+    /// 팩 <c>.tres</c> 의 애니메이션 → 장 수. 장은 <c>AtlasTexture</c> sub_resource 의 id(<c>이름_번호</c>)로 센다 —
+    /// <c>tools/install_assets.py</c> 가 그렇게 짓는다. 이름은 애니메이션 목록의 <c>"name": &amp;"…"</c> 에서 온다.
+    /// 데이터가 가리키는 그림(보스 단계의 <c>anim</c> · <c>frame</c> · 파이터 가드의 <c>guard_anim</c> · <c>guard_frame</c>)을 팩과 대 볼 때 쓴다 —
+    /// <c>JsonData</c> 는 모르는 키를 조용히 버리므로 오타가 빌드를 그냥 지나간다.
+    /// </summary>
+    public static Dictionary<string, int> PackFrames(string sprite)
+    {
+        string text = File.ReadAllText(Path.Combine("spriteframes", $"{sprite}.tres"));
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(text, "\\[sub_resource type=\"AtlasTexture\" id=\"(.+)_(\\d+)\"\\]"))
+        {
+            string name = m.Groups[1].Value;
+            int frame = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+            counts[name] = Math.Max(counts.GetValueOrDefault(name), frame + 1);
+        }
+
+        return Regex.Matches(text, "\"name\": &\"([^\"]+)\"")
+            .Select(m => m.Groups[1].Value)
+            .ToDictionary(name => name, name => counts.GetValueOrDefault(name), StringComparer.Ordinal);
     }
 
     private static Dictionary<string, T> Table<T>(string name) =>

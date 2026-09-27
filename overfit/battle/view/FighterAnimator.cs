@@ -5,7 +5,7 @@ using Overfit.Core;
 namespace Overfit.Battle.View;
 
 /// <summary>
-/// 파이터 스프라이트의 <b>시트를 어느 장에 세우고 언제 흘리나</b> — 칼질의 선딜 · 칼 · 경직, 대시와 패리의 마지막 자세.
+/// 파이터 스프라이트의 <b>시트를 어느 장에 세우고 언제 흘리나</b> — 칼질의 선딜 · 칼 · 경직, 대시와 패리의 마지막 자세, 가드의 멈춘 자세.
 /// <see cref="FighterView"/> 가 무엇을 그릴지(자세 · 색 · 링 · 섬광)를 정하고, 이 클래스는 그 자세를 시트의 장으로 옮긴다.
 ///
 /// <para>
@@ -31,6 +31,9 @@ public sealed class FighterAnimator
     /// 시트(<c>attack2</c>)는 그 뒤에 칼이 나가는 f4 · f5 가 더 있다.
     /// </summary>
     private int _parryFrames;
+
+    /// <summary>가드가 멈춰 서는 장 — 칼을 사선으로 세운 <c>attack2</c> f1 (#96 · 설계 §6). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
+    private StillFrame _guard;
 
     /// <summary>지금 그리는 칼질이 몇 번째인가 (<see cref="SwingBegan"/> 이 정한다).</summary>
     private int _swing;
@@ -61,17 +64,26 @@ public sealed class FighterAnimator
     /// <summary>패리가 도는 시트 이름.</summary>
     public string ParryAnim => _parry.Anim;
 
+    /// <summary>
+    /// 가드가 서는 시트 이름. 팩에 그 시트가 없으면 <c>idle</c> 이다 — #96 전의 가드 그림(선 자세 위의 색과 멈춘 링)으로 물러선다.
+    /// 없는 이름을 <see cref="Animate"/> 에 넘기면 가드 내내 매 프레임 <c>[W]</c> 가 찍히고 앞 그림이 남는다(<see cref="FighterView.Load"/> 가
+    /// 한 번만 알린다).
+    /// </summary>
+    public string GuardAnim => HasAnimation(_guard.Anim) ? _guard.Anim : "idle";
+
     /// <summary>지금 칼질의 시트. 목록이 비었으면(스프라이트가 없는 판) 빈 이름이라 아래 갈래가 전부 시트 없음으로 빠진다.</summary>
     private SwingSheet Sheet => _swings.Length == 0 ? default : _swings[System.Math.Clamp(_swing, 0, _swings.Length - 1)];
 
     /// <summary>
-    /// 칼질마다의 시트와 패리의 시트를 받는다 — <see cref="FighterView.Load"/> 가 옮겨 준다.
+    /// 칼질마다의 시트와 패리의 시트, 가드의 장을 받는다 — <see cref="FighterView.Load"/> 가 옮겨 준다.
     /// <paramref name="parry"/> 는 칼이 나가는 장이 없다(<c>BladeFrame</c> 은 안 쓴다).
     /// <paramref name="parryFrames"/> 는 그 시트에서 패리가 도는 장 수다(<c>parry_anim_frames</c>).
+    /// <paramref name="guard"/> 는 가드가 멈춰 서는 장이다(<c>guard_anim</c> · <c>guard_frame</c>).
     /// </summary>
-    public void SetSheets(IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames)
+    public void SetSheets(IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard)
     {
         _parry = parry;
+        _guard = guard;
         _parryFrames = parryFrames;
         _swings = new SwingSheet[swings.Count];
         for (int i = 0; i < _swings.Length; i++)
@@ -112,6 +124,7 @@ public sealed class FighterAnimator
             {
                 HoldDash(frame, anim);
                 HoldParry(frame);
+                HoldGuard(frame);
             }
         }
     }
@@ -185,8 +198,11 @@ public sealed class FighterAnimator
     }
 
     /// <summary>시트가 있는가 — 없는 이름으로 Play 하면 엔진이 ERROR 를 찍는다(<see cref="Animate"/> 의 주석).</summary>
-    private bool HasSheet(SwingSheet sheet) =>
-        _sprite.SpriteFrames is { } frames && !string.IsNullOrEmpty(sheet.Anim) && frames.HasAnimation(sheet.Anim);
+    private bool HasSheet(SwingSheet sheet) => HasAnimation(sheet.Anim);
+
+    /// <summary>팩에 그 이름의 애니메이션이 있는가. 스프라이트가 없는 판이면 없다.</summary>
+    private bool HasAnimation(string? name) =>
+        _sprite.SpriteFrames is { } frames && !string.IsNullOrEmpty(name) && frames.HasAnimation(name);
 
     /// <summary>
     /// 선딜 — 1타든 2타든 같은 규칙이다. <b>시작하는 장부터 돌리다가 칼이 나가기 바로 앞 장에서
@@ -288,8 +304,8 @@ public sealed class FighterAnimator
     }
 
     /// <summary>
-    /// 칼질 뒤 경직에서 멈춰 둔 <c>idle</c> 을 다시 흘린다(<see cref="StandAfterSwing"/>). 경직이 끝나면 자세는 대개 Idle 이나 가드라 둘 다 같은
-    /// <c>idle</c> 이고, <see cref="Animate"/> 는 이름이 안 바뀌었다고 보고 다시 안 튼다 — 대시 뒤 걸음의 멈춘 <c>run</c> 과 같은 함정이다
+    /// 칼질 뒤 경직에서 멈춰 둔 <c>idle</c> 을 다시 흘린다(<see cref="StandAfterSwing"/>). 경직이 끝나면 자세는 대개 Idle 이라 이름이 같은
+    /// <c>idle</c> 이고(가드는 제 시트로 바뀐다 · #96), <see cref="Animate"/> 는 이름이 안 바뀌었다고 보고 다시 안 튼다 — 대시 뒤 걸음의 멈춘 <c>run</c> 과 같은 함정이다
     /// (<see cref="HoldDash"/>). 이 파일이 멈춘 것만 푼다(<see cref="_standing"/>) — 다른 까닭으로 멈춘 시트는 제 주인이 푼다.
     /// </summary>
     private void Unstand()
@@ -319,7 +335,7 @@ public sealed class FighterAnimator
     /// 키를 떼거나 다른 그림으로 바뀔 때까지. <c>battle-9c</c> 의 대본이 바로 그 길인데 찍기 직전에 키를 떼 Idle 로 찍히므로 사진에는
     /// 안 나왔다 — 리뷰가 찾았고, 매 프레임 장 번호 로그로 확인했다(대시 뒤 걸음에서 멈춘 <c>run</c> 18프레임 → 0).
     /// 시트가 <c>run</c> 일 때만 푼다 — 팩에 <c>run</c> 이 없어 <see cref="Animate"/> 가 앞 시트를 남겼으면 그 시트(붙든
-    /// 패리의 마지막 장)를 흘려서는 안 된다. 칼질의 경직은 시트가 아니라 멈춘 `idle` 을 붙들고, 그건 걸음으로 풀리기 전에 이미 흐른다.
+    /// 패리의 마지막 장 · 가드의 멈춘 장)를 흘려서는 안 된다. 칼질의 경직은 시트가 아니라 멈춘 `idle` 을 붙들고, 그건 걸음으로 풀리기 전에 이미 흐른다.
     /// </para>
     /// </summary>
     /// <param name="frame">이 프레임의 상태.</param>
@@ -363,6 +379,37 @@ public sealed class FighterAnimator
         if ((frame.Stiff || _sprite.Frame >= last) && (_sprite.Frame != last || _sprite.IsPlaying()))
         {
             _sprite.Frame = last;
+            _sprite.Pause();
+        }
+    }
+
+    /// <summary>
+    /// 가드 — 칼을 사선으로 세운 장(<c>guard_frame</c> · <c>attack2</c> f1)에 <b>멈춰 선다</b> (#96 · 설계 §6). 팩에 막는 모션이 없어 빌린
+    /// 자세이고, 버티는 동안 아무것도 안 변하는 것이 가드라 흘리지 않는다 — 가드 링이 크기를 안 바꾸는 것과 같은 말이다.
+    ///
+    /// <para>
+    /// <b>패리와는 움직임으로 갈린다.</b> 패리는 같은 시트의 f0~f3 을 움직이며 돌고 경직 동안 f3 에 선다(<see cref="HoldParry"/>) — 가드는
+    /// 처음부터 f1 에 멈춰 있다. 그래서 드는 순간 곧장 그 장이다: <see cref="Animate"/> 가 시트를 f0 부터 틀어도 같은 프레임에 여기서 세운다.
+    /// 패리 경직에서 ↓ 를 쥔 채 풀리면 이름이 같아(<c>attack2</c>) <see cref="Animate"/> 가 안 트는데, 그때도 f3 에서 f1 로 곧장 옮겨 선다.
+    /// 놓으면 자세가 Idle 이라 <see cref="Animate"/> 가 <c>idle</c> 을 튼다. 가드 중에 누른 패리는 <see cref="ParryBegan"/> 이 f0 부터 돌린다.
+    /// </para>
+    ///
+    /// <para>
+    /// 시트가 가드의 것일 때만 선다 — 맞은 자세 · 탈진(<c>hit</c>)이 이기고, 팩에 그 시트가 없으면 <see cref="GuardAnim"/> 이 <c>idle</c> 로
+    /// 물러서 여기는 아무것도 안 한다. 장이 모자라면 있는 마지막 장이다 — 데이터가 팩에 있는 장을 가리키는지는 <c>FighterDataTests</c> 가 본다.
+    /// </para>
+    /// </summary>
+    private void HoldGuard(FighterFrame frame)
+    {
+        if (frame.Pose != FighterPose.Guard || !HasAnimation(_guard.Anim) || _sprite.Animation != _guard.Anim)
+        {
+            return;
+        }
+
+        int still = System.Math.Clamp(_guard.Frame, 0, _sprite.SpriteFrames!.GetFrameCount(_guard.Anim) - 1);
+        if (_sprite.Frame != still || _sprite.IsPlaying())
+        {
+            _sprite.Frame = still;
             _sprite.Pause();
         }
     }

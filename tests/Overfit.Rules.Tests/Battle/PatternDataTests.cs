@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Overfit.Battle.Rules;
 using Overfit.Core;
 using Shouldly;
@@ -355,33 +354,13 @@ public class PatternDataTests
         leaps.ShouldBeGreaterThan(0, "도약이 하나도 없다 — 이 가드가 아무것도 안 본다");
     }
 
-    /// <summary>
-    /// 팩 <c>.tres</c> 의 애니메이션 → 장 수. 장은 <c>AtlasTexture</c> sub_resource 의 id(<c>이름_번호</c>)로 센다 —
-    /// <c>tools/install_assets.py</c> 가 그렇게 짓는다. 이름은 애니메이션 목록의 <c>"name": &amp;"…"</c> 에서 온다.
-    /// </summary>
-    private static Dictionary<string, int> PackFrames(string sprite)
-    {
-        string text = File.ReadAllText(Path.Combine("spriteframes", $"{sprite}.tres"));
-        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (Match m in Regex.Matches(text, "\\[sub_resource type=\"AtlasTexture\" id=\"(.+)_(\\d+)\"\\]"))
-        {
-            string name = m.Groups[1].Value;
-            int frame = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
-            counts[name] = Math.Max(counts.GetValueOrDefault(name), frame + 1);
-        }
-
-        return Regex.Matches(text, "\"name\": &\"([^\"]+)\"")
-            .Select(m => m.Groups[1].Value)
-            .ToDictionary(name => name, name => counts.GetValueOrDefault(name), StringComparer.Ordinal);
-    }
-
     [Fact]
     public void 단계의_그림은_보스_팩에_있는_이름과_장이다()
     {
         // 설계 §6 — 뷰는 규칙의 단계가 가리키는 장(anim · frame)을 그대로 붙든다. 이름이 틀리면 뷰가 [W] 한 줄 남기고
         // 아무것도 안 바꾸고(PlaySafe), 장이 틀리면 엔진이 ERROR: 를 찍는다. JsonData 는 모르는 키를 조용히 버리므로
         // 오타가 빌드를 그냥 지나간다 — 그래서 보스 팩의 .tres 와 대 본다. end 가 아닌 단계는 모두 그림을 갖는다.
-        Dictionary<string, int> pack = PackFrames(TestConfigs.Boss().Sprite);
+        Dictionary<string, int> pack = TestConfigs.PackFrames(TestConfigs.Boss().Sprite);
         pack.ShouldContainKey("attack", "팩을 못 읽었다 — 이 가드가 아무것도 안 본다");
 
         foreach ((string id, PatternDef def) in Load())

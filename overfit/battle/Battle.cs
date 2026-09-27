@@ -307,12 +307,13 @@ public partial class Battle : Node2D
         // 바닥 충격파는 판정이 바닥 전체를 덮었는지를 아레나 폭으로 잰다(#83) — 판을 세운 바로 그 폭이다.
         _cues = new BattleCues(_sim, _fighterView, _bossView, _landingWave, battle.ArenaWidth, ShakeFor, StartHitstop);
 
-        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59).
+        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59). 가드가 멈춰 서는 장도 데이터다(#96).
         _fighterView.Load(
             _fighterConfig.Sprite,
             Swings(_fighterConfig),
             new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
-            _fighterConfig.ParryAnimFrames);
+            _fighterConfig.ParryAnimFrames,
+            new StillFrame(_fighterConfig.GuardAnim, _fighterConfig.GuardFrame));
         _bossView.Load(_bossConfig.Sprite);
 
         _grabOrb = new GrabOrb();
