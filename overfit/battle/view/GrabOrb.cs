@@ -8,8 +8,8 @@ namespace Overfit.Battle.View;
 /// 규칙은 흰 구를 모른다 — 날고 · 붙들고 · 흩어지는 시각은 규칙의 단계와 잡힘이 정하고(<see cref="OrbFrame"/>), 여기는 그것을 그리기만 한다.
 ///
 /// <list type="bullet">
-/// <item><b>난다</b> — 잡기 창 바로 앞 단계(1.30초의 idle) 동안 보스 몸 가운데에서 파이터 몸 가운데로 그 단계가 지난 몫만큼 간다 — 창이 열리는
-/// 틱에 파이터에 닿는다.</item>
+/// <item><b>난다</b> — 잡기 창 바로 앞 단계(1.30초의 idle) 동안 보스 몸 가운데에서 <b>파이터 발밑 바닥의</b> 몸 가운데로 그 단계가 지난
+/// 몫만큼 간다 — 창이 열리는 틱에 땅에 선 파이터에 닿는다. 뛴 파이터를 따라 뜨지 않는다: 잡기가 치는 곳은 바닥이다.</item>
 /// <item><b>붙든다</b> — 파이터가 붙들린 동안(<c>Fighter.Held</c>) 파이터를 감싼다.</item>
 /// <item><b>기다린다</b> — 못 잡았으면(뛰었으면) 창이 산 동안 파이터 발밑의 바닥에 선다.</item>
 /// <item><b>흩어진다</b> — 붙들림이 풀리거나 창이 닫히거나 패턴이 끊기거나(탈진) 판이 끝나면(<c>Battle</c> 이 거른다) 그 자리에서
@@ -55,11 +55,17 @@ public partial class GrabOrb : Node2D
     {
         double radius = _feel.GrabOrbRadius;
         Vector2 fighter = new((float)frame.FighterX, (float)-(frame.FighterY + radius));
+
+        // 날아갈 곳과 기다릴 곳은 파이터 발밑 **바닥**의 몸 가운데다 — 떠 있는 몸이 아니다. 잡기의 띠는 바닥(높이 60)을 치므로 흰 구가 창이
+        // 열리기 전부터 "맞는 자리는 바닥" 이라고 말해야 한다(설계 §12 「잡기의 충격파」 · 보이는 것이 곧 맞는 것). 처음 것은 떠 있는 몸 가운데로
+        // 날았다 — 보고 뛴 사람(90틱)에게 흰 구가 공중에서 닿았다가(101틱 · 발 192 · 흰 구 276) 창이 열리는 틱(102)에 한 프레임 만에 바닥(90)으로
+        // 떨어졌다. 제대로 뛴 사람이 "공중에서 잡혔다" 로 읽는다. 땅에 선 사람에게는 둘이 같다(발 0).
+        Vector2 floor = new((float)frame.FighterX, (float)-radius);
         Vector2 boss = new((float)frame.BossX, (float)-(frame.BossY + frame.BossBodyHeight / 2));
 
         (string? state, Vector2 at) = frame.Held ? ("hold", fighter)
-            : frame.Flying ? ("fly", boss.Lerp(fighter, (float)frame.Progress))
-            : frame.GrabLive ? ("wait", new Vector2((float)frame.FighterX, (float)-radius))
+            : frame.Flying ? ("fly", boss.Lerp(floor, (float)frame.Progress))
+            : frame.GrabLive ? ("wait", floor)
             : ((string?)null, Position);
 
         if (state is not null)

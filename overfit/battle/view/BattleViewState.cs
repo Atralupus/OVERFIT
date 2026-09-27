@@ -160,14 +160,14 @@ public readonly record struct BossFrame(
 /// 규칙의 단계와 잡힘에서 <c>Battle</c> 이 옮겨 싣는다. 좌표는 규칙 좌표(위가 +)다.
 /// </summary>
 /// <param name="Flying">잡기 창 바로 앞 단계인가 — 보스에게서 파이터에게 난다.</param>
-/// <param name="Progress">그 단계가 지난 몫 0 ~ 1 — 창이 열리는 틱에 파이터에 닿는다.</param>
+/// <param name="Progress">그 단계가 지난 몫 0 ~ 1 — 창이 열리는 틱에 파이터 발밑의 바닥(땅에 선 파이터의 몸)에 닿는다.</param>
 /// <param name="Held">파이터가 붙들렸나 — 파이터를 감싼다.</param>
 /// <param name="GrabLive">잡기 창이 살아 있나 — 못 잡았으면 창이 닫힐 때까지 바닥에서 기다린다.</param>
 /// <param name="BossX">보스 발 중심 x.</param>
 /// <param name="BossY">보스 발바닥 높이.</param>
 /// <param name="BossBodyHeight">보스 몸 키 — 흰 구가 몸 가운데에서 떠난다.</param>
 /// <param name="FighterX">파이터 발 중심 x.</param>
-/// <param name="FighterY">파이터 발바닥 높이.</param>
+/// <param name="FighterY">파이터 발바닥 높이 — 붙든 흰 구만 따른다. 날고 기다리는 흰 구는 바닥에 있다(잡기가 치는 곳).</param>
 public readonly record struct OrbFrame(
     bool Flying,
     double Progress,
