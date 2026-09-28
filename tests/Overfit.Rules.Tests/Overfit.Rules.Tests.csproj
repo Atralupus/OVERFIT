@@ -99,6 +99,7 @@
     <Compile Include="../../tools/factory/BotRun.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/SampleCsv.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/FactoryBatch.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/FactoryStats.cs" LinkBase="linked/factory" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
