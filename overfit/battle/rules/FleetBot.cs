@@ -37,8 +37,17 @@ public sealed class FleetBot
     private readonly int _reactionTicks;
     private readonly int _jumpLeadTicks;
 
+    /// <summary>1타 한 번이 묶는 틱 — 선딜 · 판정 · 후딜 · 경직(경직 동안도 칼질이라 못 피한다 · #82).</summary>
+    private readonly int _swingTicks;
+
+    /// <summary>1타에서 2타까지 이어 치면 묶는 틱 — 2타는 1타의 경직 안에서 선다(#82).</summary>
+    private readonly int _chainTicks;
+
     /// <summary>지난 틱의 패턴(null = 쉬는 중). 바뀌는 순간이 새 사례다.</summary>
     private string? _pattern;
+
+    /// <summary>지난 패턴이 끝난 틱 — 다음 패턴은 보스의 간격(<see cref="Boss.PatternGap"/>) 뒤에 선다. 판의 처음은 0 이다.</summary>
+    private int _patternEnd;
 
     /// <summary>지금 사례가 선 틱 — 리듬형의 시각표가 여기서 잰다.</summary>
     private int _patternStart;
@@ -80,6 +89,11 @@ public sealed class FleetBot
         _beats = beats;
         _reactionTicks = Ticks(traits.ReactionSeconds);
         _jumpLeadTicks = Ticks(traits.JumpLead * fighter.JumpVelocity / Arena.Gravity);
+        ComboStepDef first = fighter.Combo[0];
+        _swingTicks = Ticks(first.Windup + first.Active + first.Recover + first.Stiff);
+        _chainTicks = fighter.Combo.Count < 2 ? _swingTicks
+            : Ticks(first.Windup + first.Active + first.Recover)
+                + Ticks(fighter.Combo[1].Windup + fighter.Combo[1].Active + fighter.Combo[1].Recover + fighter.Combo[1].Stiff);
     }
 
     /// <summary>이번 틱에 무엇을 할지. <see cref="BattleSim"/> 의 상태만 보고 정한다.</summary>
@@ -107,7 +121,7 @@ public sealed class FleetBot
         }
 
         // 후딜(남은 판정 없이 패턴이 도는 빈 시간)과 보스의 탈진은 들어가 칠 때다 — 멀리 서서 기다리는 사람도.
-        return Offend(sim, gap, toward, punish: sim.Boss.CurrentPattern is not null || sim.Boss.Exhausted);
+        return Offend(sim, gap, toward, punish: sim.Boss.CurrentPattern is not null || sim.Boss.Exhausted, reckless: false);
     }
 
     /// <summary>사례 · 선딜의 시작 · 끝난 판정을 센다. 틱마다 가장 먼저 부른다.</summary>
@@ -116,6 +130,11 @@ public sealed class FleetBot
         string? now = sim.Boss.CurrentPattern;
         if (!string.Equals(now, _pattern, StringComparison.Ordinal))
         {
+            if (now is null)
+            {
+                _patternEnd = sim.Ticks;
+            }
+
             _pattern = now;
             _plan = null;
             _hitIndex = 0;
@@ -158,11 +177,11 @@ public sealed class FleetBot
             return new InputFrame(0, false, false, false, false, GuardHeld: true);
         }
 
-        Plan plan = _plan ??= NewPlan();
+        Plan plan = _plan ??= NewPlan(sim);
         if (plan.Greedy)
         {
             // 이 판정을 안 피하고 칼을 넣는다 — 욕심 축(GreedWindow)이 재는 바로 그 사람이다.
-            return Offend(sim, gap, toward, punish: true);
+            return Offend(sim, gap, toward, punish: true, reckless: true);
         }
 
         if (plan.Pressed)
@@ -177,26 +196,43 @@ public sealed class FleetBot
             expected = _patternStart + Ticks(beat[_hitIndex]);
         }
 
-        int press = expected - (plan.Verb == DodgeVerb.Jump ? _jumpLeadTicks : 0) + plan.OffsetTicks;
-        if (sim.Ticks < Math.Max(press, _windupStart + _reactionTicks))
+        int press = Math.Max(expected - (plan.Verb == DodgeVerb.Jump ? _jumpLeadTicks : 0) + plan.OffsetTicks, _windupStart + _reactionTicks);
+        if (sim.Ticks < press)
         {
-            return default;
+            // 기다리는 동안 간격을 두는 사람은 제 간격까지 물러선다 — 간격 습관의 첫 수단은 자리다(DodgeVerb.Spacing). 판정 직전에는 계획의
+            // 수단을 누른다: 물러서는 걸음(초당 수백 px)으로는 칼 궤적을 다 못 벗어나는 자리가 있다.
+            return _traits.RestGap > 0 && gap < sim.FighterReach + _traits.RestGap
+                ? new InputFrame((sbyte)-toward, false, false, false, false)
+                : default;
         }
 
-        return Press(sim.Fighter, plan, toward);
+        InputFrame input = Press(sim.Fighter, plan, toward, out string? blocked);
+        if (plan.Pressed)
+        {
+            Log.Debug("fleet", () => $"press verb={plan.Verb} tick={sim.Ticks} planned={press} window={expected}");
+        }
+        else if (blocked is not null)
+        {
+            Log.Trace("fleet", () => $"blocked verb={plan.Verb} reason={blocked} tick={sim.Ticks} planned={press}");
+        }
+
+        return input;
     }
 
     /// <summary>
     /// 계획의 수단을 누른다. <b>행동이 실제로 서는 틱에만</b> 눌렀다고 적는다 — 굳었거나(탈진 · 붙들림) 다른 행동 중이면 그 틱의 누름은 안 먹으므로,
     /// 적어 버리면 그 판정의 회피를 통째로 건너뛴다. 조건은 규칙이 누름을 받는 자리(<c>Fighter.Begin</c> · <c>Fall</c>)와 같다.
     /// </summary>
-    private static InputFrame Press(Fighter fighter, Plan plan, sbyte toward)
+    private static InputFrame Press(Fighter fighter, Plan plan, sbyte toward, out string? blocked)
     {
-        bool free = !fighter.Locked && fighter.Action is FighterAction.Idle or FighterAction.Guard;
+        blocked = fighter.Locked ? "locked"
+            : fighter.Action is not (FighterAction.Idle or FighterAction.Guard) ? $"action_{fighter.Action}"
+            : null;
         switch (plan.Verb)
         {
             case DodgeVerb.Dash:
-                if (!free || !fighter.Affords(FighterAction.Dash))
+                blocked ??= fighter.Affords(FighterAction.Dash) ? null : "stamina";
+                if (blocked is not null)
                 {
                     return default;
                 }
@@ -212,7 +248,8 @@ public sealed class FleetBot
                 return new InputFrame(0, false, Dash: true, false, false);
 
             case DodgeVerb.Jump:
-                if (fighter.Locked || fighter.Action != FighterAction.Idle || !fighter.Grounded)
+                blocked ??= fighter.Action != FighterAction.Idle ? $"action_{fighter.Action}" : fighter.Grounded ? null : "airborne";
+                if (blocked is not null)
                 {
                     return default;
                 }
@@ -221,7 +258,8 @@ public sealed class FleetBot
                 return new InputFrame(0, Jump: true, false, false, false);
 
             default:
-                if (!free || !fighter.Affords(FighterAction.Parry))
+                blocked ??= fighter.Affords(FighterAction.Parry) ? null : "stamina";
+                if (blocked is not null)
                 {
                     return default;
                 }
@@ -234,8 +272,16 @@ public sealed class FleetBot
     /// <summary>
     /// 칠 때. 멈출 간격 = 들어가 칠 때면 칼 사거리, 쉬는 동안이면 사거리 + 기다리는 간격. 쉬는 동안 기다리는 봇은 멈출 간격의 절반보다
     /// 가까우면 물러선다 — 그 사이에서는 선다(경계에서 틱마다 돌아서면 바라보는 쪽이 흔들려 대시의 방향이 거짓말을 한다).
+    ///
+    /// <para>
+    /// <b>끝까지 칠 수 있는 칼만 넣는다 — 욕심이 그 선을 넘는다.</b> 칼질은 경직까지 커밋이라(#82) 다음 패턴이 설 때 칼 안에 있으면 못 피한다.
+    /// 다음 위험은 쉬는 동안이면 다음 패턴이 설 틱(지난 패턴이 끝난 틱 + 보스의 간격), 후딜이면 지금 + 간격(패턴이 아직 안 끝났으니 적게 잡은 값)이다.
+    /// 1타 + 2타가 안 들어가면 1타만, 1타도 안 들어가면 안 친다 — 그러나 칼질마다 욕심의 몫만큼은 재지 않고 친다. 탈진한 보스는 잴 것 없이 친다.
+    /// 재 봤다(#104): 이 선이 없으면 간격 끝에 넣은 2타(1.46초)가 다음 점프 공격의 착지까지 묶어, 수단 비중이 0.8 인 봇의 관측 대부분이 "안 피함" 이 됐다 —
+    /// 성향이 축에 안 닿았다. 사람도 그렇게 걸리지만, 그것은 욕심이 할 말이다(README — "위험한데도 공격을 욕심내나").
+    /// </para>
     /// </summary>
-    private InputFrame Offend(BattleSim sim, double gap, sbyte toward, bool punish)
+    private InputFrame Offend(BattleSim sim, double gap, sbyte toward, bool punish, bool reckless)
     {
         Fighter fighter = sim.Fighter;
         double reach = sim.FighterReach;
@@ -255,14 +301,28 @@ public sealed class FleetBot
             return default;
         }
 
-        // 2타를 이을지는 1타를 누를 때 정한다 — 사람은 1타를 누를 때 이미 2타를 정해 둔다(최소 봇과 같다).
-        _swings++;
-        _chainThis = Det.Roll01(_seed, Det.Domain.FleetAct, k1: _swings, k2: 5) < _traits.Chain;
+        // 2타를 이을지는 1타를 누를 때 정한다 — 사람은 1타를 누를 때 이미 2타를 정해 둔다(최소 봇과 같다). 주사위의 키는 이번 칼질의 번호다 —
+        // 안 쳐서 기다리는 틱에는 같은 값이 나와 마음이 틱마다 안 바뀐다.
+        int swing = _swings + 1;
+        bool chain = Det.Roll01(_seed, Det.Domain.FleetAct, k1: swing, k2: 5) < _traits.Chain;
+        if (!reckless && !sim.Boss.Exhausted && Det.Roll01(_seed, Det.Domain.FleetAct, k1: swing, k2: 6) >= _traits.Greed)
+        {
+            int gapTicks = Ticks(sim.Boss.PatternGap);
+            int danger = sim.Boss.CurrentPattern is null ? _patternEnd + gapTicks : sim.Ticks + gapTicks;
+            chain = chain && sim.Ticks + _chainTicks <= danger;
+            if (sim.Ticks + _swingTicks > danger)
+            {
+                return default;
+            }
+        }
+
+        _swings = swing;
+        _chainThis = chain;
         return new InputFrame(0, false, false, false, Attack: true);
     }
 
     /// <summary>판정 하나의 계획 — 욕심 · 수단 · 리듬 · 대시 방향 · 잡음을 <b>한 번</b> 뽑는다. 키는 계획 번호다.</summary>
-    private Plan NewPlan()
+    private Plan NewPlan(BattleSim sim)
     {
         _plans++;
         double Roll(int kind) => Det.Roll01(_seed, Det.Domain.FleetAct, k1: _plans, k2: kind);
@@ -271,7 +331,7 @@ public sealed class FleetBot
         DodgeVerb verb = pick < _traits.Dash ? DodgeVerb.Dash
             : pick < _traits.Dash + _traits.Jump ? DodgeVerb.Jump
             : DodgeVerb.Parry;
-        return new Plan
+        var plan = new Plan
         {
             Greedy = Roll(1) < _traits.Greed,
             Verb = verb,
@@ -279,6 +339,9 @@ public sealed class FleetBot
             Inward = Roll(4) < _traits.DashInward,
             OffsetTicks = Ticks(_traits.BiasSeconds + BotNoise.Sample(_seed, _plans, _traits.JitterSeconds)),
         };
+        Log.Debug("fleet", () => $"plan pattern={_pattern} hit={_hitIndex} verb={plan.Verb} greedy={plan.Greedy} rhythm={plan.Rhythm}"
+            + $" inward={plan.Inward} offset={plan.OffsetTicks} tick={sim.Ticks}");
+        return plan;
     }
 
     /// <summary>
