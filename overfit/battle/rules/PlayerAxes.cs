@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 플레이어가 어떻게 싸우는가, 10개 숫자로. <b>열이라는 것이 계약이다</b> — 망의 입력 모양이라
-/// 늘리는 것은 수치 하나를 고치는 것과 다른 종류의 변경이고, 새 기술의 신호는 축이 아니라
-/// <b>개수</b>로 실린다 (<see cref="GuardSamples"/>).
+/// 플레이어가 어떻게 싸우는가, 11개 숫자로. <b>수와 순서가 계약이다</b> — 망의 입력 모양이라
+/// 늘리는 것은 수치 하나를 고치는 것과 다른 종류의 변경이다. 10 → 11(<see cref="GuardRate"/>)은 망을 세우는
+/// 자리에서 한 번에 정했다 (#104 · 설계 2026-09-28 §3.2). 근거의 크기는 축이 아니라 <b>개수</b>로 실린다(<see cref="Samples"/> 들).
 /// <see cref="DodgeEvent"/> 목록만 받으므로
 /// <b>전투를 안 돌려도 테스트된다.</b>
 ///
@@ -37,7 +37,7 @@ namespace Overfit.Battle.Rules;
 /// 다섯 축은 전체가 아니라 <b>부분집합</b>으로 계산된다 (대시·점프·패리 건만).
 /// <see cref="Samples"/> 만 옆에 붙이면 "관측 10건" 이 "대시 3건으로 낸 분산" 까지
 /// 보증하는 것처럼 보인다 — 가장 얇은 근거를 가장 크게 믿게 만드는 배치다.
-/// 그래서 수단별 건수를 따로 싣는다. <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
+/// 그래서 수단별 건수를 따로 싣는다. <b>축이 아니라 개수다</b> — 축의 수를 안 건드린다.
 /// </para>
 /// </summary>
 public sealed class PlayerAxes
@@ -126,6 +126,25 @@ public sealed class PlayerAxes
     /// </summary>
     public double DistanceBias { get; private init; }
 
+    /// <summary>
+    /// <b>가드를 고른</b> 관측의 몫 — 11번째 축 (#104 · 설계 2026-09-28 §3.2). 잡힌 가드도 든다 — 고른 것은 같고 결과가 다르다.
+    ///
+    /// <para>
+    /// <b>의존도가 아니라 사용 비율인 이유.</b> 의존도 축(<see cref="JumpReliance"/> · <see cref="ParryReliance"/>)은 "그 수단이 가능했고
+    /// <b>다른 수단도</b> 가능했던" 판정을 분모로 삼는다 — 가능했던 수단이 드문 패턴만 만난 사람을 "안 골랐다" 로 세지 않으려는 것이다.
+    /// 가드는 잡기 하나를 빼면 <b>모든</b> 판정에서 가능해 그 분모가 거의 전부이고, 그러니 가드의 사용 비율은 그 자체로 정직한 성향이다 —
+    /// 의존도 축이 피하려던 혼동이 가드에는 없다. 분모를 "가드할 수 있었던 판정" 으로 좁히지 않는 이유: ↓ 를 붙든 채 잡기에 붙들린 관측은
+    /// 가드를 고른 것인데(수단 Guard) 가드할 수 없던 판정이라, 좁히면 분자에만 남아 몫이 1 을 넘을 수 있다. 1단계에는 가드 못 받는 판정이
+    /// 없어 분모 <see cref="Samples"/> 가 곧 "가드할 수 있었던 판정" 이다.
+    /// </para>
+    ///
+    /// <para>
+    /// 왜 지금 축인가: 2단계의 <c>점프 3연속</c> 이 "가드로 버티는 사람" 을 노린다(겨냥 표 · 설계 2026-09-24 §6.2). 망이 그 겨냥을 배우려면
+    /// 입력에 가드가 있어야 한다 — <see cref="GuardSamples"/> 로 쌓아 두고 입력 모양은 망을 세우는 자리에서 정하기로 한 그 자리가 여기다.
+    /// </para>
+    /// </summary>
+    public double GuardRate { get; private init; }
+
     /// <summary>이 축들을 낸 관측 수. 축의 신뢰도가 여기 들어 있다.</summary>
     public int Samples { get; private init; }
 
@@ -149,26 +168,11 @@ public sealed class PlayerAxes
     public int ParryChoiceSamples { get; private init; }
 
     /// <summary>
-    /// <b>가드로 버틴</b> 관측 수 (이슈 #47). <b>축이 아니라 개수다</b> — 10축 계약은 그대로다.
+    /// <b>가드로 버틴</b> 관측 수 (이슈 #47) — <see cref="GuardRate"/> 의 분자이자 그 축의 근거다. "가드 비율 0.5" 가 두 건으로 낸
+    /// 값인지 이백 건으로 낸 값인지를 망이 알아야 해서 축과 같이 싣는다(다른 수단의 개수와 같은 까닭).
     ///
     /// <para>
-    /// <b>왜 11번째 축이 아닌가.</b> 10축은 망의 <b>입력 모양</b>이라, 하나 늘리는 것은 지금까지의
-    /// 모든 입력 벡터를 다른 길이로 만드는 일이다. 그럴 만한 값이 지금 가드에는 없다:
-    /// 의존도 축(<see cref="JumpReliance"/> · <see cref="ParryReliance"/>)의 셈법은
-    /// "그 수단이 가능했고 <b>다른 수단도</b> 가능했던" 판정을 분모로 삼는데, 가드는
-    /// 잡기(#78 · 설계 §7.3) 하나를 빼면 <b>모든</b> 판정에서 가능하다(옛 가드 불가 판정은 #72 에서 걷었다) — 분모가 거의 전부라
-    /// "가드 의존도" 는 그냥 사용 비율이 되고, 그건 이 두 축이 피하려고 만들어진 바로 그 값이다.
-    /// </para>
-    ///
-    /// <para>
-    /// 대조가 생겨도 축으로 올릴지는 <b>별개의 결정</b>이다 — 10축은 망의 입력 모양이고 지금 이 저장소에는 그 망이 아직
-    /// 없다(패턴은 무작위로 뽑힌다). 입력 모양은 망을 세우는 자리에서 한 번에 정하는 것이 맞고, 그때까지 신호는 개수로
-    /// 안전하게 쌓인다.
-    /// </para>
-    ///
-    /// <para>
-    /// 그동안에는 개수로 싣는다. 잃는 것도 적다 — 가드는 이미 다른 축을 움직인다:
-    /// 가드로 받은 판정은 <see cref="ParryReliance"/> 의 분모에 들어가되 분자에는 안 들어가고
+    /// 가드는 비율 말고도 다른 축을 움직인다: 가드로 받은 판정은 <see cref="ParryReliance"/> 의 분모에 들어가되 분자에는 안 들어가고
     /// ("패리 말고 다른 것을 골랐다"), 거리는 <see cref="DistanceBias"/> 에 그대로 쌓인다.
     /// </para>
     /// </summary>
@@ -185,7 +189,7 @@ public sealed class PlayerAxes
     /// 관측들을 축으로 접는다.
     ///
     /// <para>
-    /// ⚠ <b><see cref="DodgeEvent.PatternId"/> 를 안 읽는다</b> — 열 축 전부가 모든 패턴을 뭉갠
+    /// ⚠ <b><see cref="DodgeEvent.PatternId"/> 를 안 읽는다</b> — 축 전부가 모든 패턴을 뭉갠
     /// 값이다 (확인함 · 이슈 #46). 패턴이 여럿이면 빚이다: "3연격은 패리하고 점프 공격은 뛰어넘는다" 는 사람이
     /// "패리 반 점프 반" 한 명으로 읽힌다.
     ///
@@ -301,6 +305,7 @@ public sealed class PlayerAxes
             ParryReliance = Ratio(parryChosen, parryChoices),
             Greed = Ratio(greedy, events.Count),
             DistanceBias = distance / events.Count,
+            GuardRate = Ratio(guards, events.Count),
             Samples = events.Count,
             DashSamples = dashes,
             JumpSamples = jumps,

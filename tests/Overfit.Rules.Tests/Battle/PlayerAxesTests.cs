@@ -37,6 +37,7 @@ public class PlayerAxesTests
         axes.DashTimingBias.ShouldBe(0);
         axes.DashTimingVar.ShouldBe(0);
         axes.ParryRate.ShouldBe(0);
+        axes.GuardRate.ShouldBe(0);
         axes.Samples.ShouldBe(0);
     }
 
@@ -235,7 +236,7 @@ public class PlayerAxesTests
     public void 수단별_표본_수를_따로_들고_다닌다()
     {
         // Samples 하나만 붙이면 "관측 10건" 이 "대시 3건으로 낸 분산" 까지 보증하는 것처럼 보인다 —
-        // 가장 얇은 근거를 가장 크게 믿게 만드는 배치다. 축이 아니라 개수라 10축 계약은 그대로다.
+        // 가장 얇은 근거를 가장 크게 믿게 만드는 배치다. 축이 아니라 개수라 축의 계약(수와 순서)을 안 건드린다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash),
@@ -260,7 +261,7 @@ public class PlayerAxesTests
     public void 간격으로_피한_것은_어떤_수단에도_안_들어간다()
     {
         // Spacing 은 행동이 아니라 서 있던 자리다. 이것을 수단으로 세면 의존도 축이 오염된다 —
-        // 거리 성향은 DistanceBias 가 이미 재고 있으므로 11번째 축을 만들지 않는다.
+        // 거리 성향은 DistanceBias 가 이미 재고 있으므로 간격의 축을 따로 만들지 않는다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(verb: DodgeVerb.Spacing, timingError: 0, direction: 0),
@@ -276,12 +277,11 @@ public class PlayerAxesTests
     }
 
     [Fact]
-    public void 가드는_축이_아니라_개수로_실린다()
+    public void 가드는_축과_개수로_같이_실린다()
     {
-        // **10축 계약을 안 깬다** (이슈 #47). 지금 가드에는 의존도 축이 될 분모가 없다 —
-        // 지금 모든 판정에서 가드가 되므로(#72 — 가드 불가 판정을 걷었다) "고를 수 있었는데 골랐나" 가 사실상
-        // 사용 비율이고, 그건 JumpReliance · ParryReliance 가 피하려고 만들어진 바로 그 값이다.
-        // 그래서 **개수**로 싣는다.
+        // 가드는 11번째 축(GuardRate · 사용 비율)이고 개수(GuardSamples · GuardBrokenSamples)도 그대로 싣는다 (#104 · 설계 2026-09-28 §3.2).
+        // 가드는 잡기 하나를 빼면 모든 판정에서 가능해 "고를 수 있었는데 골랐나" 의 분모가 거의 전부다 — 그러니 사용 비율이 곧
+        // 정직한 성향이다. 의존도 축이 피하려던 혼동(가능했던 수단이 드문 패턴만 만났다)이 가드에는 없다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
@@ -290,6 +290,7 @@ public class PlayerAxesTests
             Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Parried),
         });
 
+        axes.GuardRate.ShouldBe(0.75, 0.001);
         axes.GuardSamples.ShouldBe(3);
         axes.GuardBrokenSamples.ShouldBe(1, "깨진 가드가 막아낸 가드와 한 점이 됐다");
 
@@ -321,14 +322,40 @@ public class PlayerAxesTests
     }
 
     [Fact]
-    public void 축은_열_개_그대로다()
+    public void 가드_비율은_가드를_고른_관측의_몫이다()
     {
-        // 10축 계약은 **망의 입력 모양**이다. 축을 하나 늘리면 지금까지의 입력 벡터가 전부
-        // 다른 길이가 되므로, 수치 하나를 고치는 것과 다른 종류의 변경이다.
+        // 잡힌 가드도 가드다 — 고른 것은 같고 결과가 다르다(DodgeVerb.Guard). 가드를 안 받는 판정(잡기)이라도 ↓ 를 붙들고 있었으면
+        // 가드를 고른 것이다: 분모를 "가드할 수 있었던 판정" 으로 좁히면 잡기에 붙들린 가드가 분자에만 남아 1 을 넘을 수 있다.
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
+        {
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.GuardBroken),
+            Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Grabbed,
+                dashAvailable: false, parryAvailable: false, guardAvailable: false),
+            Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Parried),
+        });
+
+        axes.GuardRate.ShouldBe(0.75, 0.001);
+    }
+
+    [Fact]
+    public void 가드가_없으면_가드_비율은_0_이다()
+    {
+        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent> { Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash) });
+
+        axes.GuardRate.ShouldBe(0);
+    }
+
+    [Fact]
+    public void 축은_열한_개다()
+    {
+        // 축의 계약은 **망의 입력 모양**이다. 축을 하나 늘리면 지금까지의 입력 벡터가 전부
+        // 다른 길이가 되므로, 수치 하나를 고치는 것과 다른 종류의 변경이다. 10 → 11(GuardRate)은 망을 세우는 자리에서
+        // 한 번에 정했다(#104 · 설계 2026-09-28 §3.2) — GuardSamples 의 주석이 미뤄 둔 바로 그 결정이다.
         // 이름 목록으로 세지 않는 이유는 그러면 축을 더하면서 목록을 같이 고치는 것이
         // "계약을 지켰다" 로 보이기 때문이다 — 리플렉션이 그 손을 막는다.
         typeof(PlayerAxes).GetProperties().Count(p => p.PropertyType == typeof(double))
-            .ShouldBe(10, "축의 수가 바뀌었다 — 10축 계약은 가볍게 못 바꾼다");
+            .ShouldBe(11, "축의 수가 바뀌었다 — 축의 계약은 가볍게 못 바꾼다");
     }
 
 }

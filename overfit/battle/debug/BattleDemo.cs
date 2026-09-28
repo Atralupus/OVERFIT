@@ -91,7 +91,7 @@ public partial class BattleDemo : Node
         // 정확했나" 가 읽힌다. parry_late_n(부정확 패리)은 그 단계가 없어져 같이 빠졌다.
         Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
             + $" parry_n={axes.ParrySamples}"
-            // guard_n · guard_broken_n 도 **축이 아니라 개수**다 (이슈 #47). 둘을 같이 찍는 이유는
+            // guard_n · guard_broken_n 은 **개수**다 (이슈 #47) — 축은 끝의 guard_rate(#104)다. 둘을 같이 찍는 이유는
             // "버텨냈다" 와 "버티다 무너졌다" 가 결과가 정반대이기 때문이다 — 한 칸만 보면
             // 가드가 도는지는 알아도 그것이 일하는지는 모른다.
             + $" guard_n={axes.GuardSamples} guard_broken_n={axes.GuardBrokenSamples}"
@@ -100,7 +100,8 @@ public partial class BattleDemo : Node
             + $" dash_var={axes.DashTimingVar:0.000} dash_dir={axes.DashDirectionBias:0.00}"
             + $" jump_bias={axes.JumpTimingBias:0.000} jump_rel={axes.JumpReliance:0.00}"
             + $" air_impact={axes.AirborneAtImpactRatio:0.00} parry_rate={axes.ParryRate:0.00}"
-            + $" parry_rel={axes.ParryReliance:0.00} greed={axes.Greed:0.00} dist={axes.DistanceBias:0}");
+            + $" parry_rel={axes.ParryReliance:0.00} greed={axes.Greed:0.00} dist={axes.DistanceBias:0}"
+            + $" guard_rate={axes.GuardRate:0.00}");
 
         Log.Marker("battle-demo", $"battle-demo=done outcome={outcome} ticks={sim.Ticks} events={sim.Events.Count}");
         GetTree().Quit();
