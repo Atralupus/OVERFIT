@@ -53,21 +53,7 @@ public static class BotRun
         ArgumentNullException.ThrowIfNull(tables);
         BotTraits traits = BotTraits.Sample(fleetSeed, bot, tables.Fleet);
         var history = new RunHistory(BotTraits.SessionSeed(fleetSeed, bot));
-        long ticks = 0;
-
-        int stage1 = 0;
-        bool reached = false;
-        while (!reached && stage1 < stage1Tries)
-        {
-            stage1++;
-            (int number, ulong seed) = history.Open();
-            StageSetup setup = StageRoster.Setup(tables.Stages, 1, seed, history.Records)
-                ?? throw new InvalidOperationException("1단계가 안 선다 — [stage][E] 를 보라");
-            (BattleOutcome outcome, BattleSim sim) = Play(tables, traits, seed, setup.PatternIds, setup.Picker, tracker: null);
-            ticks += sim.Ticks;
-            Record(history, recorded, new AttemptRecord(number, 1, seed, outcome, [.. sim.Events]));
-            reached = outcome == BattleOutcome.Win;
-        }
+        (int stage1, bool reached, long ticks) = Stage1(tables, traits, history, stage1Tries, recorded);
 
         var samples = new List<FactorySample>();
         int stage2 = 0;
@@ -98,8 +84,33 @@ public static class BotRun
         return new BotResult(bot, traits, stage1, reached, stage2, won, ticks, samples);
     }
 
+    /// <summary>
+    /// 1단계 — <see cref="StageRoster.Setup"/> 으로 세워(게임 · 데모와 같은 자리) 이길 때까지, 많아야 <paramref name="stage1Tries"/> 번. 기록은
+    /// <paramref name="history"/> 에 붙는다. 평가(<see cref="EvalRun"/> · #114)도 이 한 자리로 1단계를 친다 — 따로 치면 두 파일의 1단계가 갈린다.
+    /// </summary>
+    internal static (int Attempts, bool Reached, long Ticks) Stage1(
+        FactoryTables tables, BotTraits traits, RunHistory history, int stage1Tries, Action<AttemptRecord>? recorded)
+    {
+        int attempts = 0;
+        bool reached = false;
+        long ticks = 0;
+        while (!reached && attempts < stage1Tries)
+        {
+            attempts++;
+            (int number, ulong seed) = history.Open();
+            StageSetup setup = StageRoster.Setup(tables.Stages, 1, seed, history.Records)
+                ?? throw new InvalidOperationException("1단계가 안 선다 — [stage][E] 를 보라");
+            (BattleOutcome outcome, BattleSim sim) = Play(tables, traits, seed, setup.PatternIds, setup.Picker, tracker: null);
+            ticks += sim.Ticks;
+            Record(history, recorded, new AttemptRecord(number, 1, seed, outcome, [.. sim.Events]));
+            reached = outcome == BattleOutcome.Win;
+        }
+
+        return (attempts, reached, ticks);
+    }
+
     /// <summary>한 판을 끝까지 민다 — 사례를 가를 때는 틱마다 지금 패턴과 관측 수를 넘긴다.</summary>
-    private static (BattleOutcome Outcome, BattleSim Sim) Play(
+    internal static (BattleOutcome Outcome, BattleSim Sim) Play(
         FactoryTables tables, BotTraits traits, ulong seed, IReadOnlyList<string> roster, IPatternPicker picker, InstanceTracker? tracker)
     {
         var sim = new BattleSim(new BattleSetup
@@ -133,7 +144,7 @@ public static class BotRun
     }
 
     /// <summary>명부의 칸 — 판이 명부에서 뽑은 id 라 늘 있다. 없으면 판이 명부 밖을 낸 것이다(규칙 위반).</summary>
-    private static int Slot(IReadOnlyList<string> roster, string id)
+    internal static int Slot(IReadOnlyList<string> roster, string id)
     {
         for (int i = 0; i < roster.Count; i++)
         {

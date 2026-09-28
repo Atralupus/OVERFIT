@@ -14,7 +14,7 @@ namespace Overfit.Factory;
 /// <summary>
 /// 데이터 공장의 콘솔 (#108 · 설계 2026-09-28 §4) — 인자 · 파일 · 매니페스트 · 로그 싱크뿐이다. 표본을 짓는 것은 링크된 순수 파일들이다
 /// (<see cref="BotRun"/> · <see cref="FactoryBatch"/> · <see cref="SampleCsv"/> · <see cref="FactoryStats"/> — 테스트 프로젝트도 링크한다).
-/// 실행은 <c>tools/build.sh factory [인자…]</c> 다.
+/// 실행은 <c>tools/build.sh factory [인자…]</c> 다. <c>--evaluate</c> 면 평가 모드다(<see cref="EvaluateMode"/> · #114 — <c>tools/build.sh evaluate</c>).
 ///
 /// <para>
 /// <b>로그.</b> <see cref="Log"/> 는 정적이라 스레드를 띄우기 <b>전에</b> 레벨(기본 <c>warn</c>)과 싱크(잠금 · <c>[E]</c> 세기)를 한 번 정한다. 규칙 층이
@@ -40,6 +40,14 @@ public static class Program
           --commit=SHA        매니페스트에 적을 커밋 (build.sh 가 넣는다)
           --log-level=L       규칙 층의 로그 레벨 (기본 warn) — debug 는 --threads=1 과 같이 쓴다
           --check-targeting   원본 겨냥 표의 한 줄이라도 기저율 이하면 실패(종료 코드 1)
+
+        tools/build.sh evaluate [인자…]  — 같은 봇에게 망 보스와 무작위 보스 (#114 · 설계 2026-09-28 §7.1)
+
+          --evaluate          평가 모드 (build.sh evaluate 가 넣는다) — 1단계 한 번 · 2단계를 망 · 무작위 갈래로 한 번씩
+          --fleet-seed=N      기본은 망이 배운 함대 시드(network.json 의 trained_on)
+          --from=N --to=M     기본은 망이 배운 봇 다음부터 5만 대 — 배운 봇과 겹치면 멈춘다
+          --out=DIR           출력 폴더 (기본 out/evaluate/<시드>-<from>-<to>)
+          (그 밖의 인자는 위와 같다 — --check-targeting 은 없다)
         """;
 
     private static readonly object _gate = new();
@@ -51,6 +59,14 @@ public static class Program
         {
             Console.Out.Write(_usage);
             return 0;
+        }
+
+        // 스레드를 띄우기 전에 한 번 — 레벨과 싱크는 정적이다. 두 모드가 같이 쓴다.
+        Log.Level = CmdArgs.Text(args, "--log-level=") is { } text && Log.TryParseLevel(text, out LogLevel level) ? level : LogLevel.Warn;
+        Log.Sink = Write;
+        if (CmdArgs.Has(args, "--evaluate"))
+        {
+            return EvaluateMode.Run(args);
         }
 
         ulong fleetSeed = CmdArgs.UInt64(args, "--fleet-seed=") ?? 0;
@@ -71,10 +87,6 @@ public static class Program
             Console.Error.Write(_usage);
             return 2;
         }
-
-        // 스레드를 띄우기 전에 한 번 — 레벨과 싱크는 정적이다.
-        Log.Level = CmdArgs.Text(args, "--log-level=") is { } text && Log.TryParseLevel(text, out LogLevel level) ? level : LogLevel.Warn;
-        Log.Sink = Write;
 
         FactoryTables tables;
         string digest;
@@ -103,7 +115,7 @@ public static class Program
         {
             try
             {
-                FactoryBatch.Run(fleetSeed, from, to, threads, tables, stage1Tries, stage2Tries, results =>
+                FactoryBatch.Run(from, to, threads, bot => BotRun.Run(fleetSeed, bot, tables, stage1Tries, stage2Tries), results =>
                 {
                     var sampleText = new StringBuilder();
                     var botText = new StringBuilder();
@@ -248,6 +260,26 @@ public static class Program
         json.WriteEndObject();
     }
 
+    /// <summary>지금까지 난 <c>[E]</c> 의 수 — 평가 모드도 이것으로 실패를 가른다.</summary>
+    internal static int Errors
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _errors;
+            }
+        }
+    }
+
+    /// <summary>인자가 틀렸을 때 — 무엇이 틀렸는지와 쓰는 법.</summary>
+    internal static int Usage(string problem)
+    {
+        Console.Error.WriteLine(problem);
+        Console.Error.Write(_usage);
+        return 2;
+    }
+
     /// <summary>싱크 — 잠그고 한 줄씩 쓴다. <c>[E]</c> 를 센다(공장의 실패 조건).</summary>
     private static void Write(LogLevel level, string line)
     {
@@ -263,49 +295,11 @@ public static class Program
     }
 
     /// <summary>공장 자신의 줄 — 레벨을 안 거친다(위 설명).</summary>
-    private static void Say(string message) => Write(LogLevel.Info, $"[factory][I] {message}");
+    internal static void Say(string message) => Write(LogLevel.Info, $"[factory][I] {message}");
 
-    private static string Habit(BotHabit habit) => habit.ToString().ToLowerInvariant();
+    internal static string Habit(BotHabit habit) => habit.ToString().ToLowerInvariant();
 
-    private static int? Int(string[] args, string prefix) => CmdArgs.UInt64(args, prefix) is { } value ? checked((int)value) : null;
+    internal static int? Int(string[] args, string prefix) => CmdArgs.UInt64(args, prefix) is { } value ? checked((int)value) : null;
 
-    private static string Hex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
-
-    /// <summary>CSV 파일 하나 — 머리를 쓰고, 묶음마다 이어 쓰며 sha256 과 줄 수를 같이 센다(다 쓴 뒤 다시 읽지 않는다).</summary>
-    private sealed class CsvFile : IDisposable
-    {
-        private readonly FileStream _stream;
-        private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        private string? _sha256;
-
-        public CsvFile(string path, string header)
-        {
-            _stream = File.Create(path);
-            Append(Encoding.UTF8.GetBytes(header + "\n"));
-        }
-
-        /// <summary>머리를 뺀 줄 수.</summary>
-        public long Rows { get; private set; }
-
-        /// <summary>파일 전체(머리 포함)의 sha256 — 처음 읽을 때 닫는다.</summary>
-        public string Sha256 => _sha256 ??= Hex(_hash.GetHashAndReset());
-
-        public void Write(StringBuilder text, int rows)
-        {
-            Append(Encoding.UTF8.GetBytes(text.ToString()));
-            Rows += rows;
-        }
-
-        public void Dispose()
-        {
-            _stream.Dispose();
-            _hash.Dispose();
-        }
-
-        private void Append(byte[] bytes)
-        {
-            _hash.AppendData(bytes);
-            _stream.Write(bytes);
-        }
-    }
+    internal static string Hex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
 }

@@ -27,6 +27,8 @@
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대로 망의 학습 데이터를 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
 #                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
 #                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000 --check-targeting
+#   tools/build.sh evaluate [인자…]    평가 (#114) — 학습에 안 쓴 봇에게 2단계를 망 · 무작위 갈래로 한 번씩 → out/evaluate/<시드>-<from>-<to>/
+#                                      기본은 망이 배운 봇 다음부터 5만 대. 인자는 factory 와 같다(--help) · 로그는 out/evaluate.log
 #                                      시드는 시도 시드다(기본 51) — 게임 로그의 [run][I] attempt=… seed=X 를 그대로 넘기면
 #                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
@@ -485,18 +487,33 @@ python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt 로 
 # 몇 배 느리다. 판정은 헤드리스와 같은 함수다(judge_headless): [E] 가 하나라도 있으면(규칙 위반) · 표지가 없으면(끝까지 못 갔다) ·
 # 종료 코드가 0 이 아니면(--check-targeting 의 관문) 실패다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
 cmd_factory() {
+  run_factory "데이터 공장" "공장" "$OUT/factory.log" "factory=done" "$@"
+  ok "공장 통과 ($OUT/factory.log)"
+}
+
+# 평가 (#114 · 설계 2026-09-28 §7.1). 같은 공장 콘솔의 --evaluate — 학습에 안 쓴 봇(기본: 망이 배운 봇 다음부터 5만 대)이 1단계를 한 번 치고
+# 2단계를 망 갈래 · 무작위 갈래로 한 번씩 친다(같은 시도 시드). → out/evaluate/<시드>-<from>-<to>/ 의 attempts · samples · bots.csv · manifest.json.
+# 판정(§7.1 의 다섯 줄)은 여기서 안 한다 — tools/build.sh validate 가 그 폴더로 잰다.
+cmd_evaluate() {
+  run_factory "평가 — 같은 봇에게 망 보스와 무작위 보스" "평가" "$OUT/evaluate.log" "evaluate=done" --evaluate "$@"
+  ok "평가 통과 ($OUT/evaluate.log) — 판정은 tools/build.sh validate"
+}
+
+# 공장 콘솔을 Release 로 빌드해 저장소 뿌리에서 돌린다 — factory · evaluate 가 같이 쓴다. 기본 경로(overfit/data · tools/factory/fleet.json ·
+# out/…)가 뿌리에서 선다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
+run_factory() {
+  local title="$1" name="$2" log="$3" marker="$4"
+  shift 4
   command -v dotnet >/dev/null || die "dotnet 이 없습니다. tools/build.sh doctor 를 보세요."
   say "공장 빌드 (Release)"
   dotnet build "$FACTORY_PROJ" -c Release -v minimal || die "공장 빌드 실패."
-  say "데이터 공장"
+  say "$title"
   mkdir -p "$OUT"
-  local log="$OUT/factory.log" code=0 commit
+  local code=0 commit
   commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
   [[ -z "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]] || commit="$commit-dirty"
-  # 저장소 뿌리에서 돈다 — 기본 경로(overfit/data · tools/factory/fleet.json · out/factory/…)가 거기서 선다.
   (cd "$ROOT" && dotnet "$FACTORY_DIR/bin/Release/net8.0/Overfit.Factory.dll" "--commit=$commit" "$@") 2>&1 | tee "$log" || code=$?
-  judge_headless "공장" "$log" "factory=done" "$code"
-  ok "공장 통과 ($log)"
+  judge_headless "$name" "$log" "$marker" "$code"
 }
 
 # 익스포트 템플릿이 있는 폴더. 버전 문자열은 Godot 에게 물어본다 —
@@ -692,6 +709,7 @@ case "${1:-}" in
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
   factory)   shift; cmd_factory "$@" ;;
+  evaluate)  shift; cmd_evaluate "$@" ;;
   train)     shift; cmd_train "$@" ;;
   golden)    shift; cmd_golden "$@" ;;
   shots)     shift; cmd_shots "$@" ;;

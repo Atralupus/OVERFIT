@@ -24,7 +24,7 @@ public class FactoryBatchTests
         var samples = new StringBuilder(SampleCsv.SamplesHeader).Append('\n');
         var bots = new StringBuilder(SampleCsv.BotsHeader).Append('\n');
         var chunks = new List<int[]>();
-        FactoryBatch.Run(51, from, to, threads, _tables.Value, 3, 3, results =>
+        FactoryBatch.Run(from, to, threads, bot => BotRun.Run(51, bot, _tables.Value, 3, 3), results =>
         {
             chunks.Add(results.Select(r => r.Bot).ToArray());
             foreach (BotResult result in results)
