@@ -100,6 +100,9 @@ public class PatternPickerTests
         }
 
         begins.ShouldBe(new[] { "점프 공격", "점프 공격", "3연격", "점프 공격", "점프 공격", "3연격" });
+
+        // 판이 뽑힌 순서를 스스로 싣는다(#112 · 설계 2026-09-28 §6.5) — 기록과 되살리기가 그 순서를 견준다. 패턴이 서는 틱마다 한 칸이다.
+        sim.Drawn.ShouldBe(begins);
     }
 
     [Fact]

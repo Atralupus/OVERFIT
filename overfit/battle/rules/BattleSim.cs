@@ -97,6 +97,9 @@ public sealed class BattleSim
     private int _gapLeft;
     private int _picks;
 
+    /// <summary>뽑혀 선 패턴 id 들, 선 순서 — <see cref="Drawn"/>.</summary>
+    private readonly List<string> _drawn = new();
+
     /// <summary>
     /// 지금 도는 움직임 (설계 §8.1) — 러너가 움직임을 단 단계에 들 때 서고, 스스로 끝났다고 말하면 걷는다.
     /// 러너가 아니라 여기가 돌리는 이유: 움직임은 파이터의 X 를 읽는데 러너는 플레이어를 모른다.
@@ -232,6 +235,12 @@ public sealed class BattleSim
 
     /// <summary>이 판에서 일어난 회피 관측 전부. <see cref="PlayerAxes.From"/> 에 그대로 넣는다.</summary>
     public IReadOnlyList<DodgeEvent> Events => _swings.Events;
+
+    /// <summary>
+    /// 이 판에서 뽑혀 선 패턴 id 의 순서 (#112 · 설계 2026-09-28 §6.5) — 시도 기록과 로그가 싣고, 되살리기가 기록의 순서와 앞머리를 견준다. 명부 밖을
+    /// 뽑았거나 없는 패턴이라 안 선 것은 안 싣는다.
+    /// </summary>
+    public IReadOnlyList<string> Drawn => _drawn;
 
     /// <summary>
     /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
@@ -634,6 +643,7 @@ public sealed class BattleSim
         _current = def;
         _runner = new PatternRunner(def, _hits[id]);
         Boss.CurrentPattern = id;
+        _drawn.Add(id);
         Log.Debug("boss", () => $"pattern_begin id={id} pick={_picks} tick={Ticks}");
     }
 

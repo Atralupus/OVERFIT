@@ -116,6 +116,13 @@ public static class Det
         /// <summary>함대 봇의 <b>타이밍 잡음</b> (#104) — 판정마다 균등 난수 넷(합이 잡음이다 · 설계 2026-09-28 §3.1). 번호는 뒤에 더할 뿐이다.</summary>
         public const uint FleetTiming = 9;
 
+        /// <summary>
+        /// 2단계 시도의 <b>동전</b> — 망 · 무작위 갈래 (#112 · 설계 2026-09-28 §6.3). <c>RollInt(시도 시드, PickerArm, 100)</c> 을 정수 퍼센트와 견준다.
+        /// 뽑기(<see cref="PatternPick"/>)와 다른 스트림이라 동전을 던진 것만으로 보스의 순서가 안 밀린다 — 무작위 갈래는 <c>uniform</c> 과 같은 판이다.
+        /// 번호는 뒤에 더할 뿐이다.
+        /// </summary>
+        public const uint PickerArm = 10;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -128,6 +135,7 @@ public static class Det
             FleetBot => "fleet_bot",
             FleetAct => "fleet_act",
             FleetTiming => "fleet_timing",
+            PickerArm => "picker_arm",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

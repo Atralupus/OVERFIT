@@ -348,7 +348,10 @@ cmd_golden() {
   local out code=0
   out="$(python3 "$ML_DIR/golden.py" --verify 2>&1)" || code=$?
   case "$code" in
-    0)  ok "$out" ;;
+    0)  ok "$(head -1 <<< "$out")"
+        # 둘째 줄부터는 경고다 — 망이 배운 데이터의 지문이 지금과 다르다(설계 §5.6 · 이상하지만 계속 간다).
+        [[ "$(wc -l <<< "$out")" -gt 1 ]] && warn "$(tail -n +2 <<< "$out")"
+        return 0 ;;
     77) warn "망 골든 — network.json 이 아직 없어 건너뜁니다"
         sed 's/^/      /' <<< "$out" ;;
     *)  sed 's/^/      /' <<< "$out"
@@ -417,6 +420,8 @@ cmd_smoke() {
   judge_headless "스모크" "$log" "tour=done" "$code"
   # 순회가 정말 씬을 갈아끼웠나. 표지만 보면 "돌지 않고 끝난" 경우를 못 본다.
   expect_log "$log" info '^\[data\]\[I\] loaded ' "balance.json 을 읽은 흔적이 없습니다."
+  # 망(#112) — 부팅이 network.json 을 읽었나. 모양이 틀리면 [net][E] 로 위에서 이미 멈췄다.
+  expect_log "$log" info '^\[net\]\[I\] loaded heads=5 features=19 trained_on=' "망(network.json)을 읽은 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Play$' "Play 씬으로 간 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] play ready$' "Play 씬의 스크립트가 안 붙었습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Battle$' "Battle 씬으로 간 흔적이 없습니다."
@@ -435,7 +440,9 @@ cmd_smoke() {
   # 대본 칸 (#96 · 설계 §4.4). 순회가 첫 전투에만 대본을 넣는다(Game._tourScript) — 첫 줄의 picker=script 가 칸이 전투에 닿은 것이고,
   # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 단계 점프로 선 전투도 script 로 선다.
   expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=script history=0$' "첫 전투가 시도 1 의 시드와 순회의 대본으로 안 섰습니다."
-  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
+  # 2단계의 고르기는 망이다(#112) — 시도 2 의 시드에서 동전(Det 10 picker_arm)이 무작위 갈래를 낸다(RollInt(9131751153949564229, 10, 100) ≥ 50).
+  # 갈래가 로그에 실리는지 · 동전이 시드만으로 정해지는지를 본다 — 다른 갈래가 찍히면 동전의 스트림이나 몫이 바뀌었다.
+  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=network arm=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았거나(TakeScript 가 칸을 안 비웠다) 2단계의 동전이 달라졌습니다."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."

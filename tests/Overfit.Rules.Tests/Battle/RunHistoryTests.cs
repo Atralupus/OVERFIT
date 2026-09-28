@@ -62,4 +62,22 @@ public class RunHistoryTests
         history.Records[0].Number.ShouldBe(1);
         history.Records[1].ShouldBe(Finished(3, 1, BattleOutcome.Win));
     }
+
+    [Fact]
+    public void 런은_1_부터이고_처음부터_할_때만_오른다()
+    {
+        // 런 번호는 한 세션의 로그에서 "같은 런의 앞 기록" 을 찾는 열쇠다(#112 · 설계 2026-09-28 §6.5) — 되살리기가 그 런의 앞 시도들로 고르기를
+        // 다시 세운다. 시도를 열거나 붙여도 안 오르고, 기록을 비울 때(처음부터)만 오른다.
+        var history = new RunHistory(7);
+        history.Run.ShouldBe(1);
+
+        history.Open();
+        history.Record(Finished(1, 1, BattleOutcome.Lose));
+        history.Run.ShouldBe(1);
+
+        history.Clear();
+        history.Run.ShouldBe(2);
+        history.Clear();
+        history.Run.ShouldBe(3);
+    }
 }

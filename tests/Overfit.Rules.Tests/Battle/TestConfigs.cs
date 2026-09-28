@@ -316,6 +316,9 @@ public static class TestConfigs
     /// <summary>실제 <c>tools/factory/fleet.json</c> — 봇 함대의 성향 범위(#104). 게임 데이터가 아니라 실험의 조건이라 <c>data/</c> 밖에 있다.</summary>
     public static FleetConfig Fleet() => JsonData<FleetConfig>.ParseOne(File.ReadAllText("fleet.json"), "fleet.json");
 
+    /// <summary>게임이 부팅 때 읽는 망과 고르기의 수치 — 진짜 <c>network.json</c> 과 <c>balance.json</c> 의 <c>picker</c> (#112). 2단계를 대본 없이 세우는 판이 넘긴다.</summary>
+    public static NetworkContext Network() => new(TestNets.Real(), Balance().Picker);
+
     public static BalanceData Balance() =>
         JsonData<BalanceData>.ParseOne(File.ReadAllText(Path.Combine("data", "balance.json")), "balance.json");
 

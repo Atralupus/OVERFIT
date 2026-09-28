@@ -190,9 +190,18 @@ public class DetTests
     }
 
     [Fact]
+    public void 고르기의_동전은_10_이다()
+    {
+        // 2단계 시도의 동전 — 망 · 무작위 갈래 (#112 · 설계 2026-09-28 §6.3). 뽑기(PatternPick)와 다른 스트림이라 동전을 던진 것만으로 보스의
+        // 순서가 안 밀린다. 번호는 뒤에 더할 뿐이다.
+        Det.Domain.PickerArm.ShouldBe(10u);
+        Det.Domain.Name(Det.Domain.PickerArm).ShouldBe("picker_arm");
+    }
+
+    [Fact]
     public void 도메인_이름은_모르는_번호를_숫자_그대로_돌려준다()
     {
         Det.Domain.Name(0).ShouldBe("0");
-        Det.Domain.Name(10).ShouldBe("10");
+        Det.Domain.Name(11).ShouldBe("11");
     }
 }
