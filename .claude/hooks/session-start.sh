@@ -17,18 +17,19 @@ if ! command -v dotnet >/dev/null 2>&1; then
   apt-get install -y -qq dotnet-sdk-8.0
 fi
 
-# ── Godot 4.7 (.NET/Mono) ─────────────────────────────────────────────────
-# project.godot 의 config/features 가 "4.7" · "C#" 을 박아 둔 그 버전이다.
+# ── Godot 4.7.2 (.NET/Mono) ───────────────────────────────────────────────
+# overfit/Overfit.csproj 의 Godot.NET.Sdk/4.7.2 와 **점 버전까지** 같아야 한다. 4.7.0(4.7-stable)을 깔았더니 임포트가
+# csproj 의 SDK 를 4.7.0 으로 내려 쓰고 Overfit.csproj.old 를 남겼다(확인함 · #106).
 #
 # 공식 배포처(godotengine.org · downloads.tuxfamily.org)는 이 환경의 네트워크 정책이 CONNECT 단계에서
 # 막는다(확인함 — connect_rejected). GitHub 릴리스 미러(godotengine/godot-builds)는 뚫려 있으므로 거기서 받는다.
-GODOT_DIR="/opt/godot/Godot_v4.7-stable_mono_linux_x86_64"
-GODOT_BIN="$GODOT_DIR/Godot_v4.7-stable_mono_linux.x86_64"
+GODOT_DIR="/opt/godot/Godot_v4.7.2-stable_mono_linux_x86_64"
+GODOT_BIN="$GODOT_DIR/Godot_v4.7.2-stable_mono_linux.x86_64"
 
 if [ ! -x "$GODOT_BIN" ]; then
   tmp="$(mktemp -d)"
   curl -fsSL --max-time 120 -o "$tmp/godot.zip" \
-    "https://github.com/godotengine/godot-builds/releases/download/4.7-stable/Godot_v4.7-stable_mono_linux_x86_64.zip"
+    "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_linux_x86_64.zip"
   mkdir -p /opt/godot
   unzip -q "$tmp/godot.zip" -d /opt/godot
   rm -rf "$tmp"
