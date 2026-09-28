@@ -444,7 +444,7 @@ cmd_smoke() {
   # 대본 칸 (#96 · 설계 §4.4). 순회가 첫 전투에만 대본을 넣는다(Game._tourScript) — 첫 줄의 picker=script 가 칸이 전투에 닿은 것이고,
   # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 단계 점프로 선 전투도 script 로 선다.
   expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=script history=0$' "첫 전투가 시도 1 의 시드와 순회의 대본으로 안 섰습니다."
-  # 2단계의 고르기는 망이다(#112) — 시도 2 의 시드에서 동전(Det 10 picker_arm)이 무작위 갈래를 낸다(RollInt(9131751153949564229, 10, 100) ≥ 50).
+  # 2단계의 고르기는 망이다(#112) — 시도 2 의 시드에서 동전(Det 10 picker_arm)이 무작위 갈래를 낸다(RollInt(9131751153949564229, 10, 100) ≥ 70 — 몫 70 · #122).
   # 갈래가 로그에 실리는지 · 동전이 시드만으로 정해지는지를 본다 — 다른 갈래가 찍히면 동전의 스트림이나 몫이 바뀌었다.
   expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=network arm=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았거나(TakeScript 가 칸을 안 비웠다) 2단계의 동전이 달라졌습니다."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
