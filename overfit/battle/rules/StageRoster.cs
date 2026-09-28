@@ -25,9 +25,15 @@ public sealed class StageDef
 /// 한 판의 보스 쪽 재료 — 단계의 명부와 그 위에 세운 고르기 (#72 · 설계 §4.4). <see cref="StageRoster.Setup"/> 이 짓는다.
 /// </summary>
 /// <param name="PatternIds">명부 — <c>BattleSetup.PatternIds</c>.</param>
-/// <param name="PickerId">고르기 id — 로그의 <c>picker=</c>.</param>
+/// <param name="PickerId">고르기 id — 로그의 <c>picker=</c>. 단계의 id 그대로다(동전이 무작위 갈래를 골라도 <c>network</c>).</param>
 /// <param name="Picker">그 시도의 시드와 기록으로 세운 고르기 — <c>BattleSetup.Picker</c>.</param>
-public sealed record StageSetup(IReadOnlyList<string> PatternIds, string PickerId, IPatternPicker Picker);
+/// <param name="Stage">실제로 싸우는 단계 — 범위 밖을 물으면 가장 가까운 단계로 잘라 쓴 값이다(#112 · 설계 2026-09-28 §6.5). 기록이 이것을 싣는다.</param>
+/// <param name="Arm">
+/// 동전의 갈래 — <c>network</c> · <c>uniform</c> (#112 · 설계 §6.3). 고르기 id 가 <c>network</c> 가 아닌 단계는 갈래가 없다(null).
+/// </param>
+/// <param name="Decision">망 갈래면 망 고르기의 결정(좁힌 명부 · 숨통 · 로짓 · 들어 올림 · 까닭) — 로그와 기록이 싣는다.</param>
+public sealed record StageSetup(
+    IReadOnlyList<string> PatternIds, string PickerId, IPatternPicker Picker, int Stage, string? Arm = null, PickDecision? Decision = null);
 
 /// <summary>
 /// 단계 번호 → 그 단계가 쓰는 패턴 id 목록과 고르기.
@@ -56,37 +62,61 @@ public static class StageRoster
     /// 대본 — 있으면 이 전투만 단계의 <c>picker</c> 대신 <c>script</c> 로 선다 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). <c>Game</c> 의 다음
     /// 전투 한 칸이 GIF 러너 · 스크린샷에게서 받아 넘긴다. 명부는 그대로 그 단계의 것이다 — 대본은 명부 안의 순서만 정한다.
     /// </param>
+    /// <param name="network">
+    /// 망과 고르기의 수치 (#112) — 단계의 고르기가 <c>network</c> 면 필요하다. 없으면 <c>[E] network_missing</c> 을 남기고 판을 안 세운다. 게임과 데모가
+    /// 부팅 때 읽은 것을 넘긴다.
+    /// </param>
     public static StageSetup? Setup(
         IReadOnlyDictionary<string, StageDef> stages, int stage, ulong seed, IReadOnlyList<AttemptRecord> history,
-        IReadOnlyList<string>? script = null)
+        IReadOnlyList<string>? script = null, NetworkContext? network = null)
     {
-        if (Resolve(stages, stage) is not { } def)
+        if (Resolve(stages, stage, out int used) is not { } def)
         {
             return null;
         }
 
         string id = script is null ? def.Picker : "script";
+
+        // 반반의 동전 (설계 2026-09-28 §6.3). 단계의 고르기가 망이면 시도마다 망 · 무작위 갈래를 정한다 — 같은 사람에게 망 보스와 무작위 보스를
+        // 붙여 보는 것 말고 망이 일하는지 증명할 길이 없다. 동전은 PickerArm 스트림이라 뽑기(PatternPick)를 안 민다: 무작위 갈래는 uniform 과
+        // 같은 판이다. 정수 퍼센트와 견준다 — 사칙연산과 비교뿐이다(§8).
+        string? arm = null;
+        string build = id;
+        if (id == NetworkPicker.Id)
+        {
+            if (network is null)
+            {
+                Log.Error("stage", $"network_missing stage={used}");
+                return null;
+            }
+
+            arm = Det.RollInt(seed, Det.Domain.PickerArm, 100) < network.Knobs.NetworkSharePercent ? NetworkPicker.Id : "uniform";
+            build = arm;
+        }
+
         IPatternPicker? picker;
         try
         {
-            picker = PatternPickers.Create(id, new PickerInputs(def.Patterns, history, seed, stage, script));
+            picker = PatternPickers.Create(build, new PickerInputs(def.Patterns, history, seed, used, script, network));
         }
         catch (ArgumentException e)
         {
-            // 대본이 명부 밖이거나(ScriptPicker) script 고르기에 대본이 없으면 세울 때 던진다. 여기서 받지 않으면 예외가 Battle._Ready 를
-            // 빠져나가고, Godot 은 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매 프레임 NRE 가 나 이 한 줄이
-            // 그 밑에 묻혔다(#78 T6-I1). 다른 실패와 같이 [E] 를 남기고 null — Battle 이 판을 깨진 채로 멈춘다. [E] 는 판정을 그대로 떨어뜨린다.
-            Log.Error("stage", $"script_rejected stage={stage} reason={e.Message}");
+            // 대본이 명부 밖이거나(ScriptPicker) script 고르기에 대본이 없거나, 망의 머리가 명부와 다르면(NetworkPicker) 세울 때 던진다. 여기서
+            // 받지 않으면 예외가 Battle._Ready 를 빠져나가고, Godot 은 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매
+            // 프레임 NRE 가 나 이 한 줄이 그 밑에 묻혔다(#78 T6-I1). 다른 실패와 같이 [E] 를 남기고 null — Battle 이 판을 깨진 채로 멈춘다.
+            Log.Error("stage", build == "script"
+                ? $"script_rejected stage={used} reason={e.Message}"
+                : $"picker_rejected id={build} stage={used} reason={e.Message}");
             return null;
         }
 
         if (picker is null)
         {
-            Log.Error("stage", $"picker_missing id={id} stage={stage}");
+            Log.Error("stage", $"picker_missing id={build} stage={used}");
             return null;
         }
 
-        return new StageSetup(def.Patterns, id, picker);
+        return new StageSetup(def.Patterns, id, picker, used, arm, (picker as NetworkPicker)?.Decision);
     }
 
     /// <summary>
@@ -101,9 +131,13 @@ public static class StageRoster
     /// "없는 단계를 달라고 했다" 는 데이터 손상이 아니라 호출자의 범위 문제다. 전투는 명부와 고르기를 이 한 정의에서
     /// 읽는다(#72) — 따로 찾으면 잘린 단계의 명부와 물은 단계의 고르기가 갈린다. 못 찾으면(구멍 · 빈 명부) null 이다.
     /// </summary>
-    public static StageDef? Resolve(IReadOnlyDictionary<string, StageDef> stages, int stage)
+    public static StageDef? Resolve(IReadOnlyDictionary<string, StageDef> stages, int stage) => Resolve(stages, stage, out _);
+
+    /// <summary><see cref="Resolve(IReadOnlyDictionary{string, StageDef}, int)"/> 에 잘라 쓴 단계(<paramref name="used"/>)를 더한다 — 기록이 싣는 값이다.</summary>
+    public static StageDef? Resolve(IReadOnlyDictionary<string, StageDef> stages, int stage, out int used)
     {
         ArgumentNullException.ThrowIfNull(stages);
+        used = stage;
 
         int lowest = int.MaxValue, highest = int.MinValue;
         foreach (string key in stages.Keys)
@@ -124,6 +158,7 @@ public static class StageRoster
         }
 
         int picked = Math.Clamp(stage, lowest, highest);
+        used = picked;
         if (picked != stage)
         {
             Log.Warn("stage", $"out_of_range asked={stage} used={picked} defined={lowest}..{highest}");

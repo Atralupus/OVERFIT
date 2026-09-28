@@ -72,6 +72,7 @@ public class PlayerFeaturesTests
             "jump_choice_samples",
             "parry_choice_samples",
         ]);
+        PlayerFeatures.Names[PlayerFeatures.SamplesIndex].ShouldBe("samples");
     }
 
     [Fact]

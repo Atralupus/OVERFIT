@@ -44,6 +44,9 @@ public static class PlayerFeatures
         "parry_choice_samples",
     ];
 
+    /// <summary>관측 수(<c>samples</c>)의 칸 — 망의 고르기가 <c>min_samples</c> 와 견준다(#112).</summary>
+    public const int SamplesIndex = 11;
+
     /// <summary>축을 <see cref="Names"/> 의 순서로 싣는다.</summary>
     public static double[] From(PlayerAxes axes)
     {

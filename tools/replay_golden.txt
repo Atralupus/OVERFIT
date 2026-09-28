@@ -498,4 +498,7 @@
 # 링크된 파일에서 바꾼 것은 FleetConfig.cs 의 주석뿐이다 — 표는 tools/factory/fleet.json 이 싣고 게임은 안 읽는다. 여기가 움직였다면 주석 아닌 것이 섞였다.
 # 2026-09-28 **안 움직였다** (#112 · 게임 안의 망 PlayerNet · 동전의 도메인 10 picker_arm · balance.json 의 picker): 51 2024 12 0 19 2d5b1d281a8f35bb 그대로다.
 # 새로 링크한 PlayerNet.cs 는 판이 안 부른다 · Det 에는 상수와 이름 하나만 더했다 · BalanceData 에는 고르기의 수치 블록만 더했다. 여기가 움직였다면 옛 도메인이나 수치를 건드렸다.
+# 2026-09-28 **안 움직였다** (#112 · 망의 고르기 NetworkPicker · StageRoster.Setup 의 동전 · 잘라 쓴 단계): 51 2024 12 0 19 2d5b1d281a8f35bb 그대로다.
+# 골든은 1단계(uniform)로 돈다 — 동전은 고르기 id 가 network 인 단계에서만 던지고, 1단계의 Setup 은 같은 고르기를 같은 시드로 세운다(StageSetup 에 칸만
+# 늘었다). PlayerFeatures 에는 상수 하나(SamplesIndex)가 들었다. 여기가 움직였다면 1단계의 고르기가 바뀌었다.
 51 2024 12 0 19 2d5b1d281a8f35bb
