@@ -71,6 +71,19 @@ def check_shape(net):
     return problems
 
 
+def _dumps(golden):
+    """사례 하나를 한 줄에 — 입력 19칸과 로짓 5칸. 수는 json 의 기본(파이썬 repr · 가장 짧은 왕복 표기)이다."""
+    lines = ["{"]
+    lines.append(f' "_comment": {json.dumps(golden["_comment"], ensure_ascii=False)},')
+    lines.append(f' "network_sha256": {json.dumps(golden["network_sha256"])},')
+    lines.append(' "cases": [')
+    cases = [f'  {{"input": {json.dumps(c["input"])}, "logits": {json.dumps(c["logits"])}}}' for c in golden["cases"]]
+    lines.append(",\n".join(cases))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def sha256(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
@@ -98,8 +111,7 @@ def main(argv):
             "cases": cases,
         }
         with open(GOLDEN, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(golden, f, ensure_ascii=False, indent=1)
-            f.write("\n")
+            f.write(_dumps(golden))
         print(f"망 골든 — 입력 {len(cases)} 개의 로짓을 {os.path.relpath(GOLDEN, ROOT)} 에 썼다")
         return 0
 
