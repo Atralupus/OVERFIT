@@ -82,6 +82,7 @@
     <Compile Include="../../overfit/battle/rules/PlayerFeatures.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerNet.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/NetworkPicker.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/AttemptLog.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotPolicy.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FleetConfig.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotTraits.cs" LinkBase="linked/battle/rules" />
