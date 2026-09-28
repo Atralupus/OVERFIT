@@ -119,8 +119,8 @@
   }
  ],
  "trained_on": {
-  "commit": "3791209885cca6fef0b5eb1794bb3127298e854c",
-  "data_digest": "085f0435b1f04e2737cbcca8f32085db2b456d92a895ca1bc83a01712344011e",
+  "commit": "636d0cdf93277ef2365f92a2228a456c3aa49e12",
+  "data_digest": "bd7be7bf59703c6a056a426c786321be2ad4187022f9e0b94d0cd0b4f9faebb1",
   "fleet_seed": 1,
   "bots": 100000
  },
@@ -203,6 +203,6 @@
     "targeted_share": 0.94942
    }
   ],
-  "lift_min": 0.405465
+  "lift_min": 0.405
  }
 }

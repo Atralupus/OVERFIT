@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 using Overfit.Battle.Rules;
-using Overfit.Factory;
 using Shouldly;
 using Xunit;
 
-namespace Overfit.Rules.Tests.Factory;
+namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
 /// 사례 가르기와 라벨 (#108 · 설계 2026-09-28 §4.3). 판을 안 돌리고 틱마다의 (지금 패턴, 관측 수)와 관측 목록을 손으로 지어 넣는다 — 규칙이

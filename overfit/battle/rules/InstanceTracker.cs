@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Overfit.Battle.Rules;
 
-namespace Overfit.Factory;
+namespace Overfit.Battle.Rules;
 
 /// <summary>사례 하나 — 패턴이 한 번 선 것과 그 사례에 맞았나(망의 라벨).</summary>
 /// <param name="PatternId">그 패턴의 id.</param>
@@ -12,6 +11,12 @@ public readonly record struct PatternInstance(string PatternId, bool Hit);
 /// <summary>
 /// 판을 사례로 가른다 (#108 · 설계 2026-09-28 §4.3). 판을 미는 쪽이 틱마다(<c>BattleSim.Tick</c> 뒤) 지금의 패턴과 관측 수를 넘기고, 판이 끝나면
 /// 관측 목록으로 라벨을 붙인다. 관측(<see cref="DodgeEvent"/>)의 모양은 안 바꾼다 — 사례의 경계는 판 밖에서 지금 패턴의 바뀜으로만 잰다.
+///
+/// <para>
+/// <b>공장과 게임이 이 한 자리를 같이 쓴다</b>(#114). 공장은 학습의 라벨을, 게임(<c>Battle</c>)은 시도 기록의 사례를 여기서 짓는다 — sim-to-real 이
+/// 사람의 사례를 봇의 사례와 같은 정의로 견줘야 해서다. 사람의 기록만 보고 파이썬이 따로 가르면 같은 패턴이 연달아 선 사례의 경계를 모른다(좁힌
+/// 명부에서는 흔하다) — 그래서 처음엔 공장에만 있던 이 파일을 규칙 층으로 옮겼다.
+/// </para>
 ///
 /// <para>
 /// <b>사례는 패턴이 서는 틱에 선다</b> — 지금 패턴이 다른 값(대개 null)에서 id 로 바뀌는 틱이다. 판은 패턴 사이에 늘 쉬는 틱을 두어 같은 패턴이

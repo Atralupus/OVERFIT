@@ -88,6 +88,7 @@
     <Compile Include="../../overfit/battle/rules/BotTraits.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BeatTable.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FleetBot.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/InstanceTracker.cs" LinkBase="linked/battle/rules" />
 
     <!-- 뷰의 순수 절반 (#83 · #78). 규칙은 아니지만 Godot 을 모르므로 여기서 돈다 — core/Log.cs · LogSink.cs 와 같은 가름이다:
          그리는 노드(battle/view/LandingWave.cs · BossView.cs)는 빼고, 규칙의 판정 사각형에서 모양을 읽는 계산과 단계의 장을 고르는 결정만 넣는다.
@@ -96,13 +97,14 @@
     <Compile Include="../../overfit/battle/view/BossStepDraw.cs" LinkBase="linked/battle/view" />
 
     <!-- 데이터 공장의 순수 절반 (#108 · 설계 2026-09-28 §4.1). 공장(tools/factory/Overfit.Factory.csproj)은 콘솔이지만 표본을 짓는 핵심 —
-         사례 가르기 · 봇 한 대의 흐름 · 묶음 병렬 · CSV 서식 — 은 여기서도 돈다. 공장만의 것은 Program.cs(인자 · 파일)뿐이다. -->
-    <Compile Include="../../tools/factory/InstanceTracker.cs" LinkBase="linked/factory" />
+         봇 한 대의 흐름 · 묶음 병렬 · CSV 서식 — 은 여기서도 돈다(사례 가르기는 게임도 쓰게 되어 규칙 층으로 갔다 · #114). 평가(#114)의 봇 한 대와 서식도 여기서 돈다. 공장만의 것은 Program.cs · EvaluateMode.cs · CsvFile.cs(인자 · 파일)뿐이다. -->
     <Compile Include="../../tools/factory/FactoryTables.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/BotRun.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/SampleCsv.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/FactoryBatch.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/FactoryStats.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/EvalRun.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/EvalCsv.cs" LinkBase="linked/factory" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.

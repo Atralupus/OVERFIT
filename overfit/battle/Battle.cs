@@ -71,6 +71,15 @@ public partial class Battle : Node2D
     /// </summary>
     private StageSetup _setup = null!;
 
+    /// <summary>
+    /// 이 전투를 세울 때의 입력 19칸 — 이번 런의 앞 기록으로 짓는다(망이 읽는 그 값 · #114). 끝날 때 기록이 싣는다: sim-to-real 이 파이썬에서 입력을
+    /// 다시 짓지 않게(설계 2026-09-28 §7.3).
+    /// </summary>
+    private double[] _features = [];
+
+    /// <summary>판을 사례로 가른다 — 공장과 같은 정의(<see cref="InstanceTracker"/> · #114). 틱마다 보고, 끝날 때 사례와 라벨을 기록이 싣는다.</summary>
+    private InstanceTracker _instances = new();
+
     private bool _over;
     private BattleOutcome _outcome;
     private double _resultIn;
@@ -298,6 +307,8 @@ public partial class Battle : Node2D
         }
 
         _setup = stage;
+        _features = PlayerFeatures.From(history.Records);
+        _instances = new InstanceTracker();
         string arm = stage.Arm is null ? "" : $" arm={stage.Arm}";
         Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId}{arm} history={history.Records.Count}");
 
@@ -388,6 +399,7 @@ public partial class Battle : Node2D
         _carried = default;
 
         BattleOutcome? outcome = _sim.Tick(input);
+        _instances.Observe(_sim.Boss.CurrentPattern, _sim.Events.Count);
         _cues.Observe(input);
 
         if (outcome is { } done)
@@ -496,11 +508,13 @@ public partial class Battle : Node2D
         var record = new AttemptRecord(_attempt.Number, _setup.Stage, _attempt.Seed, outcome, [.. _sim.Events], _setup.Arm);
         history.Record(record);
         Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
+        List<PatternInstance> instances = _instances.Finish(_sim.Events);
         var entry = new AttemptEntry(
-            history.SessionSeed, history.Run, record, _setup.PickerId, [.. _sim.Drawn], _sim.Ticks, _setup.Decision, Balance.NetworkSha256);
+            history.SessionSeed, history.Run, record, _setup.PickerId, [.. _sim.Drawn], _sim.Ticks, _setup.Decision, Balance.NetworkSha256,
+            _features, instances);
         if (AttemptFile.Append(entry) is { } path)
         {
-            Log.Debug("run", $"logged attempt={_attempt.Number} path={path}");
+            Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} path={path}");
         }
     }
 
