@@ -36,6 +36,19 @@ if [ ! -x "$GODOT_BIN" ]; then
   chmod +x "$GODOT_BIN"
 fi
 
+# ── 망의 학습 도구 (ml/ · #110) ──────────────────────────────────────────
+# numpy · pandas 를 ml/.venv 에 깐다 — tools/build.sh train 이 그 파이썬으로 돈다. check 는 이것이 필요 없다(골든은 표준 라이브러리)
+# 그래서 실패해도 세션을 막지 않는다. torch 는 안 쓴다: download.pytorch.org 가 막혀 PyPI 의 CUDA 휠(수 GB)을 세션마다 받아야 한다.
+ML_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}/ml"
+if [ -f "$ML_DIR/requirements.txt" ]; then
+  if [ ! -x "$ML_DIR/.venv/bin/python" ]; then
+    python3 -m venv "$ML_DIR/.venv" || echo "ml/.venv 를 못 지었다 — tools/build.sh train 이 멈춘다" >&2
+  fi
+  if [ -x "$ML_DIR/.venv/bin/pip" ]; then
+    "$ML_DIR/.venv/bin/pip" install -q -r "$ML_DIR/requirements.txt" || echo "ml 의존성을 못 깔았다 — tools/build.sh train 이 멈춘다" >&2
+  fi
+fi
+
 # tools/build.sh 는 godot 을 PATH 가 아니라 GODOT_PATH(없으면 GODOT)로 찾는다 — 세션 전체에 심어 둔다.
 ln -sf "$GODOT_BIN" /usr/local/bin/godot
 ln -sf "$GODOT_BIN" /usr/bin/godot   # godot MCP 서버의 기본 조회 경로

@@ -442,12 +442,13 @@ command -v dotnet >/dev/null || pass   # 툴체인이 없으면 검사할 방법
 # 스테이징된 것 중 검사 대상이 없으면 돌릴 이유가 없다.
 # C# 뿐 아니라 overfit/data/*.json 도 대상이다 — 수치는 코드가 아니라 그 파일에만 있다.
 # 봇 함대의 설정(tools/factory/*.json · #104 · #108)도 그렇다 — 관문 테스트가 읽는다. 그것만 고친 커밋이 check 를 안 돌면 관문을 안 거친다.
+# 망의 골든(ml/*.py · tests/**/NetworkGolden.json · #110)도 그렇다 — check 의 골든 단계가 그 둘을 본다.
 # tools/build.sh 와 tools/extract_hitboxes.py 도 대상이다 — 앞의 것은 check 가 무엇을 도는지이고, 뒤의 것은
 # 판정 모양 단계 그 자체다. 이 둘만 고친 커밋이 check 를 안 돌면 검사를 깨뜨리는 변경이 게이트를 그냥 지난다(#69).
 # 셰이더(.gdshader)와 .uid 도 대상이다 — check 의 .uid 짝 단계가 보는 파일이다. 셰이더만 더하고 .uid 를 빠뜨린 커밋이나
 # .uid 만 지운 커밋이 check 를 안 돌면 짝이 깨진 채 들어간다(#71 — 이 저장소의 첫 셰이더).
 if [[ -n "$staged" ]] \
-  && ! grep -qE '\.(cs|csproj|sln|uid)$|(^|/)\.(editorconfig|runsettings)$|^overfit/data/.*\.json$|^tools/factory/.*\.json$|^overfit/.*\.(tscn|tres|godot|gdshader)$|^tools/(build\.sh|extract_hitboxes\.py)$' <<< "$staged"; then
+  && ! grep -qE '\.(cs|csproj|sln|uid)$|(^|/)\.(editorconfig|runsettings)$|^overfit/data/.*\.json$|^tools/factory/.*\.json$|^ml/.*\.py$|^tests/.*\.json$|^overfit/.*\.(tscn|tres|godot|gdshader)$|^tools/(build\.sh|extract_hitboxes\.py)$' <<< "$staged"; then
   pass
 fi
 

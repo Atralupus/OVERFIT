@@ -37,6 +37,8 @@ obj/
 # 다음 사람이 그대로 커밋한다.
 __pycache__/
 *.pyc
+# 망의 학습 도구(ml/ · #110)의 가상 환경 — 세션 훅이나 사람이 ml/requirements.txt 로 짓는다.
+ml/.venv/
 
 # ---------- 테스트 산출물 ----------
 # tools/build.sh test 는 out/TestResults 로 떨어뜨리지만, IDE 테스트 탐색기는 프로젝트 옆에 만든다.

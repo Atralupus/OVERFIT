@@ -12,6 +12,11 @@
 #                                      cover → 커버리지(cobertura) 까지. 나머지 인자는 dotnet test 로 그대로
 #                                      (예: --filter FullyQualifiedName~Det)
 #   tools/build.sh uids                .cs · .gdshader 마다 .uid 가 짝을 이루는지. check 가 부른다
+#   tools/build.sh golden              망의 골든(ml/golden.py --verify) — network.json 의 로짓을 표준 라이브러리로 다시 셈해 골든 파일과 견준다.
+#                                      check 가 부른다. 망이 아직 없으면 경고하고 건너뛴다
+#   tools/build.sh train [인자…]       망의 학습 (#110) — 공장의 원본으로 ml/train.py → network.json · ml/report.md, 이어 골든을 다시 짓는다.
+#                                      ml/.venv 의 파이썬(세션 훅이 짓는다 · 손으로는 python3 -m venv ml/.venv && ml/.venv/bin/pip install
+#                                      -r ml/requirements.txt). 인자는 ml/train.py --help
 #   tools/build.sh hitboxes            hitboxes.json 이 그림과 같은지 (extract_hitboxes.py --check). check 가 부른다
 #                                      그림(PNG)이 안 깔린 체크아웃이면 경고하고 건너뛴다 — 실패가 아니다
 #   tools/build.sh run [씬]            C# 빌드 후 게임 실행
@@ -62,6 +67,10 @@ TEST_PROJ="$TEST_DIR/Overfit.Rules.Tests.csproj"
 # 데이터 공장 (#108). 규칙 파일을 링크하는 .NET 콘솔이다 — 솔루션에 들어 있어 check 의 포맷 · 빌드가 같이 덮는다.
 FACTORY_DIR="$ROOT/tools/factory"
 FACTORY_PROJ="$FACTORY_DIR/Overfit.Factory.csproj"
+
+# 망의 학습 (#110). 넘파이 · 판다스는 ml/.venv 에 있다 — 골든(golden.py)만 표준 라이브러리라 check 는 시스템 python3 로 돈다.
+ML_DIR="$ROOT/ml"
+ML_PYTHON="${ML_PYTHON:-$ML_DIR/.venv/bin/python}"
 
 GODOT="${GODOT_PATH:-${GODOT:-/Applications/Godot_mono.app/Contents/MacOS/Godot}}"
 
@@ -331,6 +340,22 @@ cmd_hitboxes() {
   esac
 }
 
+# 망의 골든 (#110 · 설계 2026-09-28 §5.7). network.json 으로 고정 입력의 로짓을 표준 라이브러리 파이썬이 C# 과 같은 연산 순서로 다시 셈해
+# 골든 파일(tests/…/NetworkGolden.json)과 == 로 견준다 — C# 테스트(4번 PR 의 PlayerNet)도 같은 파일을 == 로 본다. 파이썬 == 골든 == C# 이
+# 매 커밋 선다. 망을 다시 학습하고 골든을 안 지었으면 여기서 멈춘다. 망이 아직 없는 체크아웃은 볼 것이 없을 뿐이라 경고로 넘긴다(77).
+cmd_golden() {
+  command -v python3 >/dev/null || { warn "python3 없음 — 망 골든 검사를 건너뜁니다"; return 0; }
+  local out code=0
+  out="$(python3 "$ML_DIR/golden.py" --verify 2>&1)" || code=$?
+  case "$code" in
+    0)  ok "$out" ;;
+    77) warn "망 골든 — network.json 이 아직 없어 건너뜁니다"
+        sed 's/^/      /' <<< "$out" ;;
+    *)  sed 's/^/      /' <<< "$out"
+        die "망 골든이 어긋났습니다 (위 출력). 망을 다시 학습했으면 python3 ml/golden.py 로 골든을 다시 지으세요." ;;
+  esac
+}
+
 cmd_check() {
   say "포맷 검사"
   if ! dotnet format "$SLN" --verify-no-changes --no-restore; then
@@ -354,6 +379,9 @@ cmd_check() {
 
   say "판정 모양 (hitboxes.json ↔ 그림)"
   cmd_hitboxes
+
+  say "망 골든 (network.json ↔ NetworkGolden.json)"
+  cmd_golden
 }
 
 cmd_run() {
@@ -431,6 +459,18 @@ cmd_demo() {
   expect_log "$log" info '^\[result\]\[I\] (win|lose) ' "승패 판정이 안 났습니다."
   expect_log "$log" info '^\[axes\]\[I\] samples=[1-9]' "회피 관측이 0건입니다 — 계측이 안 돌았습니다."
   ok "전투 데모 통과 ($log)"
+}
+
+# 망의 학습 (#110 · 설계 2026-09-28 §5). 원본은 공장이 짓는다(tools/build.sh factory — 설계 §4.8 의 규모가 기본 경로다). 관문(§5.5)을 못 넘으면
+# ml/train.py 가 1 로 끝나고 network.json 을 안 쓴다. 쓰고 나면 골든을 다시 짓는다 — 안 지으면 다음 check 가 골든이 낡았다고 멈춘다.
+cmd_train() {
+  [[ -x "$ML_PYTHON" ]] || die "학습의 파이썬이 없습니다 — $ML_PYTHON
+python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt 로 지으세요(세션 훅이 클라우드에서 짓는다)."
+  say "학습"
+  (cd "$ROOT" && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 "$ML_PYTHON" "$ML_DIR/train.py" "$@") || die "학습이 멈췄습니다 — 위 출력을 보세요."
+  say "골든"
+  (cd "$ROOT" && python3 "$ML_DIR/golden.py") || die "골든을 못 지었습니다."
+  ok "network.json · 골든 · ml/report.md 를 썼습니다 — 같이 커밋하세요."
 }
 
 # 데이터 공장 (#108 · 설계 2026-09-28 §4). 봇 함대가 1단계 · 2단계를 게임과 같은 순서로 치고, 2단계의 사례(패턴이 선 것 하나)마다
@@ -645,6 +685,8 @@ case "${1:-}" in
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
   factory)   shift; cmd_factory "$@" ;;
+  train)     shift; cmd_train "$@" ;;
+  golden)    shift; cmd_golden "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
   gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;
