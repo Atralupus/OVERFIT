@@ -11,7 +11,7 @@ public enum DodgeVerb
     /// <summary>
     /// 거리가 안 닿아 그냥 빗나갔다. 행동이 아니라 <b>서 있던 자리</b>가 피하게 한 것이라
     /// 타이밍도 방향도 없다. 축으로는 <c>DistanceBias</c> 가 이미 이것을 잰다 —
-    /// 그래서 11번째 축을 만들지 않고 이 값만 남긴다.
+    /// 그래서 간격의 축을 따로 만들지 않고 이 값만 남긴다.
     ///
     /// <para>
     /// 안(<see cref="HitVerdict.MissedByGap"/>)과 밖(<see cref="HitVerdict.MissedTooFar"/>)이
@@ -41,8 +41,8 @@ public enum DodgeVerb
     /// </para>
     ///
     /// <para>
-    /// ⚠ <b>11번째 축을 만들지 않는다.</b> 가드의 개수는 <c>PlayerAxes.GuardSamples</c> ·
-    /// <c>GuardBrokenSamples</c> 가 나르고 10축 계약은 그대로다 — 이유는 그 두 프로퍼티의 주석에 있다.
+    /// 가드는 11번째 축 <c>PlayerAxes.GuardRate</c>(고른 몫 — 의존도가 아니라 사용 비율인 이유는 그 주석에 있다)이고, 개수는
+    /// <c>GuardSamples</c> · <c>GuardBrokenSamples</c> 가 나른다 (#104).
     /// </para>
     /// </summary>
     Guard,

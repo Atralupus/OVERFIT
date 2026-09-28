@@ -177,9 +177,22 @@ public class DetTests
     }
 
     [Fact]
+    public void 봇_함대의_도메인은_7_8_9_다()
+    {
+        // 봇 함대의 세 스트림 (#104 · 설계 2026-09-28 §8). 봇 번호 → 성향 · 행동 선택 · 타이밍 잡음을 한 스트림에 안 섞는다 —
+        // 나눠 쓰면 한 판단을 한 번 더 한 것만으로 그 뒤의 다른 판단이 전부 밀린다(옛 봇 도메인들과 같은 까닭). 번호는 뒤에 더할 뿐이다.
+        Det.Domain.FleetBot.ShouldBe(7u);
+        Det.Domain.FleetAct.ShouldBe(8u);
+        Det.Domain.FleetTiming.ShouldBe(9u);
+        Det.Domain.Name(Det.Domain.FleetBot).ShouldBe("fleet_bot");
+        Det.Domain.Name(Det.Domain.FleetAct).ShouldBe("fleet_act");
+        Det.Domain.Name(Det.Domain.FleetTiming).ShouldBe("fleet_timing");
+    }
+
+    [Fact]
     public void 도메인_이름은_모르는_번호를_숫자_그대로_돌려준다()
     {
         Det.Domain.Name(0).ShouldBe("0");
-        Det.Domain.Name(7).ShouldBe("7");
+        Det.Domain.Name(10).ShouldBe("10");
     }
 }

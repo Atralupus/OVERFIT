@@ -69,7 +69,7 @@ public static class Det
         /// </summary>
         public const uint PatternPick = 1;
 
-        /// <summary>최소 봇이 회피 수단을 고를 때. 학습 데이터용 봇 함대는 이 스트림을 쓰지 않는다.</summary>
+        /// <summary>최소 봇이 회피 수단을 고를 때. 학습 데이터용 봇 함대는 이 스트림을 쓰지 않는다 — 함대는 <see cref="FleetAct"/> 다.</summary>
         public const uint BotChoice = 2;
 
         /// <summary>
@@ -101,6 +101,21 @@ public static class Det
         /// </summary>
         public const uint Attempt = 6;
 
+        /// <summary>
+        /// 봇 함대의 <b>봇 한 대</b> (#104 · 설계 2026-09-28 §3.3) — <c>Hash64(함대 시드, FleetBot, k1: 봇 번호, k2: 0)</c> 이 그 봇의 세션 시드이고,
+        /// <c>k2: 1 + j</c> 가 성향 j 의 좌표다. 봇 번호 하나로 그 봇이 되살아난다. 번호는 뒤에 더할 뿐이다.
+        /// </summary>
+        public const uint FleetBot = 7;
+
+        /// <summary>
+        /// 함대 봇의 <b>행동 선택</b> (#104) — 이번 패턴을 가드로 받나 · 욕심 · 수단 · 리듬 · 대시 방향 · 2연격. 시도 시드 위에서 굴린다.
+        /// 타이밍 잡음(<see cref="FleetTiming"/>)과 같은 스트림을 안 쓴다 — 나눠 쓰면 잡음을 한 번 더 뽑은 것만으로 그 뒤의 모든 선택이 밀린다.
+        /// </summary>
+        public const uint FleetAct = 8;
+
+        /// <summary>함대 봇의 <b>타이밍 잡음</b> (#104) — 판정마다 균등 난수 넷(합이 잡음이다 · 설계 2026-09-28 §3.1). 번호는 뒤에 더할 뿐이다.</summary>
+        public const uint FleetTiming = 9;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -110,6 +125,9 @@ public static class Det
             BotGuard => "bot_guard",
             BotCombo => "bot_combo",
             Attempt => "attempt",
+            FleetBot => "fleet_bot",
+            FleetAct => "fleet_act",
+            FleetTiming => "fleet_timing",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

@@ -313,6 +313,9 @@ public static class TestConfigs
 
     public static Dictionary<string, StageDef> Stages() => Table<StageDef>("stages.json");
 
+    /// <summary>실제 <c>tools/factory/fleet.json</c> — 봇 함대의 성향 범위(#104). 게임 데이터가 아니라 실험의 조건이라 <c>data/</c> 밖에 있다.</summary>
+    public static FleetConfig Fleet() => JsonData<FleetConfig>.ParseOne(File.ReadAllText("fleet.json"), "fleet.json");
+
     public static BalanceData Balance() =>
         JsonData<BalanceData>.ParseOne(File.ReadAllText(Path.Combine("data", "balance.json")), "balance.json");
 
