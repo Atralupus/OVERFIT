@@ -77,6 +77,15 @@ public partial class Battle : Node2D
     /// </summary>
     private double[] _features = [];
 
+    /// <summary>
+    /// 이 전투를 세울 때까지의 기록 — 고르기가 읽은 그 기록이다. 리포트(#122)가 회피를 여기서 센다: 끝날 때의 <c>History.Records</c> 에는 이 시도가 이미
+    /// 붙어 있어, 고른 뒤의 회피까지 세게 된다.
+    /// </summary>
+    private IReadOnlyList<AttemptRecord> _prior = [];
+
+    /// <summary>결과 화면의 패턴 리포트 줄들 (#122) — 동전이 있는 단계(2단계)만 있다. 끝날 때 짓고 결과 화면이 띄운다.</summary>
+    private IReadOnlyList<string> _report = [];
+
     /// <summary>판을 사례로 가른다 — 공장과 같은 정의(<see cref="InstanceTracker"/> · #114). 틱마다 보고, 끝날 때 사례와 라벨을 기록이 싣는다.</summary>
     private InstanceTracker _instances = new();
 
@@ -308,6 +317,7 @@ public partial class Battle : Node2D
 
         _setup = stage;
         _features = PlayerFeatures.From(history.Records);
+        _prior = [.. history.Records];
         _instances = new InstanceTracker();
         string arm = stage.Arm is null ? "" : $" arm={stage.Arm}";
         Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId}{arm} history={history.Records.Count}");
@@ -516,6 +526,16 @@ public partial class Battle : Node2D
         {
             Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} path={path}");
         }
+
+        // 2단계의 패턴 리포트 (#122) — 동전이 있는 단계만. 갈래가 있으면 판을 세울 때 망을 이미 읽었다(부팅이 망 없이는 안 선다).
+        if (_setup.Arm is not null)
+        {
+            _report = PickReport.Lines(_setup, Balance.Network, _prior, _sim.Drawn, instances);
+            foreach (string line in _report)
+            {
+                Log.Debug("report", $"line=\"{line}\"");
+            }
+        }
     }
 
     /// <summary>
@@ -548,7 +568,7 @@ public partial class Battle : Node2D
         // 이긴 판에서 [다시] 는 거짓말이다 — 단계가 이미 올랐으므로 같은 판이 아니다.
         string againLabel = cleared ? "처음부터" : won ? "다음 단계" : "다시";
 
-        _result.Reveal(won, headline, detail, againLabel);
+        _result.Reveal(won, headline, detail, againLabel, string.Join('\n', _report));
     }
 
     private void OnAgain()
