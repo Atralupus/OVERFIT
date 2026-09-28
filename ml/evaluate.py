@@ -10,12 +10,16 @@
 로그 · 시그모이드는 여기(파이썬)에만 있다 — 게임의 결정 경로는 사칙연산과 비교뿐이다(설계 §8).
 """
 
+import json
 import math
+import os
 
 import numpy as np
 
-# 설계 §6.4 의 picker.lift_min(ln 1.5 — 평균의 사람보다 오즈가 1.5 배). 4번 PR 이 balance.json 의 picker 로 옮긴다 — 그때 여기가 그 값을 읽는다.
-LIFT_MIN = math.log(1.5)
+# 겨냥의 문턱 — 게임의 고르기가 읽는 그 값(balance.json 의 picker.lift_min · #112). 관문과 게임이 다른 문턱을 쓰면 "망이 겨냥 표를 배웠다" 가
+# 게임에서 거짓말이 된다.
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "overfit", "data", "balance.json"), encoding="utf-8") as _f:
+    LIFT_MIN = float(json.load(_f)["picker"]["lift_min"])
 ECE_MAX = 0.05
 BINS = 10
 

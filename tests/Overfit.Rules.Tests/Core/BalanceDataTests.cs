@@ -44,6 +44,18 @@ public class BalanceDataTests
     }
 
     [Fact]
+    public void 고르기의_수치가_balance_json_에_있다()
+    {
+        // 망의 고르기(#112 · 설계 2026-09-28 §6.4) — 동전의 몫 · 근거의 문턱 · 겨냥의 문턱 · 겨냥의 최대 수. 규칙이 읽는 수치라 여기 있다.
+        BalanceData data = JsonData<BalanceData>.ParseOne(ReadData("balance.json"), "balance.json");
+
+        data.Picker.NetworkSharePercent.ShouldBeInRange(0, 100, "동전의 몫은 정수 퍼센트다");
+        data.Picker.MinSamples.ShouldBeGreaterThanOrEqualTo(0);
+        data.Picker.LiftMin.ShouldBeGreaterThan(0, "문턱이 0 이하면 평균의 사람보다 덜 먹히는 칸도 겨냥이 된다");
+        data.Picker.MaxTargeted.ShouldBeInRange(1, 4, "겨냥이 다섯이면 숨통이 설 칸이 없다");
+    }
+
+    [Fact]
     public void DTO_가_안_읽는_키가_balance_json_에_없다()
     {
         // JsonData 는 DTO 가 모르는 키를 조용히 버린다. 부팅의 `required` 검사는 "DTO 가 원하는 키가 JSON 에 있나" 한 방향만
@@ -57,6 +69,7 @@ public class BalanceDataTests
         unread.AddRange(UnreadKeys(root, typeof(BalanceData), ""));
         unread.AddRange(UnreadKeys(root.GetProperty("battle"), typeof(BattleBalance), "battle."));
         unread.AddRange(UnreadKeys(root.GetProperty("feel"), typeof(FeelBalance), "feel."));
+        unread.AddRange(UnreadKeys(root.GetProperty("picker"), typeof(PickerBalance), "picker."));
 
         unread.ShouldBeEmpty("DTO 에 짝이 없는 키 — 아무도 안 읽는 수치다. 프로퍼티와 키는 같이 걷는다");
     }

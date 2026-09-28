@@ -80,6 +80,7 @@
     <Compile Include="../../overfit/battle/rules/DodgeCredit.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerFeatures.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PlayerNet.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotPolicy.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FleetConfig.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotTraits.cs" LinkBase="linked/battle/rules" />
@@ -112,6 +113,8 @@
     <None Include="../../tools/replay_golden.txt" Link="replay_golden.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- 봇 함대의 성향 범위(#104) — 게임 데이터가 아니라 실험의 조건이라 overfit/data 밖(tools/factory)에 있다. -->
     <None Include="../../tools/factory/fleet.json" Link="fleet.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 망의 골든(#110) — ml/golden.py 가 network.json 으로 셈한 로짓. PlayerNet 이 == 로 본다(#112). -->
+    <None Update="Battle/NetworkGolden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- 병렬 실행을 끈다. Log.Sink · Log.Level 은 전역이라 LogCapture 를 쓰는 테스트가 동시에 돌면
