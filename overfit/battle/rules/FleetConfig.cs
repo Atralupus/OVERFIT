@@ -48,8 +48,9 @@ public sealed class FleetConfig
     public required IReadOnlyList<string> RhythmReferences { get; init; }
 
     /// <summary>
-    /// 설계가 의도한 겨냥 표 (#108 · 설계 2026-09-28 §4.6) — 그 습관형 봇은 그 패턴에 기저율보다 더 맞아야 한다. 공장(원본) · 학습(망의 들어 올림) ·
-    /// 검증(망 보스)이 <b>이 표 하나</b>를 읽는다 — 셋이 따로 적으면 한쪽만 고친 날 관문이 다른 것을 잰다.
+    /// 겨냥 표 (#108 · 설계 2026-09-28 §4.6) — 패턴의 판정이 스스로 막는 수단: 그 습관형 봇은 그 패턴에 기저율보다 더 맞아야 한다. 공장(원본) ·
+    /// 학습(망의 들어 올림) · 검증(망 보스)이 <b>이 표 하나</b>를 읽는다 — 셋이 따로 적으면 한쪽만 고친 날 관문이 다른 것을 잰다. 처음에는 README 의
+    /// GIF 표를 옮겼는데 원본에 한 줄만 서서 2번 PR 이 재서 바꿨다(까닭은 설계 §4.6).
     /// </summary>
     public required IReadOnlyList<TargetingRow> Targeting { get; init; }
 }
