@@ -23,5 +23,13 @@
   "dash_inward": [0.0, 1.0],
   "greed": [0.0, 0.6],
   "chain": [0.0, 1.0],
-  "jump_lead": [0.3, 0.7]
+  "jump_lead": [0.3, 0.7],
+
+  "_note_겨냥": "targeting — 설계가 의도한 겨냥 표(설계 2026-09-24 §6.2 · 2026-09-28 §4.6). 그 습관형 봇은 그 패턴에 기저율보다 더 맞아야 한다 — 공장이 원본에서 · 학습이 망의 들어 올림에서 · 검증이 망 보스에서 같은 표를 읽는다. 패리는 리듬 min_rhythm 이상인 봇만 센다(눈으로 누르는 패리는 엇박에 안 속는다).",
+  "targeting": [
+    { "habit": "dash", "pattern": "1타 잡기" },
+    { "habit": "guard", "pattern": "점프 3연속" },
+    { "habit": "parry", "pattern": "엇박 3연격", "min_rhythm": 0.5 },
+    { "habit": "spacing", "pattern": "1타 돌진" }
+  ]
 }

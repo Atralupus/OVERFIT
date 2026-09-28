@@ -51,6 +51,24 @@ public class BotTraitsTests
     }
 
     [Fact]
+    public void 겨냥_표의_패턴은_2단계_명부에_있다()
+    {
+        // 겨냥 표는 공장 · 학습 · 검증이 같이 읽는다(#108 · 설계 §4.6). 명부 밖의 id 는 그 줄의 사례가 0건이라 관문이 "기저율보다 높다" 를
+        // 잴 수 없다 — 사람이 손으로 적는 파일이라 오타가 여기서 멈춘다. 습관 넷에 한 줄씩이고, 혼합형과 점프 습관형은 겨냥하는 패턴이 없다.
+        FleetConfig fleet = TestConfigs.Fleet();
+        IReadOnlyList<string> roster = StageRoster.For(TestConfigs.Stages(), 2);
+
+        fleet.Targeting.Select(r => r.Habit).ShouldBe(new[] { BotHabit.Dash, BotHabit.Guard, BotHabit.Parry, BotHabit.Spacing });
+        foreach (TargetingRow row in fleet.Targeting)
+        {
+            roster.ShouldContain(row.Pattern, $"{row.Habit} 의 겨냥 {row.Pattern} 이 2단계 명부에 없다");
+            row.MinRhythm.ShouldBeInRange(0, 1);
+        }
+
+        fleet.Targeting.Single(r => r.Habit == BotHabit.Parry).MinRhythm.ShouldBe(0.5);
+    }
+
+    [Fact]
     public void 같은_봇_번호는_같은_성향이다()
     {
         BotTraits.Sample(_fleetSeed, 7, TestConfigs.Fleet()).ShouldBe(BotTraits.Sample(_fleetSeed, 7, TestConfigs.Fleet()));
