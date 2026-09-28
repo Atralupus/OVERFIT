@@ -97,8 +97,11 @@ Test set (10,000 bots not used in training):
 
   Lift is used instead of the raw hit chance so the boss does not simply pick what is hard for everyone.
   Settings are in `overfit/data/balance.json` (`picker`). With all five patterns, the draw is identical to the random picker.
-- **Control arm.** Each stage-2 attempt flips a coin from the attempt seed: 50% network, 50% random. Logs show `arm=network` or `arm=uniform`.
+- **Control arm.** Each stage-2 attempt flips a coin from the attempt seed: 70% network, 30% random. Logs show `arm=network` or `arm=uniform`.
   Stage 1 is always random because it is where habits are measured.
+- **Report.** When a stage-2 attempt ends, win or lose, the result screen shows how the patterns were picked: the dodge counts
+  recorded before the attempt, each pattern's predicted hit chance (and the average), whether it was targeted, the breathing room, or unused,
+  and how many times each pattern appeared and hit.
 - **Attempt log.** Each finished attempt adds one JSON line to `user://attempts/<session seed>.jsonl`: arm, drawn patterns, dodge events,
   the 19 inputs, hit or not for each pattern instance, and the network's decision. Nothing is uploaded.
   - Replay an attempt with a bot: `EXTRA="--history=<file> --attempt=N" tools/build.sh demo`.
