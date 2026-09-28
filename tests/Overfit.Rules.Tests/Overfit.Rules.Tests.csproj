@@ -82,6 +82,7 @@
     <Compile Include="../../overfit/battle/rules/FleetConfig.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotTraits.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BeatTable.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FleetBot.cs" LinkBase="linked/battle/rules" />
 
     <!-- 뷰의 순수 절반 (#83 · #78). 규칙은 아니지만 Godot 을 모르므로 여기서 돈다 — core/Log.cs · LogSink.cs 와 같은 가름이다:
          그리는 노드(battle/view/LandingWave.cs · BossView.cs)는 빼고, 규칙의 판정 사각형에서 모양을 읽는 계산과 단계의 장을 고르는 결정만 넣는다.
