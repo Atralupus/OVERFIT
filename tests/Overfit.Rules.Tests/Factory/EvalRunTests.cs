@@ -27,10 +27,13 @@ public class EvalRunTests
     private static EvalResult Eval(int bot, int stage1Tries = 5, int stage2Tries = 5) =>
         EvalRun.Run(_fleetSeed, bot, Tables, _network.Value, stage1Tries, stage2Tries);
 
-    /// <summary>봇 번호 0 부터 <paramref name="wanted"/> 를 만족하는 첫 봇 — 64 대 안에 없으면 실패다.</summary>
+    /// <summary>
+    /// 봇 0 ~ 63 과 2단계에 가는 봇들(<see cref="FleetBots"/>) 중 <paramref name="wanted"/> 를 만족하는 첫 봇 — 없으면 실패다. 보스 체력 400(#126)에서는
+    /// 앞 64 대 안에 1단계를 넘는 봇이 하나뿐이라, 2단계를 보는 조건은 뒤의 봇들이 채운다.
+    /// </summary>
     private static (int Bot, EvalResult Result) First(Func<EvalResult, bool> wanted, int stage1Tries = 5)
     {
-        for (int bot = 0; bot < 64; bot++)
+        foreach (int bot in Enumerable.Range(0, 64).Concat(FleetBots.ReachStage2).Distinct())
         {
             EvalResult result = Eval(bot, stage1Tries);
             if (wanted(result))
@@ -39,7 +42,7 @@ public class EvalRunTests
             }
         }
 
-        throw new InvalidOperationException("봇 64 대 안에 찾는 봇이 없다");
+        throw new InvalidOperationException("봇 0 ~ 63 과 FleetBots.ReachStage2 안에 찾는 봇이 없다");
     }
 
     private static string Csv(EvalResult result)
@@ -102,7 +105,7 @@ public class EvalRunTests
     public void 좁힌_시도의_사례는_좁힌_칸_안에만_있고_숨통을_늘_싣는다()
     {
         int narrowed = 0;
-        for (int bot = 0; bot < 16; bot++)
+        foreach (int bot in FleetBots.ReachStage2)
         {
             foreach (EvalAttempt a in Eval(bot).Network.Attempts.Where(a => a.Decision?.Mode == PickDecision.ModeNarrowed))
             {
@@ -113,7 +116,7 @@ public class EvalRunTests
             }
         }
 
-        narrowed.ShouldBeGreaterThan(0, "봇 열여섯 대의 망 갈래에 좁힌 시도가 하나도 없다");
+        narrowed.ShouldBeGreaterThan(0, "2단계에 가는 봇 열여섯 대의 망 갈래에 좁힌 시도가 하나도 없다");
     }
 
     [Fact]

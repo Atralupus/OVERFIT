@@ -80,31 +80,33 @@ public class BotPolicyTests
     }
 
     [Fact]
-    public void 데모의_봇이_실제_1단계를_이긴다()
+    public void 데모의_봇이_실제_1단계를_끝까지_싸운다()
     {
         // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 1단계 명부와 고르기 · 시드 51 (#72 · 설계 §9).
-        // "봇이 1단계를 이길 수 있다" 가 데모의 전제인데 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 —
-        // 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이 실제 데이터다. 명부와 고르기는 데모처럼
-        // StageRoster.Setup 에서 받는다 — 따로 세우면 1단계의 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
+        // 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 — 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이
+        // 실제 데이터다. 명부와 고르기는 데모처럼 StageRoster.Setup 에서 받는다 — 따로 세우면 1단계의 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
+        //
+        // **이기는지는 안 본다**(#126). 보스 체력이 200 → 400 이 되고 이 최소 봇은 1단계를 못 넘는다 — 2748틱에 보스 HP 140 을 남기고 진다. 공장의 함대 봇도 2천 대 중
+        // 2% 만 넘는다(200 에서는 62%). 유저가 "사람에게는 어렵지 않다" 며 이 체력으로 가기로 했다. 그래서 판이 끝까지 서고 봇의 칼이 보스에 닿는지를 본다.
         (BattleOutcome outcome, BattleSim sim) = PlayDemo(1);
 
-        outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 1단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
+        outcome.ShouldBeOneOf(BattleOutcome.Win, BattleOutcome.Lose);
+        sim.Boss.Health.ShouldBeLessThan(DemoBossMaxHealth(), $"데모의 봇이 1단계에서 보스를 한 번도 못 쳤다 — {sim.Ticks}틱");
     }
 
     [Fact]
-    public void 데모의_봇이_실제_2단계를_이긴다()
+    public void 데모의_봇이_실제_2단계를_끝까지_싸운다()
     {
-        // #78 완료 조건 — "2단계 데모 봇이 이긴다". EXTRA=--stage=2 tools/build.sh demo 가 도는 바로 그 판이다(시드 51 · 2단계 명부 다섯 · uniform).
-        // 봇은 태그를 안 보는 최소 봇이고(설계 §5.4) 값보다 많을 때만 누른다 — 이 PR 은 봇을 안 고친다. 잡기 앞에서 대시 · 패리를 고르면 잡히고,
-        // 점프를 고르면 넘는다. 이 판은 2506틱 · 파이터 HP 2 · 관측 24 로 **아슬하게** 이긴다: 행동 뒤 경직(#82)이 든 파이터에게 2단계의 넷은
-        // 1단계보다 아프다. 데모의 차림 그대로(실제 캐릭터 · StageRoster.Setup 의 명부와 고르기 · 판과 BotPolicy 에 같은 시드) 16 시드(_seeds)를
-        // 돌리면 2단계는 열 판을 이기고(31337 · 12345 · 1 · 3 · 5 · 9 에 진다) 1단계는 열네 판을 이긴다(12345 · 2 에 진다) — #78 이 쟀고 PR 설명에
-        // 이 값을 적는다. 계획이 적은 아홉 · 열다섯은 잰 값이 아니었다(최종 리뷰 F-I4). 여기서는 데모의 한 판만 못박는다: 지면 규칙이 아니라 봇의
-        // 성향을 고친다(설계 §9 · #82).
+        // EXTRA=--stage=2 tools/build.sh demo 가 도는 바로 그 판이다(시드 51 · 2단계 명부 다섯 · 망 고르기 — 기록이 없어 다섯 전부다).
+        // #78 의 완료 조건은 "2단계 데모 봇이 이긴다" 였고 보스 체력 200 에서 2506틱 · 파이터 HP 2 로 **아슬하게** 이겼다. 400(#126)에서는
+        // 2807틱에 보스 HP 170 을 남기고 진다. 1단계와 같은 까닭으로 이기는지는 안 본다 — 봇은 태그를 안 보는 최소 봇이라(설계 §5.4) 체력이 두 배인 보스를 못 넘는다.
         (BattleOutcome outcome, BattleSim sim) = PlayDemo(2);
 
-        outcome.ShouldBe(BattleOutcome.Win, $"데모의 봇이 2단계를 {sim.Ticks}틱에 졌다 — 파이터 HP {sim.Fighter.Health} · 보스 HP {sim.Boss.Health}");
+        outcome.ShouldBeOneOf(BattleOutcome.Win, BattleOutcome.Lose);
+        sim.Boss.Health.ShouldBeLessThan(DemoBossMaxHealth(), $"데모의 봇이 2단계에서 보스를 한 번도 못 쳤다 — {sim.Ticks}틱");
     }
+
+    private static int DemoBossMaxHealth() => TestConfigs.Bosses()[TestConfigs.Balance().Battle.Boss].MaxHealth;
 
     [Fact]
     public void 봇은_값보다_많을_때만_눌러_스스로_탈진하지_않는다()
