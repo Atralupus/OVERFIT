@@ -176,6 +176,44 @@ public class NetworkPickerTests
         network.ShouldBeInRange(450, 550);
     }
 
+    private static StageSetup? Forced(ulong seed, string arm) =>
+        StageRoster.Setup(NetworkStages(), 2, seed, TestNets.History(30), network: new NetworkContext(TestNets.Constant([0, 2, 0, 0, 0]), TestNets.Knobs(share: 50)), arm: arm);
+
+    [Fact]
+    public void 갈래를_정해_넘기면_동전을_안_던진다()
+    {
+        // 평가(#114 · 설계 §7.1)가 같은 시도를 두 갈래로 한 번씩 돈다 — 동전이 무엇을 내든 넘긴 갈래로 선다. 몫 50 에 시드 마흔이면 동전은 양쪽을 다 낸다.
+        for (ulong seed = 0; seed < 40; seed++)
+        {
+            StageSetup network = Forced(seed, NetworkPicker.Id).ShouldNotBeNull();
+            network.Arm.ShouldBe(NetworkPicker.Id);
+            network.Decision.ShouldNotBeNull().Mode.ShouldBe(PickDecision.ModeNarrowed);
+
+            StageSetup uniform = Forced(seed, "uniform").ShouldNotBeNull();
+            uniform.Arm.ShouldBe("uniform");
+            uniform.Decision.ShouldBeNull();
+            var reference = new UniformPicker(seed, 5);
+            Enumerable.Range(0, 100).Select(uniform.Picker.Pick).ShouldBe(Enumerable.Range(0, 100).Select(reference.Pick));
+        }
+    }
+
+    [Fact]
+    public void 모르는_갈래는_E_를_남기고_판을_안_세운다()
+    {
+        using var log = new LogCapture();
+
+        Forced(51, "script").ShouldBeNull();
+
+        log.Lines.ShouldContain("[stage][E] arm_unknown arm=script stage=2");
+    }
+
+    [Fact]
+    public void 고르기가_망이_아닌_단계는_갈래를_안_쓴다()
+    {
+        // 갈래는 망 단계의 동전 자리다 — 1단계(uniform)에 넘겨도 판은 그 단계의 고르기로 서고 갈래가 없다.
+        StageRoster.Setup(NetworkStages(), 1, 51, TestNets.History(30), arm: NetworkPicker.Id).ShouldNotBeNull().Arm.ShouldBeNull();
+    }
+
     [Fact]
     public void 무작위_갈래는_uniform_과_같은_판이고_망_갈래는_좁힌다()
     {
