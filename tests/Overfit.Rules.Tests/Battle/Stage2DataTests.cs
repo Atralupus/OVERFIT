@@ -33,12 +33,12 @@ public class Stage2DataTests
     public void 이단계_명부는_바탕_3연격에_1단계의_습관을_겨냥한_넷을_더한_다섯이다()
     {
         // 설계 §4 · §12 「2단계 명부」 — "2단계의 추가 패턴은 지금 말한 것만" 에 1단계의 바탕(3연격)을 두고, "점프공격은 2단계에선 그냥 3번" 이
-        // 단발을 대신한다. 순서는 뽑기 좌표다(stages.json 의 _note_순서) — 설계의 표 그대로다. 고르기는 아직 무작위(uniform)다.
+        // 단발을 대신한다. 순서는 뽑기 좌표다(stages.json 의 _note_순서) — 설계의 표 그대로다. 고르기는 망이다(#112 — 동전의 무작위 갈래가 uniform).
         StageDef two = TestConfigs.Stages()["2"];
 
         two.Patterns.ShouldBe(new[] { "3연격", "점프 3연속", "1타 돌진", "1타 잡기", "엇박 3연격" });
         two.Want.ShouldBe(5);
-        two.Picker.ShouldBe("uniform");
+        two.Picker.ShouldBe(NetworkPicker.Id);
     }
 
     [Fact]

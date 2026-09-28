@@ -66,6 +66,11 @@ public partial class Battle : Node2D
     /// <summary>이 전투의 시도 — 번호와 시드 (#72 · 설계 §4.4). 설 때 열고, 끝나면 그 판의 관측과 함께 기록에 붙인다.</summary>
     private (int Number, ulong Seed) _attempt;
 
+    /// <summary>
+    /// 이 전투를 세운 명부와 고르기 (#112) — 끝날 때 기록이 잘라 쓴 단계 · 동전의 갈래 · 망의 결정을 여기서 읽는다(설계 2026-09-28 §6.5).
+    /// </summary>
+    private StageSetup _setup = null!;
+
     private bool _over;
     private BattleOutcome _outcome;
     private double _resultIn;
@@ -285,13 +290,16 @@ public partial class Battle : Node2D
         // 있으면(GIF · 스크린샷 · #78) 이 전투만 그 대본으로 선다 — 가져가며 비우므로 다음 전투는 단계의 고르기로 돌아간다.
         RunHistory history = Game.Instance.History;
         _attempt = history.Open();
-        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript()) is not { } stage)
+        // 2단계의 고르기는 망이다(#112) — 부팅 때 읽은 망과 고르기의 수치를 넘긴다. 동전의 갈래(arm)는 로그와 기록이 싣는다.
+        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript(), Balance.Network) is not { } stage)
         {
             _broken = true; // [E] 는 StageRoster 가 남겼다
             return;
         }
 
-        Log.Info("run", $"attempt={_attempt.Number} stage={_stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
+        _setup = stage;
+        string arm = stage.Arm is null ? "" : $" arm={stage.Arm}";
+        Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId}{arm} history={history.Records.Count}");
 
         _sim = new BattleSim(new BattleSetup
         {
@@ -481,8 +489,19 @@ public partial class Battle : Node2D
 
         // 끝까지 간 시도만 기록에 붙는다 — 이긴 판도(1단계를 이긴 판이 곧 1단계 기록이다 · 설계 §4.4). 판마다 한 번이고,
         // 관측이 살아 있는 마지막 자리가 여기다.
-        Game.Instance.History.Record(new AttemptRecord(_attempt.Number, _stage, _attempt.Seed, outcome, [.. _sim.Events]));
+        //
+        // 단계는 실제로 싸운 단계(잘라 쓴 값)다 — 요청한 값이 아니다(#59 3/6 · 설계 2026-09-28 §6.5). 갈래와 망의 결정도 같이 싣는다: 분석이 망 보스와
+        // 무작위 보스를 이것으로 가른다. 디스크에도 한 줄을 덧붙인다 — 되살리기와 sim-to-real 의 재료다(AttemptFile).
+        RunHistory history = Game.Instance.History;
+        var record = new AttemptRecord(_attempt.Number, _setup.Stage, _attempt.Seed, outcome, [.. _sim.Events], _setup.Arm);
+        history.Record(record);
         Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
+        var entry = new AttemptEntry(
+            history.SessionSeed, history.Run, record, _setup.PickerId, [.. _sim.Drawn], _sim.Ticks, _setup.Decision, Balance.NetworkSha256);
+        if (AttemptFile.Append(entry) is { } path)
+        {
+            Log.Debug("run", $"logged attempt={_attempt.Number} path={path}");
+        }
     }
 
     /// <summary>

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using Overfit.Battle.Rules;
 using Overfit.Core;
@@ -24,6 +26,47 @@ public partial class BattleDemo : Node
         // 2^53 을 넘는 시드(시도 시드는 거의 다 그렇다)가 다른 판을 돌렸다.
         ulong seed = CmdArgs.UInt64(args, "--seed=") ?? 51;
         int stage = (int)(CmdArgs.Double(args, "--stage=") ?? 1);
+
+        // 되살리기 (#112 · 설계 2026-09-28 §6.5) — 게임이 남긴 시도 기록(user://attempts/<세션 시드>.jsonl)에서 그 시도의 시드 · 단계와 **같은 런의 앞
+        // 기록**을 읽어 고르기를 다시 세운다. 고르기는 상태 없는 조회라 보스의 순서가 그대로 선다 — 봇이 싸우므로 판의 길이는 달라도 앞머리가 같다.
+        IReadOnlyList<AttemptRecord> history = Array.Empty<AttemptRecord>();
+        IReadOnlyList<string>? script = null;
+        AttemptEntry? replay = null;
+        if (CmdArgs.Text(args, "--history=") is { } historyPath && CmdArgs.UInt64(args, "--attempt=") is { } wanted)
+        {
+            List<AttemptEntry> entries;
+            try
+            {
+                entries = AttemptFile.Read(historyPath);
+            }
+            catch (DataException e)
+            {
+                Log.Error("battle-demo", $"history_unreadable {e.Message}");
+                GetTree().Quit(1);
+                return;
+            }
+
+            replay = entries.FirstOrDefault(e => (ulong)e.Record.Number == wanted);
+            if (replay is null)
+            {
+                Log.Error("battle-demo", $"replay_missing attempt={wanted} path={historyPath} attempts={entries.Count}");
+                GetTree().Quit(1);
+                return;
+            }
+
+            seed = replay.Record.Seed;
+            stage = replay.Record.Stage;
+            history = [.. entries.Where(e => e.SessionSeed == replay.SessionSeed && e.Run == replay.Run && e.Record.Number < replay.Record.Number).Select(e => e.Record)];
+
+            // 대본으로 선 시도(GIF · 스크린샷 · 순회)는 대본이 기록에 없다 — 뽑힌 순서가 곧 대본이다(대본은 돌며 되풀이된다).
+            script = replay.PickerId == "script" ? replay.Drawn : null;
+            if (replay.NetworkSha256 is { } logged && logged != Balance.NetworkSha256)
+            {
+                Log.Warn("battle-demo", $"replay_network_changed logged={logged} now={Balance.NetworkSha256} — 다른 망이라 다른 명부가 설 수 있다");
+            }
+
+            Log.Info("battle-demo", $"replay attempt={wanted} run={replay.Run} history={history.Count} seed={seed} stage={stage} picker={replay.PickerId}");
+        }
 
         // 게임과 같은 자리에서 읽는다 — 둘이 다른 판을 세우지 않게 (BattleTables).
         BattleTables data = BattleTables.Load();
@@ -51,15 +94,16 @@ public partial class BattleDemo : Node
             return;
         }
 
-        // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup). 기록은 비어 있다 —
-        // uniform 은 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 순서가 선다.
-        if (StageRoster.Setup(data.Stages, stage, seed, Array.Empty<AttemptRecord>()) is not { } setup)
+        // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup) — 망과 동전도 같다. 기록은 되살리기가 아니면
+        // 비어 있다 — 그러면 망 갈래도 근거가 얇아 다섯 전부(uniform 과 같은 순서)라 시드만으로 게임의 그 시도와 같은 순서가 선다.
+        if (StageRoster.Setup(data.Stages, stage, seed, history, script, Balance.Network) is not { } setup)
         {
             GetTree().Quit(1);
             return;
         }
 
-        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}");
+        string arm = setup.Arm is null ? "" : $" arm={setup.Arm}";
+        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={setup.Stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}{arm}");
 
         var sim = new BattleSim(new BattleSetup
         {
@@ -103,7 +147,40 @@ public partial class BattleDemo : Node
             + $" parry_rel={axes.ParryReliance:0.00} greed={axes.Greed:0.00} dist={axes.DistanceBias:0}"
             + $" guard_rate={axes.GuardRate:0.00}");
 
+        if (replay is not null)
+        {
+            Replayed(replay, setup, sim);
+        }
+
         Log.Marker("battle-demo", $"battle-demo=done outcome={outcome} ticks={sim.Ticks} events={sim.Events.Count}");
         GetTree().Quit();
+    }
+
+    /// <summary>
+    /// 되살린 판이 기록과 같은가 — 갈래 · 망의 결정(좁힌 명부) · 뽑힌 순서의 앞머리. 같은 망이면 어긋남은 규칙 위반이다(<c>[E]</c> — 고르기가 기록과 시드만으로
+    /// 안 선다). 망이 바뀌었으면 어긋날 수 있다(<c>[W]</c>).
+    /// </summary>
+    private static void Replayed(AttemptEntry replay, StageSetup setup, BattleSim sim)
+    {
+        int common = Math.Min(replay.Drawn.Count, sim.Drawn.Count);
+        bool sameArm = setup.Arm == replay.Record.Arm;
+        bool sameNarrowed = (setup.Decision?.Narrowed ?? []).SequenceEqual(replay.Decision?.Narrowed ?? []);
+        bool sameDrawn = replay.Drawn.Take(common).SequenceEqual(sim.Drawn.Take(common), StringComparer.Ordinal);
+        if (sameArm && sameNarrowed && sameDrawn)
+        {
+            Log.Info("battle-demo", $"replay_match attempt={replay.Record.Number} arm={setup.Arm ?? "-"} prefix={common}/{replay.Drawn.Count}");
+            return;
+        }
+
+        string message = $"replay_mismatch attempt={replay.Record.Number} arm_logged={replay.Record.Arm ?? "-"} arm_now={setup.Arm ?? "-"}"
+            + $" drawn_logged={string.Join(',', replay.Drawn.Take(common))} drawn_now={string.Join(',', sim.Drawn.Take(common))}";
+        if (replay.NetworkSha256 is { } logged && logged != Balance.NetworkSha256)
+        {
+            Log.Warn("battle-demo", message);
+        }
+        else
+        {
+            Log.Error("battle-demo", message);
+        }
     }
 }

@@ -50,7 +50,7 @@ public static class StageRoster
     /// <summary>
     /// <paramref name="stage"/> 단계의 명부와 고르기를 세운다 (#72 · 설계 §4.4). <b>게임(<c>Battle</c>)과 데모(<c>BattleDemo</c>)가
     /// 이 한 자리에서 세운다</b> — 따로 세우면 로그의 <c>seed=</c> 를 데모에 넘겨도 다른 고르기로 돌 수 있다. 고르기는 시도를
-    /// 시작할 때 그때까지의 기록으로 한 번 세운다 — 판 도중에는 안 바뀐다. 단계를 못 찾거나(<see cref="Resolve"/> 가 <c>[E]</c> 를
+    /// 시작할 때 그때까지의 기록으로 한 번 세운다 — 판 도중에는 안 바뀐다. 단계를 못 찾거나(<see cref="Resolve(IReadOnlyDictionary{string, StageDef}, int)"/> 가 <c>[E]</c> 를
     /// 남겼다) 고르기가 등록표에 없거나 대본이 명부 밖이면(<c>script</c> 고르기에 대본이 없는 것도) <c>[E]</c> 를 남기고 null 이다 — <b>던지지
     /// 않는다</b>: <c>Battle</c> 은 null 을 받아 판을 깨진 채로 멈추지만, 예외는 <c>_Ready</c> 를 빠져나가 반쯤 선 노드를 남긴다.
     /// </summary>
@@ -120,7 +120,7 @@ public static class StageRoster
     }
 
     /// <summary>
-    /// <paramref name="stage"/> 단계의 패턴 id 들 — <see cref="Resolve"/> 가 찾은 단계의 명부. 못 찾으면 빈 목록이다.
+    /// <paramref name="stage"/> 단계의 패턴 id 들 — <see cref="Resolve(IReadOnlyDictionary{string, StageDef}, int)"/> 가 찾은 단계의 명부. 못 찾으면 빈 목록이다.
     /// </summary>
     public static IReadOnlyList<string> For(IReadOnlyDictionary<string, StageDef> stages, int stage) =>
         Resolve(stages, stage)?.Patterns ?? Array.Empty<string>();

@@ -1,4 +1,7 @@
+using System;
+using System.Security.Cryptography;
 using Godot;
+using Overfit.Battle.Rules;
 
 namespace Overfit.Core;
 
@@ -19,13 +22,27 @@ public partial class Balance : Node
 {
     public const string BalancePath = "res://data/balance.json";
 
+    /// <summary>2단계의 고르기가 읽는 망 (#112 · 설계 2026-09-28 §6.1) — 필수 데이터다.</summary>
+    public const string NetworkPath = "res://data/network.json";
+
     private BalanceData? _data;
+    private PlayerNet? _net;
 
     public static Balance Instance { get; private set; } = null!;
 
     /// <summary>모든 수치의 진실 원천. 부팅에 성공한 뒤에만 유효하다.</summary>
     public static BalanceData Data => Instance._data
         ?? throw new System.InvalidOperationException("balance.json 이 로드되지 않았다");
+
+    /// <summary>망 — 부팅에 성공한 뒤에만 유효하다.</summary>
+    public static PlayerNet Net => Instance._net
+        ?? throw new System.InvalidOperationException("network.json 이 로드되지 않았다");
+
+    /// <summary>망과 고르기의 수치 — 판을 세우는 자리(<c>StageRoster.Setup</c>)에 넘긴다.</summary>
+    public static NetworkContext Network => new(Net, Data.Picker);
+
+    /// <summary><c>network.json</c> 의 sha256 — 시도 기록이 싣는다. 되살릴 때 지금과 다르면 다른 망이다.</summary>
+    public static string NetworkSha256 { get; private set; } = "";
 
     public bool Loaded { get; private set; }
 
@@ -37,15 +54,50 @@ public partial class Balance : Node
         try
         {
             _data = JsonData<BalanceData>.ParseOne(ReadText(BalancePath), BalancePath);
-            Loaded = true;
             Log.Info("data", $"loaded path={BalancePath} version={_data.Version}");
+            _net = LoadNetwork();
+            Loaded = _net is not null;
         }
         catch (DataException e)
         {
             Log.Error("data", $"fatal {e.Message}");
-            // 이 프레임에 멈춘다. 깨진 데이터로 계속 가면 뒤에서 터지고, 그 스택은 원인을 안 가리킨다.
+        }
+
+        if (!Loaded)
+        {
+            // 이 프레임에 멈춘다. 깨진 데이터로 계속 가면 뒤에서 터지고, 그 스택은 원인을 안 가리킨다. 모양이 틀린 망은 PlayerNet 이 [net][E] 를 남겼다.
             GetTree().Quit(1);
         }
+    }
+
+    /// <summary>
+    /// 망을 읽는다 (#112 · 설계 2026-09-28 §6.1 · §5.6). 필수 키가 빠지면 <see cref="DataException"/>, 모양이 틀리면 null(<c>[net][E]</c>). 망이 배운
+    /// 게임의 지문(<c>trained_on.data_digest</c>)이 지금의 <see cref="DataDigest"/> 와 다르면 <c>[W]</c> — 이상하지만 계속 간다: 실패로 두면 수치 하나를
+    /// 고칠 때마다 몇 시간의 공장이 막는다. 규칙 코드의 변화는 리플레이 골든이 잡는다.
+    /// </summary>
+    private static PlayerNet? LoadNetwork()
+    {
+        byte[] bytes = FileAccess.GetFileAsBytes(NetworkPath);
+        if (bytes.Length == 0)
+        {
+            throw new DataException($"{NetworkPath}: 파일을 열 수 없다 — {FileAccess.GetOpenError()}");
+        }
+
+        PlayerNet? net = PlayerNet.Load(System.Text.Encoding.UTF8.GetString(bytes), NetworkPath);
+        if (net is null)
+        {
+            return null;
+        }
+
+        NetworkSha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        Log.Info("net", $"loaded heads={net.Heads.Count} features={PlayerFeatures.Names.Count} trained_on={net.TrainedOn.Commit}");
+        string now = DataDigest.Of(name => FileAccess.GetFileAsBytes($"res://data/{name}"));
+        if (now != net.TrainedOn.DataDigest)
+        {
+            Log.Warn("net", $"stale data_digest={now} trained_on={net.TrainedOn.DataDigest}");
+        }
+
+        return net;
     }
 
     /// <summary>

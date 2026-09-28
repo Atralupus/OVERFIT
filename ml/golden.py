@@ -84,6 +84,20 @@ def _dumps(golden):
     return "\n".join(lines) + "\n"
 
 
+# overfit/core/DataDigest.cs 와 같은 목록 · 같은 순서 · 같은 정의(파일마다 이름 \0 길이 \0 바이트를 이은 sha256). ml/data.py 에도 같은 것이 있다 —
+# 이 파일은 표준 라이브러리만 쓰므로(check 가 넘파이 없이 돈다) 그것을 못 불러온다.
+DIGEST_FILES = ("bosses.json", "fighters.json", "hitboxes.json", "patterns.json", "stages.json")
+
+
+def data_digest():
+    h = hashlib.sha256()
+    for name in DIGEST_FILES:
+        with open(os.path.join(ROOT, "overfit", "data", name), "rb") as f:
+            body = f.read()
+        h.update(name.encode("utf-8") + b"\0" + str(len(body)).encode("ascii") + b"\0" + body)
+    return h.hexdigest()
+
+
 def sha256(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
@@ -134,6 +148,11 @@ def main(argv):
         return 1
 
     print(f"망 골든 — 입력 {len(golden['cases'])} 개의 로짓이 network.json 과 비트까지 같다")
+    now = data_digest()
+    if now != net["trained_on"]["data_digest"]:
+        # 설계 §5.6 — 이상하지만 계속 간다(실패로 두면 수치 하나를 고칠 때마다 몇 시간의 공장이 막는다). 게임의 부팅도 [net][W] stale 을 남긴다.
+        print(f"망이 배운 데이터의 지문이 지금과 다르다 — data_digest {now[:12]} · trained_on {net['trained_on']['data_digest'][:12]}. "
+              "망을 다시 학습할지 PR 설명에 적어라 (tools/build.sh factory → tools/build.sh train)")
     return 0
 
 
