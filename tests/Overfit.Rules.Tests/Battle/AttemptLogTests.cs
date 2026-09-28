@@ -76,6 +76,38 @@ public class AttemptLogTests
     }
 
     [Fact]
+    public void 시도를_시작할_때의_입력과_사례를_싣고_그대로_읽는다()
+    {
+        // sim-to-real(#114 · 설계 §7.3)의 재료 — 입력 19칸과 사례의 라벨을 게임이 공장과 같은 코드로 한 번 짓는다. 파이썬이 따로 지으면 두 벌이 갈린다.
+        // 같은 패턴이 연달아 선 두 사례가 따로 남는다 — 관측만으로는 그 경계를 모른다.
+        double[] features = [.. Enumerable.Range(0, PlayerFeatures.Names.Count).Select(i => ((i + 0.1) / 3) - 2)];
+        PatternInstance[] instances = [new("1타 잡기", true), new("1타 잡기", false), new("3연격", false)];
+        AttemptEntry entry = Entry(null, "uniform") with { Features = features, Instances = instances };
+
+        string line = AttemptLog.Line(entry);
+
+        line.ShouldContain("\"instances\":[{\"pattern_id\":\"1타 잡기\",\"hit\":true},{\"pattern_id\":\"1타 잡기\",\"hit\":false}");
+        AttemptEntry back = AttemptLog.Parse(line, "시험");
+        ShouldMatch(back, entry);
+        back.Features.ShouldNotBeNull().Select(BitConverter.DoubleToInt64Bits).ShouldBe(features.Select(BitConverter.DoubleToInt64Bits));
+        back.Instances.ShouldNotBeNull().ShouldBe(instances);
+    }
+
+    [Fact]
+    public void 입력과_사례가_없는_옛_줄도_읽는다()
+    {
+        // #113 의 게임이 남긴 줄에는 둘이 없다 — 읽히고 null 이다. sim-to-real 은 그런 시도를 건너뛰고 몇 개인지 적는다.
+        const string old = "{\"session_seed\":51,\"run\":1,\"attempt\":2,\"stage\":2,\"seed\":9131751153949564229,\"picker\":\"network\",\"arm\":\"uniform\","
+            + "\"drawn\":[\"3연격\"],\"outcome\":\"lose\",\"ticks\":120,\"events\":[],\"network_sha256\":\"88b7f3823cce6c9fad6c67816c686addc3dd5d384286c5f56073c643efeb899e\"}";
+
+        AttemptEntry back = AttemptLog.Parse(old, "옛 줄");
+
+        (back.Record.Number, back.Record.Arm, back.Record.Outcome).ShouldBe((2, "uniform", BattleOutcome.Lose));
+        back.Features.ShouldBeNull();
+        back.Instances.ShouldBeNull();
+    }
+
+    [Fact]
     public void 깨진_줄은_어느_줄인지_말한다()
     {
         Should.Throw<DataException>(() => AttemptLog.Parse("{\"run\": 1}", "attempts.jsonl:7")).Message.ShouldContain("attempts.jsonl:7");
