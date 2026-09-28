@@ -76,7 +76,7 @@ public class BotRunTests
         // 칸 = 2단계 명부의 인덱스 — 망의 머리가 그 순서다(설계 §5.2). 1단계는 재는 자리라 표본이 없다.
         int roster = StageRoster.For(Tables.Stages, 2).Count;
         var slots = new HashSet<int>();
-        for (int bot = 0; bot < 8; bot++)
+        foreach (int bot in FleetBots.ReachStage2.Take(8))
         {
             var records = new List<AttemptRecord>();
             BotResult result = BotRun.Run(_fleetSeed, bot, Tables, 5, 5, records.Add);
@@ -89,7 +89,7 @@ public class BotRunTests
             }
         }
 
-        slots.Count.ShouldBe(roster, "봇 여덟 대의 2단계 사례가 명부의 칸을 다 덮어야 한다(uniform)");
+        slots.Count.ShouldBe(roster, "2단계에 가는 봇 여덟 대의 사례가 명부의 칸을 다 덮어야 한다(uniform)");
     }
 
     [Fact]

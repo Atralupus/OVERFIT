@@ -43,14 +43,15 @@ public class FactoryBatchTests
     [Fact]
     public void 스레드_수와_무관하게_같은_글자다()
     {
-        (string samples1, string bots1, List<int[]> chunks1) = Csv(0, 8, threads: 1, chunk: 3);
-        (string samples4, string bots4, List<int[]> chunks4) = Csv(0, 8, threads: 4, chunk: 3);
+        // 봇 24 ~ 31 — 26 이 1단계를 넘어 2단계 사례를 낸다(FleetBots · #126). 0 ~ 7 은 보스 체력 400 에서 아무도 못 넘는다.
+        (string samples1, string bots1, List<int[]> chunks1) = Csv(24, 32, threads: 1, chunk: 3);
+        (string samples4, string bots4, List<int[]> chunks4) = Csv(24, 32, threads: 4, chunk: 3);
 
         samples4.ShouldBe(samples1);
         bots4.ShouldBe(bots1);
 
         // 묶음은 봇 번호 순서로, 묶음 안도 번호 순서로 온다 — 끝 묶음은 남은 만큼이다.
-        chunks1.Select(c => string.Join(' ', c)).ShouldBe(new[] { "0 1 2", "3 4 5", "6 7" });
+        chunks1.Select(c => string.Join(' ', c)).ShouldBe(new[] { "24 25 26", "27 28 29", "30 31" });
         chunks4.Select(c => string.Join(' ', c)).ShouldBe(chunks1.Select(c => string.Join(' ', c)));
         samples1.Split('\n').Length.ShouldBeGreaterThan(2, "봇 여덟 대가 2단계 사례를 하나도 안 냈다");
     }
