@@ -46,4 +46,27 @@ public sealed class FleetConfig
 
     /// <summary>리듬형이 따르는 기준 패턴들 — 여는 그림이 같은 패턴에서 그 기준의 판정 시각표를 쓴다(<see cref="BeatTable"/>).</summary>
     public required IReadOnlyList<string> RhythmReferences { get; init; }
+
+    /// <summary>
+    /// 겨냥 표 (#108 · 설계 2026-09-28 §4.6) — 패턴의 판정이 스스로 막는 수단: 그 습관형 봇은 그 패턴에 기저율보다 더 맞아야 한다. 공장(원본) ·
+    /// 학습(망의 들어 올림) · 검증(망 보스)이 <b>이 표 하나</b>를 읽는다 — 셋이 따로 적으면 한쪽만 고친 날 관문이 다른 것을 잰다. 처음에는 README 의
+    /// GIF 표를 옮겼는데 원본에 한 줄만 서서 2번 PR 이 재서 바꿨다(까닭은 설계 §4.6).
+    /// </summary>
+    public required IReadOnlyList<TargetingRow> Targeting { get; init; }
+}
+
+/// <summary>겨냥 표의 한 줄 — 이 습관형은 이 패턴에 더 맞아야 한다.</summary>
+public sealed class TargetingRow
+{
+    /// <summary>습관형 — 혼합형(<see cref="BotHabit.Mixed"/>)은 겨냥 표에 없다.</summary>
+    public required BotHabit Habit { get; init; }
+
+    /// <summary>2단계 명부의 패턴 id.</summary>
+    public required string Pattern { get; init; }
+
+    /// <summary>
+    /// 이 리듬 이상인 봇만 센다 — 없으면 0(전부). 패리 습관형 중 눈으로 누르는 봇은 엇박에 안 속는다: 엇박이 노리는 것은 패리가 아니라
+    /// <b>박자로 누르는</b> 패리다(설계 2026-09-24 §4.9).
+    /// </summary>
+    public double MinRhythm { get; init; }
 }

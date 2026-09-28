@@ -1,0 +1,80 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    데이터 공장 (#108 · 설계 2026-09-28 §4). 봇 함대로 망의 학습 데이터를 짓는 .NET 콘솔 — Godot 없이 돈다.
+
+    왜 소스를 **링크**하는가: 테스트 프로젝트와 같은 까닭이다. 규칙 파일은 게임의 것이라 옮기지 않고, 공장은 게임과 **같은 코드**로 판을
+    돌아야 한다 — 사본을 두면 게임을 고친 날 공장이 옛 규칙으로 데이터를 짓는다. Godot 을 끌고 오는 파일이 섞이면 CS0246 으로 막힌다.
+    이 폴더의 .cs(공장의 순수 절반 · Program.cs)는 SDK 의 기본 glob 이 담는다.
+
+    솔루션(overfit/Overfit.sln)에 든다 — tools/build.sh check 의 포맷 · 빌드 단계가 그대로 공장을 덮는다. 규칙 층이 공장에 필요한 파일을
+    새로 쓰면 아래 링크가 빠진 것이 그 자리에서 드러난다(CLAUDE.md §0: 검증하는 곳이 늘어도 그 명령 하나를 부른다).
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- 게임과 같은 타깃 · 언어 버전 — 같은 코드가 같은 컴파일러로 돈다. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <!-- 수를 쓰는 곳이 문화를 안 타게 — SampleCsv 는 불변 문화를 따로 적지만 이것이 바닥이다. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ImplicitUsings>false</ImplicitUsings>
+    <RootNamespace>Overfit.Factory</RootNamespace>
+
+    <!-- 테스트 · 게임 csproj 와 같은 분석기 설정. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1574;CS1580</NoWarn>
+    <AnalysisModePerformance>All</AnalysisModePerformance>
+    <AnalysisModeReliability>All</AnalysisModeReliability>
+
+    <!-- 봇마다 판을 수십 번 새로 세운다 — 스레드마다 힙을 두는 서버 GC 가 코어를 다 쓸 때 덜 멈춘다. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 순수 core — 테스트 프로젝트의 목록에서 공장이 쓰는 것만. -->
+    <Compile Include="../../overfit/core/Log.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/Det.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/CmdArgs.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/JsonData.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/BalanceData.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/DataDigest.cs" LinkBase="linked/core" />
+
+    <!-- 전투 규칙 — 판 · 계측 · 함대 봇 · 입력. -->
+    <Compile Include="../../overfit/battle/rules/InputFrame.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/Arena.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FighterConfig.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/Fighter.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/HitBox.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/HitShape.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/HitShapeTable.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PatternDef.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PatternRunner.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossHits.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/JumpClearance.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossMotions.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/LeapMotion.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/RushMotion.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/StageRoster.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PatternPickers.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/RunHistory.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/HitResolver.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/Boss.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BattleSim.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossSwings.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PoiseGauge.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/DodgeEvent.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/DodgeCredit.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PlayerFeatures.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FleetConfig.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BotTraits.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BeatTable.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FleetBot.cs" LinkBase="linked/battle/rules" />
+  </ItemGroup>
+
+</Project>

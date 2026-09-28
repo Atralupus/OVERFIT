@@ -189,14 +189,21 @@ public sealed class FleetBot
             return default;
         }
 
-        int expected = sim.Ticks + (int)Math.Round(remaining / BattleSim.Dt);
+        // 판정이 서는 틱에 누름이 먹는 틱 — 그 앞 틱이다. Next 가 낸 입력은 다음 Tick 에서 먹는다(Tick 이 틱 수를 올리고 파이터를 먼저 민다). 판정이
+        // 서는 틱에 누르면 편향 0 이 한 틱 늦은 사람이 된다: 전에 그랬고, 서는 틱에 닿는 칼 앞에서 대시가 무적을 못 댔다(재 봄 · #108).
+        int expected = sim.Ticks + (int)Math.Round(remaining / BattleSim.Dt) - 1;
+        int earliest = _windupStart + _reactionTicks;
         IReadOnlyList<double>? beat = plan.Rhythm ? _beats.For(sim.Boss.CurrentPattern!) : null;
         if (beat is not null && _hitIndex < beat.Count)
         {
-            expected = _patternStart + Ticks(beat[_hitIndex]);
+            // 박자로 누르는 사람은 타마다 선딜을 보고 누르지 않는다 — 여는 그림으로 패턴을 알아챈 뒤로는 박자가 누른다. 알아채는 데 드는 것은
+            // 패턴이 선 뒤의 반응 지연 하나다. 타마다의 선딜에 묶어 두었더니 느린 리듬형이 엇박의 늦은 타를 우연히 받아쳐 엇박이 노리는 사람이
+            // 원본에 안 섰다(재 봄 · #108: 리듬형 패리의 엇박 0.671 · 기저율 0.672).
+            expected = _patternStart + Ticks(beat[_hitIndex]) - 1;
+            earliest = _patternStart + _reactionTicks;
         }
 
-        int press = Math.Max(expected - (plan.Verb == DodgeVerb.Jump ? _jumpLeadTicks : 0) + plan.OffsetTicks, _windupStart + _reactionTicks);
+        int press = Math.Max(expected - (plan.Verb == DodgeVerb.Jump ? _jumpLeadTicks : 0) + plan.OffsetTicks, earliest);
         if (sim.Ticks < press)
         {
             // 기다리는 동안 간격을 두는 사람은 제 간격까지 물러선다 — 간격 습관의 첫 수단은 자리다(DodgeVerb.Spacing). 판정 직전에는 계획의

@@ -51,6 +51,7 @@
     <Compile Include="../../overfit/core/JsonData.cs" LinkBase="linked/core" />
     <Compile Include="../../overfit/core/BalanceData.cs" LinkBase="linked/core" />
     <Compile Include="../../overfit/core/CreditsData.cs" LinkBase="linked/core" />
+    <Compile Include="../../overfit/core/DataDigest.cs" LinkBase="linked/core" />
 
     <!-- 전투 규칙. 이 목록이 곧 "무엇이 규칙인가"의 선언이다 — 커밋 훅의 TDD 게이트가 여기를 읽는다. -->
     <Compile Include="../../overfit/battle/rules/InputFrame.cs" LinkBase="linked/battle/rules" />
@@ -78,6 +79,7 @@
     <Compile Include="../../overfit/battle/rules/DodgeEvent.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/DodgeCredit.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PlayerAxes.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PlayerFeatures.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotPolicy.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FleetConfig.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BotTraits.cs" LinkBase="linked/battle/rules" />
@@ -89,6 +91,15 @@
          넣었으니 TDD 게이트도 이 파일들을 본다. -->
     <Compile Include="../../overfit/battle/view/FloorWave.cs" LinkBase="linked/battle/view" />
     <Compile Include="../../overfit/battle/view/BossStepDraw.cs" LinkBase="linked/battle/view" />
+
+    <!-- 데이터 공장의 순수 절반 (#108 · 설계 2026-09-28 §4.1). 공장(tools/factory/Overfit.Factory.csproj)은 콘솔이지만 표본을 짓는 핵심 —
+         사례 가르기 · 봇 한 대의 흐름 · 묶음 병렬 · CSV 서식 — 은 여기서도 돈다. 공장만의 것은 Program.cs(인자 · 파일)뿐이다. -->
+    <Compile Include="../../tools/factory/InstanceTracker.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/FactoryTables.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/BotRun.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/SampleCsv.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/FactoryBatch.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/FactoryStats.cs" LinkBase="linked/factory" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
