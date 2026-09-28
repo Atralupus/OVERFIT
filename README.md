@@ -1,285 +1,164 @@
 # OVERFIT
 
-**딥러닝을 소울라이크에 접목해 보고, 그게 재미있는지 확인하는 프로젝트다.**
+[한국어](README.ko.md)
 
-확인하려는 것은 하나다 — **플레이어가 지금까지 어떻게 피해 왔는지를 읽고 공격 패턴을 정하는 보스**가
-상대할 만한가. 재미있는가.
+OVERFIT is a 2D side-scrolling soulslike with one boss fought in two stages. Stage 1 records how the player avoids attacks.
+In stage 2, a neural network reads the record and the boss picks its attack patterns from the network's predictions.
 
-> ### 🚧 아직 개발 중이다
->
-> 전투 한 판은 처음부터 끝까지 돌아간다. 이 프로젝트의 핵심인 **패턴을 고르는 망이 2단계에 들어왔고, 같은 봇에게 망 보스와
-> 무작위 보스를 붙여 재 봤다 — 다섯 줄 중 둘을 아직 못 넘었다**([망은 정말 일하나](#망은-정말-일하나)). 무엇을 고칠지 정할 때까지
-> 릴리즈는 망이 들어오기 전의 것이다. 2단계 시도의 절반은 일부러 무작위로 고르고, 이유는 [아래](#반반의-대조군)에 적었다.
+The purpose is to check whether a boss that adapts to the player's dodging habits is fair and fun to fight.
 
----
+## Stage 2 patterns
 
-## 무슨 게임인가
-
-보스 하나를 두 단계에 걸쳐 잡는 **2D 가로 소울라이크**다. 1단계를 이기면 2단계가 서고, 2단계를 이기면 클리어다.
-
-2단계의 보스는 **당신이 어떻게 피했는지를 보고** 패턴을 고른다 — 시도의 절반은 비교를 위한 무작위다.
-지고 다시 하면 시드가 바뀌어 패턴의 순서가 대개 달라지고, 망은 그 판까지의 기록으로 다시 고른다.
-
-## 2단계는 1단계의 습관을 겨냥한다
-
-2단계의 새 패턴 넷은 저마다 1단계에서 한 가지에 기댄 사람을 겨냥해 만들었다. 아래는 그 패턴이 왔을 때 그 사람이
-당하는 모습이다. 누구에게 무엇을 낼지는 망이 기록을 읽고 정한다([아래](#그-예측으로-보스를-어떻게-정하나)).
+Each new stage-2 pattern punishes one habit from stage 1.
 
 | <img src="docs/gifs/rush.gif" width="420"> | <img src="docs/gifs/grab.gif" width="420"> |
 |---|---|
-| 멀리 서서 지켜보다 후딜에만 찔끔 친다 → **1타 → 돌진 → 3타**<br>망이 고르는 몫 23.5% · 무작위 20.1% | 대시로만 피한다 → **1타 → 잡기**<br>망이 고르는 몫 27.5% · 무작위 20.0% |
+| **1 hit → rush → 3 hits** (`1타 돌진`)<br>Targets players who stay back and attack only during the boss's recovery. | **1 hit → grab** (`1타 잡기`)<br>Targets players who only dash. |
 | <img src="docs/gifs/offbeat.gif" width="420"> | <img src="docs/gifs/jump3.gif" width="420"> |
-| 패리를 많이 한다 → **엇박 3연격**<br>망이 고르는 몫 7.9% · 무작위 20.1% | 가드로 버틴다 → **점프 ×3**<br>망이 고르는 몫 1.8% · 무작위 19.8% |
+| **Off-beat 3-hit combo** (`엇박 3연격`)<br>Targets players who parry a lot. | **Jump attack ×3** (`점프 3연속`)<br>Targets players who guard. |
 
-GIF 는 `tools/build.sh gifs` 가 고정된 대본으로 다시 찍는다 — 패턴을 고정하고, 그 습관대로 움직이는 파이터를 둔다. GIF 아래의 수는 그 습관에
-기대는 봇에게 2단계에서 그 패턴이 뽑힌 몫이다(망 보스 · 무작위 보스 — [망은 정말 일하나](#망은-정말-일하나)). 엇박과 점프 ×3 은 망이 오히려
-덜 고른다 — 아래처럼 망이 배운 짝이 GIF 와 달라서다.
+The fifth stage-2 pattern is the stage-1 3-hit combo (`3연격`). The GIFs come from fixed scripts with a fighter that follows
+one habit (`tools/build.sh gifs`). These pairs are the design intent. The pairs the network learned are listed under [Results](#results).
 
-**봇 함대로 재 보니 이 짝이 다 습관이 되지는 않았다**(#108). GIF 는 한 장면으로는 참이지만, 가드 → 점프 ×3 은 3연격을 막은 **바로 뒤**에만
-서고(가득 찬 스태미나는 착지 셋을 다 막는다), 간격 → 돌진은 1단계에서 본 3연격과 똑같이 여는 패턴을 모르는 척해야 선다. 망이 배우는 짝은
-판정이 스스로 막는 수단이다 — **잡기는 대시와 가드를, 점프 ×3 의 착지는 패리를, 돌진 뒤의 3타는 점프를** 막는다. 까닭과 수치는
-[설계 문서 §4.6](docs/superpowers/specs/2026-09-28-패턴-고르는-망-design.md#46-원본에-겨냥-표가-보여야-한다-2번-pr-의-관문).
+## Neural network
 
-## 조작
+```
+bot fleet ─▶ data factory ─▶ training (NumPy) ─▶ network.json ─▶ stage-2 pattern picker (C#)
+```
 
-| 행동 | 키 |
+For each of the five stage-2 patterns, the network predicts the chance that the player gets hit by the pattern.
+The network does not choose patterns. A fixed rule turns the five predictions into the boss's pattern list,
+so odd network outputs cannot break the game.
+
+### Input
+
+19 numbers computed from the player's dodge events in the current run (stage 1 and any stage-2 retries):
+
+| Feature | Meaning |
 |---|---|
-| 이동 | `←` `→` (또는 `A` `D`) |
-| 점프 | `Space` |
-| 대시 | `Shift` |
-| 공격 | `J` — 이어 누르면 2연격 |
-| 가드 | `↓` (또는 `S`) — 누르고 있는 동안 |
-| 패리 | `K` |
+| `dash_timing_bias`, `dash_timing_var` | Mean and variance of dash timing error (early or late) |
+| `dash_direction_bias` | Dashes toward the boss or away from it |
+| `jump_timing_bias` | Mean jump timing error |
+| `jump_reliance`, `parry_reliance` | Share of attacks where jump or parry was chosen although another option would also have worked |
+| `airborne_at_impact` | Share of boss attacks that met the player in the air |
+| `parry_rate` | Share of parries that succeeded |
+| `greed` | Share of boss attacks that met the player in the middle of an attack |
+| `distance_bias` | Average distance to the boss (px) |
+| `guard_rate` | Share of boss attacks answered with guard |
+| 8 counts | Number of events behind the values above: total, dash, jump, parry, guard, guard broken, jump possible, parry possible |
 
-## 해보기
+The counts let the network tell a value measured from 3 events apart from the same value measured from 300.
+`PlayerFeatures.From` computes the input. The data factory and the game call the same function.
 
-**[Releases](https://github.com/Atralupus/OVERFIT/releases/latest)** 에 macOS 빌드가 있다.
-서명하지 않은 빌드라 처음 열 때 막히면 **시스템 설정 → 개인정보 보호 및 보안** 맨 아래의 **그래도 열기** 를 누른다(macOS 14 이하는 우클릭 → 열기).
+The pattern is not an input. Each pattern has its own output. Pattern tags (parryable, dash window, range, …) are not used,
+because the 3-hit combo and the off-beat 3-hit combo have identical tags and differ only in timing.
 
-소스에서 돌리려면 Godot 4.7 (mono) 과 .NET 8 이 필요하다.
-에셋 zip 은 itch.io 에서 손으로 받는다 — 받는 곳과 전체 준비(`GODOT_PATH` 등)는 [CONTRIBUTING.md](CONTRIBUTING.md) 에 있다.
+### Training data
 
-```bash
-python3 tools/install_assets.py    # 그림은 저장소에 없다 — 받아둔 zip 에서 푼다
-tools/build.sh import              # 한 번 — 임포트 캐시를 만든다
-tools/build.sh run
-```
+One attempt produces about 20 dodge events, and no existing model uses this game's measurements. Training data comes from bots.
 
----
+- **Bot fleet.** 100,000 bots. Half rely on one option (dash, jump, parry, guard, or keeping distance). The other half mix
+  the four defensive options. Each bot also has a reaction time, timing noise, greed, preferred distance, and combo habits.
+  Bots send the same inputs as a player and fight under the real battle rules, without rendering.
+- **Data factory** (`tools/build.sh factory`, a .NET console). Each bot plays stage 1 until it wins (up to 5 tries), then stage 2
+  (up to 5 tries) with patterns drawn at random. Each stage-2 pattern instance becomes one sample: the 19 inputs at the start of
+  the attempt, the pattern, and a label (hit or not hit). 1,383,287 samples in about 105 seconds on 4 cores.
+- Random numbers are looked up by seed, stream, and key instead of drawn in sequence (`overfit/core/Det.cs`).
+  The same seed and commit give byte-identical data, regardless of thread count.
 
-## 어떤 망을 어떻게 만드나
+### Model and training
 
-### 망이 답하는 질문
+- MLP 19 → 32 → 32 → 5 with ReLU, about 1,900 parameters. NumPy with hand-written backpropagation, checked against finite differences.
+- Binary cross-entropy on the drawn pattern's output only. Output biases start at each pattern's base-rate logit.
+- Split by bot: 80% train, 10% validation, 10% test. Inputs standardized with training statistics. Adam, batch 1024, early stopping.
+- `tools/build.sh train` writes `overfit/data/network.json` (weights, standardization, base rates, training source) and `ml/report.md`.
 
-> **이 플레이어에게 이 패턴을 내면, 맞을 확률이 얼마인가?**
+Test set (10,000 bots not used in training):
 
-그것 하나다. "무슨 패턴을 낼까" 를 망이 직접 정하지 않는다. 망은 **난이도만 예측**하고,
-그 예측을 보고 패턴을 고르는 건 규칙이 한다. 이렇게 나눠야 망이 이상한 값을 내도 게임이 안 깨진다.
+| Pattern | Log loss | Base-rate log loss | ECE | AUC |
+|---|---|---|---|---|
+| 3-hit combo | 0.6131 | 0.6466 | 0.0085 | 0.653 |
+| Jump attack ×3 | 0.4595 | 0.4944 | 0.0052 | 0.687 |
+| 1 hit → rush | 0.6060 | 0.6473 | 0.0123 | 0.669 |
+| 1 hit → grab | 0.3639 | 0.3939 | 0.0090 | 0.695 |
+| Off-beat 3-hit combo | 0.6033 | 0.6296 | 0.0066 | 0.638 |
 
-### 입력
+### In the game
 
-**① 플레이어 잠재 벡터** — 회피 관측에서 뽑은 11개 숫자다. 사람이 손으로 정의했고, 망이 배우는 건
-이 축들이 아니라 **이 사람이 이 축들의 어디쯤에 있는가** 뿐이다.
+- **Loading.** At boot the game loads `network.json`. `PlayerNet` runs the forward pass in C# with only + − × ÷ and comparisons,
+  in a fixed order. On 20 fixed inputs, Python and C# give bit-identical logits. `tools/build.sh check` compares them on every commit.
+  If the game data changed after training, boot logs `[net][W] stale`.
+- **Selection rule** (`NetworkPicker`), once at the start of each stage-2 attempt:
+  1. Compute the 19 inputs from the run's records. Fewer than 20 events: use all five patterns.
+  2. Get a logit for each pattern. Lift = logit − base-rate logit: how much more likely this player is to be hit than an average bot.
+  3. Targets: up to 2 patterns with lift ≥ 0.405 (1.5× the odds), largest first. No target: use all five patterns.
+  4. Breathing room: the non-target pattern with the lowest logit.
+  5. For the whole attempt, the boss draws only from the targets and the breathing-room pattern.
 
-| | |
+  Lift is used instead of the raw hit chance so the boss does not simply pick what is hard for everyone.
+  Settings are in `overfit/data/balance.json` (`picker`). With all five patterns, the draw is identical to the random picker.
+- **Control arm.** Each stage-2 attempt flips a coin from the attempt seed: 50% network, 50% random. Logs show `arm=network` or `arm=uniform`.
+  Stage 1 is always random because it is where habits are measured.
+- **Attempt log.** Each finished attempt adds one JSON line to `user://attempts/<session seed>.jsonl`: arm, drawn patterns, dodge events,
+  the 19 inputs, hit or not for each pattern instance, and the network's decision. Nothing is uploaded.
+  - Replay an attempt with a bot: `EXTRA="--history=<file> --attempt=N" tools/build.sh demo`.
+  - Compare human logs with the bot fleet: copy the files to `ml/human/` and run `ml/.venv/bin/python ml/sim2real.py`.
+
+### Results
+
+50,000 bots not used in training (31,580 reached stage 2) played stage 2 twice with the same seeds: once against the network boss,
+once against the random boss (`tools/build.sh evaluate`, then `tools/build.sh validate`). Brackets are 95% bootstrap intervals over bots.
+
+| Check | Target | Result | |
+|---|---|---|---|
+| Guard bots get grab | Pattern drawn ≥ 1.5× as often as with the random boss, and hit rate up | 2.36×, +3.7 pts [+3.4, +4.1] | pass |
+| Parry bots get jump attack ×3 | Same | 1.93×, +2.9 pts [+2.5, +3.2] | pass |
+| Jump bots get rush | Same | 1.59×, +1.2 pts [+0.8, +1.6] | pass |
+| Dash bots get grab | Same | 1.38×, +1.5 pts [+1.2, +1.8] | fail |
+| Breathing room | In every narrowed attempt, and hit less than targets | Always present, 59% vs 89% hit | pass |
+| Not picking on weak players | ≥ 80% of network attempts by bots with no habit and slow, noisy reactions use all five patterns | 38% [36, 41] | fail |
+| Win rate does not collapse | Stage-2 win rate against the network boss ≥ half of the rate against the random boss | 52% vs 56% | pass |
+| Calibration | ECE ≤ 0.05 for each pattern | 0.004 to 0.022 | pass |
+
+- The pairs the network learned: dash → grab, guard → grab, parry → jump attack ×3, jump → rush.
+  For parry bots the network picks the off-beat combo 7.9% of the time (random: 20%). For guard bots it picks jump attack ×3 1.8% of the time.
+- Dash bots: the network often targets grab and jump attack ×3 together, so grab is one of three patterns.
+- Weak bots: even bots without a habit get uneven lifts across patterns (spread about 0.65), so one pattern often passes 0.405.
+- The network learned from bots, not people. `ml/sim2real.py` measures the gap once human logs exist.
+
+Full report: [`ml/validation.md`](ml/validation.md). Rule variants are compared in the
+[design document §7.1](docs/superpowers/specs/2026-09-28-패턴-고르는-망-design.md#71-같은-봇에게-망-보스와-무작위-보스) (Korean).
+
+### Files
+
+| Part | Location |
 |---|---|
-| `dash_timing_bias` · `dash_timing_var` | 대시를 이르게 누르나 늦게 누르나, 얼마나 들쭉날쭉한가 |
-| `dash_direction_bias` | 안으로 파고드나 밖으로 도망가나 |
-| `jump_timing_bias` | 점프 타이밍 편향 |
-| `jump_reliance` · `parry_reliance` | **다른 수단도 있었는데** 그걸 골랐나. 단순 사용 비율이 아니다 — 그러면 "의존한다" 와 "그것밖에 답이 없는 패턴만 만났다" 가 같은 값이 된다 |
-| `airborne_at_impact` | 판정이 서는 순간 공중에 있던 비율 |
-| `parry_rate` | 패리 성공률 — 누른 것 중 창 안에 든 비율 |
-| `greed` | 위험한데도 공격을 욕심내나 |
-| `distance_bias` | 붙어서 싸우나 떨어져서 싸우나 |
-| `guard_rate` | 가드로 버티나 — 가드는 거의 언제나 가능해서 사용 비율이 곧 성향이다 |
+| Bot fleet | `overfit/battle/rules/FleetBot.cs`, `BotTraits.cs`, `tools/factory/fleet.json` |
+| Input | `overfit/battle/rules/PlayerAxes.cs`, `PlayerFeatures.cs` |
+| Data factory, evaluation | `tools/factory/` |
+| Training, validation, sim-to-real | `ml/` |
+| Weights | `overfit/data/network.json` |
+| Forward pass | `overfit/battle/rules/PlayerNet.cs` |
+| Selection rule, coin | `overfit/battle/rules/NetworkPicker.cs`, `StageRoster.cs` |
+| Attempt log | `overfit/battle/rules/AttemptLog.cs`, `InstanceTracker.cs`, `overfit/battle/AttemptFile.cs` |
 
-축 뒤에 **몇 건의 근거로 나온 값인지**를 여덟 칸 더 싣는다 — 관측 전부, 그리고 대시 · 점프 · 패리 · 가드 · 가드가 깨진 ·
-점프를 고를 수 있었던 · 패리를 고를 수 있었던 건수. "3건으로 낸 0.5" 와 "300건으로 낸 0.5" 는 다르고, 망이 그 차이를 알아야 한다.
-모두 19칸이고, 재료는 이번 런의 기록 전부다 — 1단계의 판과 2단계를 다시 한 판([`PlayerFeatures.cs`](overfit/battle/rules/PlayerFeatures.cs)).
-데이터 공장과 게임이 이 한 함수로 입력을 짓는다 — 둘이 다른 코드로 지으면 망은 틀린 칸을 읽고도 수를 낸다.
+## Play
 
-의존도의 분모인 "그 수단으로 피할 수 있었나" 는 패턴에 붙은 태그만으로 정하지 않고 **판정마다** 좁혀 잰다 —
-한 패턴 안에서도 타마다 답이 다를 수 있어서다. 점프는 한 겹 더 —
-그 판정이 선 순간 **당신이 선 자리에서** 잰다. 같은 칼이라도 선 자리에 따라 뛰어넘을 수 있기도 없기도 해서,
-패턴 하나에 답 하나를 붙이면 분모가 거짓을 싣는다.
+macOS builds are on the [Releases](https://github.com/Atralupus/OVERFIT/releases/latest) page. The build is not signed.
+If macOS blocks it, open System Settings → Privacy & Security and choose Open Anyway.
 
-**② 패턴은 입력이 아니라 출력의 칸이다.** 망은 입력 19칸을 받아 2단계의 다섯 패턴 **각각에** 맞을 확률(로짓)을 한 번에 낸다.
-패턴마다 손으로 적어 둔 태그(패리 가능 여부와 그 창, 대시 창과 방향, 뛰어넘을 수 있는지, 사거리 …)를 입력으로 쓰지 않은 까닭은
-태그로는 **3연격과 엇박 3연격이 같아서다** — 엇박은 박자만 다르다. 잡기가 대시 · 가드 · 패리를 안 받는 것도 태그가 아니라 판정에 있다.
-태그로 읽는 망은 둘에 같은 수를 낼 수밖에 없다. 패턴을 더하면 칸이 늘고 다시 학습한다 — 새 패턴은 어차피 새 데이터가 필요하다.
+| Action | Key |
+|---|---|
+| Move | ← → (A D) |
+| Jump | Space |
+| Dash | Shift |
+| Attack | J (press again for a 2-hit combo) |
+| Guard | ↓ (S), hold |
+| Parry | K |
 
-**③ 캐릭터는 입력에서 뺐다.** 지금은 1종이라 상수고, 상수인 칸에서 망이 배울 것은 없다. 캐릭터가 늘면 그때 칸을 더하고 다시 학습한다.
+Building from source needs Godot 4.7 (mono) and .NET 8. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### 왜 직접 만들어야 하나
+## License
 
-회피 관측은 시도 한 번에 스무 건 안팎이다(`tools/build.sh demo` 의 봇 한 판이 그쯤 남긴다). 몇 번 죽어도
-한 사람의 한 런이 백 건 단위다. 그 수로는 아무것도 학습할 수 없다.
-허깅페이스에 가져다 쓸 모델도 없다 — 플레이어 모델의 입력은 **그 게임의 회피 계측값**이라
-남의 게임에서 학습된 가중치는 옮겨올 대상 자체가 없다.
-
-그래서 데이터를 직접 만든다.
-
-```
-① 봇을 십만 대 뽑는다       대시 · 점프 · 패리 · 가드 · 간격 중 무엇에 기대는지와 반응 속도,
-                            흔들림을 성향으로 가진 가짜 플레이어 — 사람처럼 늦고 흔들린다
-
-② 헤드리스로 전투를 돌린다   창 없이 실제 전투 규칙 그대로. "이 봇이 이 패턴에
-                            맞았는가" 가 라벨이 된다 — 사례 138만 건 ← 데이터 공장
-
-③ 망을 학습한다 (Python)     f(입력 19칸) → 다섯 패턴 각각의 피격 로짓
-                            19 → 32 → 32 → 5 의 MLP. 사례가 백만 단위라 쓸 근거가 있다
-
-④ 게임 안의 추론 (C#)        실제 관측 수십~수백 건으로 입력 19칸을 짓고 순전파 한 번
-```
-
-**④가 핵심이다.** "무엇이 누구에게 어려운가" 라는 무거운 질문은 망이 오프라인에서 푼다.
-게임 안에서는 "이 사람이 어떤 유형인가" 라는 저차원 문제만 푼다.
-
-**②는 이 저장소의 구조 그 자체다.** 사람과 봇이 같은 입력 통로로 같은 전투를 타는 것도,
-규칙 층이 Godot 을 모르고 난수도 벽시계도 없는 것도 전부 여기서 나왔다([개발 방식](#개발-방식)) — 봇이 다른 경로를 타면
-망은 "봇 전용 전투" 를 배우고, 그건 사람에게 아무 의미가 없다.
-
-학습은 [`ml/`](ml)(넘파이)가 하고, 가중치는 [`overfit/data/network.json`](overfit/data/network.json) 에 실린다. 게임은 그 파일을 읽어
-사칙연산만으로 순전파한다 — 파이썬과 C# 의 로짓이 고정 입력 스무 개에서 **비트까지** 같은지를 커밋마다 본다. 칸마다의 손실 · 보정 ·
-겨냥은 [`ml/report.md`](ml/report.md) 에 있다. 공장은 같은 커밋이면 스레드 수와 무관하게 같은 바이트를, 학습은 같은 기기 · 같은
-원본이면 같은 가중치를 다시 낸다.
-
-### 그 예측으로 보스를 어떻게 정하나
-
-2단계를 시작할 때 **다섯 패턴 전부를 망으로 점수 매기고**, 보스가 그 판에 쓸 **명부를 좁힌다.** 읽는 것은 이번 런의
-기록 전부다 — 1단계의 판과 2단계를 다시 한 판.
-
-```
-관측: 대시로만 피한다
-
-2단계 보스의 명부:
-  · 1타 → 잡기                    ← 이 사람에게 유독 먹히는 패턴 (겨냥)
-  · 이 사람이 가장 덜 맞을 것 하나  ← 숨통
-```
-
-**의존 봉인** — 손에 익은 것을 빼앗는다. 목적은 "못하는 걸 더 주기" 가 아니라 **잘하는 걸 막기**다.
-칸마다 **들어 올림** = 이 사람의 로짓 − 평균의 사람의 로짓(패턴의 기저율)을 잰다. 평균의 사람보다 맞을 오즈가 1.5배 이상인
-칸(로짓으로 ln 1.5 ≈ 0.405)을, 큰 순서로 많아야 둘 고른다. 2단계의 패턴은 판정이 저마다 어떤 수단을 막으므로 도드라진 칸은 곧
-그 사람이 기대는 수단을 막는 패턴이다 — 어느 습관에 어느 패턴이 짝지어졌는지는 [위의 GIF](#2단계는-1단계의-습관을-겨냥한다)가 보여 준다.
-
-**숨통 보장** — 겨냥이 아닌 칸 중 망이 가장 낮게 본 패턴을 하나 남긴다. 전부가 낯선 방어전이면 배울 여유가
-없어 그냥 불합리하게 느껴진다. 보장된 하나가 "내가 늘었다" 를 확인시켜 준다.
-
-보스는 판 내내 이 두세 패턴 중에서만 시드 위의 무작위로 뽑는다.
-
-실패율이 높은 축을 더 요구하는 **약점 저격은 하지 않는다** — 데스 스파이럴이 되고 초보자일수록 가혹해진다. 로짓 자체가 높은 칸이
-아니라 **들어 올림**을 보는 까닭이 이것이다 — 고르게 약한 사람은 어느 칸도 도드라지지 않아 명부를 좁히지 않게 하려는 것이다.
-다만 지금의 문턱으로는 [아직 그렇지 않다](#알고-있는-위험). 관측이 스무 건보다 적으면 좁히지 않는다. 좁히지 않은 판은 다섯 전부로
-돌고, 그 뽑기는 무작위 보스와 **비트까지 같다.**
-
-고르기는 **시도를 시작할 때 한 번** 세운다. 판 도중에는 안 바뀌고, 지고 다시 하면 그때까지의 기록으로
-다시 세운다 — 실시간 추론이 없다. 결정에는 사칙연산과 비교만 쓰므로 같은 기록 · 같은 시드면 어느 기기에서나 같은 명부다.
-문턱과 수는 [`balance.json`](overfit/data/balance.json) 의 `picker` 에 있고, 판마다의 결정(좁힌 명부 · 숨통 · 로짓 · 들어 올림)은
-`[pick][D]` 한 줄로 남는다.
-
-### 반반의 대조군
-
-2단계의 시도마다 **동전을 던진다** — 절반은 망이 고르고, 절반은 망이 들어오기 전처럼 무작위(`uniform`)다. 같은 플레이어에게
-무작위 보스와 망 보스를 붙여 비교하는 것 말고 망이 정말 일하는지 증명할 방법이 없어서다. 동전은 시도 시드로 정해지고(뽑기와 다른
-난수 스트림이라 무작위 갈래의 순서는 망이 없던 때와 같다), 로그의 `arm=` 과 시도 기록이 그 갈래를 싣는다.
-
-1단계는 계속 무작위다 — 당신이 무엇에 기대는지를 재는 자리라서다. 고르기가 기록을 읽으면 2단계가 읽을 측정이 기운다.
-
-### 망은 정말 일하나
-
-**아직 그렇다고 말할 수 없다 — 다섯 줄 중 둘을 못 넘었다.** 학습에 안 쓴 봇 5만 대(2단계에 간 봇 31,580 대)가 1단계를 한 번 치고, 2단계를
-같은 시드로 망 보스와 한 번 · 무작위 보스와 한 번 싸웠다(`tools/build.sh evaluate` → `tools/build.sh validate`). 한 봇의 두 판을 짝지어 보므로
-봇마다의 차이가 지워진다. 괄호는 봇을 다시 뽑는 부트스트랩의 95% 구간이다.
-
-| 무엇 | 선 | 잰 값 | 판정 |
-|---|---|---|---|
-| 의존 봉인 — 가드 → 잡기 | 그 패턴이 무작위의 1.5배 이상 뽑히고, 맞는 비율이 오른다 | 2.36배 · +3.7%p (+3.4 ~ +4.1) | 통과 |
-| 의존 봉인 — 패리 → 점프 ×3 | 〃 | 1.93배 · +2.9%p (+2.5 ~ +3.2) | 통과 |
-| 의존 봉인 — 점프 → 돌진 | 〃 | 1.59배 · +1.2%p (+0.8 ~ +1.6) | 통과 |
-| 의존 봉인 — 대시 → 잡기 | 〃 | **1.38배** · +1.5%p (+1.2 ~ +1.8) | **못 넘음** |
-| 숨통 | 좁힌 판은 전부 숨통을 싣고, 숨통 칸은 겨냥 칸보다 덜 맞는다 | 전부 싣는다 · 59% vs 89% | 통과 |
-| 약점 저격이 아니다 | 고르게 약한 봇의 80% 이상이 다섯 전부로 돈다 | **38%** (36 ~ 41) | **못 넘음** |
-| 죽음의 나선이 아니다 | 망 보스에게 이기는 비율이 무작위의 절반 이상 | 52% vs 56% (0.92배) | 통과 |
-| 보정 | 칸마다 ECE ≤ 0.05 — "30% 라고 한 것이 30% 맞는다" | 0.004 ~ 0.022 | 통과 |
-
-**대시 → 잡기가 모자란 까닭** — 망은 대시에 기대는 봇에게 점프 ×3 의 착지도 평균보다 잘 먹힌다고 보고 겨냥을 둘 세운다. 그러면 잡기는 명부의
-1/3 이다. 맞는 비율은 올랐다 — 막는 수단이 안 선 것이 아니라 한 패턴에 덜 몰렸다.
-**약점 저격은** [미리 잰](#알고-있는-위험) 그대로다 — 습관 없는 봇도 칸마다 망의 점수가 꽤 벌어져 문턱(오즈 1.5배)을 넘는 칸이 흔하다.
-
-문턱을 조용히 고치지 않는다. 겨냥을 하나로 줄이면 앞의 것이 풀리고, 문턱을 "그 사람의 다른 칸보다 도드라진 칸" 으로 바꾸면 뒤의 것이
-나아진다. 그런데 재 보니 둘을 한꺼번에 넘는 규칙이 아직 없다 — 가늠한 표는
-[설계 §7.1](docs/superpowers/specs/2026-09-28-패턴-고르는-망-design.md#71-같은-봇에게-망-보스와-무작위-보스)에 있다.
-
-보정은 좋다 — 칸마다 망이 매긴 확률의 평균과 실제로 맞은 비율이 1 ~ 2%p 안이다(두 보스의 뽑힌 사례 전부):
-
-| 칸 | 망의 예측 | 실제 | ECE |
-|---|---|---|---|
-| 3연격 | 66.8% | 66.3% | 0.005 |
-| 점프 ×3 | 82.5% | 82.8% | 0.004 |
-| 돌진 | 65.8% | 63.7% | 0.022 |
-| 잡기 | 89.1% | 88.6% | 0.004 |
-| 엇박 3연격 | 68.4% | 67.9% | 0.006 |
-
-전부는 [`ml/validation.md`](ml/validation.md) 에 있다 — 무리마다 망이 고르는 패턴의 몫까지.
-
-### 알고 있는 위험
-
-**sim-to-real 간극.** 망은 "내 봇이 어떻게 실패하는가" 를 배우지 "사람이 어떻게 실패하는가" 를
-배우지 않는다. 이 접근의 유일한 진짜 위험이고, 사람의 실제 플레이로 망의 예측이 실제와 상관이 있는지
-검증하는 도구를 세워 뒀다. 게임은 판마다 `user://attempts/<세션 시드>.jsonl` 에 한 줄을 남긴다 — 갈래 · 뽑힌 순서 · 회피 관측 전부 ·
-망의 입력 · 패턴마다 맞았나 · 망의 결정. 어디에도 저절로 보내지 않는다. 그 파일을 `ml/human/` 으로 옮기면 [`ml/sim2real.py`](ml/sim2real.py) 가
-사람의 입력이 봇 함대 밖에 있는지 · 망의 예측이 사람에게도 맞는지 · 망 보스와 무작위 보스의 차이를 잰다. 결과는 기록이 쌓이면 여기 싣는다.
-
-**약점 저격일 수 있다.** 습관 없이 고르게 약한 봇(혼합형 · 반응 0.30초 이상 · 흔들림 0.08초 이상)의 2단계 시도 중 62% 에서 명부가
-좁혀졌다 — 선은 "80% 이상이 다섯 전부" 다. 망을 게임에 넣으며 미리 잰 값(61%)이 [검증](#망은-정말-일하나)에서도 그대로 나왔다. 망이 쏠림을
-읽기는 한다: 혼합형도 수단 비중이 고를수록 덜 좁혀진다(가장 큰 비중이 0.35 미만이면 47%, 0.55 이상이면 78%). 그런데 습관 없는 봇도 칸마다의
-들어 올림이 평균 0.65 쯤 벌어져 오즈 1.5배의 문턱을 넘는 칸이 흔히 나온다. 무엇을 바꿀지 — 규칙 · 문턱 · "고르게 약한 봇" 의 정의 — 는
-아직 안 정했다([설계 §6.2](docs/superpowers/specs/2026-09-28-패턴-고르는-망-design.md#62-networkpicker--좁힌-명부) ·
-[§7.1](docs/superpowers/specs/2026-09-28-패턴-고르는-망-design.md#71-같은-봇에게-망-보스와-무작위-보스)).
-
-**낡은 망.** 망은 학습한 날의 게임을 배운다. 패턴 · 판정 · 단계의 데이터 파일이 그 뒤에 바뀌면 부팅이 `[net][W] stale` 한 줄을 남기고
-그대로 간다 — 다시 학습할지(`tools/build.sh factory` → `tools/build.sh train`)는 사람이 정한다.
-
----
-
-## 개발 방식
-
-**규칙과 그림을 나눈다.** 전투 규칙([`overfit/battle/rules`](overfit/battle/rules))은 Godot 을 모르는 순수 C# 이고,
-씬([`overfit/battle/view`](overfit/battle/view))은 그 결과를 그리기만 한다. 경계는 컴파일러가 지킨다 — 규칙 테스트 프로젝트
-([`Overfit.Rules.Tests.csproj`](tests/Overfit.Rules.Tests/Overfit.Rules.Tests.csproj))가 순수 파일을 하나씩 링크하는데 그 어셈블리에는
-Godot 참조가 없어서, Godot 을 끌고 오는 파일이 섞이면 빌드가 깨진다. 수치는 코드가 아니라 [`overfit/data`](overfit/data) 의 JSON 에 있고,
-칼의 판정 모양은 그림에서 뽑는다([`extract_hitboxes.py`](tools/extract_hitboxes.py)).
-
-**같은 시드면 같은 결과.** 난수는 뽑지 않고 시드 · 도메인 · 키로 좌표를 조회한다([`Det.cs`](overfit/core/Det.cs)) —
-호출 순서가 값에 안 섞인다. 규칙 층에는 `System.Random` 도 벽시계도 없다. `Det` 의 골든 벡터는 파이썬으로 알고리즘을 따로
-구현해 얻었고([`DetTests.cs`](tests/Overfit.Rules.Tests/Core/DetTests.cs)), 리플레이 골든([`replay_golden.txt`](tools/replay_golden.txt))은
-고정 시드 · 고정 입력으로 돈 한 판의 틱 수 · 체력 · 회피 관측 스트림의 해시를 박아 커밋마다 견준다 — 학습 데이터를 나중에도
-다시 만들 수 있어야 해서다. 게임 로그의 `[run][I] attempt=… stage=S seed=X` 를 `EXTRA=--stage=S tools/build.sh demo X` 에 넘기면
-그 시도의 보스 순서로 봇 한 판이 돈다. 망 갈래는 기록을 읽으므로 시도 기록 파일을 넘긴다 —
-`EXTRA="--history=<파일> --attempt=N" tools/build.sh demo` 가 그 런의 앞 기록으로 고르기를 다시 세우고, 뽑힌 순서를 기록과 견준다.
-
-**눈으로 안 봐도 확인된다.** 검증은 [`tools/build.sh`](tools/build.sh) 하나에 모인다. `check` 는 포맷 · 빌드 · 규칙 테스트 ·
-`.uid` 짝 · 판정 모양이 그림과 같은지 · 망의 로짓이 파이썬과 비트까지 같은지를 Godot 없이 본다 — 커밋 게이트다. `smoke` 는 Godot 을 헤드리스로 띄워 씬을 순회하고,
-`demo` 는 봇이 전투 한 판을 끝까지 돈다. 둘 다 로그로 판정한다 — `[E]` 한 줄이나 엔진의 `ERROR:` 블록(C# 예외는 여기로만
-나온다)이 있으면 실패, 완료 표지 `[M]` 이 없어도 실패다.
-
-**디버깅은 로그로.** 판단이 일어나는 곳마다 왜 그랬는지를 `[tag][L] key=value` 한 줄로 남기고 레벨
-(`T` `D` `I` `W` `E`)로 거른다([`Log.cs`](overfit/core/Log.cs)). `E` 는 규칙 위반에만 쓰고 헤드리스 판정이 그 한 줄을 실패로 본다 —
-공짜 불변식이다. `LOG_LEVEL=trace tools/build.sh …` 로 매 틱 값까지 켠다.
-
-**규칙은 TDD 로 고친다.** 실패하는 테스트 먼저, 통과할 만큼만, 그다음 정리. 개발은 개발자와 Claude Code 가 대화로 같이 하고,
-에이전트의 커밋은 Claude Code 의 커밋 훅(PreToolUse — [`.claude/settings.json`](.claude/settings.json) →
-[`precommit_check.sh`](tools/precommit_check.sh))을 지난다. 훅은 main 직접 커밋을 막고, 규칙 파일(테스트 csproj 가 링크한 파일)을
-고친 커밋에 `tests/` 변경이 없으면 막고, 마지막에 `check` 를 돌린다. git 훅이 아니라서 손으로 한 커밋은 거르지 않는다.
-
-**설계와 계획은 문서로 남긴다.** 큰 작업마다 설계([`docs/superpowers/specs`](docs/superpowers/specs))를 먼저 쓰고, 그것을
-태스크 단위의 계획([`docs/superpowers/plans`](docs/superpowers/plans))으로 쪼개 구현한다. 지금의 보스전을 정한
-[보스전 재설계](docs/superpowers/specs/2026-09-24-보스전-재설계-design.md)는 개발자가 한 말 · 대화로 정한 것 · 가정한 것을
-나눠 적고, 뒤집은 결정은 개정 기록으로 남긴다. 코드 규칙은 [`CLAUDE.md`](CLAUDE.md) 에 있다.
-
----
-
-## 라이선스
-
-코드는 [MIT](LICENSE). 그림은 CC0 팩 셋을 쓰며 원본은 저장소에 없다 —
-목록은 게임 안 크레딧 화면과 [`overfit/data/credits.json`](overfit/data/credits.json) 에 있다.
+Code: [MIT](LICENSE). Art: three CC0 packs, not included in the repository. The list is in the in-game credits and
+[`overfit/data/credits.json`](overfit/data/credits.json).
