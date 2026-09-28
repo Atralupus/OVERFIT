@@ -29,6 +29,8 @@
 #                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000 --check-targeting
 #   tools/build.sh evaluate [인자…]    평가 (#114) — 학습에 안 쓴 봇에게 2단계를 망 · 무작위 갈래로 한 번씩 → out/evaluate/<시드>-<from>-<to>/
 #                                      기본은 망이 배운 봇 다음부터 5만 대. 인자는 factory 와 같다(--help) · 로그는 out/evaluate.log
+#   tools/build.sh validate [인자…]    §7.1 의 다섯 줄 (#114 · ml/validate.py) — 평가 폴더로 재고 ml/validation.md 를 쓴다. 선을 못 넘으면 실패
+#                                      사람의 기록은 ml/.venv/bin/python ml/sim2real.py (ml/human/*.jsonl · 설계 §7.3)
 #                                      시드는 시도 시드다(기본 51) — 게임 로그의 [run][I] attempt=… seed=X 를 그대로 넘기면
 #                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
@@ -499,6 +501,17 @@ cmd_evaluate() {
   ok "평가 통과 ($OUT/evaluate.log) — 판정은 tools/build.sh validate"
 }
 
+# §7.1 의 다섯 줄 (#114). 평가 폴더(기본: tools/build.sh evaluate 의 기본 범위)를 읽어 ml/validation.md 를 쓴다 — 못 넘은 줄이 있으면 1 로
+# 끝난다. 문턱(balance.json 의 picker)을 조용히 고치지 않는다: 멈추고 까닭을 적는다(설계 §7.1). 보고서는 늘 쓴다 — 같이 커밋한다.
+cmd_validate() {
+  [[ -x "$ML_PYTHON" ]] || die "검증의 파이썬이 없습니다 — $ML_PYTHON
+python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt 로 지으세요(세션 훅이 클라우드에서 짓는다)."
+  say "검증 — §7.1 의 다섯 줄"
+  (cd "$ROOT" && "$ML_PYTHON" "$ML_DIR/validate.py" "$@") \
+    || die "선을 못 넘은 줄이 있습니다 — ml/validation.md 를 보세요. 문턱을 조용히 고치지 않습니다(설계 §7.1)."
+  ok "다섯 줄 모두 선을 넘었습니다 — ml/validation.md"
+}
+
 # 공장 콘솔을 Release 로 빌드해 저장소 뿌리에서 돌린다 — factory · evaluate 가 같이 쓴다. 기본 경로(overfit/data · tools/factory/fleet.json ·
 # out/…)가 뿌리에서 선다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
 run_factory() {
@@ -710,6 +723,7 @@ case "${1:-}" in
   demo)      shift; cmd_demo "$@" ;;
   factory)   shift; cmd_factory "$@" ;;
   evaluate)  shift; cmd_evaluate "$@" ;;
+  validate)  shift; cmd_validate "$@" ;;
   train)     shift; cmd_train "$@" ;;
   golden)    shift; cmd_golden "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
