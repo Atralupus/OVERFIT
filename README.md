@@ -13,11 +13,11 @@ Each new stage-2 pattern punishes one habit from stage 1.
 
 | <img src="docs/gifs/rush.gif" width="420"> | <img src="docs/gifs/grab.gif" width="420"> |
 |---|---|
-| **1 hit → rush → 3 hits** (`1타 돌진`)<br>Targets players who stay back and attack only during the boss's recovery. | **1 hit → grab** (`1타 잡기`)<br>Targets players who only dash. |
+| **1 hit → rush → 3 hits**<br>Targets players who stay back and attack only during the boss's recovery. | **1 hit → grab**<br>Targets players who only dash. |
 | <img src="docs/gifs/offbeat.gif" width="420"> | <img src="docs/gifs/jump3.gif" width="420"> |
-| **Off-beat 3-hit combo** (`엇박 3연격`)<br>Targets players who parry a lot. | **Jump attack ×3** (`점프 3연속`)<br>Targets players who guard. |
+| **Off-beat 3-hit combo**<br>Targets players who parry a lot. | **Jump attack ×3**<br>Targets players who guard. |
 
-The fifth stage-2 pattern is the stage-1 3-hit combo (`3연격`). The GIFs come from fixed scripts with a fighter that follows
+The fifth stage-2 pattern is the stage-1 3-hit combo. The GIFs come from fixed scripts with a fighter that follows
 one habit (`tools/build.sh gifs`). These pairs are the design intent. The pairs the network learned are listed under [Results](#results).
 
 ## Neural network
