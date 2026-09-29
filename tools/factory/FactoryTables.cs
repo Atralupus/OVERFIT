@@ -31,9 +31,6 @@ public sealed class FactoryTables
     /// <summary>리듬형이 따르는 시각표 — 함대 설정의 기준 패턴으로 한 번 짓는다.</summary>
     public required BeatTable Beats { get; init; }
 
-    /// <summary>망 고르기의 수치 — <c>balance.json</c> 의 <c>picker</c>. 평가(#114)가 게임과 같은 문턱으로 망 갈래를 세운다.</summary>
-    public required PickerBalance Picker { get; init; }
-
     /// <summary>
     /// <paramref name="dataDir"/>(<c>overfit/data</c>)의 전투 데이터와 <paramref name="fleetPath"/>(<c>tools/factory/fleet.json</c>)를 읽는다. 깨진 파일은
     /// <see cref="DataException"/> 이 어느 파일의 어느 키인지까지 말한다 — 게임의 부팅과 같은 로더다.
@@ -67,7 +64,6 @@ public sealed class FactoryTables
             MaxTicks = balance.Battle.MaxTicks,
             Fleet = fleet,
             Beats = new BeatTable(patterns, fleet.RhythmReferences),
-            Picker = balance.Picker,
         };
     }
 

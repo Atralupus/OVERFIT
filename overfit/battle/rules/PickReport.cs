@@ -1,22 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using Overfit.Core;
 
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 2단계 결과 화면의 패턴 리포트 (#122) — 이번 시도의 패턴을 어떻게 골랐고, 무엇이 몇 번 나와 몇 번 맞았나. 씬(<c>Battle</c>)은 줄을 받아 그리기만 한다.
+/// 결과 화면의 패턴 리포트 (#122) — 보스가 이 판의 패턴을 어떻게 골랐고, 무엇이 몇 번 나와 몇 번 맞았나. 씬(<c>Battle</c>)은 줄을 받아 그리기만 한다.
 ///
 /// <para>
-/// <b>"어떤 회피 때문에" 는 따로 추정하지 않는다</b>(유저 결정 · #122). 망은 패턴마다 맞을 확률만 내므로 리포트도 "맞을 확률 → 고른 패턴" 으로만 말한다.
-/// 회피 횟수는 망의 입력이 된 기록을 그대로 센 사실이다 — 둘을 나란히 두되 인과로 잇지 않는다. 가드와 패리는 망이 설계 의도(README 의 표)와 다른
-/// 패턴에 이었다(설계 2026-09-28 §7.1) — 의도를 표로 박아 이유로 적으면 리포트가 망과 다른 말을 한다.
-/// </para>
-///
-/// <para>
-/// 확률은 로짓의 시그모이드다. <c>Math.Exp</c> 를 쓰지만 결정 경로가 아니라 보이는 글이라 사칙연산 규칙(설계 §8)의 밖이다 — 고르기는 로짓을 그대로 견준다.
+/// <b>망이 없으니 확률 줄이 없다</b>(설계 2026-09-29 조각1 §4.5 · §6). 옛 리포트는 2단계의 망이 패턴마다 낸 맞을 확률과 좁힌 명부를 적었다 — 그 망은
+/// 걷었다. 회피 횟수는 <b>이 판</b>의 것이다: 옛 리포트는 망이 읽은 앞 시도의 기록을 셌지만, 지금 고르기는 기록을 안 읽으므로 "무엇을 했나" 를 이
+/// 판에서 보여 주는 것이 사실에 맞다. 조각 4 가 "보스가 무엇을 읽고 무엇을 골랐나" 를 여기에 더한다.
 /// </para>
 /// </summary>
 public static class PickReport
@@ -32,96 +26,48 @@ public static class PickReport
         (DodgeVerb.None, "무대응"),
     ];
 
-    /// <summary>
-    /// 리포트의 줄들. 동전이 없는 단계(<see cref="StageSetup.Arm"/> 이 null — 1단계)는 빈 목록이다.
-    /// </summary>
-    /// <param name="setup">이 시도를 세운 것 — 갈래 · 결정 · 명부.</param>
-    /// <param name="network">망과 고르기의 수치 — 기저율과 동전의 몫 · 겨냥 수를 읽는다.</param>
-    /// <param name="prior">이 시도 <b>전까지</b>의 기록 — 고르기가 읽은 그 기록이다. 끝난 이 시도를 넣으면 고른 뒤의 회피까지 센다.</param>
+    /// <summary>리포트의 줄들 — 머리 · 이 판의 회피 · 명부 순서로 패턴마다 한 줄.</summary>
+    /// <param name="pickerId">이 판을 세운 고르기 — 대본(<c>script</c>)으로 선 판은 그렇다고 적는다.</param>
+    /// <param name="roster">이 판의 명부 — 줄의 순서다.</param>
+    /// <param name="events">이 판의 회피 관측(<c>BattleSim.Events</c>).</param>
     /// <param name="drawn">이 판에 선 패턴들(<c>BattleSim.Drawn</c>) — 플레이어가 본 횟수다.</param>
     /// <param name="instances">이 판의 사례들(<see cref="InstanceTracker"/>) — 맞은 횟수를 센다.</param>
     public static IReadOnlyList<string> Lines(
-        StageSetup setup, NetworkContext network, IReadOnlyList<AttemptRecord> prior, IReadOnlyList<string> drawn, IReadOnlyList<PatternInstance> instances)
+        string pickerId, IReadOnlyList<string> roster, IReadOnlyList<DodgeEvent> events, IReadOnlyList<string> drawn,
+        IReadOnlyList<PatternInstance> instances)
     {
-        ArgumentNullException.ThrowIfNull(setup);
-        ArgumentNullException.ThrowIfNull(network);
-        ArgumentNullException.ThrowIfNull(prior);
+        ArgumentNullException.ThrowIfNull(roster);
+        ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(drawn);
         ArgumentNullException.ThrowIfNull(instances);
-        if (setup.Arm is null)
+
+        var lines = new List<string>
         {
-            return [];
-        }
-
-        IReadOnlyList<string> roster = setup.PatternIds;
-        PickDecision? decision = setup.Decision;
-        var lines = new List<string> { Headline(setup.Arm, decision, roster.Count, network.Knobs), Dodges(prior) };
-        PickDecision? narrowed = decision?.Mode == PickDecision.ModeNarrowed ? decision : null;
-        if (narrowed is not null)
+            pickerId == "script" ? "보스가 정해진 대본대로 골랐습니다" : "보스가 패턴을 무작위로 골랐습니다",
+            Dodges(events),
+        };
+        foreach (string id in roster)
         {
-            lines.Add($"겨냥: 평균보다 확실히 더 맞을 패턴(최대 {network.Knobs.MaxTargeted}개) · 숨통: 겨냥 밖에서 가장 덜 맞을 패턴");
-        }
-
-        for (int i = 0; i < roster.Count; i++)
-        {
-            string id = roster[i];
-            string seen = Seen(id, drawn, instances);
-
-            // 망을 안 돌린 시도(무작위 갈래 · 근거가 얇다)는 확률이 없다 — 횟수만 적는다.
-            if (decision?.Logits is not { } logits)
-            {
-                lines.Add($"{id} — {seen}");
-                continue;
-            }
-
-            string probability = $"맞을 확률 {Percent(logits[i])}% (평균 {Percent(network.Net.Baseline[i])}%)";
-            if (narrowed is null)
-            {
-                lines.Add($"{id} — {probability} · {seen}");
-            }
-            else if (!narrowed.Narrowed.Contains(i))
-            {
-                lines.Add($"{id} — {probability} → 안 씀");
-            }
-            else
-            {
-                lines.Add($"{id} — {probability} → {(narrowed.Breathing == i ? "숨통" : "겨냥")} · {seen}");
-            }
+            lines.Add($"{id} — {Seen(id, drawn, instances)}");
         }
 
         return lines;
     }
 
-    private static string Headline(string arm, PickDecision? decision, int patterns, PickerBalance knobs)
-    {
-        if (arm != NetworkPicker.Id || decision is null)
-        {
-            return $"이번 시도는 무작위로 골랐습니다 (비교용 {100 - knobs.NetworkSharePercent}%)";
-        }
-
-        return decision.Reason switch
-        {
-            PickDecision.ReasonThin => $"회피 기록이 {decision.Samples}건뿐이라({knobs.MinSamples}건 미만) {patterns}개 패턴을 모두 썼습니다",
-            PickDecision.ReasonNoHabit => $"평균보다 두드러지게 맞을 패턴이 없어 {patterns}개 패턴을 모두 썼습니다",
-            _ => "보스가 회피 기록을 읽고 패턴을 골랐습니다",
-        };
-    }
-
     /// <summary>수단별 횟수, 많은 순 — 0 인 수단은 뺀다.</summary>
-    private static string Dodges(IReadOnlyList<AttemptRecord> prior)
+    private static string Dodges(IReadOnlyList<DodgeEvent> events)
     {
-        int total = prior.Sum(r => r.Events.Count);
-        if (total == 0)
+        if (events.Count == 0)
         {
-            return "이 시도 전까지의 회피 기록이 없습니다";
+            return "이 판의 회피가 없습니다";
         }
 
         var counts = _verbs
-            .Select((v, order) => (v.Name, Count: prior.Sum(r => r.Events.Count(e => e.Verb == v.Verb)), order))
+            .Select((v, order) => (v.Name, Count: events.Count(e => e.Verb == v.Verb), order))
             .Where(c => c.Count > 0)
             .OrderByDescending(c => c.Count)
             .ThenBy(c => c.order);
-        return $"이 시도 전까지의 회피 {total}건: " + string.Join(" · ", counts.Select(c => $"{c.Name} {c.Count}"));
+        return $"이 판의 회피 {events.Count}건: " + string.Join(" · ", counts.Select(c => $"{c.Name} {c.Count}"));
     }
 
     private static string Seen(string id, IReadOnlyList<string> drawn, IReadOnlyList<PatternInstance> instances)
@@ -135,7 +81,4 @@ public static class PickReport
         int hits = instances.Count(p => p.Hit && string.Equals(p.PatternId, id, StringComparison.Ordinal));
         return $"{shown}번 나옴 · {hits}번 맞음";
     }
-
-    private static string Percent(double logit) =>
-        Math.Round(100 / (1 + Math.Exp(-logit)), MidpointRounding.AwayFromZero).ToString("F0", CultureInfo.InvariantCulture);
 }

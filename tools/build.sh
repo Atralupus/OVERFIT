@@ -12,11 +12,6 @@
 #                                      cover → 커버리지(cobertura) 까지. 나머지 인자는 dotnet test 로 그대로
 #                                      (예: --filter FullyQualifiedName~Det)
 #   tools/build.sh uids                .cs · .gdshader 마다 .uid 가 짝을 이루는지. check 가 부른다
-#   tools/build.sh golden              망의 골든(ml/golden.py --verify) — network.json 의 로짓을 표준 라이브러리로 다시 셈해 골든 파일과 견준다.
-#                                      check 가 부른다. 망이 아직 없으면 경고하고 건너뛴다
-#   tools/build.sh train [인자…]       망의 학습 (#110) — 공장의 원본으로 ml/train.py → network.json · ml/report.md, 이어 골든을 다시 짓는다.
-#                                      ml/.venv 의 파이썬(세션 훅이 짓는다 · 손으로는 python3 -m venv ml/.venv && ml/.venv/bin/pip install
-#                                      -r ml/requirements.txt). 인자는 ml/train.py --help
 #   tools/build.sh hitboxes            hitboxes.json 이 그림과 같은지 (extract_hitboxes.py --check). check 가 부른다
 #                                      그림(PNG)이 안 깔린 체크아웃이면 경고하고 건너뛴다 — 실패가 아니다
 #   tools/build.sh run [씬]            C# 빌드 후 게임 실행
@@ -24,15 +19,11 @@
 #   tools/build.sh import              에셋 임포트만 (헤드리스). 클론 직후 반드시 한 번
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
 #   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
-#   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대로 망의 학습 데이터를 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
-#                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
-#                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000 --check-targeting
-#   tools/build.sh evaluate [인자…]    평가 (#114) — 학습에 안 쓴 봇에게 2단계를 망 · 무작위 갈래로 한 번씩 → out/evaluate/<시드>-<from>-<to>/
-#                                      기본은 망이 배운 봇 다음부터 5만 대. 인자는 factory 와 같다(--help) · 로그는 out/evaluate.log
-#   tools/build.sh validate [인자…]    §7.1 의 다섯 줄 (#114 · ml/validate.py) — 평가 폴더로 재고 ml/validation.md 를 쓴다. 선을 못 넘으면 실패
-#                                      사람의 기록은 ml/.venv/bin/python ml/sim2real.py (ml/human/*.jsonl · 설계 §7.3)
 #                                      시드는 시도 시드다(기본 51) — 게임 로그의 [run][I] attempt=… seed=X 를 그대로 넘기면
 #                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
+#   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
+#                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
+#                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000
 #   tools/build.sh shots              창을 띄워 스크린샷 → out/shots/ · docs/shots/
 #                                      엔진 안에서 뷰포트를 직접 찍는다 — 화면 기록 권한이 필요 없고 다른 창이 안 겹친다
 #   tools/build.sh gifs [id…]          README 의 패턴별 GIF → docs/gifs/<id>.gif (기본: GifRunner.cs 의 대본 전부)
@@ -72,9 +63,6 @@ TEST_PROJ="$TEST_DIR/Overfit.Rules.Tests.csproj"
 FACTORY_DIR="$ROOT/tools/factory"
 FACTORY_PROJ="$FACTORY_DIR/Overfit.Factory.csproj"
 
-# 망의 학습 (#110). 넘파이 · 판다스는 ml/.venv 에 있다 — 골든(golden.py)만 표준 라이브러리라 check 는 시스템 python3 로 돈다.
-ML_DIR="$ROOT/ml"
-ML_PYTHON="${ML_PYTHON:-$ML_DIR/.venv/bin/python}"
 
 GODOT="${GODOT_PATH:-${GODOT:-/Applications/Godot_mono.app/Contents/MacOS/Godot}}"
 
@@ -344,25 +332,6 @@ cmd_hitboxes() {
   esac
 }
 
-# 망의 골든 (#110 · 설계 2026-09-28 §5.7). network.json 으로 고정 입력의 로짓을 표준 라이브러리 파이썬이 C# 과 같은 연산 순서로 다시 셈해
-# 골든 파일(tests/…/NetworkGolden.json)과 == 로 견준다 — C# 테스트(4번 PR 의 PlayerNet)도 같은 파일을 == 로 본다. 파이썬 == 골든 == C# 이
-# 매 커밋 선다. 망을 다시 학습하고 골든을 안 지었으면 여기서 멈춘다. 망이 아직 없는 체크아웃은 볼 것이 없을 뿐이라 경고로 넘긴다(77).
-cmd_golden() {
-  command -v python3 >/dev/null || { warn "python3 없음 — 망 골든 검사를 건너뜁니다"; return 0; }
-  local out code=0
-  out="$(python3 "$ML_DIR/golden.py" --verify 2>&1)" || code=$?
-  case "$code" in
-    0)  ok "$(head -1 <<< "$out")"
-        # 둘째 줄부터는 경고다 — 망이 배운 데이터의 지문이 지금과 다르다(설계 §5.6 · 이상하지만 계속 간다).
-        [[ "$(wc -l <<< "$out")" -gt 1 ]] && warn "$(tail -n +2 <<< "$out")"
-        return 0 ;;
-    77) warn "망 골든 — network.json 이 아직 없어 건너뜁니다"
-        sed 's/^/      /' <<< "$out" ;;
-    *)  sed 's/^/      /' <<< "$out"
-        die "망 골든이 어긋났습니다 (위 출력). 망을 다시 학습했으면 python3 ml/golden.py 로 골든을 다시 지으세요." ;;
-  esac
-}
-
 cmd_check() {
   say "포맷 검사"
   if ! dotnet format "$SLN" --verify-no-changes --no-restore; then
@@ -386,9 +355,6 @@ cmd_check() {
 
   say "판정 모양 (hitboxes.json ↔ 그림)"
   cmd_hitboxes
-
-  say "망 골든 (network.json ↔ NetworkGolden.json)"
-  cmd_golden
 }
 
 cmd_run() {
@@ -424,8 +390,6 @@ cmd_smoke() {
   judge_headless "스모크" "$log" "tour=done" "$code"
   # 순회가 정말 씬을 갈아끼웠나. 표지만 보면 "돌지 않고 끝난" 경우를 못 본다.
   expect_log "$log" info '^\[data\]\[I\] loaded ' "balance.json 을 읽은 흔적이 없습니다."
-  # 망(#112) — 부팅이 network.json 을 읽었나. 모양이 틀리면 [net][E] 로 위에서 이미 멈췄다.
-  expect_log "$log" info '^\[net\]\[I\] loaded heads=5 features=19 trained_on=' "망(network.json)을 읽은 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Play$' "Play 씬으로 간 흔적이 없습니다."
   expect_log "$log" info '^\[scene\]\[I\] play ready$' "Play 씬의 스크립트가 안 붙었습니다."
   expect_log "$log" info '^\[scene\]\[I\] goto=Battle$' "Battle 씬으로 간 흔적이 없습니다."
@@ -444,9 +408,8 @@ cmd_smoke() {
   # 대본 칸 (#96 · 설계 §4.4). 순회가 첫 전투에만 대본을 넣는다(Game._tourScript) — 첫 줄의 picker=script 가 칸이 전투에 닿은 것이고,
   # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 단계 점프로 선 전투도 script 로 선다.
   expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=script history=0$' "첫 전투가 시도 1 의 시드와 순회의 대본으로 안 섰습니다."
-  # 2단계의 고르기는 망이다(#112) — 시도 2 의 시드에서 동전(Det 10 picker_arm)이 무작위 갈래를 낸다(RollInt(9131751153949564229, 10, 100) ≥ 70 — 몫 70 · #122).
-  # 갈래가 로그에 실리는지 · 동전이 시드만으로 정해지는지를 본다 — 다른 갈래가 찍히면 동전의 스트림이나 몫이 바뀌었다.
-  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=network arm=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았거나(TakeScript 가 칸을 안 비웠다) 2단계의 동전이 달라졌습니다."
+  # 2단계도 무작위다 — 옛 망의 동전(Det 10 picker_arm)은 걷었다(설계 2026-09-29 조각1 §6). 시도 2 의 줄이 "전투가 설 때마다 새 시도 · 새 시드" 를 본다.
+  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."
@@ -472,47 +435,16 @@ cmd_demo() {
   ok "전투 데모 통과 ($log)"
 }
 
-# 망의 학습 (#110 · 설계 2026-09-28 §5). 원본은 공장이 짓는다(tools/build.sh factory — 설계 §4.8 의 규모가 기본 경로다). 관문(§5.5)을 못 넘으면
-# ml/train.py 가 1 로 끝나고 network.json 을 안 쓴다. 쓰고 나면 골든을 다시 짓는다 — 안 지으면 다음 check 가 골든이 낡았다고 멈춘다.
-cmd_train() {
-  [[ -x "$ML_PYTHON" ]] || die "학습의 파이썬이 없습니다 — $ML_PYTHON
-python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt 로 지으세요(세션 훅이 클라우드에서 짓는다)."
-  say "학습"
-  (cd "$ROOT" && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 "$ML_PYTHON" "$ML_DIR/train.py" "$@") || die "학습이 멈췄습니다 — 위 출력을 보세요."
-  say "골든"
-  (cd "$ROOT" && python3 "$ML_DIR/golden.py") || die "골든을 못 지었습니다."
-  ok "network.json · 골든 · ml/report.md 를 썼습니다 — 같이 커밋하세요."
-}
-
 # 데이터 공장 (#108 · 설계 2026-09-28 §4). 봇 함대가 1단계 · 2단계를 게임과 같은 순서로 치고, 2단계의 사례(패턴이 선 것 하나)마다
-# 입력 19칸과 라벨(맞았나)을 samples.csv 에 싣는다. 봇 · 매니페스트는 bots.csv · manifest.json. Release 로 빌드해 돈다 — 디버그의 규칙은
+# 라벨(맞았나)을 samples.csv 에 싣는다. 봇 · 매니페스트는 bots.csv · manifest.json. Release 로 빌드해 돈다 — 디버그의 규칙은
 # 몇 배 느리다. 판정은 헤드리스와 같은 함수다(judge_headless): [E] 가 하나라도 있으면(규칙 위반) · 표지가 없으면(끝까지 못 갔다) ·
-# 종료 코드가 0 이 아니면(--check-targeting 의 관문) 실패다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
+# 종료 코드가 0 이 아니면 실패다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
 cmd_factory() {
   run_factory "데이터 공장" "공장" "$OUT/factory.log" "factory=done" "$@"
   ok "공장 통과 ($OUT/factory.log)"
 }
 
-# 평가 (#114 · 설계 2026-09-28 §7.1). 같은 공장 콘솔의 --evaluate — 학습에 안 쓴 봇(기본: 망이 배운 봇 다음부터 5만 대)이 1단계를 한 번 치고
-# 2단계를 망 갈래 · 무작위 갈래로 한 번씩 친다(같은 시도 시드). → out/evaluate/<시드>-<from>-<to>/ 의 attempts · samples · bots.csv · manifest.json.
-# 판정(§7.1 의 다섯 줄)은 여기서 안 한다 — tools/build.sh validate 가 그 폴더로 잰다.
-cmd_evaluate() {
-  run_factory "평가 — 같은 봇에게 망 보스와 무작위 보스" "평가" "$OUT/evaluate.log" "evaluate=done" --evaluate "$@"
-  ok "평가 통과 ($OUT/evaluate.log) — 판정은 tools/build.sh validate"
-}
-
-# §7.1 의 다섯 줄 (#114). 평가 폴더(기본: tools/build.sh evaluate 의 기본 범위)를 읽어 ml/validation.md 를 쓴다 — 못 넘은 줄이 있으면 1 로
-# 끝난다. 문턱(balance.json 의 picker)을 조용히 고치지 않는다: 멈추고 까닭을 적는다(설계 §7.1). 보고서는 늘 쓴다 — 같이 커밋한다.
-cmd_validate() {
-  [[ -x "$ML_PYTHON" ]] || die "검증의 파이썬이 없습니다 — $ML_PYTHON
-python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt 로 지으세요(세션 훅이 클라우드에서 짓는다)."
-  say "검증 — §7.1 의 다섯 줄"
-  (cd "$ROOT" && "$ML_PYTHON" "$ML_DIR/validate.py" "$@") \
-    || die "선을 못 넘은 줄이 있습니다 — ml/validation.md 를 보세요. 문턱을 조용히 고치지 않습니다(설계 §7.1)."
-  ok "다섯 줄 모두 선을 넘었습니다 — ml/validation.md"
-}
-
-# 공장 콘솔을 Release 로 빌드해 저장소 뿌리에서 돌린다 — factory · evaluate 가 같이 쓴다. 기본 경로(overfit/data · tools/factory/fleet.json ·
+# 공장 콘솔을 Release 로 빌드해 저장소 뿌리에서 돌린다. 기본 경로(overfit/data · tools/factory/fleet.json ·
 # out/…)가 뿌리에서 선다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
 run_factory() {
   local title="$1" name="$2" log="$3" marker="$4"
@@ -722,10 +654,6 @@ case "${1:-}" in
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
   factory)   shift; cmd_factory "$@" ;;
-  evaluate)  shift; cmd_evaluate "$@" ;;
-  validate)  shift; cmd_validate "$@" ;;
-  train)     shift; cmd_train "$@" ;;
-  golden)    shift; cmd_golden "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
   gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;

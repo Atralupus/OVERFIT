@@ -14,7 +14,8 @@ namespace Overfit.Factory;
 /// <summary>
 /// 데이터 공장의 콘솔 (#108 · 설계 2026-09-28 §4) — 인자 · 파일 · 매니페스트 · 로그 싱크뿐이다. 표본을 짓는 것은 링크된 순수 파일들이다
 /// (<see cref="BotRun"/> · <see cref="FactoryBatch"/> · <see cref="SampleCsv"/> · <see cref="FactoryStats"/> — 테스트 프로젝트도 링크한다).
-/// 실행은 <c>tools/build.sh factory [인자…]</c> 다. <c>--evaluate</c> 면 평가 모드다(<see cref="EvaluateMode"/> · #114 — <c>tools/build.sh evaluate</c>).
+/// 실행은 <c>tools/build.sh factory [인자…]</c> 다. 옛 망의 평가 모드(<c>--evaluate</c> · #114)와 겨냥 표(<c>--check-targeting</c>)는 옛 망과 같이
+/// 걷었다(설계 2026-09-29 조각1 §6) — 공장은 봇 함대가 보스와 싸운 기록을 짓는 자리로 남는다(밸런스를 재고, 조각 4 의 망이 배울 재료).
 ///
 /// <para>
 /// <b>로그.</b> <see cref="Log"/> 는 정적이라 스레드를 띄우기 <b>전에</b> 레벨(기본 <c>warn</c>)과 싱크(잠금 · <c>[E]</c> 세기)를 한 번 정한다. 규칙 층이
@@ -26,7 +27,7 @@ namespace Overfit.Factory;
 public static class Program
 {
     private const string _usage = """
-        tools/build.sh factory [인자…]  — 봇 함대로 망의 학습 데이터를 짓는다 (#108 · 설계 2026-09-28 §4)
+        tools/build.sh factory [인자…]  — 봇 함대가 보스와 싸운 기록을 짓는다 (#108 · 설계 2026-09-28 §4)
 
           --fleet-seed=N      함대 시드 (기본 0) — 봇의 성향 · 세션 시드가 여기서 나온다
           --from=N --to=M     봇 번호 N ~ M-1 (기본 0 ~ 1000)
@@ -39,15 +40,6 @@ public static class Program
           --fleet=FILE        함대 설정 (기본 tools/factory/fleet.json)
           --commit=SHA        매니페스트에 적을 커밋 (build.sh 가 넣는다)
           --log-level=L       규칙 층의 로그 레벨 (기본 warn) — debug 는 --threads=1 과 같이 쓴다
-          --check-targeting   원본 겨냥 표의 한 줄이라도 기저율 이하면 실패(종료 코드 1)
-
-        tools/build.sh evaluate [인자…]  — 같은 봇에게 망 보스와 무작위 보스 (#114 · 설계 2026-09-28 §7.1)
-
-          --evaluate          평가 모드 (build.sh evaluate 가 넣는다) — 1단계 한 번 · 2단계를 망 · 무작위 갈래로 한 번씩
-          --fleet-seed=N      기본은 망이 배운 함대 시드(network.json 의 trained_on)
-          --from=N --to=M     기본은 망이 배운 봇 다음부터 5만 대 — 배운 봇과 겹치면 멈춘다
-          --out=DIR           출력 폴더 (기본 out/evaluate/<시드>-<from>-<to>)
-          (그 밖의 인자는 위와 같다 — --check-targeting 은 없다)
         """;
 
     private static readonly object _gate = new();
@@ -61,13 +53,9 @@ public static class Program
             return 0;
         }
 
-        // 스레드를 띄우기 전에 한 번 — 레벨과 싱크는 정적이다. 두 모드가 같이 쓴다.
+        // 스레드를 띄우기 전에 한 번 — 레벨과 싱크는 정적이다.
         Log.Level = CmdArgs.Text(args, "--log-level=") is { } text && Log.TryParseLevel(text, out LogLevel level) ? level : LogLevel.Warn;
         Log.Sink = Write;
-        if (CmdArgs.Has(args, "--evaluate"))
-        {
-            return EvaluateMode.Run(args);
-        }
 
         ulong fleetSeed = CmdArgs.UInt64(args, "--fleet-seed=") ?? 0;
         int from = Int(args, "--from=") ?? 0;
@@ -80,7 +68,6 @@ public static class Program
         string fleetPath = CmdArgs.Text(args, "--fleet=") ?? Path.Combine("tools", "factory", "fleet.json");
         string commit = CmdArgs.Text(args, "--commit=") ?? "unknown";
         string outDir = CmdArgs.Text(args, "--out=") ?? Path.Combine("out", "factory", $"{fleetSeed}-{from}-{to}");
-        bool checkTargeting = CmdArgs.Has(args, "--check-targeting");
         if (to <= from || stage1Tries < 1 || stage2Tries < 1 || threads < 1 || chunk < 1)
         {
             Console.Error.WriteLine($"인자가 틀렸다 — from={from} to={to} stage1-tries={stage1Tries} stage2-tries={stage2Tries} threads={threads} chunk={chunk}");
@@ -104,7 +91,7 @@ public static class Program
         }
 
         IReadOnlyList<string> roster = StageRoster.For(tables.Stages, 2);
-        var stats = new FactoryStats(roster, tables.Fleet.Targeting);
+        var stats = new FactoryStats(roster);
         Directory.CreateDirectory(outDir);
         Say($"start fleet_seed={fleetSeed} bots={from}..{to - 1} tries={stage1Tries}/{stage2Tries} threads={threads} chunk={chunk}"
             + $" data_digest={digest[..12]} fleet={fleetSha[..12]} commit={commit} out={outDir}");
@@ -150,46 +137,18 @@ public static class Program
             Say($"done bots={stats.Bots} reached_stage2={stats.ReachedStage2} won_stage2={stats.WonStage2} samples={stats.Samples}"
                 + $" ticks={stats.Ticks} seconds={seconds:0.0} bots_per_s={stats.Bots / seconds:0.0} ticks_per_s={stats.Ticks / seconds:0}");
 
-            bool below = Report(stats);
+            foreach (SlotRate slot in stats.Slots)
+            {
+                Say($"base pattern={slot.Pattern} samples={slot.Samples} hits={slot.Hits} rate={slot.Rate:0.000}");
+            }
+
             Manifest(Path.Combine(outDir, "manifest.json"), new ManifestFacts(
                 fleetSeed, from, to, stage1Tries, stage2Tries, threads, fleetSha, commit, digest, samples, bots, seconds), stats);
             Say($"wrote samples={samples.Rows} bots={bots.Rows} out={outDir}");
 
             Log.Marker("factory", "factory=done");
-            if (_errors > 0)
-            {
-                return 1;
-            }
-
-            return checkTargeting && below ? 1 : 0;
+            return _errors > 0 ? 1 : 0;
         }
-    }
-
-    /// <summary>기저율과 원본 겨냥 표를 찍는다. 기저율 이하인 줄이 있으면 참 — <c>[W]</c> 로 남기고(이상하지만 계속 간다) 관문을 켜면 실패다.</summary>
-    private static bool Report(FactoryStats stats)
-    {
-        foreach (SlotRate slot in stats.Slots)
-        {
-            Say($"base pattern={slot.Pattern} samples={slot.Samples} hits={slot.Hits} rate={slot.Rate:0.000}");
-        }
-
-        bool below = false;
-        foreach (TargetingResult row in stats.Targeting)
-        {
-            string line = $"habit={Habit(row.Row.Habit)} pattern={row.Row.Pattern} min_rhythm={row.Row.MinRhythm:0.##} bots={row.Bots}"
-                + $" samples={row.Samples} rate={row.Rate:0.000} base={row.BaseRate:0.000} diff={row.Diff:+0.000;-0.000;0.000}";
-            if (row.Above)
-            {
-                Say($"targeting {line} ok");
-            }
-            else
-            {
-                below = true;
-                Log.Warn("factory", $"targeting_below {line} — 이 습관형이 겨냥 패턴에 기저율보다 더 안 맞는다(봇의 모형이나 패턴의 겨냥을 보라)");
-            }
-        }
-
-        return below;
     }
 
     /// <summary>매니페스트의 사실들 — 인자 · 해시 · 파일.</summary>
@@ -239,45 +198,7 @@ public static class Program
         }
 
         json.WriteEndArray();
-        json.WriteStartArray("targeting");
-        foreach (TargetingResult row in stats.Targeting)
-        {
-            json.WriteStartObject();
-            json.WriteString("habit", Habit(row.Row.Habit));
-            json.WriteString("pattern", row.Row.Pattern);
-            json.WriteNumber("min_rhythm", row.Row.MinRhythm);
-            json.WriteNumber("bots", row.Bots);
-            json.WriteNumber("samples", row.Samples);
-            json.WriteNumber("hits", row.Hits);
-            json.WriteNumber("rate", row.Rate);
-            json.WriteNumber("base", row.BaseRate);
-            json.WriteNumber("diff", row.Diff);
-            json.WriteBoolean("above", row.Above);
-            json.WriteEndObject();
-        }
-
-        json.WriteEndArray();
         json.WriteEndObject();
-    }
-
-    /// <summary>지금까지 난 <c>[E]</c> 의 수 — 평가 모드도 이것으로 실패를 가른다.</summary>
-    internal static int Errors
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _errors;
-            }
-        }
-    }
-
-    /// <summary>인자가 틀렸을 때 — 무엇이 틀렸는지와 쓰는 법.</summary>
-    internal static int Usage(string problem)
-    {
-        Console.Error.WriteLine(problem);
-        Console.Error.Write(_usage);
-        return 2;
     }
 
     /// <summary>싱크 — 잠그고 한 줄씩 쓴다. <c>[E]</c> 를 센다(공장의 실패 조건).</summary>
@@ -296,8 +217,6 @@ public static class Program
 
     /// <summary>공장 자신의 줄 — 레벨을 안 거친다(위 설명).</summary>
     internal static void Say(string message) => Write(LogLevel.Info, $"[factory][I] {message}");
-
-    internal static string Habit(BotHabit habit) => habit.ToString().ToLowerInvariant();
 
     internal static int? Int(string[] args, string prefix) => CmdArgs.UInt64(args, prefix) is { } value ? checked((int)value) : null;
 

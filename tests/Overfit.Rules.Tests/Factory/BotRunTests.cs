@@ -50,30 +50,9 @@ public class BotRunTests
     }
 
     [Fact]
-    public void 이단계의_입력은_그_시도_앞의_기록이다()
-    {
-        // 게임의 고르기가 서는 그 자리 · 그 재료다 — 시도를 시작할 때 그때까지 끝난 시도 전부(1단계 · 앞선 2단계). 둘째 2단계 시도까지 본다:
-        // 첫 시도는 1단계 기록만, 둘째는 첫 2단계 시도의 기록까지 든다.
-        (BotResult result, List<AttemptRecord> records) = First(5, 5, r => r.ReachedStage2 && r.Stage2Attempts >= 2);
-
-        int[] attempts = result.Samples.Select(s => s.Attempt).Distinct().ToArray();
-        attempts.Length.ShouldBeGreaterThanOrEqualTo(2, "2단계 시도 둘 이상에서 표본이 나와야 한다");
-        foreach (int attempt in attempts)
-        {
-            double[] expected = PlayerFeatures.From(records.Where(r => r.Number < attempt).ToList());
-            foreach (FactorySample sample in result.Samples.Where(s => s.Attempt == attempt))
-            {
-                sample.Features.ShouldBe(expected, $"시도 {attempt} 의 입력");
-            }
-
-            records.Single(r => r.Number == attempt).Stage.ShouldBe(2);
-        }
-    }
-
-    [Fact]
     public void 표본은_2단계의_사례뿐이고_칸은_명부_안이다()
     {
-        // 칸 = 2단계 명부의 인덱스 — 망의 머리가 그 순서다(설계 §5.2). 1단계는 재는 자리라 표본이 없다.
+        // 칸 = 2단계 명부의 인덱스다. 1단계는 재는 자리라 표본이 없다.
         int roster = StageRoster.For(Tables.Stages, 2).Count;
         var slots = new HashSet<int>();
         foreach (int bot in FleetBots.ReachStage2.Take(8))
@@ -118,8 +97,7 @@ public class BotRunTests
         a.Samples.Count.ShouldBe(b.Samples.Count);
         for (int i = 0; i < a.Samples.Count; i++)
         {
-            (a.Samples[i].Attempt, a.Samples[i].Slot, a.Samples[i].Hit).ShouldBe((b.Samples[i].Attempt, b.Samples[i].Slot, b.Samples[i].Hit));
-            a.Samples[i].Features.ShouldBe(b.Samples[i].Features);
+            a.Samples[i].ShouldBe(b.Samples[i]);
         }
     }
 }

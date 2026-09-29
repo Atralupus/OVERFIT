@@ -57,28 +57,31 @@ public class FactoryBatchTests
     }
 
     [Fact]
-    public void 수는_왕복_서식이다()
+    public void 사례의_줄은_봇_시도_칸_라벨이다()
     {
-        // 같은 double 은 같은 글자다 — 되읽으면 비트까지 같아야 학습(파이썬)이 공장과 같은 수를 본다.
-        double[] features = [0.1 + 0.2, 1e-5, -0.03, 1.0 / 3, 94, 0, 123456789.125, double.Epsilon, 2.0 / 7, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
         var builder = new StringBuilder();
 
-        SampleCsv.AppendSample(builder, new FactorySample(7, 3, 4, true, features));
+        SampleCsv.AppendSample(builder, new FactorySample(7, 3, 4, true));
 
-        string line = builder.ToString();
-        line.ShouldEndWith("\n");
-        string[] cells = line.TrimEnd('\n').Split(',');
-        cells[..4].ShouldBe(new[] { "7", "3", "4", "1" });
-        double[] back = cells[4..].Select(c => double.Parse(c, NumberStyles.Float, CultureInfo.InvariantCulture)).ToArray();
-        back.Select(BitConverter.DoubleToInt64Bits).ShouldBe(features.Select(BitConverter.DoubleToInt64Bits));
+        builder.ToString().ShouldBe("7,3,4,1\n");
+        SampleCsv.SamplesHeader.Split(',').ShouldBe(new[] { "bot", "attempt", "slot", "label" });
+        SampleCsv.BotsHeader.Split(',').Length.ShouldBe(SampleCsv.BotsHeader.Split(',').Distinct().Count(), "bots.csv 의 머리에 같은 이름이 둘이다");
     }
 
     [Fact]
-    public void 머리는_입력_이름의_순서다()
+    public void 성향의_수는_왕복_서식이다()
     {
-        // samples.csv 의 입력 칸이 PlayerFeatures 의 순서다 — 학습이 이름으로 읽고 network.json 의 features 에 그대로 싣는다.
-        SampleCsv.SamplesHeader.Split(',').ShouldBe(new[] { "bot", "attempt", "slot", "label" }.Concat(PlayerFeatures.Names));
-        SampleCsv.BotsHeader.Split(',').Length.ShouldBe(SampleCsv.BotsHeader.Split(',').Distinct().Count(), "bots.csv 의 머리에 같은 이름이 둘이다");
+        // 같은 double 은 같은 글자다 — 되읽으면 비트까지 같아야 분석(파이썬)이 공장과 같은 수를 본다. 칸은 봇 · 습관 뒤의 열셋이다(TraitsHeader).
+        BotResult result = BotRun.Run(51, 0, _tables.Value, 1, 1);
+        var builder = new StringBuilder();
+
+        SampleCsv.AppendBot(builder, result);
+
+        string[] cells = builder.ToString().TrimEnd('\n').Split(',');
+        double[] back = cells[2..15].Select(c => double.Parse(c, NumberStyles.Float, CultureInfo.InvariantCulture)).ToArray();
+        BotTraits t = result.Traits;
+        double[] traits = [t.Dash, t.Jump, t.Parry, t.Guard, t.ReactionSeconds, t.JitterSeconds, t.BiasSeconds, t.Rhythm, t.DashInward, t.RestGap, t.Greed, t.Chain, t.JumpLead];
+        back.Select(BitConverter.DoubleToInt64Bits).ShouldBe(traits.Select(BitConverter.DoubleToInt64Bits));
     }
 
     [Fact]

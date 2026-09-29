@@ -190,10 +190,9 @@ public class DetTests
     }
 
     [Fact]
-    public void 고르기의_동전은_10_이다()
+    public void 은퇴한_동전의_번호_10_은_비워_둔다()
     {
-        // 2단계 시도의 동전 — 망 · 무작위 갈래 (#112 · 설계 2026-09-28 §6.3). 뽑기(PatternPick)와 다른 스트림이라 동전을 던진 것만으로 보스의
-        // 순서가 안 밀린다. 번호는 뒤에 더할 뿐이다.
+        // 옛 망의 동전(망 · 무작위 갈래 · #112)은 조각 1 에서 걷었다(설계 2026-09-29 조각1 §6). 번호는 재사용하지 않는다 — 다음 스트림은 11 부터다.
         Det.Domain.PickerArm.ShouldBe(10u);
         Det.Domain.Name(Det.Domain.PickerArm).ShouldBe("picker_arm");
     }
