@@ -20,55 +20,32 @@ namespace Overfit.Battle.Debug;
 /// </para>
 ///
 /// <para>
-/// 대본 id 는 ASCII 소문자다(<c>rush</c> · <c>grab</c> · <c>offbeat</c> · <c>jump3</c>) — 인자와 파일 이름(<c>docs/gifs/&lt;id&gt;.gif</c>)으로 쓰인다.
-/// 대본은 이 안의 C# 표다 — 스크린샷 대본이 코드인 것과 같다.
+/// 대본 id 는 ASCII 소문자다(<c>offbeat</c>) — 인자와 파일 이름(<c>docs/gifs/&lt;id&gt;.gif</c>)으로 쓰인다. 대본은 이 안의 C# 표다 — 스크린샷
+/// 대본이 코드인 것과 같다. 조각 1 에서 없어진 동작을 쓰던 대본 셋(<c>rush</c> · <c>grab</c> · <c>jump3</c>)은 걷었다 — 새 대본은 GIF 를 다시 찍을
+/// 때 짠다(설계 2026-09-29 조각1 §4.2). README 의 그 세 그림(<c>docs/gifs/</c>)은 그대로 둔다.
 /// </para>
 /// </summary>
 public partial class GifRunner : Node
 {
     /// <summary>
-    /// 한 대본의 상한(초) — 판이 서고 잡을 구간이 끝나기까지. 넘으면 <c>[E]</c> 로 멈춘다(GIF 가 안 찍힌 것은 도구의 실패다). 대본 넷은 길어야
-    /// 10초 남짓이다(점프 ×3 칸 — 3연격을 돌고 점프 ×3 의 셋째 착지 + 30틱까지).
+    /// 한 대본의 상한(초) — 판이 서고 잡을 구간이 끝나기까지. 넘으면 <c>[E]</c> 로 멈춘다(GIF 가 안 찍힌 것은 도구의 실패다). 대본은 길어야
+    /// 몇 초다(<c>offbeat</c> — 판이 서고 엇박 3연격의 둘째 판정 + 30틱까지 3초 남짓).
     /// </summary>
     private const double _timeout = 30.0;
 
     /// <summary>판의 틱으로 적는 입력의 시작 — "판이 설 때부터".</summary>
     private const int _battleStart = 1;
 
-    /// <summary>끝이 없는 입력 — 대본이 끝날 때까지 붙든다.</summary>
-    private const int _forever = int.MaxValue - 1;
-
     /// <summary>엣지인 액션 (설계 §5.4 · <c>InputFrame</c>) — 한 틱 앞에 누른다(<see cref="Drive"/>). 나머지(이동 · 가드)는 레벨이다.</summary>
     private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "parry", "attack" };
 
     /// <summary>
-    /// 대본 넷 (설계 §6.2 의 표). 틱은 패턴의 틱이고, 판의 틱으로 적은 것은 <see cref="GifInput.OnBattleClock"/> 이 참이다.
+    /// 대본 (설계 §6.2 의 표 — 조각 1 뒤에는 하나다). 틱은 패턴의 틱이고, 판의 틱으로 적은 것은 <see cref="GifInput.OnBattleClock"/> 이 참이다.
     /// 잡을 구간은 [<see cref="GifScript.From"/>, <see cref="GifScript.To"/>) 패턴 틱 — 60fps 로 240장(4초)을 넘지 않는다(도구가 막는다).
-    /// 대본마다 같은 입력을 규칙 위에서 틱까지 못박은 테스트가 있다(<c>Stage2BattleTests</c>) — 숫자를 바꾸면 거기서 먼저 잰다.
+    /// 대본마다 같은 입력을 규칙 위에서 틱까지 못박은 테스트가 있다(<c>MoveBattleTests</c>) — 숫자를 바꾸면 거기서 먼저 잰다.
     /// </summary>
     private static readonly GifScript[] _scripts =
     {
-        // 멀리 서서 지켜보다 후딜에만 찔끔 친다 → 1타 → 돌진 → 3타 (설계 §4.6). 1타(51틱)가 멀리서 헛치자 후딜을 노려 걸어 들어가고(60 ~ 77틱),
-        // 보스가 달리기 시작하는 78틱에 J 를 누른다 — 칼은 달려오는 보스에 닿지만(84틱) 1타 뒤 경직(0.40초 · #82)이 118틱까지 묶어, 1타가 끝난
-        // 95틱에 대시로 빠지려 한 누름이 버려지고 도착(85틱) 15틱 뒤의 3타(100틱)를 맞는다. 3타 + 30 까지 잡는다. 입력은 짝 테스트
-        // (Stage2BattleTests.일타_돌진은_달려오는_보스를_찌른_사람을_1타_뒤_경직에서_3타로_맞힌다)와 같다 — 그 테스트의 대조군(경직 0)은 같은
-        // 95틱의 대시로 3타를 흘린다. 전에는 대본이 그 대시를 빼 두어 GIF 의 사람이 테스트의 사람과 달랐다(#96).
-        new("rush", Patterns: new[] { "1타 돌진" }, Target: "1타 돌진",
-            Inputs: new[] { new GifInput(60, 77, "move_right"), new GifInput(78, 78, "attack"), new GifInput(95, 95, "dash") },
-            From: 1, To: 130),
-
-        // 대시로만 피한다 → 1타 → 잡기 (설계 §4.7). 판이 서면 1타 사거리 안(보스와 356 떨어진 956)으로 걸어 들어가, 1타 창이 열리는 틱(51)에
-        // 대시로 흘리고(보스를 뚫고 등 뒤로 빠진다 · 대시와 그 뒤 경직 0.10초가 68틱에 풀린다), 잡기 창(102)이 열리기 4틱 앞(98)에 또 대시해 **무적인
-        // 채로** 흰 구에 붙들린다. 풀리는 틱(162) 뒤 흰 구가 흩어지는 0.3초(18틱 · feel.grab_orb_fade_seconds)까지 잡는다 — 그 값을 고치면 To 도 같이 고친다.
-        new("grab", Patterns: new[] { "1타 잡기" }, Target: "1타 잡기",
-            Inputs: new[]
-            {
-                new GifInput(_battleStart, 68, "move_right", OnBattleClock: true),
-                new GifInput(51, 51, "dash"),
-                new GifInput(98, 98, "dash"),
-            },
-            From: 1, To: 180),
-
         // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
         // 1타는 60틱이라 패리의 창(+6)을 지나 커밋(+18) 안에 떨어져 맨몸으로 맞는다. 헛친 한 번(커밋과 패리 뒤 경직 · 0.583초 · #82)이 84틱에 풀리면
         // 맞은 틱(60)에서 3연격의 간격(42틱)을 재어 2틱 앞(100)에 또 누른다 — 늦은 2타(111)에 또 맞는다. 둘째 + 30 까지 잡는다.
@@ -80,17 +57,6 @@ public partial class GifRunner : Node
                 new GifInput(100, 100, "parry"),
             },
             From: 1, To: 141),
-
-        // 가드로 버틴다 → 점프 ×3 (설계 §4.8). 사거리 안으로 걸어 들어가 ↓ 를 놓지 않는다 — 3연격을 막고(54) 곧장 온 점프 ×3 의 셋째 착지에서
-        // 붕괴한다(54 + 21.6 × 2 = 97.2 라 셋째 21.6 을 못 낸다). 3연격과 첫 도약은 잡지 않고 돌고(스태미나 바가 이미 줄어 있다) 둘째 도약의
-        // 선딜(90)부터 셋째 착지(240) + 30 까지 잡는다 — 착지마다 흰 충격파가 선다(#83).
-        new("jump3", Patterns: new[] { "3연격", "점프 3연속" }, Target: "점프 3연속",
-            Inputs: new[]
-            {
-                new GifInput(_battleStart, 68, "move_right", OnBattleClock: true),
-                new GifInput(69, _forever, "guard", OnBattleClock: true),
-            },
-            From: 90, To: 270),
     };
 
     private readonly SceneDriver _drive;

@@ -49,7 +49,7 @@ public sealed class SceneDriver
     /// <para>
     /// <paramref name="script"/> 를 주면 그 판 하나를 대본(패턴 id 의 순서)으로 세운다 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」) — <c>Game</c> 의
     /// 다음 전투 한 칸에 넣고 전투로 가면 <c>Battle</c> 이 가져간다. 무엇이 올지 알아야 "그 패턴이 왔을 때" 를 찍는다. <c>params</c> 인 까닭:
-    /// 부르는 자리가 <c>new[] { "1타 잡기" }</c> 를 적으면 분석기(CA1861 · 상수 배열 인수)가 그 줄마다 경고한다.
+    /// 부르는 자리가 <c>new[] { "잡기" }</c> 를 적으면 분석기(CA1861 · 상수 배열 인수)가 그 줄마다 경고한다.
     /// </para>
     /// </summary>
     public async Task<Overfit.Battle.Battle?> NewBattle(params string[] script)

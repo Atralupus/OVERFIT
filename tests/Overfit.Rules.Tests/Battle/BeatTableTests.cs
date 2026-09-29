@@ -18,20 +18,30 @@ public class BeatTableTests
 
     [Theory]
     [InlineData("엇박 3연격")]
-    [InlineData("1타 잡기")]
-    [InlineData("1타 돌진")]
+    [InlineData("빠른 3연격")]
     [InlineData("3연격")]
     public void 여는_그림이_3연격과_같으면_3연격의_시각표를_받는다(string id)
     {
-        // 엇박의 실제 판정은 1.00 · 1.85 · 3.10 이다 — 박자로 누르는 사람은 타마다 0.15 · 0.30 · 0.45 초 이르다.
+        // 엇박의 실제 판정은 1.00 · 1.85 · 3.10 이다 — 박자로 누르는 사람은 타마다 0.15 · 0.30 · 0.45 초 이르다. 빠른 3연격(0.40 · 0.85 · 1.40)은
+        // 거꾸로 늦다 — 3연격의 박자를 아는 사람이 빠른 첫 타에 늦는 자리다(설계 2026-09-29 조각1 §2.2).
         Real().For(id).ShouldBe(new[] { 0.85, 1.55, 2.65 });
     }
 
     [Fact]
-    public void 점프_3연속은_점프_공격의_시각표를_받는다()
+    public void 점프_공격은_제_시각표를_받는다()
     {
-        // 기준은 착지 하나다 — 둘째 · 셋째 착지는 봇이 눈으로 잰다(시각표가 모자란 칸).
-        Real().For("점프 3연속").ShouldBe(new[] { 1.0 });
+        Real().For("점프 공격").ShouldBe(new[] { 1.0 });
+    }
+
+    [Theory]
+    [InlineData("돌진")]
+    [InlineData("잡기")]
+    [InlineData("올려베기")]
+    public void 여는_그림이_기준과_다른_동작은_눈으로_잰다(string id)
+    {
+        // 돌진은 run · 잡기는 idle · 올려베기는 attack2 로 연다 — 어느 기준과도 여는 그림이 달라 박자로 안 누른다. 올려베기가 3연격(attack)과 선딜의
+        // 그림이 다른 것이 "끝까지 보는 사람은 가려낸다" 의 그 다름이다(설계 2026-09-29 조각1 §2.1).
+        Real().For(id).ShouldBeNull();
     }
 
     [Fact]

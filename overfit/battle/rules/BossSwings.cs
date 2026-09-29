@@ -329,7 +329,7 @@ public sealed class BossSwings
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
             // 이 셋이 없으면 만들어지지 않는다. 대시 · 패리는 태그를 판정의 답이 좁힌다 (#78 · 설계 §7.3) — 규칙(HitResolver.Effective)과
-            // 같은 두 값이다. 태그만 실으면 1타는 다 되고 잡기는 점프만 되는 한 패턴(1타 잡기)에서 잡기가 "대시도 됐다" 로 실린다.
+            // 같은 두 값이다. 태그만 실으면 판정마다 답이 다른 패턴(옛 1타 잡기 · #78 — 1타는 다 되고 잡기는 점프만 됐다)에서 잡기가 "대시도 됐다" 로 실린다.
             DashAvailable: swing.Tags.DashWindow > 0 && box.Dashable,
             ParryAvailable: swing.Tags.Parryable && box.Parryable,
 

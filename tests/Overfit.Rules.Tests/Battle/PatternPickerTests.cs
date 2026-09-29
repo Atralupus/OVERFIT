@@ -49,9 +49,9 @@ public class PatternPickerTests
     {
         // 설계 §4.4 — script 는 대본(패턴 id 의 순서)을 돌고, 끝나면 처음부터 다시 돈다. GIF 도구와 스크린샷이 패턴을 고정하는 데 쓴다.
         // 몇 번째로 뽑는지(draw)는 BattleSim 이 세고 고르기는 그 번호로 조회만 한다 — uniform 과 같이 상태가 없다.
-        string[] roster = { "3연격", "점프 3연속", "1타 돌진" };
+        string[] roster = { "3연격", "점프 공격", "돌진" };
         IPatternPicker picker = PatternPickers.Create("script",
-            new PickerInputs(roster, Array.Empty<AttemptRecord>(), 51, 2, Script: new[] { "1타 돌진", "3연격" })).ShouldNotBeNull();
+            new PickerInputs(roster, Array.Empty<AttemptRecord>(), 51, 2, Script: new[] { "돌진", "3연격" })).ShouldNotBeNull();
 
         Enumerable.Range(0, 6).Select(picker.Pick).ShouldBe(new[] { 2, 0, 2, 0, 2, 0 });
     }
@@ -62,7 +62,7 @@ public class PatternPickerTests
         // 설계 §4.4 — 명부에 없는 id 는 세울 때 거절한다. 판 도중에 명부 밖을 내면 BattleSim 이 [E] 를 남기며 간격마다 다시 고르는데(아래
         // 테스트), 대본은 사람이 손으로 쓰는 것이라 틀리면 대본(GifRunner · ShotRunner 가 넘긴다)으로 판을 세우는 자리에서 바로 멈춰야 한다 —
         // 이 예외를 StageRoster.Setup 이 [E] 로 바꿔 판을 세우지 않는다(StageRosterTests). 빠진 것은 전부 싣는다.
-        string[] roster = { "3연격", "점프 3연속" };
+        string[] roster = { "3연격", "점프 공격" };
         Should.Throw<ArgumentException>(() => new ScriptPicker(roster, new[] { "3연격", "돌진", "잡기" }))
             .Message.ShouldContain("돌진, 잡기");
         Should.Throw<ArgumentException>(() => new ScriptPicker(roster, Array.Empty<string>()));

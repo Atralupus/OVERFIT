@@ -74,7 +74,7 @@ public static class BossHits
             HitShape? shape = ShapeOf(step, shapes);
             if (shape is null)
             {
-                problems.Add($"{id}[{i}] {step.Hitbox ?? "모양 없음"}");
+                problems.Add($"{id}[{i}] {step.Hitbox ?? (step.Rects is null ? "모양 없음" : "rects 가 틀렸다(사각형마다 [x0, x1, y0, y1] · x0 ≤ x1 · y0 ≤ y1)")}");
                 continue;
             }
 
@@ -96,6 +96,36 @@ public static class BossHits
             return shapes.TryGetValue(hitbox, out HitShape? shape) ? shape : null;
         }
 
+        if (step.Rects is { } rects)
+        {
+            return Handwritten(rects);
+        }
+
         return step.Band is { Count: 4 } b ? HitShape.Band(b[0], b[1], b[2], b[3]) : null;
+    }
+
+    /// <summary>
+    /// 손으로 적은 사각형들(<see cref="PatternStep.Rects"/>)의 모양 — 비었거나 넷이 아닌 사각형 · 뒤집힌 사각형이 하나라도 있으면 null(부르는 쪽이 그
+    /// 판정을 거절 목록에 싣는다). <see cref="HitShape"/> 의 생성자도 뒤집힌 사각형을 던지지만, 여기서 먼저 걸러 다른 모양 없는 판정과 같이 한 번에 거절한다.
+    /// </summary>
+    private static HitShape? Handwritten(IReadOnlyList<IReadOnlyList<double>> rects)
+    {
+        if (rects.Count == 0)
+        {
+            return null;
+        }
+
+        var local = new HitRect[rects.Count];
+        for (int k = 0; k < rects.Count; k++)
+        {
+            if (rects[k] is not { Count: 4 } r || r[0] > r[1] || r[2] > r[3])
+            {
+                return null;
+            }
+
+            local[k] = new HitRect(r[0], r[1], r[2], r[3]);
+        }
+
+        return new HitShape(local);
     }
 }

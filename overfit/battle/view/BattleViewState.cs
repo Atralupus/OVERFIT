@@ -156,6 +156,10 @@ public readonly record struct StillFrame(string Anim, int Frame);
 /// 지나간다(파이터의 <c>HoldWindup</c> 과 같은 이유). null 이면 그 애니메이션을 제 속도로 돈다.
 /// </param>
 /// <param name="AnimSpeed">그 애니메이션을 도는 배속 — 보통 1 이고, 돌진(#78) 동안 <c>feel.rush_anim_speed</c> 다. <c>Battle</c> 이 단계의 움직임을 보고 싣는다.</param>
+/// <param name="Mirror">
+/// 그 단계의 그림을 보는 쪽의 반대로 그리나 — 단계의 <c>mirror</c>(설계 2026-09-29 조각1 §2.1). 올려베기가 attack2 를 뒤집어 그린다: 그 궤적의 높은
+/// 부분이 보스 등 뒤라 그대로면 앞의 공중을 치는 그림이 안 된다. 판정은 모양(<c>rects</c>)이 정하고 규칙은 이 값을 안 읽는다.
+/// </param>
 public readonly record struct BossFrame(
     double X,
     double Y,
@@ -164,7 +168,8 @@ public readonly record struct BossFrame(
     bool Exhausted,
     string? Anim,
     int? Frame,
-    double AnimSpeed);
+    double AnimSpeed,
+    bool Mirror = false);
 
 /// <summary>
 /// 한 렌더 프레임에 잡기의 흰 구(<c>GrabOrb</c> · #78 · 설계 §4.7)를 그리는 데 필요한 전부. 규칙은 흰 구를 모른다 — 날고 · 붙들고 · 기다리는 것은
