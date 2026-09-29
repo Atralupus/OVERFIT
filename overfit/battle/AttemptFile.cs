@@ -10,7 +10,7 @@ namespace Overfit.Battle;
 /// 순수한 <see cref="AttemptLog"/> 이고 여기는 파일만 다룬다(Godot 과 순수 C# 의 경계 — <see cref="Balance.ReadText"/> 와 같은 가름).
 ///
 /// <para>
-/// 자동으로 어디에도 안 보낸다 — 되살리기(<c>tools/build.sh demo</c> 의 <c>--history</c>)와 sim-to-real(5번 PR)이 사람이 건넨 파일을 읽는다.
+/// 자동으로 어디에도 안 보낸다 — 되살리기(<c>tools/build.sh demo</c> 의 <c>--history</c>)가 사람이 건넨 파일을 읽는다.
 /// 쓰기에 실패하면 <c>[W]</c> 다 — 기록이 빠질 뿐 규칙은 어기지 않았다.
 /// </para>
 /// </summary>

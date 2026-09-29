@@ -11,10 +11,10 @@ namespace Overfit.Factory;
 /// </summary>
 public static class SampleCsv
 {
-    /// <summary><c>samples.csv</c> 의 머리 — 봇 · 시도 · 칸 · 라벨 뒤에 입력 19칸이 <see cref="PlayerFeatures.Names"/> 의 순서로 온다.</summary>
-    public static string SamplesHeader { get; } = "bot,attempt,slot,label," + string.Join(',', PlayerFeatures.Names);
+    /// <summary><c>samples.csv</c> 의 머리 — 봇 · 시도 · 칸 · 라벨.</summary>
+    public const string SamplesHeader = "bot,attempt,slot,label";
 
-    /// <summary>성향의 칸 — 습관 · 수단 넷 · 나머지 아홉(<see cref="AppendTraits"/> 의 순서). 평가의 <c>bots.csv</c> 도 같은 칸이다(#114).</summary>
+    /// <summary>성향의 칸 — 습관 · 수단 넷 · 나머지 아홉(<see cref="AppendTraits"/> 의 순서).</summary>
     public const string TraitsHeader = "habit,dash,jump,parry,guard,reaction,jitter,bias,rhythm,dash_inward,rest_gap,greed,chain,jump_lead";
 
     /// <summary><c>bots.csv</c> 의 머리 — 봇 번호 · 성향 전부 · 흐름(1단계 시도 · 2단계에 갔나 · 2단계 시도 · 2단계를 이겼나) · 틱 · 사례 수.</summary>
@@ -29,13 +29,7 @@ public static class SampleCsv
         Int(builder, sample.Bot).Append(',');
         Int(builder, sample.Attempt).Append(',');
         Int(builder, sample.Slot).Append(',');
-        builder.Append(sample.Hit ? '1' : '0');
-        foreach (double value in sample.Features)
-        {
-            Real(builder.Append(','), value);
-        }
-
-        builder.Append('\n');
+        builder.Append(sample.Hit ? '1' : '0').Append('\n');
     }
 
     /// <summary>봇 한 줄 — 습관은 <c>fleet.json</c> 과 같은 소문자 이름 · 참거짓은 0 · 1.</summary>

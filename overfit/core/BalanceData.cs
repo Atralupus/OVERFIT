@@ -249,24 +249,6 @@ public sealed class FeelBalance
 }
 
 /// <summary>모든 수치의 진실 원천. <c>data/balance.json</c> 하나가 이 모양이다.</summary>
-/// <summary>
-/// 2단계의 고르기 (#112 · 설계 2026-09-28 §6.4) — 규칙이 읽는 수치다. 망(<c>network.json</c>)은 로짓만 내고, 무엇을 고르는지는 이 넷이 정한다.
-/// </summary>
-public sealed class PickerBalance
-{
-    /// <summary>2단계 시도 중 망 갈래의 몫(정수 퍼센트 — 동전이 정수 비교다). 나머지가 무작위(대조군)다.</summary>
-    public required int NetworkSharePercent { get; init; }
-
-    /// <summary>관측이 이보다 적으면 다섯 전부(<c>thin</c>) — 근거가 얇은 축으로 명부를 좁히지 않는다.</summary>
-    public required int MinSamples { get; init; }
-
-    /// <summary>겨냥의 문턱 — 들어 올림(로짓 − 기저율의 로짓)이 이 이상인 칸. 0.405 ≈ ln 1.5 · 평균의 사람보다 오즈가 1.5배.</summary>
-    public required double LiftMin { get; init; }
-
-    /// <summary>겨냥의 최대 수 — 숨통까지 셋이면 숨통이 1/3 이다.</summary>
-    public required int MaxTargeted { get; init; }
-}
-
 public sealed class BalanceData
 {
     [JsonPropertyName("_version")]
@@ -276,6 +258,4 @@ public sealed class BalanceData
 
     /// <summary>연출 수치. 규칙이 아니라 <b>뷰</b>가 읽는다.</summary>
     public required FeelBalance Feel { get; init; }
-
-    public required PickerBalance Picker { get; init; }
 }

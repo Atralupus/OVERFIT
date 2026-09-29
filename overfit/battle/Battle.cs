@@ -67,23 +67,11 @@ public partial class Battle : Node2D
     private (int Number, ulong Seed) _attempt;
 
     /// <summary>
-    /// 이 전투를 세운 명부와 고르기 (#112) — 끝날 때 기록이 잘라 쓴 단계 · 동전의 갈래 · 망의 결정을 여기서 읽는다(설계 2026-09-28 §6.5).
+    /// 이 전투를 세운 명부와 고르기 (#112) — 끝날 때 기록이 잘라 쓴 단계 · 고르기 id 를 여기서 읽는다(설계 2026-09-28 §6.5).
     /// </summary>
     private StageSetup _setup = null!;
 
-    /// <summary>
-    /// 이 전투를 세울 때의 입력 19칸 — 이번 런의 앞 기록으로 짓는다(망이 읽는 그 값 · #114). 끝날 때 기록이 싣는다: sim-to-real 이 파이썬에서 입력을
-    /// 다시 짓지 않게(설계 2026-09-28 §7.3).
-    /// </summary>
-    private double[] _features = [];
-
-    /// <summary>
-    /// 이 전투를 세울 때까지의 기록 — 고르기가 읽은 그 기록이다. 리포트(#122)가 회피를 여기서 센다: 끝날 때의 <c>History.Records</c> 에는 이 시도가 이미
-    /// 붙어 있어, 고른 뒤의 회피까지 세게 된다.
-    /// </summary>
-    private IReadOnlyList<AttemptRecord> _prior = [];
-
-    /// <summary>결과 화면의 패턴 리포트 줄들 (#122) — 동전이 있는 단계(2단계)만 있다. 끝날 때 짓고 결과 화면이 띄운다.</summary>
+    /// <summary>결과 화면의 패턴 리포트 줄들 (#122) — 끝날 때 짓고 결과 화면이 띄운다.</summary>
     private IReadOnlyList<string> _report = [];
 
     /// <summary>판을 사례로 가른다 — 공장과 같은 정의(<see cref="InstanceTracker"/> · #114). 틱마다 보고, 끝날 때 사례와 라벨을 기록이 싣는다.</summary>
@@ -308,19 +296,15 @@ public partial class Battle : Node2D
         // 있으면(GIF · 스크린샷 · #78) 이 전투만 그 대본으로 선다 — 가져가며 비우므로 다음 전투는 단계의 고르기로 돌아간다.
         RunHistory history = Game.Instance.History;
         _attempt = history.Open();
-        // 2단계의 고르기는 망이다(#112) — 부팅 때 읽은 망과 고르기의 수치를 넘긴다. 동전의 갈래(arm)는 로그와 기록이 싣는다.
-        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript(), Balance.Network) is not { } stage)
+        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript()) is not { } stage)
         {
             _broken = true; // [E] 는 StageRoster 가 남겼다
             return;
         }
 
         _setup = stage;
-        _features = PlayerFeatures.From(history.Records);
-        _prior = [.. history.Records];
         _instances = new InstanceTracker();
-        string arm = stage.Arm is null ? "" : $" arm={stage.Arm}";
-        Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId}{arm} history={history.Records.Count}");
+        Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
 
         _sim = new BattleSim(new BattleSetup
         {
@@ -512,29 +496,24 @@ public partial class Battle : Node2D
         // 끝까지 간 시도만 기록에 붙는다 — 이긴 판도(1단계를 이긴 판이 곧 1단계 기록이다 · 설계 §4.4). 판마다 한 번이고,
         // 관측이 살아 있는 마지막 자리가 여기다.
         //
-        // 단계는 실제로 싸운 단계(잘라 쓴 값)다 — 요청한 값이 아니다(#59 3/6 · 설계 2026-09-28 §6.5). 갈래와 망의 결정도 같이 싣는다: 분석이 망 보스와
-        // 무작위 보스를 이것으로 가른다. 디스크에도 한 줄을 덧붙인다 — 되살리기와 sim-to-real 의 재료다(AttemptFile).
+        // 단계는 실제로 싸운 단계(잘라 쓴 값)다 — 요청한 값이 아니다(#59 3/6 · 설계 2026-09-28 §6.5). 디스크에도 한 줄을 덧붙인다 — 되살리기의
+        // 재료다(AttemptFile).
         RunHistory history = Game.Instance.History;
-        var record = new AttemptRecord(_attempt.Number, _setup.Stage, _attempt.Seed, outcome, [.. _sim.Events], _setup.Arm);
+        var record = new AttemptRecord(_attempt.Number, _setup.Stage, _attempt.Seed, outcome, [.. _sim.Events]);
         history.Record(record);
         Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
         List<PatternInstance> instances = _instances.Finish(_sim.Events);
-        var entry = new AttemptEntry(
-            history.SessionSeed, history.Run, record, _setup.PickerId, [.. _sim.Drawn], _sim.Ticks, _setup.Decision, Balance.NetworkSha256,
-            _features, instances);
+        var entry = new AttemptEntry(history.SessionSeed, history.Run, record, _setup.PickerId, [.. _sim.Drawn], _sim.Ticks, instances);
         if (AttemptFile.Append(entry) is { } path)
         {
             Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} path={path}");
         }
 
-        // 2단계의 패턴 리포트 (#122) — 동전이 있는 단계만. 갈래가 있으면 판을 세울 때 망을 이미 읽었다(부팅이 망 없이는 안 선다).
-        if (_setup.Arm is not null)
+        // 패턴 리포트 (#122 · 설계 2026-09-29 조각1 §4.5) — 모든 판의 결과 화면에 선다. 옛 망이 걷혀 확률 줄이 없다.
+        _report = PickReport.Lines(_setup.PickerId, _setup.PatternIds, _sim.Events, _sim.Drawn, instances);
+        foreach (string line in _report)
         {
-            _report = PickReport.Lines(_setup, Balance.Network, _prior, _sim.Drawn, instances);
-            foreach (string line in _report)
-            {
-                Log.Debug("report", $"line=\"{line}\"");
-            }
+            Log.Debug("report", $"line=\"{line}\"");
         }
     }
 

@@ -60,11 +60,6 @@ public partial class BattleDemo : Node
 
             // 대본으로 선 시도(GIF · 스크린샷 · 순회)는 대본이 기록에 없다 — 뽑힌 순서가 곧 대본이다(대본은 돌며 되풀이된다).
             script = replay.PickerId == "script" ? replay.Drawn : null;
-            if (replay.NetworkSha256 is { } logged && logged != Balance.NetworkSha256)
-            {
-                Log.Warn("battle-demo", $"replay_network_changed logged={logged} now={Balance.NetworkSha256} — 다른 망이라 다른 명부가 설 수 있다");
-            }
-
             Log.Info("battle-demo", $"replay attempt={wanted} run={replay.Run} history={history.Count} seed={seed} stage={stage} picker={replay.PickerId}");
         }
 
@@ -94,16 +89,15 @@ public partial class BattleDemo : Node
             return;
         }
 
-        // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup) — 망과 동전도 같다. 기록은 되살리기가 아니면
-        // 비어 있다 — 그러면 망 갈래도 근거가 얇아 다섯 전부(uniform 과 같은 순서)라 시드만으로 게임의 그 시도와 같은 순서가 선다.
-        if (StageRoster.Setup(data.Stages, stage, seed, history, script, Balance.Network) is not { } setup)
+        // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup). 기록은 되살리기가 아니면 비어 있다 —
+        // 지금 고르기는 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 순서가 선다.
+        if (StageRoster.Setup(data.Stages, stage, seed, history, script) is not { } setup)
         {
             GetTree().Quit(1);
             return;
         }
 
-        string arm = setup.Arm is null ? "" : $" arm={setup.Arm}";
-        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={setup.Stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}{arm}");
+        Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={setup.Stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}");
 
         var sim = new BattleSim(new BattleSetup
         {
@@ -149,7 +143,7 @@ public partial class BattleDemo : Node
 
         if (replay is not null)
         {
-            Replayed(replay, setup, sim);
+            Replayed(replay, sim);
         }
 
         Log.Marker("battle-demo", $"battle-demo=done outcome={outcome} ticks={sim.Ticks} events={sim.Events.Count}");
@@ -157,30 +151,19 @@ public partial class BattleDemo : Node
     }
 
     /// <summary>
-    /// 되살린 판이 기록과 같은가 — 갈래 · 망의 결정(좁힌 명부) · 뽑힌 순서의 앞머리. 같은 망이면 어긋남은 규칙 위반이다(<c>[E]</c> — 고르기가 기록과 시드만으로
-    /// 안 선다). 망이 바뀌었으면 어긋날 수 있다(<c>[W]</c>).
+    /// 되살린 판이 기록과 같은가 — 뽑힌 순서의 앞머리. 봇이 싸우므로 판의 길이는 달라도 앞머리가 같아야 한다 — 다르면 규칙 위반이다(<c>[E]</c> — 고르기가
+    /// 기록과 시드만으로 안 선다). 저장한 입력으로 판 전체를 되살리는 것은 조각 1 의 6/8 이다(설계 2026-09-29 조각1 §4.4).
     /// </summary>
-    private static void Replayed(AttemptEntry replay, StageSetup setup, BattleSim sim)
+    private static void Replayed(AttemptEntry replay, BattleSim sim)
     {
         int common = Math.Min(replay.Drawn.Count, sim.Drawn.Count);
-        bool sameArm = setup.Arm == replay.Record.Arm;
-        bool sameNarrowed = (setup.Decision?.Narrowed ?? []).SequenceEqual(replay.Decision?.Narrowed ?? []);
-        bool sameDrawn = replay.Drawn.Take(common).SequenceEqual(sim.Drawn.Take(common), StringComparer.Ordinal);
-        if (sameArm && sameNarrowed && sameDrawn)
+        if (replay.Drawn.Take(common).SequenceEqual(sim.Drawn.Take(common), StringComparer.Ordinal))
         {
-            Log.Info("battle-demo", $"replay_match attempt={replay.Record.Number} arm={setup.Arm ?? "-"} prefix={common}/{replay.Drawn.Count}");
+            Log.Info("battle-demo", $"replay_match attempt={replay.Record.Number} prefix={common}/{replay.Drawn.Count}");
             return;
         }
 
-        string message = $"replay_mismatch attempt={replay.Record.Number} arm_logged={replay.Record.Arm ?? "-"} arm_now={setup.Arm ?? "-"}"
-            + $" drawn_logged={string.Join(',', replay.Drawn.Take(common))} drawn_now={string.Join(',', sim.Drawn.Take(common))}";
-        if (replay.NetworkSha256 is { } logged && logged != Balance.NetworkSha256)
-        {
-            Log.Warn("battle-demo", message);
-        }
-        else
-        {
-            Log.Error("battle-demo", message);
-        }
+        Log.Error("battle-demo", $"replay_mismatch attempt={replay.Record.Number}"
+            + $" drawn_logged={string.Join(',', replay.Drawn.Take(common))} drawn_now={string.Join(',', sim.Drawn.Take(common))}");
     }
 }

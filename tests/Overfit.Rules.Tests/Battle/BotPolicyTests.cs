@@ -45,7 +45,7 @@ public class BotPolicyTests
     private static (BattleOutcome Outcome, BattleSim Sim) PlayDemo(int stage)
     {
         BalanceData balance = TestConfigs.Balance();
-        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), stage, 51, Array.Empty<AttemptRecord>(), network: TestConfigs.Network())
+        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), stage, 51, Array.Empty<AttemptRecord>())
             ?? throw new InvalidOperationException($"stages.json 에 {stage}단계가 안 선다");
         var sim = new BattleSim(new BattleSetup
         {

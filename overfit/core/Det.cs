@@ -117,9 +117,8 @@ public static class Det
         public const uint FleetTiming = 9;
 
         /// <summary>
-        /// 2단계 시도의 <b>동전</b> — 망 · 무작위 갈래 (#112 · 설계 2026-09-28 §6.3). <c>RollInt(시도 시드, PickerArm, 100)</c> 을 정수 퍼센트와 견준다.
-        /// 뽑기(<see cref="PatternPick"/>)와 다른 스트림이라 동전을 던진 것만으로 보스의 순서가 안 밀린다 — 무작위 갈래는 <c>uniform</c> 과 같은 판이다.
-        /// 번호는 뒤에 더할 뿐이다.
+        /// 2단계 시도의 <b>동전</b> — 망 · 무작위 갈래 (#112 · 설계 2026-09-28 §6.3). <c>RollInt(시도 시드, PickerArm, 100)</c> 을 정수 퍼센트와 견줬다.
+        /// <para>⚠ <b>은퇴했다</b> (설계 2026-09-29 조각1 §6 — 옛 망과 동전을 걷었다). 번호는 비워 둔다: 재사용하면 옛 리플레이의 스트림과 섞인다.</para>
         /// </summary>
         public const uint PickerArm = 10;
 

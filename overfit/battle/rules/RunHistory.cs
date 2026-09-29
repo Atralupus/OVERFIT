@@ -11,12 +11,8 @@ namespace Overfit.Battle.Rules;
 /// <param name="Stage">그 시도의 단계.</param>
 /// <param name="Seed">시도 시드 — <see cref="RunHistory.SeedOf"/>. 로그의 <c>seed=</c> 와 같다.</param>
 /// <param name="Outcome">결과. 이긴 판도 붙는다 — 1단계를 이긴 판이 곧 "1단계 기록" 이다.</param>
-/// <param name="Events">그 판의 회피 관측 전부 — 망이 읽을 재료다.</param>
-/// <param name="Arm">
-/// 동전의 갈래 — <c>network</c> · <c>uniform</c> (#112 · 설계 2026-09-28 §6.3). 고르기 id 가 <c>network</c> 가 아닌 단계는 null 이다. 분석이 이것으로 망 보스와
-/// 무작위 보스를 가른다.
-/// </param>
-public sealed record AttemptRecord(int Number, int Stage, ulong Seed, BattleOutcome Outcome, IReadOnlyList<DodgeEvent> Events, string? Arm = null);
+/// <param name="Events">그 판의 회피 관측 전부 — 조각 3 의 기억이 읽을 재료다(우산 설계 §6).</param>
+public sealed record AttemptRecord(int Number, int Stage, ulong Seed, BattleOutcome Outcome, IReadOnlyList<DodgeEvent> Events);
 
 /// <summary>
 /// 세션의 시도 번호와 기록 (#72 · 설계 §4.4). <c>Game</c>(Autoload)이 하나를 든다 — 씬이 다시 서도 산다. 로직을 여기 두는

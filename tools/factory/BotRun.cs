@@ -5,13 +5,15 @@ using Overfit.Core;
 
 namespace Overfit.Factory;
 
-/// <summary>2단계 사례 하나 — 학습 표본의 한 줄(<c>samples.csv</c>).</summary>
+/// <summary>
+/// 2단계 사례 하나 — 표본의 한 줄(<c>samples.csv</c>). 옛 망의 입력 19칸(<c>PlayerFeatures</c>)은 옛 망과 같이 걷었다(설계 2026-09-29 조각1 §6) —
+/// 조각 4 의 망은 입력이 다르다(최근 흐름 + 누적 성향).
+/// </summary>
 /// <param name="Bot">봇 번호.</param>
-/// <param name="Attempt">그 봇의 시도 번호(<see cref="RunHistory"/> — 1단계부터 이어 센다). 같은 시도의 사례는 입력이 같다.</param>
-/// <param name="Slot">2단계 명부의 칸 — 망의 머리 순서다.</param>
+/// <param name="Attempt">그 봇의 시도 번호(<see cref="RunHistory"/> — 1단계부터 이어 센다).</param>
+/// <param name="Slot">2단계 명부의 칸.</param>
 /// <param name="Hit">라벨 — 그 사례에 맞았나(<see cref="InstanceTracker"/>).</param>
-/// <param name="Features">그 시도를 시작할 때의 입력(<see cref="PlayerFeatures"/>). 같은 시도의 사례들이 한 배열을 같이 쥔다.</param>
-public sealed record FactorySample(int Bot, int Attempt, int Slot, bool Hit, IReadOnlyList<double> Features);
+public sealed record FactorySample(int Bot, int Attempt, int Slot, bool Hit);
 
 /// <summary>봇 한 대의 결과 — <c>bots.csv</c> 의 한 줄과 그 봇의 표본.</summary>
 /// <param name="Bot">봇 번호.</param>
@@ -33,9 +35,8 @@ public sealed record BotResult(
 /// <list type="number">
 /// <item><b>1단계</b> — <see cref="StageRoster.Setup"/> 으로 세워(게임 · 데모와 같은 자리) 이길 때까지, 많아야 <c>stage1Tries</c> 번. 못 이긴 봇은 2단계에
 /// 못 간다 — 사람도 그렇다.</item>
-/// <item><b>2단계</b> — 이길 때까지, 많아야 <c>stage2Tries</c> 번. 입력은 시도를 시작할 때 그때까지의 기록으로 한 번 짓는다(게임의 고르기가 서는 그 자리 ·
-/// 그 재료). 명부는 <see cref="StageRoster.For"/> 에서 읽고 고르기는 <see cref="UniformPicker"/> 로 <b>고정한다</b> — <c>stages.json</c> 의 2단계가 망이어도
-/// 공장은 무작위라야 다섯 칸이 고르게 덮이고 라벨이 고르기에 안 기운다.</item>
+/// <item><b>2단계</b> — 이길 때까지, 많아야 <c>stage2Tries</c> 번. 명부는 <see cref="StageRoster.For"/> 에서 읽고 고르기는 <see cref="UniformPicker"/> 로
+/// <b>고정한다</b> — 공장은 무작위라야 칸이 고르게 덮이고 라벨이 고르기에 안 기운다.</item>
 /// </list>
 /// 판을 끝내는 규칙(승패 · <c>max_ticks</c>)은 게임과 같다. 판이 끝나면 기록을 붙인다 — 이긴 판도.
 /// </summary>
@@ -65,13 +66,12 @@ public static class BotRun
             {
                 stage2++;
                 (int number, ulong seed) = history.Open();
-                double[] features = PlayerFeatures.From(history.Records);
                 var tracker = new InstanceTracker();
                 (BattleOutcome outcome, BattleSim sim) = Play(tables, traits, seed, roster, new UniformPicker(seed, roster.Count), tracker);
                 ticks += sim.Ticks;
                 foreach (PatternInstance instance in tracker.Finish(sim.Events))
                 {
-                    samples.Add(new FactorySample(bot, number, Slot(roster, instance.PatternId), instance.Hit, features));
+                    samples.Add(new FactorySample(bot, number, Slot(roster, instance.PatternId), instance.Hit));
                 }
 
                 Record(history, recorded, new AttemptRecord(number, 2, seed, outcome, [.. sim.Events]));

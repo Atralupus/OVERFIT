@@ -15,25 +15,19 @@ public interface IPatternPicker
 }
 
 /// <summary>
-/// 고르기를 세우는 재료 (설계 §4.4) — 시도를 시작할 때 그때까지의 기록으로 <b>한 번</b> 세운다. 판 도중에는 안 바뀐다
-/// (유저: "실시간은 아니고 보스전에 실패할때마다 업데이트").
+/// 고르기를 세우는 재료 (설계 §4.4) — 시도를 시작할 때 그때까지의 기록으로 <b>한 번</b> 세운다. 판 도중에는 안 바뀐다.
 /// </summary>
 /// <param name="Roster">그 단계의 명부 — <c>stages.json</c> 의 <c>patterns</c>. 칸 번호가 이 인덱스다.</param>
-/// <param name="History">그때까지 끝난 시도들. <c>uniform</c> 은 안 읽는다 — 망이 읽는다.</param>
+/// <param name="History">그때까지 끝난 시도들. 지금의 두 고르기는 안 읽는다 — 옛 망(태그 <c>v0.9.2</c>)이 읽던 자리이고, 조각 3 의 기억이 다시 채운다.</param>
 /// <param name="Seed">시도 시드.</param>
 /// <param name="Stage">단계.</param>
 /// <param name="Script">대본 — 패턴 id 의 순서. <c>script</c> 고르기(#78)만 읽는다. 대본을 넘긴 전투(<c>Game</c> 의 대본 칸)가 아니면 null 이다.</param>
-/// <param name="Network">망과 고르기의 수치 — <c>network</c> 고르기(#112)만 읽는다. 게임 · 데모가 부팅 때 읽은 것을 넘긴다.</param>
 public sealed record PickerInputs(
-    IReadOnlyList<string> Roster, IReadOnlyList<AttemptRecord> History, ulong Seed, int Stage, IReadOnlyList<string>? Script = null,
-    NetworkContext? Network = null);
-
-/// <summary>망 고르기의 재료 (#112) — 망(<c>network.json</c>)과 고르기의 수치(<c>balance.json</c> 의 <c>picker</c>).</summary>
-public sealed record NetworkContext(PlayerNet Net, PickerBalance Knobs);
+    IReadOnlyList<string> Roster, IReadOnlyList<AttemptRecord> History, ulong Seed, int Stage, IReadOnlyList<string>? Script = null);
 
 /// <summary>
 /// 무작위 — 시드 위의 <c>Det.RollInt(시드, PatternPick, 명부 수, k1: draw)</c>. 옛 <c>BattleSim.Begin</c> 의 한 줄과 <b>비트까지
-/// 같다</b>: 인터페이스를 끼우는 것만으로는 순서가 안 움직인다. 망이 들어오면 이것이 <b>대조군</b>이다 — 같은 사람에게 무작위
+/// 같다</b>: 인터페이스를 끼우는 것만으로는 순서가 안 움직인다. 예측 망이 들어오면(조각 4) 이것이 <b>대조군</b>이다 — 같은 사람에게 무작위
 /// 보스와 망 보스를 붙여 비교하는 것 말고 망이 일하는지 증명할 길이 없다.
 /// </summary>
 public sealed class UniformPicker : IPatternPicker
@@ -112,7 +106,8 @@ public sealed class ScriptPicker : IPatternPicker
 
 /// <summary>
 /// 고르기 등록표 — <c>stages.json</c> 의 <c>picker</c> id → 구현 (CLAUDE.md §2 · 설계 §4.4). 고르기를 하나 더할 때 이 표에
-/// 한 줄을 더한다 — <c>BattleSim</c> 은 안 연다. <c>uniform</c>(3번 PR) · <c>script</c>(대본 · #78) · <c>network</c>(망 · #112)가 있다.
+/// 한 줄을 더한다 — <c>BattleSim</c> 은 안 연다. <c>uniform</c>(3번 PR) · <c>script</c>(대본 · #78)가 있다. 옛 망 고르기(<c>network</c> · #112)는
+/// 조각 1 에서 걷었다(설계 2026-09-29 조각1 §6) — 명부가 바뀌어 옛 망의 머리가 설 자리가 없다.
 /// </summary>
 public static class PatternPickers
 {
@@ -121,7 +116,6 @@ public static class PatternPickers
         ["uniform"] = inputs => new UniformPicker(inputs.Seed, inputs.Roster.Count),
         ["script"] = inputs => new ScriptPicker(
             inputs.Roster, inputs.Script ?? throw new ArgumentException("script 고르기에 대본이 없다", nameof(inputs))),
-        [NetworkPicker.Id] = inputs => new NetworkPicker(inputs),
     };
 
     /// <summary>등록된 id 들 — 데이터 테스트가 <c>stages.json</c> 의 <c>picker</c> 를 여기와 대 본다.</summary>
