@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Threading.Tasks;
 using Godot;
 using Overfit.Battle.Rules;
@@ -38,20 +37,8 @@ public partial class Game : Node
     private const double _tourStepSeconds = 0.3;
 
     /// <summary>
-    /// 단계 점프 디버그 액션의 접두어 (이슈 #54). <c>project.godot</c> 의 <c>debug_stage_1..2</c> 이고
-    /// 끝의 숫자가 곧 단계다. 타이틀의 조작 안내는 <c>debug_</c> 로 시작하는 액션을 안 싣는다(Title).
-    /// </summary>
-    private const string _stageJumpPrefix = "debug_stage_";
-
-    /// <summary>
-    /// 순회가 전투에서 눌러 보는 단계 점프 — 마지막 단계(2)라 1 에서 옮겨 간 것이 로그에서 갈린다. 3단계가 없어져(#72)
-    /// 3 을 누르면 전투가 2단계로 잘려 서고 <c>[W]</c> 를 남기므로 smoke 가 "3단계 전투가 섰다" 를 못 본다.
-    /// </summary>
-    private const string _tourStageJump = "debug_stage_2";
-
-    /// <summary>
-    /// 순회가 첫 전투에만 넣는 대본 (#96 · 설계 §4.4 「대본이 전투에 닿는 길」) — 1단계 명부 안의 한 칸이면 된다. smoke 가 그 전투의
-    /// <c>picker=script</c> 와, 단계 점프로 선 다음 전투의 <c>picker=uniform</c> 을 같이 본다. 둘째 줄이 <see cref="TakeScript"/> 가 가져가며
+    /// 순회가 첫 전투에만 넣는 대본 (#96 · 설계 §4.4 「대본이 전투에 닿는 길」) — 명부 안의 한 칸이면 된다. smoke 가 그 전투의
+    /// <c>picker=script</c> 와, 다시 선 둘째 전투의 <c>picker=uniform</c> 을 같이 본다. 둘째 줄이 <see cref="TakeScript"/> 가 가져가며
     /// 비운다는 증명이다 — 칸이 남으면 다음 전투도 <c>script</c> 로 선다. 규칙 테스트로는 못 본다: 칸은 Autoload(Godot 쪽)에 있다.
     /// </summary>
     private static readonly string[] _tourScript = { "3연격" };
@@ -61,23 +48,7 @@ public partial class Game : Node
     public Scene Current { get; private set; } = Scene.Title;
 
     /// <summary>
-    /// 지금 도는 단계. 이기면 오르고, 타이틀로 나가면 1로 돌아간다.
-    ///
-    /// <para>
-    /// <b>이것이 남은 유일한 진행 상태다.</b> 캐릭터 3택과 스탯 강화는 만들지 않는다(이슈 #22) —
-    /// 단계 진행은 성장 루프가 아니라 보스 설계의 축이라 남긴다: 보스는 두 단계이고(#72 · 설계 §4),
-    /// 2단계는 1단계에서 쓴 답을 겨냥한 패턴으로 돈다(#78 — 고르기는 아직 무작위다). 그 "나를 보고 바뀐다" 가 게임 자체다.
-    /// </para>
-    ///
-    /// <para>
-    /// 씬이 아니라 여기(Autoload)에 둔다. 전투 씬은 다시 시작할 때마다 새로 만들어지므로
-    /// 씬 안에 두면 이긴 단계가 그 자리에서 사라진다.
-    /// </para>
-    /// </summary>
-    public int Stage { get; private set; } = 1;
-
-    /// <summary>
-    /// 세션의 시도 번호와 기록 (#72 · 설계 §4.4). 단계처럼 여기(Autoload)에 둔다 — 전투 씬은 설 때마다 새로 만들어진다.
+    /// 세션의 시도 번호와 기록 (#72 · 설계 §4.4). 여기(Autoload)에 둔다 — 전투 씬은 설 때마다 새로 만들어진다.
     /// 로직은 <see cref="RunHistory"/>(규칙 층 · 테스트 안)에 있다.
     /// </summary>
     public RunHistory History { get; private set; } = null!;
@@ -85,7 +56,7 @@ public partial class Game : Node
     /// <summary>
     /// <b>다음 전투 하나에만</b> 쓰는 대본 — 패턴 id 의 순서 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). GIF 러너와 스크린샷 대본이(smoke
     /// 순회도 첫 전투에 · <see cref="_tourScript"/>) 채우고 전투로 가면, <c>Battle</c> 이 가져가며(<see cref="TakeScript"/>) 그 전투의 고르기를
-    /// 단계의 <c>picker</c> 대신 <c>script</c> 로 세운다. 단계처럼 여기(Autoload)에 두는 이유는 같다 — 전투 씬은 설 때마다 새로 만들어진다.
+    /// 단계의 <c>picker</c> 대신 <c>script</c> 로 세운다. 기록처럼 여기(Autoload)에 두는 이유는 같다 — 전투 씬은 설 때마다 새로 만들어진다.
     /// <c>stages.json</c> 은 안 건드린다: 데이터에 <c>picker: script</c> 를 적는 길을 안 만든다.
     /// </summary>
     private IReadOnlyList<string>? _nextScript;
@@ -131,17 +102,6 @@ public partial class Game : Node
         }
     }
 
-    /// <summary>
-    /// 단계를 옮긴다. <b>범위를 여기서 안 자른다</b> — 몇 단계가 있는지는
-    /// <c>data/stages.json</c> 이 알고, 그 파일을 읽는 것은 전투 씬이다.
-    /// 여기서 상한을 박으면 데이터와 코드에 같은 숫자가 둘이 된다.
-    /// </summary>
-    public void SetStage(int stage)
-    {
-        Stage = System.Math.Max(1, stage);
-        Log.Info("run", $"stage={Stage}");
-    }
-
     /// <summary>다음 전투 하나를 대본으로 세운다 (<see cref="_nextScript"/>). 그 전투가 가져가면 비고, 그 뒤의 전투는 단계의 고르기로 돌아간다.</summary>
     public void SetNextScript(IReadOnlyList<string> script)
     {
@@ -151,8 +111,8 @@ public partial class Game : Node
     }
 
     /// <summary>
-    /// 대본 칸을 가져가며 비운다 — 전투를 세우는 <c>Battle</c> 만 부른다. 비었으면 null 이다. 가져가며 비우는 이유: 칸이 남으면 재시도나
-    /// 다음 단계의 전투까지 대본으로 서서 "재시도마다 다른 보스"(설계 §4.4)가 조용히 꺼진다.
+    /// 대본 칸을 가져가며 비운다 — 전투를 세우는 <c>Battle</c> 만 부른다. 비었으면 null 이다. 가져가며 비우는 이유: 칸이 남으면 재시도의
+    /// 전투까지 대본으로 서서 "재시도마다 다른 보스"(설계 §4.4)가 조용히 꺼진다.
     /// </summary>
     public IReadOnlyList<string>? TakeScript()
     {
@@ -162,12 +122,11 @@ public partial class Game : Node
     }
 
     /// <summary>
-    /// 판을 처음으로 — 1단계로 돌아가고 시도 기록을 비운다(새 런은 1단계에서 다시 잰다 · 설계 §4.4). 타이틀로 나갈 때와
-    /// 클리어 뒤 [처음부터] 에 부른다 — 안 부르면 다음 판이 2단계에서 시작한다. 세션 시드와 시도 번호는 안 돌아간다.
+    /// 판을 처음으로 — 시도 기록을 비우고 런이 오른다(설계 §4.4). 타이틀로 나갈 때와 클리어 뒤 [처음부터] 에 부른다. 세션 시드와 시도 번호는
+    /// 안 돌아간다. 보스전이 하나라(설계 2026-09-29 조각1 §1) 되돌릴 단계는 없다.
     /// </summary>
     public void ResetRun()
     {
-        SetStage(1);
         History.Clear();
         Log.Debug("run", $"history_cleared attempts={History.Attempts}");
     }
@@ -204,45 +163,7 @@ public partial class Game : Node
             Log.Debug("scene", "input key=F9 action=cycle");
             GoTo(Next(Current));
             GetViewport().SetInputAsHandled();
-            return;
         }
-
-        // 전투 중 1 · 2 → 그 단계를 바로 시작한다 (이슈 #54). 유저가 2단계를 보려고 한 판을
-        // 이기고 올라가지 않게 하는 디버그 키다. **위의 IsDebugBuild 가드가 릴리즈 빌드를 이미 걸렀다** —
-        // 그 한 줄이 이 키를 릴리즈에서 죽이는 전부라, 이 갈래를 그 가드 위로 올리지 않는다.
-        if (Current == Scene.Battle && StageJump(e) is (string action, int stage))
-        {
-            Log.Debug("scene", $"input action={action} stage_jump from={Stage} to={stage}");
-            SetStage(stage);
-            GoTo(Scene.Battle);
-            GetViewport().SetInputAsHandled();
-        }
-    }
-
-    /// <summary>
-    /// 눌린 것이 단계 점프 키(<c>debug_stage_N</c>)면 그 액션과 단계 번호. 아니면 null.
-    ///
-    /// <para>
-    /// 단계 번호를 여기 표로 적지 않고 <b>액션 이름에서 읽는다</b> — 키와 단계의 짝이 <c>project.godot</c>
-    /// 한 곳에만 있어야 한다. 몇 단계까지 있는지는 여기서 안 자른다: <c>data/stages.json</c> 이 알고,
-    /// 없는 단계는 전투 씬이 가장 가까운 단계로 잘라 [W] 를 남긴다(<c>StageRoster.Resolve</c>).
-    /// </para>
-    /// </summary>
-    private static (string Action, int Stage)? StageJump(InputEvent e)
-    {
-        foreach (StringName name in InputMap.GetActions())
-        {
-            string action = name.ToString();
-            if (action.StartsWith(_stageJumpPrefix, StringComparison.Ordinal)
-                && int.TryParse(action.AsSpan(_stageJumpPrefix.Length), NumberStyles.Integer,
-                    CultureInfo.InvariantCulture, out int stage)
-                && e.IsActionPressed(action))
-            {
-                return (action, stage);
-            }
-        }
-
-        return null;
     }
 
     private static Scene Next(Scene scene) => scene switch
@@ -265,28 +186,20 @@ public partial class Game : Node
 
         // 크레딧도 순회에 넣는다. 데이터(data/credits.json)를 읽어 스스로를 짓는 화면이라
         // 파일이 깨지면 [credits][E] 가 뜨고, 그 한 줄이 이 순회를 실패로 만든다 — 공짜 불변식이다.
-        foreach (Scene scene in new[] { Scene.Play, Scene.Battle, Scene.Credits, Scene.Title })
+        // 전투는 두 번 선다 — 첫째만 대본(_tourScript)이다. smoke 가 둘째 전투가 새 시도 · 새 시드 · 단계의 고르기로 섰는지를 본다
+        // (대본 칸이 가져가며 비워졌다는 증명 · 설계 §4.4). 전에는 단계 점프 키(debug_stage_2)가 둘째 전투를 세웠다 — 보스전이 하나가 되며 걷었다.
+        bool scripted = false;
+        foreach (Scene scene in new[] { Scene.Play, Scene.Battle, Scene.Battle, Scene.Credits, Scene.Title })
         {
             Log.Trace("scene", $"tour step={scene} frame={Engine.GetProcessFrames()}");
-
-            // 첫 전투만 대본으로 세운다(_tourScript) — 단계 점프로 다시 선 전투가 단계의 고르기로 돌아갔는지를 smoke 가 본다.
-            if (scene == Scene.Battle)
+            if (scene == Scene.Battle && !scripted)
             {
                 SetNextScript(_tourScript);
+                scripted = true;
             }
 
             GoTo(scene);
             await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
-
-            // 전투에서는 단계 점프 키를 한 번 눌러 본다 (이슈 #54). 키가 InputMap 에 있는지 · 입력이
-            // _UnhandledInput 까지 오는지 · 단계가 정말 바뀌어 전투가 다시 서는지를 창 없이 본다 —
-            // tools/build.sh smoke 가 그 로그 두 줄을 찾는다. 엔진의 입력 큐로 넣으므로 사람이 누른 것과 같은 길이다.
-            if (scene == Scene.Battle)
-            {
-                Input.ParseInputEvent(new InputEventAction { Action = _tourStageJump, Pressed = true });
-                Input.ParseInputEvent(new InputEventAction { Action = _tourStageJump, Pressed = false });
-                await ToSignal(GetTree().CreateTimer(_tourStepSeconds), SceneTreeTimer.SignalName.Timeout);
-            }
         }
 
         Log.Marker("tour", "tour=done");

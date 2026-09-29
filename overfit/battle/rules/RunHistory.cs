@@ -5,7 +5,7 @@ using Overfit.Core;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 끝까지 간 시도 하나 (#72 · 설계 §4.4). 전투 한 번이 시도 하나다 — 재시도 · 다음 단계 · 처음부터 · 디버그 단계 점프 모두.
+/// 끝까지 간 시도 하나 (#72 · 설계 §4.4). 전투 한 번이 시도 하나다 — 재시도 · 처음부터 모두.
 /// </summary>
 /// <param name="Number">시도 번호 — 세션 안에서 1부터 오른다.</param>
 /// <param name="Stage">그 시도의 단계.</param>
@@ -51,7 +51,7 @@ public sealed class RunHistory
 
     /// <summary>
     /// 시도를 하나 연다 — 번호가 오르고 그 번호의 시드를 돌려준다. 전투가 설 때마다 한 번이다. 끝까지 안 간 전투(F9 ·
-    /// 단계 점프 · 도중에 타이틀)도 번호는 쓴다: 번호를 되돌리면 같은 시드가 두 판에 붙는다.
+    /// 도중에 타이틀)도 번호는 쓴다: 번호를 되돌리면 같은 시드가 두 판에 붙는다.
     /// </summary>
     public (int Number, ulong Seed) Open()
     {

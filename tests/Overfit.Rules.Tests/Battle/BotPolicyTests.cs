@@ -38,15 +38,14 @@ public class BotPolicyTests
     }
 
     /// <summary>
-    /// <c>tools/build.sh demo</c> 가 도는 바로 그 판 — 실제 캐릭터 · 실제 보스 · <paramref name="stage"/> 단계의 명부와 고르기 · 시드 51 을 봇으로 끝까지
-    /// 민다. 명부와 고르기는 데모처럼 <see cref="StageRoster.Setup"/> 에서 받고, 판과 봇에 같은 시드를 준다(데모의 차림). 두 단계의 데모 테스트가
-    /// 같은 스무 줄을 따로 들고 있었다(#96) — 한쪽만 고치면 두 판이 다른 차림을 잰다.
+    /// <c>tools/build.sh demo</c> 가 도는 바로 그 판 — 실제 캐릭터 · 실제 보스 · 명부와 고르기 · 시드 51 을 봇으로 끝까지 민다. 명부와 고르기는
+    /// 데모처럼 <see cref="StageRoster.Setup"/> 에서 받고, 판과 봇에 같은 시드를 준다(데모의 차림).
     /// </summary>
-    private static (BattleOutcome Outcome, BattleSim Sim) PlayDemo(int stage)
+    private static (BattleOutcome Outcome, BattleSim Sim) PlayDemo()
     {
         BalanceData balance = TestConfigs.Balance();
-        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), stage, 51, Array.Empty<AttemptRecord>())
-            ?? throw new InvalidOperationException($"stages.json 에 {stage}단계가 안 선다");
+        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), 1, 51, Array.Empty<AttemptRecord>())
+            ?? throw new InvalidOperationException("stages.json 에 보스전이 안 선다");
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -80,30 +79,18 @@ public class BotPolicyTests
     }
 
     [Fact]
-    public void 데모의_봇이_실제_1단계를_끝까지_싸운다()
+    public void 데모의_봇이_실제_보스전을_끝까지_싸운다()
     {
-        // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 1단계 명부와 고르기 · 시드 51 (#72 · 설계 §9).
+        // tools/build.sh demo 가 도는 바로 그 판이다 — 실제 캐릭터 · 실제 보스 · 명부와 고르기 · 시드 51 (#72 · 설계 §9).
         // 헤드리스 데모는 Godot 이 있어야 돌아 커밋 게이트에 없다 — 여기서 매 커밋 본다. 기준 파이터(TestConfigs.Fighter)가 아니다: 데모가 그리는 판이
-        // 실제 데이터다. 명부와 고르기는 데모처럼 StageRoster.Setup 에서 받는다 — 따로 세우면 1단계의 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
+        // 실제 데이터다. 명부와 고르기는 데모처럼 StageRoster.Setup 에서 받는다 — 따로 세우면 picker 를 바꿔도 데모만 움직이고 여기는 초록이다.
         //
-        // **이기는지는 안 본다**(#126). 보스 체력이 200 → 400 이 되고 이 최소 봇은 1단계를 못 넘는다 — 2748틱에 보스 HP 140 을 남기고 진다. 공장의 함대 봇도 2천 대 중
-        // 2% 만 넘는다(200 에서는 62%). 유저가 "사람에게는 어렵지 않다" 며 이 체력으로 가기로 했다. 그래서 판이 끝까지 서고 봇의 칼이 보스에 닿는지를 본다.
-        (BattleOutcome outcome, BattleSim sim) = PlayDemo(1);
+        // **이기는지는 안 본다**(#126 · 설계 2026-09-29 조각1 §1). 이 최소 봇은 보스 체력 1000 을 못 넘는다 — 스펙의 잰 값에서 파이터 체력 220 이면 이긴 판이
+        // 300 중 0 이다. 그래서 판이 끝까지 서고 봇의 칼이 보스에 닿는지를 본다.
+        (BattleOutcome outcome, BattleSim sim) = PlayDemo();
 
         outcome.ShouldBeOneOf(BattleOutcome.Win, BattleOutcome.Lose);
-        sim.Boss.Health.ShouldBeLessThan(DemoBossMaxHealth(), $"데모의 봇이 1단계에서 보스를 한 번도 못 쳤다 — {sim.Ticks}틱");
-    }
-
-    [Fact]
-    public void 데모의_봇이_실제_2단계를_끝까지_싸운다()
-    {
-        // EXTRA=--stage=2 tools/build.sh demo 가 도는 바로 그 판이다(시드 51 · 2단계 명부 다섯 · 망 고르기 — 기록이 없어 다섯 전부다).
-        // #78 의 완료 조건은 "2단계 데모 봇이 이긴다" 였고 보스 체력 200 에서 2506틱 · 파이터 HP 2 로 **아슬하게** 이겼다. 400(#126)에서는
-        // 2807틱에 보스 HP 170 을 남기고 진다. 1단계와 같은 까닭으로 이기는지는 안 본다 — 봇은 태그를 안 보는 최소 봇이라(설계 §5.4) 체력이 두 배인 보스를 못 넘는다.
-        (BattleOutcome outcome, BattleSim sim) = PlayDemo(2);
-
-        outcome.ShouldBeOneOf(BattleOutcome.Win, BattleOutcome.Lose);
-        sim.Boss.Health.ShouldBeLessThan(DemoBossMaxHealth(), $"데모의 봇이 2단계에서 보스를 한 번도 못 쳤다 — {sim.Ticks}틱");
+        sim.Boss.Health.ShouldBeLessThan(DemoBossMaxHealth(), $"데모의 봇이 보스를 한 번도 못 쳤다 — {sim.Ticks}틱");
     }
 
     private static int DemoBossMaxHealth() => TestConfigs.Bosses()[TestConfigs.Balance().Battle.Boss].MaxHealth;

@@ -124,13 +124,13 @@ public class FleetGateTests
     private static BotTraits Parrier(double rhythm) =>
         _skilled with { Dash = 0.05, Jump = 0.05, Parry = 0.9, Guard = 0, Greed = 0, Rhythm = rhythm };
 
-    /// <summary>2단계 대본 <paramref name="pattern"/> 만 도는 판에서, 그 패턴의 판정 중 맞은(맞음 · 붕괴 · 잡힘) 몫.</summary>
+    /// <summary>대본 <paramref name="pattern"/> 만 도는 판에서, 그 패턴의 판정 중 맞은(맞음 · 붕괴 · 잡힘) 몫.</summary>
     private static double HitShare(BotTraits traits, string pattern)
     {
         int hits = 0, all = 0;
         foreach (ulong seed in _seeds)
         {
-            foreach (DodgeEvent e in FleetPlay.Play(traits, seed, stage: 2, script: [pattern]).Sim.Events.Where(e => e.PatternId == pattern))
+            foreach (DodgeEvent e in FleetPlay.Play(traits, seed, script: [pattern]).Sim.Events.Where(e => e.PatternId == pattern))
             {
                 all++;
                 if (e.Verdict is HitVerdict.Hit or HitVerdict.GuardBroken or HitVerdict.Grabbed)

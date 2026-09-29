@@ -171,7 +171,7 @@ public class FleetBotTests
     public void 돌진_한_판을_예외_없이_끝낸다()
     {
         // 돌진 중에는 도착까지 시계가 서서 NextActiveIn 이 추정이다 — 봇은 누를 틱만 매 틱 다시 셈한다.
-        (_, BattleSim sim) = FleetPlay.Play(BotTraits.Sample(51, 3, TestConfigs.Fleet()), 11, stage: 2, script: ["1타 돌진"]);
+        (_, BattleSim sim) = FleetPlay.Play(BotTraits.Sample(51, 3, TestConfigs.Fleet()), 11, script: ["1타 돌진"]);
 
         sim.Events.Count.ShouldBeGreaterThan(0);
     }

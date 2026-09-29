@@ -30,16 +30,15 @@ public class Stage2DataTests
         + $"|{s.Motion?.Height}|{s.Motion?.Air}|{s.Motion?.Speed}|{s.Motion?.Stop}";
 
     [Fact]
-    public void 이단계_명부는_바탕_3연격에_1단계의_습관을_겨냥한_넷을_더한_다섯이다()
+    public void 명부는_두_단계를_합친_여섯이다()
     {
-        // 설계 §4 · §12 「2단계 명부」 — "2단계의 추가 패턴은 지금 말한 것만" 에 1단계의 바탕(3연격)을 두고, "점프공격은 2단계에선 그냥 3번" 이
-        // 단발을 대신한다. 순서는 뽑기 좌표다(stages.json 의 _note_순서) — 설계의 표 그대로다. 고르기는 uniform 이다 — 망(#112)이 좁히던 자리였고
-        // 조각 1 이 옛 망을 걷었다(설계 2026-09-29 조각1 §6).
-        StageDef two = TestConfigs.Stages()["2"];
+        // 보스전이 하나다(설계 2026-09-29 조각1 §1). 옛 1단계(3연격 · 점프 공격) 뒤에 옛 2단계의 나머지(점프 3연속 · 1타 돌진 · 1타 잡기 · 엇박 3연격)를
+        // 그 순서로 이었다 — 순서는 뽑기 좌표다(stages.json 의 _note_순서). 고르기는 uniform 이다.
+        StageDef only = TestConfigs.Stages()["1"];
 
-        two.Patterns.ShouldBe(new[] { "3연격", "점프 3연속", "1타 돌진", "1타 잡기", "엇박 3연격" });
-        two.Want.ShouldBe(5);
-        two.Picker.ShouldBe("uniform");
+        only.Patterns.ShouldBe(new[] { "3연격", "점프 공격", "점프 3연속", "1타 돌진", "1타 잡기", "엇박 3연격" });
+        only.Want.ShouldBe(6);
+        only.Picker.ShouldBe("uniform");
     }
 
     [Fact]
