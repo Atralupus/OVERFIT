@@ -248,6 +248,18 @@ public sealed class FeelBalance
     public required double GrabOrbFadeSeconds { get; init; }
 }
 
+/// <summary>
+/// 보스가 계획을 고르는 수치 (설계 2026-09-29 조각1 §3.5) — 규칙이 읽는다. 옛 망의 수치가 있던 자리다(조각1 §6 · 옛 망은 태그 <c>v0.9.2</c>).
+/// 무작위 고르기(<c>uniform</c>)가 쓰고, 대본(<c>script</c>)은 안 읽는다 — 대본은 계획을 통째로 적는다.
+/// </summary>
+public sealed class PickerBalance
+{
+    /// <summary>
+    /// 첫 동작에 캔슬 지점이 있을 때 끊는 몫(정수 퍼센트 — <c>RollInt(…, 100)</c> 과 견준다). 0 이면 안 끊고 100 이면 지점이 있는 동작은 늘 끊는다.
+    /// </summary>
+    public required int CancelPercent { get; init; }
+}
+
 /// <summary>모든 수치의 진실 원천. <c>data/balance.json</c> 하나가 이 모양이다.</summary>
 public sealed class BalanceData
 {
@@ -258,4 +270,7 @@ public sealed class BalanceData
 
     /// <summary>연출 수치. 규칙이 아니라 <b>뷰</b>가 읽는다.</summary>
     public required FeelBalance Feel { get; init; }
+
+    /// <summary>계획 고르기의 수치 (설계 2026-09-29 조각1 §3.5) — 규칙이 읽는다.</summary>
+    public required PickerBalance Picker { get; init; }
 }

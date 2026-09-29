@@ -99,7 +99,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, patternGap: 1000),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, rest: 1000),
         PatternIds = new[] { "3연격" },
         Patterns = Patterns(),
         Seed = 1,
@@ -151,7 +151,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 1000),
         PatternIds = new[] { "3연격" },
         Patterns = Patterns(),
         Seed = 1,
@@ -217,10 +217,10 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            // 걷는 틱 수와 patternGap 은 **짝이다** — 걸어 붙는 동안 패턴이 서면 대시가 아니라
+            // 걷는 틱 수와 쉬기(rest)는 **짝이다** — 걸어 붙는 동안 패턴이 서면 대시가 아니라
             // 걷기가 판정을 받는다. 그래서 132틱(= 2.2초)으로 둘을 맞춰 둔다.
             // 거리는 데이터에서 온다 — 보스 반폭이 바뀌어도 검사는 한 글자도 안 바뀐다.
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 2.2),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 2.2),
             PatternIds = new[] { "단타" },
             Patterns = new Dictionary<string, PatternDef>
             {
@@ -487,7 +487,7 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 10 * BattleSim.Dt),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 10 * BattleSim.Dt),
             PatternIds = new[] { "없는패턴" },
             Patterns = new Dictionary<string, PatternDef>(),
             Seed = 1,
@@ -618,7 +618,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3 * BattleSim.Dt),
         PatternIds = new[] { "단타" },
         Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern },
         Seed = 1,
@@ -796,7 +796,7 @@ public class BattleSimTests
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
             // 파이터가 주머니 앞까지 걸어갈 시간을 준다 (960 → 300 이 95틱이다).
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 100 * BattleSim.Dt),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 100 * BattleSim.Dt),
             PatternIds = new[] { "단타" },
             Patterns = new Dictionary<string, PatternDef>
             {
@@ -1184,7 +1184,7 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3 * BattleSim.Dt),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3 * BattleSim.Dt),
             PatternIds = new[] { "멀티히트" },
             Patterns = new Dictionary<string, PatternDef> { ["멀티히트"] = pattern },
             Seed = 1,
@@ -1402,13 +1402,15 @@ public class BattleSimTests
             MaxTicks = 60 * 60,
         });
 
-        // 붙은 채 기다리다 판정이 봇의 반응 창(_lateReact) 안으로 오면 K. 받아친 다음 틱에 J, 1타 도중에 J 를 한 번 더(2타).
+        // 붙은 채 기다리다 판정이 봇의 반응 창(_lateReact) 안으로 오면 K. 받아친 다음 틱에 J, 1타 도중에 J 를 한 번 더(2타). **붙은 뒤에만**
+        // 누른다 — 쉬는 길이가 흔들려(설계 2026-09-29 조각1 §3.4) 3연격이 걸어 들어가는 도중에 서면, 멀리서 받아친 뒤의 2연격은 보스에 안 닿는다.
         int parried = 0;
         for (int t = 1; t <= 60 * 30 && parried == 0; t++)
         {
             double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
             var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
-            bool press = sim.NextActiveIn is double left && left <= _lateReact && sim.Fighter.Action == FighterAction.Idle;
+            bool press = gap <= Standoff() + 10 && sim.NextActiveIn is double left && left <= _lateReact
+                && sim.Fighter.Action == FighterAction.Idle;
             sim.Tick(new InputFrame(gap > Standoff() + 10 ? toward : (sbyte)0, false, false, Parry: press, false));
             if (sim.Events.Count > 0 && sim.Events[^1].Verdict == HitVerdict.Parried)
             {

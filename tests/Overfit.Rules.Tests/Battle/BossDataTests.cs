@@ -24,6 +24,24 @@ public class BossDataTests
     }
 
     [Fact]
+    public void 쉬는_길이는_정수_틱이고_0_보다_크다()
+    {
+        // 설계 2026-09-29 조각1 §3.4 — 0.4 · 0.8 · 1.2초(24 · 48 · 72틱). 옛 pattern_gap 0.8 을 가운데에 두고 반씩 흔든다. 반 틱이면 반올림이 쉬기를
+        // 한 틱 밀어 "빠른 3연격이 2연격을 잡는 여유 6틱" 같은 잰 값이 조용히 어긋난다. 0 이하면 한 틱으로 읽힌다(TicksFor) — 틀린 데이터가 말없이 돈다.
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            boss.RestSeconds.ShouldNotBeEmpty($"{id}: 쉬는 길이가 없다");
+            foreach (double rest in boss.RestSeconds)
+            {
+                rest.ShouldBeGreaterThan(0, $"{id}: 쉬는 길이 {rest} 가 0 이하다");
+                (rest * 60).ShouldBe(System.Math.Round(rest * 60), 1e-9, $"{id}: 쉬는 길이 {rest} 가 정수 틱이 아니다");
+            }
+        }
+
+        BattleSim.RestTicks(TestConfigs.Boss()).ShouldBe(new[] { 24, 48, 72 });
+    }
+
+    [Fact]
     public void Balance_가_가리키는_보스가_bosses_json_에_있다()
     {
         // "기본 보스가 누구인가" 는 balance.json 이 정한다. 그 id 가 없는 이름이면

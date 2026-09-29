@@ -7,7 +7,7 @@ namespace Overfit.Factory;
 
 /// <summary>
 /// 공장이 한 번 읽어 모든 스레드가 같이 쓰는 표 (#108 · 설계 2026-09-28 §4.1). 판을 세우는 데이터 다섯(게임의 <c>BattleTables</c> 와 같다) ·
-/// <c>balance.json</c> 이 고르는 캐릭터 · 보스 · 아레나 · 상한 · 함대 설정. <b>읽기만 한다</b> — 판(<see cref="BattleSim"/>)과 봇이 표를 안 고치므로
+/// <c>balance.json</c> 이 고르는 캐릭터 · 보스 · 아레나 · 상한 · 계획 고르기의 수치 · 함대 설정. <b>읽기만 한다</b> — 판(<see cref="BattleSim"/>)과 봇이 표를 안 고치므로
 /// 스레드마다 사본을 둘 까닭이 없다.
 /// </summary>
 public sealed class FactoryTables
@@ -25,6 +25,12 @@ public sealed class FactoryTables
     public required Arena Arena { get; init; }
 
     public required int MaxTicks { get; init; }
+
+    /// <summary>보스의 쉬는 길이들(틱 · <see cref="BattleSim.RestTicks"/>) — 계획 고르기가 이 중에서 고른다(설계 2026-09-29 조각1 §3.4).</summary>
+    public required IReadOnlyList<int> RestTicks { get; init; }
+
+    /// <summary>계획 고르기의 수치 — <c>balance.json</c> 의 <c>picker</c>(설계 2026-09-29 조각1 §3.5). 공장도 게임과 같은 몫으로 끊는다.</summary>
+    public required PickerBalance Knobs { get; init; }
 
     public required FleetConfig Fleet { get; init; }
 
@@ -62,6 +68,8 @@ public sealed class FactoryTables
             Boss = boss,
             Arena = new Arena(balance.Battle.ArenaWidth),
             MaxTicks = balance.Battle.MaxTicks,
+            RestTicks = BattleSim.RestTicks(boss),
+            Knobs = balance.Picker,
             Fleet = fleet,
             Beats = new BeatTable(patterns, fleet.RhythmReferences),
         };

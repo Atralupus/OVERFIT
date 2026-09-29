@@ -37,11 +37,12 @@ public partial class Game : Node
     private const double _tourStepSeconds = 0.3;
 
     /// <summary>
-    /// 순회가 첫 전투에만 넣는 대본 (#96 · 설계 §4.4 「대본이 전투에 닿는 길」) — 명부 안의 한 칸이면 된다. smoke 가 그 전투의
-    /// <c>picker=script</c> 와, 다시 선 둘째 전투의 <c>picker=uniform</c> 을 같이 본다. 둘째 줄이 <see cref="TakeScript"/> 가 가져가며
-    /// 비운다는 증명이다 — 칸이 남으면 다음 전투도 <c>script</c> 로 선다. 규칙 테스트로는 못 본다: 칸은 Autoload(Godot 쪽)에 있다.
+    /// 순회가 첫 전투에만 넣는 대본 (#96 · 설계 §4.4 「대본이 전투에 닿는 길」) — 계획 한 칸이면 된다(쉬기 0.8 · 끊지 않는다 · 설계 2026-09-29
+    /// 조각1 §4.2). smoke 가 그 전투의 <c>picker=script</c> 와, 다시 선 둘째 전투의 <c>picker=uniform</c> 을 같이 본다. 둘째 줄이
+    /// <see cref="TakeScript"/> 가 가져가며 비운다는 증명이다 — 칸이 남으면 다음 전투도 <c>script</c> 로 선다. 규칙 테스트로는 못 본다: 칸은
+    /// Autoload(Godot 쪽)에 있다.
     /// </summary>
-    private static readonly string[] _tourScript = { "3연격" };
+    private static readonly ScriptPlan[] _tourScript = { new(0.8, "3연격") };
 
     public static Game Instance { get; private set; } = null!;
 
@@ -54,12 +55,12 @@ public partial class Game : Node
     public RunHistory History { get; private set; } = null!;
 
     /// <summary>
-    /// <b>다음 전투 하나에만</b> 쓰는 대본 — 패턴 id 의 순서 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). GIF 러너와 스크린샷 대본이(smoke
+    /// <b>다음 전투 하나에만</b> 쓰는 대본 — 계획의 목록 (#78 · 설계 2026-09-29 조각1 §4.2 · 설계 §4.4 「대본이 전투에 닿는 길」). GIF 러너와 스크린샷 대본이(smoke
     /// 순회도 첫 전투에 · <see cref="_tourScript"/>) 채우고 전투로 가면, <c>Battle</c> 이 가져가며(<see cref="TakeScript"/>) 그 전투의 고르기를
     /// 단계의 <c>picker</c> 대신 <c>script</c> 로 세운다. 기록처럼 여기(Autoload)에 두는 이유는 같다 — 전투 씬은 설 때마다 새로 만들어진다.
     /// <c>stages.json</c> 은 안 건드린다: 데이터에 <c>picker: script</c> 를 적는 길을 안 만든다.
     /// </summary>
-    private IReadOnlyList<string>? _nextScript;
+    private IReadOnlyList<ScriptPlan>? _nextScript;
 
     public override void _Ready()
     {
@@ -103,20 +104,38 @@ public partial class Game : Node
     }
 
     /// <summary>다음 전투 하나를 대본으로 세운다 (<see cref="_nextScript"/>). 그 전투가 가져가면 비고, 그 뒤의 전투는 단계의 고르기로 돌아간다.</summary>
-    public void SetNextScript(IReadOnlyList<string> script)
+    public void SetNextScript(IReadOnlyList<ScriptPlan> script)
     {
         ArgumentNullException.ThrowIfNull(script);
         _nextScript = script;
-        Log.Info("run", $"next_script={string.Join(',', script)}");
+        Log.Info("run", $"next_script={ScriptText(script)}");
+    }
+
+    /// <summary>
+    /// 대본의 로그 꼴 — 칸마다 <c>쉬기초:동작</c>, 끊으면 <c>&gt;지점:잇는 동작</c> 을 붙인다(예: <c>0.8:3연격&gt;0:돌진</c>). 사람이 grep 한다.
+    /// </summary>
+    public static string ScriptText(IReadOnlyList<ScriptPlan> script)
+    {
+        ArgumentNullException.ThrowIfNull(script);
+        var cells = new string[script.Count];
+        for (int i = 0; i < cells.Length; i++)
+        {
+            ScriptPlan p = script[i];
+            cells[i] = p.Next is null
+                ? $"{p.RestSeconds:0.##}:{p.Move}"
+                : $"{p.RestSeconds:0.##}:{p.Move}>{p.CancelPoint}:{p.Next}";
+        }
+
+        return string.Join(',', cells);
     }
 
     /// <summary>
     /// 대본 칸을 가져가며 비운다 — 전투를 세우는 <c>Battle</c> 만 부른다. 비었으면 null 이다. 가져가며 비우는 이유: 칸이 남으면 재시도의
     /// 전투까지 대본으로 서서 "재시도마다 다른 보스"(설계 §4.4)가 조용히 꺼진다.
     /// </summary>
-    public IReadOnlyList<string>? TakeScript()
+    public IReadOnlyList<ScriptPlan>? TakeScript()
     {
-        IReadOnlyList<string>? script = _nextScript;
+        IReadOnlyList<ScriptPlan>? script = _nextScript;
         _nextScript = null;
         return script;
     }

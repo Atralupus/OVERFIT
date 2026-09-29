@@ -71,7 +71,7 @@ public class BossPoiseTests
             Arena = TestConfigs.Arena(),
             Fighter = fighter,
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: bossHealth ?? 999_999, moveSpeed: 0, patternGap: gap),
+            Boss = TestConfigs.Boss(maxHealth: bossHealth ?? 999_999, moveSpeed: 0, rest: gap),
             PatternIds = new[] { _waitId },
             Patterns = new Dictionary<string, PatternDef> { [_waitId] = Waiting(at, reach, window) },
             Seed = 1,

@@ -515,7 +515,7 @@ cmd_shots() {
 # 대본 목록은 GifRunner.cs 의 표(_scripts) 하나다 — 여기 따로 적어 두면 대본을 더하는 날 한쪽만 는다(#96 · 전에는 GIF_IDS 가 따로 있었다).
 # 인자 없이 돌면 그 표의 줄 `new("<id>", Patterns: …` 에서 id 를 읽는다. 줄의 꼴을 바꾸면 여기도 같이 고친다(GifRunner.Ids 의 주석).
 gif_ids() {
-  sed -n 's/^[[:space:]]*new("\([a-z0-9]*\)", Patterns:.*/\1/p' "$PROJECT/battle/debug/GifRunner.cs"
+  sed -n 's/^[[:space:]]*new("\([a-z0-9]*\)", Plans:.*/\1/p' "$PROJECT/battle/debug/GifRunner.cs"
 }
 GIF_MAX_FRAMES=240
 GIF_MAX_BYTES=1048576
@@ -531,7 +531,7 @@ brew install ffmpeg 로 깔거나 FFMPEG 환경변수로 경로를 알려주세�
   local ids=("$@")
   # 낱말로 갈라 담는다 — id 는 ASCII 소문자 · 숫자라 안전하다(macOS 의 bash 3.2 에는 mapfile 이 없다).
   [[ ${#ids[@]} -gt 0 ]] || ids=($(gif_ids))
-  [[ ${#ids[@]} -gt 0 ]] || die "GifRunner.cs 에서 대본 id 를 못 읽었습니다 — 표의 줄 꼴(new(\"<id>\", Patterns: …)이 바뀌었나요? gif_ids 를 고치세요."
+  [[ ${#ids[@]} -gt 0 ]] || die "GifRunner.cs 에서 대본 id 를 못 읽었습니다 — 표의 줄 꼴(new(\"<id>\", Plans: …)이 바뀌었나요? gif_ids 를 고치세요."
   mkdir -p "$ROOT/docs/gifs" "$OUT/gifs"
 
   local id

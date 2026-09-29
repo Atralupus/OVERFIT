@@ -32,7 +32,7 @@ public partial class BattleDemo : Node
         // 되살리기 (#112 · 설계 2026-09-28 §6.5) — 게임이 남긴 시도 기록(user://attempts/<세션 시드>.jsonl)에서 그 시도의 시드 · 단계와 **같은 런의 앞
         // 기록**을 읽어 고르기를 다시 세운다. 고르기는 상태 없는 조회라 보스의 순서가 그대로 선다 — 봇이 싸우므로 판의 길이는 달라도 앞머리가 같다.
         IReadOnlyList<AttemptRecord> history = Array.Empty<AttemptRecord>();
-        IReadOnlyList<string>? script = null;
+        IReadOnlyList<ScriptPlan>? script = null;
         AttemptEntry? replay = null;
         if (CmdArgs.Text(args, "--history=") is { } historyPath && CmdArgs.UInt64(args, "--attempt=") is { } wanted)
         {
@@ -60,8 +60,9 @@ public partial class BattleDemo : Node
             stage = replay.Record.Stage;
             history = [.. entries.Where(e => e.SessionSeed == replay.SessionSeed && e.Run == replay.Run && e.Record.Number < replay.Record.Number).Select(e => e.Record)];
 
-            // 대본으로 선 시도(GIF · 스크린샷 · 순회)는 대본이 기록에 없다 — 뽑힌 순서가 곧 대본이다(대본은 돌며 되풀이된다).
-            script = replay.PickerId == "script" ? replay.Drawn : null;
+            // 대본으로 선 시도(GIF · 스크린샷 · 순회)는 대본이 기록에 없다 — 선 동작의 순서가 곧 대본이다(대본은 돌며 되풀이된다). 그 대본들은 칸마다
+            // 0.8초 쉬고 끊지 않으므로(설계 2026-09-29 조각1 §4.2) 그렇게 되살린다. 기록이 계획을 싣는 것은 6/8 이다 — 그때 이 추정을 걷는다.
+            script = replay.PickerId == "script" ? [.. replay.Drawn.Select(id => new ScriptPlan(0.8, id))] : null;
             Log.Info("battle-demo", $"replay attempt={wanted} run={replay.Run} history={history.Count} seed={seed} stage={stage} picker={replay.PickerId}");
         }
 
@@ -93,7 +94,7 @@ public partial class BattleDemo : Node
 
         // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup). 기록은 되살리기가 아니면 비어 있다 —
         // 지금 고르기는 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 순서가 선다.
-        if (StageRoster.Setup(data.Stages, stage, seed, history, script) is not { } setup)
+        if (StageRoster.Setup(data.Stages, stage, seed, history, data.Patterns, BattleSim.RestTicks(boss), Balance.Data.Picker, script) is not { } setup)
         {
             GetTree().Quit(1);
             return;

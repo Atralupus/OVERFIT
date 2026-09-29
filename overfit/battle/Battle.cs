@@ -294,7 +294,9 @@ public partial class Battle : Node2D
         // 있으면(GIF · 스크린샷 · #78) 이 전투만 그 대본으로 선다 — 가져가며 비우므로 다음 전투는 단계의 고르기로 돌아간다.
         RunHistory history = Game.Instance.History;
         _attempt = history.Open();
-        if (StageRoster.Setup(data.Stages, _stage, _attempt.Seed, history.Records, Game.Instance.TakeScript()) is not { } stage)
+        if (StageRoster.Setup(
+                data.Stages, _stage, _attempt.Seed, history.Records, data.Patterns, BattleSim.RestTicks(_bossConfig), Balance.Data.Picker,
+                Game.Instance.TakeScript()) is not { } stage)
         {
             _broken = true; // [E] 는 StageRoster 가 남겼다
             return;

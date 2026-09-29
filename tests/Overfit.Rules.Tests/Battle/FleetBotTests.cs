@@ -106,7 +106,7 @@ public class FleetBotTests
     {
         // 엇박 3연격의 첫 판정은 1.00초(60틱)이고 3연격의 박자는 0.85초(51틱)다. 리듬형은 51틱에 누르고 — 패리 창 0.133초 밖이라 커밋 안에서
         // 맞는다 — 눈으로 누르는 봇은 60틱에 누른다.
-        string[] script = ["엇박 3연격"];
+        ScriptPlan[] script = [new(0.8, "엇박 3연격")];
         (int start, int? rhythm, _) = Watch(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.15, rhythm: 1), 3), 400);
         (rhythm - start).ShouldNotBeNull().ShouldBe(50, "3연격의 1타(51틱)에 먹게 그 앞 틱에 누른다");
 
@@ -145,7 +145,7 @@ public class FleetBotTests
         // 누르는 사람은 패턴을 알아챈 뒤로는 선딜을 안 기다린다: 93틱이다. 리듬이 "판정을 눈으로 안 보고 박자로 누르는 몫" 인 이상(설계 §3.3) 박자의
         // 누름을 타마다의 반응에 묶으면 느린 리듬형은 엇박의 늦은 타를 우연히 받아친다 — 엇박이 노리는 사람이 원본에 안 선다(재 봄 · #108).
         // 사람이 멀리 있어 칼이 안 닿는 판이라 1타의 패리가 헛쳐 패턴이 끊기지 않는다.
-        string[] script = ["3연격"];
+        ScriptPlan[] script = [new(0.8, "3연격")];
         List<int> rhythm = ParryStarts(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.35, rhythm: 1), 3), 200);
         List<int> sight = ParryStarts(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.35), 3), 200);
 
@@ -171,7 +171,7 @@ public class FleetBotTests
     public void 돌진_한_판을_예외_없이_끝낸다()
     {
         // 돌진 중에는 도착까지 시계가 서서 NextActiveIn 이 추정이다 — 봇은 누를 틱만 매 틱 다시 셈한다.
-        (_, BattleSim sim) = FleetPlay.Play(BotTraits.Sample(51, 3, TestConfigs.Fleet()), 11, script: ["돌진"]);
+        (_, BattleSim sim) = FleetPlay.Play(BotTraits.Sample(51, 3, TestConfigs.Fleet()), 11, script: [new ScriptPlan(0.8, "돌진")]);
 
         sim.Events.Count.ShouldBeGreaterThan(0);
     }

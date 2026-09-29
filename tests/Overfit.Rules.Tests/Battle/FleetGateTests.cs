@@ -130,7 +130,7 @@ public class FleetGateTests
         int hits = 0, all = 0;
         foreach (ulong seed in _seeds)
         {
-            foreach (DodgeEvent e in FleetPlay.Play(traits, seed, script: [pattern]).Sim.Events.Where(e => e.PatternId == pattern))
+            foreach (DodgeEvent e in FleetPlay.Play(traits, seed, script: [new ScriptPlan(0.8, pattern)]).Sim.Events.Where(e => e.PatternId == pattern))
             {
                 all++;
                 if (e.Verdict is HitVerdict.Hit or HitVerdict.GuardBroken or HitVerdict.Grabbed)

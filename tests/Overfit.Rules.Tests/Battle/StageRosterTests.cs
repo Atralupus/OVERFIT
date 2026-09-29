@@ -87,7 +87,7 @@ public class StageRosterTests
     [Fact]
     public void 명부가_설계한_패턴_수를_넘지_않는다()
     {
-        // want 는 설계가 정한 패턴 수다(설계 2026-09-29 조각1 §1 — 옛 두 단계를 합친 여섯). 모자란 것은 로그로 드러나지만
+        // want 는 설계가 정한 패턴 수다(설계 2026-09-29 조각1 §2 — 동작 일곱). 모자란 것은 로그로 드러나지만
         // 넘치는 것은 아무 데도 안 남는다 — 새 패턴을 명부에 끼워 넣을 때 아직 자리가 없는
         // 낮은 단계에 얹으면 그 단계의 난이도 곡선이 조용히 달라진다.
         foreach ((string stage, StageDef def) in Stages())
@@ -157,28 +157,27 @@ public class StageRosterTests
     public void 대본을_주면_그_전투만_단계의_고르기_대신_대본으로_선다()
     {
         // 설계 §4.4 — Battle 은 Game 의 대본 칸이 차 있으면 그 전투의 고르기를 단계의 picker 대신 script 로 세운다(로그 picker=script). 명부는
-        // 그대로 그 단계의 것이다 — 대본은 명부 안의 순서만 정한다. 안 주면 전처럼 단계의 고르기다.
+        // 그대로 그 단계의 것이다 — 대본은 명부 안에서 계획만 정한다(설계 2026-09-29 조각1 §4.2). 안 주면 전처럼 단계의 고르기다.
         ulong seed = Det.Hash64(51, Det.Domain.Attempt, k1: 1);
 
-        StageSetup scripted = StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>(), new[] { "점프 공격" })
-            .ShouldNotBeNull();
+        StageSetup scripted = Setup(Stages(), seed, [new ScriptPlan(0.8, "점프 공격")]).ShouldNotBeNull();
         scripted.PickerId.ShouldBe("script");
         scripted.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
-        Enumerable.Range(0, 5).Select(scripted.Picker.Pick).ShouldAllBe(i => scripted.PatternIds[i] == "점프 공격");
+        Enumerable.Range(0, 5).Select(k => scripted.Picker.Next(Request(k))).ShouldAllBe(p => scripted.PatternIds[p.Move] == "점프 공격");
 
-        StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>()).ShouldNotBeNull().PickerId.ShouldBe("uniform");
+        Setup(Stages(), seed).ShouldNotBeNull().PickerId.ShouldBe("uniform");
     }
 
     [Fact]
     public void 명부_밖의_대본은_판을_세우지_않고_규칙_위반을_남긴다()
     {
-        // ScriptPicker 는 명부 밖의 id 를 세울 때 던진다. 그 예외가 Setup 을 빠져나가면 Battle._Ready 안에서 터지고, Godot 은 예외를
+        // ScriptPlanPicker 는 명부 밖의 id 를 세울 때 던진다. 그 예외가 Setup 을 빠져나가면 Battle._Ready 안에서 터지고, Godot 은 예외를
         // 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매 프레임 NRE 가 나 진짜 원인 한 줄이 그 밑에 묻혔다
         // (#78 T6-I1). 다른 실패와 같이 [E] 를 남기고 null 을 돌려줘야 Battle 이 판을 깨진 채로 멈춘다. data 에 picker: script 를 적어
         // 대본 없이 선 것도 같은 길이다.
         using var log = new LogCapture();
 
-        StageRoster.Setup(Stages(), 1, 51, System.Array.Empty<AttemptRecord>(), new[] { "3연격", "없는패턴" }).ShouldBeNull();
+        Setup(Stages(), 51, [new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.8, "없는패턴")]).ShouldBeNull();
 
         log.Lines.ShouldContain(l =>
             l.StartsWith("[stage][E] script_rejected stage=1 reason=", System.StringComparison.Ordinal)
@@ -189,7 +188,7 @@ public class StageRosterTests
             ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "script" },
         };
 
-        StageRoster.Setup(scriptedData, 1, 51, System.Array.Empty<AttemptRecord>()).ShouldBeNull();
+        Setup(scriptedData, 51).ShouldBeNull();
 
         log.Lines.ShouldContain(l =>
             l.StartsWith("[stage][E] script_rejected stage=1 reason=", System.StringComparison.Ordinal)
@@ -224,12 +223,13 @@ public class StageRosterTests
         // 다른 고르기로 돌 수 있다(설계 §4.4 의 되살리기).
         ulong seed = Det.Hash64(51, Det.Domain.Attempt, k1: 1);
 
-        StageSetup setup = StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>()).ShouldNotBeNull();
+        StageSetup setup = Setup(Stages(), seed).ShouldNotBeNull();
 
         setup.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
         setup.PickerId.ShouldBe("uniform");
-        var uniform = new UniformPicker(seed, setup.PatternIds.Count);
-        Enumerable.Range(0, 50).Select(setup.Picker.Pick).ShouldBe(Enumerable.Range(0, 50).Select(uniform.Pick));
+        Enumerable.Range(0, 50).Select(k => setup.Picker.Next(Request(k)).Move)
+            .ShouldBe(Enumerable.Range(0, 50).Select(k => Det.RollInt(seed, Det.Domain.PatternPick, setup.PatternIds.Count, k1: k)),
+                "무작위 계획의 첫 동작이 옛 uniform 의 좌표가 아니다(설계 2026-09-29 조각1 §3.5)");
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public class StageRosterTests
             ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "없는고르기" },
         };
 
-        StageRoster.Setup(stages, 1, 51, System.Array.Empty<AttemptRecord>()).ShouldBeNull();
+        Setup(stages, 51).ShouldBeNull();
 
         log.Lines.ShouldContain("[stage][E] picker_missing id=없는고르기 stage=1");
     }
@@ -294,4 +294,12 @@ public class StageRosterTests
         log.Lines.ShouldContain(l => l.Contains($"out_of_range asked=99 used={LastStage()}", System.StringComparison.Ordinal));
         log.Lines.ShouldNotContain(l => l.StartsWith("[stage][E]", System.StringComparison.Ordinal));
     }
+
+    /// <summary>1단계를 실제 동작 정의 · 실제 보스의 쉬는 길이 · 실제 picker 수치로 세운다 — 게임 · 데모와 같은 재료다.</summary>
+    private static StageSetup? Setup(IReadOnlyDictionary<string, StageDef> stages, ulong seed, IReadOnlyList<ScriptPlan>? script = null) =>
+        StageRoster.Setup(
+            stages, 1, seed, System.Array.Empty<AttemptRecord>(), Patterns(), BattleSim.RestTicks(TestConfigs.Boss()), TestConfigs.Balance().Picker, script);
+
+    /// <summary>계획 번호 <paramref name="number"/> 의 부름 — 무작위 · 대본 고르기는 번호만 읽는다.</summary>
+    private static PlanRequest Request(int number) => new(number, 0, System.Array.Empty<DodgeEvent>(), 0, 1, 0);
 }

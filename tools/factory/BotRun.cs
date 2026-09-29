@@ -30,8 +30,9 @@ public sealed record BotResult(int Bot, BotTraits Traits, int Attempts, bool Won
 ///
 /// <para>
 /// 보스전이 하나다(설계 2026-09-29 조각1 §1) — 이길 때까지, 많아야 <c>tries</c> 번 치고 판마다 사례를 싣는다. 옛 공장은 1단계를 넘은 봇만 2단계의 사례를
-/// 실었다. 명부는 <see cref="StageRoster.For"/> 에서 읽고 고르기는 <see cref="UniformPicker"/> 로 <b>고정한다</b> — 데이터의 고르기가 바뀌어도(조각 4 의
-/// 망) 공장은 무작위라야 칸이 고르게 덮이고 라벨이 고르기에 안 기운다. 판을 끝내는 규칙(승패 · <c>max_ticks</c>)은 게임과 같다. 판이 끝나면 기록을
+/// 실었다. 명부는 <see cref="StageRoster.For"/> 에서 읽고 고르기는 <see cref="UniformPlanPicker"/> 로 <b>고정한다</b> — 데이터의 고르기가 바뀌어도(조각 4 의
+/// 망) 공장은 무작위라야 칸이 고르게 덮이고 라벨이 고르기에 안 기운다. 끊는 몫 · 쉬는 길이는 게임과 같다(<c>balance.json</c> 의 <c>picker</c> ·
+/// 보스의 <c>rest_seconds</c> · 설계 2026-09-29 조각1 §3.5) — 잇는 동작도 사례다. 판을 끝내는 규칙(승패 · <c>max_ticks</c>)은 게임과 같다. 판이 끝나면 기록을
 /// 붙인다 — 이긴 판도.
 /// </para>
 /// </summary>
@@ -60,7 +61,9 @@ public static class BotRun
             attempts++;
             (int number, ulong seed) = history.Open();
             var tracker = new InstanceTracker();
-            (BattleOutcome outcome, BattleSim sim) = Play(tables, traits, seed, roster, new UniformPicker(seed, roster.Count), tracker);
+            var picker = new UniformPlanPicker(
+                new PickerInputs(roster, tables.Patterns, tables.RestTicks, tables.Knobs, Array.Empty<AttemptRecord>(), seed));
+            (BattleOutcome outcome, BattleSim sim) = Play(tables, traits, seed, roster, picker, tracker);
             ticks += sim.Ticks;
             foreach (PatternInstance instance in tracker.Finish(sim.Events))
             {
@@ -77,7 +80,7 @@ public static class BotRun
 
     /// <summary>한 판을 끝까지 민다 — 틱마다 지금 패턴과 관측 수를 넘겨 사례를 가른다.</summary>
     private static (BattleOutcome Outcome, BattleSim Sim) Play(
-        FactoryTables tables, BotTraits traits, ulong seed, IReadOnlyList<string> roster, IPatternPicker picker, InstanceTracker tracker)
+        FactoryTables tables, BotTraits traits, ulong seed, IReadOnlyList<string> roster, IPlanPicker picker, InstanceTracker tracker)
     {
         var sim = new BattleSim(new BattleSetup
         {

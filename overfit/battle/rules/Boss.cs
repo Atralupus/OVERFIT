@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Overfit.Battle.Rules;
 
@@ -21,8 +22,11 @@ public sealed class BossConfig
     /// </summary>
     public required double Height { get; init; }
 
-    /// <summary>패턴과 패턴 사이의 쉬는 시간(초). 이 동안 플레이어가 때릴 틈이 난다.</summary>
-    public required double PatternGap { get; init; }
+    /// <summary>
+    /// 쉬는 길이들(초) — 계획마다 하나를 고른다 (설계 2026-09-29 조각1 §3.4 · <see cref="BossPlan.RestTicks"/>). 이 동안 플레이어가 때릴 틈이 난다.
+    /// 옛 <c>pattern_gap</c>(0.8 하나)을 가운데에 두고 반씩 흔들었다. 틱으로는 <see cref="BattleSim.RestTicks"/> 가 바꾼다.
+    /// </summary>
+    public required IReadOnlyList<double> RestSeconds { get; init; }
 
     /// <summary>
     /// <b>탈진</b>의 길이(초) — 받아치면 어느 타든 보스가 탈진한다 (#72 · 설계 §4.3). 틱으로는 <c>BattleSim</c> 이 바꿔 넘긴다
@@ -116,7 +120,8 @@ public sealed class Boss
 
     public double HalfWidth => _config.HalfWidth;
 
-    public double PatternGap => _config.PatternGap;
+    /// <summary>쉬는 길이들(초) — <see cref="BossConfig.RestSeconds"/>. 계획이 이 중 하나를 고른다.</summary>
+    public IReadOnlyList<double> RestSeconds => _config.RestSeconds;
 
     /// <summary>
     /// 탈진했나 (#72 · 설계 §4.3). 탈진한 보스는 아무것도 안 한다 — 패턴은 무너질 때 끊겼고(<c>BattleSim</c> 의 탈진 루틴),

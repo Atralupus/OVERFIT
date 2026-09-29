@@ -161,12 +161,29 @@ public sealed class MotionDef
     public double Stop { get; init; }
 }
 
+/// <summary>
+/// 캔슬 지점 하나 (설계 2026-09-29 조각1 §3.1) — 다음 타의 선딜이 서는 시각이다. <b>수가 아니라 객체로 적는다</b>(<c>{ "t": 1.30 }</c>) —
+/// 동작과 캔슬 조합마다의 칸(조각 4 의 <c>covers</c> · 우산 §4)을 더해도 옛 데이터의 모양이 안 깨진다(§3.6). 그 칸은 지금 안 만든다 —
+/// 아무도 안 읽는 칸은 데이터 테스트만 붙든 채 산다.
+/// </summary>
+public sealed class CancelPointDef
+{
+    /// <summary>시각(초 · 패턴 시계) — 러너가 이 틱의 단계에 들지 않고 끊는다. 정수 틱이고 단계의 경계다(<c>PatternDataTests</c>).</summary>
+    public required double T { get; init; }
+}
+
 /// <summary>패턴 하나. <c>data/patterns.json</c> 의 값 부분이다.</summary>
 public sealed class PatternDef
 {
     public required PatternTags Tags { get; init; }
 
     public required List<PatternStep> Timeline { get; init; }
+
+    /// <summary>
+    /// 캔슬 지점들 — 시간순 (설계 2026-09-29 조각1 §3.1). 없으면 null 이고 그 동작은 끊기지 않는다. 계획은 이 목록의 칸 번호로 지점을 고른다
+    /// (<see cref="BossPlan.CancelPoint"/>) — 지점을 하나 더하면 그 동작의 계획에 캔슬이 하나 늘 뿐 코드를 안 연다(§3.3).
+    /// </summary>
+    public IReadOnlyList<CancelPointDef>? CancelPoints { get; init; }
 
     /// <summary>마지막 단계의 시각. 여기를 지나면 패턴이 끝난다.</summary>
     public double Duration => Timeline.Count == 0 ? 0 : Timeline[^1].T;

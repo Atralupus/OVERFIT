@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Godot;
+using Overfit.Battle.Rules;
 using Overfit.Core;
 
 namespace Overfit.Battle.Debug;
@@ -49,7 +50,7 @@ public partial class GifRunner : Node
         // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
         // 1타는 60틱이라 패리의 창(+6)을 지나 커밋(+18) 안에 떨어져 맨몸으로 맞는다. 헛친 한 번(커밋과 패리 뒤 경직 · 0.583초 · #82)이 84틱에 풀리면
         // 맞은 틱(60)에서 3연격의 간격(42틱)을 재어 2틱 앞(100)에 또 누른다 — 늦은 2타(111)에 또 맞는다. 둘째 + 30 까지 잡는다.
-        new("offbeat", Patterns: new[] { "엇박 3연격" }, Target: "엇박 3연격",
+        new("offbeat", Plans: SceneDriver.Moves("엇박 3연격"), Target: "엇박 3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 68, "move_right", OnBattleClock: true),
@@ -68,7 +69,7 @@ public partial class GifRunner : Node
 
     /// <summary>
     /// 등록된 대본 id 들 — 모르는 id 를 받았을 때 로그에 싣는다. 대본 목록은 위의 표(<see cref="_scripts"/>) 하나다: <c>tools/build.sh gifs</c> 는
-    /// 인자 없이 돌면 이 파일에서 표의 줄(<c>new("&lt;id&gt;", Patterns: …</c>)을 읽어 다 찍는다(<c>gif_ids</c>). 전에는 build.sh 가 제 목록
+    /// 인자 없이 돌면 이 파일에서 표의 줄(<c>new("&lt;id&gt;", Plans: …</c>)을 읽어 다 찍는다(<c>gif_ids</c>). 전에는 build.sh 가 제 목록
     /// (<c>GIF_IDS</c>)을 따로 들어 대본을 더하는 날 한쪽만 늘 수 있었다(#96). 줄의 꼴을 바꾸면 <c>gif_ids</c> 도 같이 고친다.
     /// </summary>
     public static IEnumerable<string> Ids
@@ -97,13 +98,13 @@ public partial class GifRunner : Node
         // 한 프레임 기다린 뒤 판을 세운다 — 이 노드는 Game._Ready 가 트리에 붙이는 도중에 서므로 곧장 씬을 바꾸면 엔진이 "자식을 붙이는 중"
         // 이라며 ERROR 를 찍는다(재 보니 그랬다 — 헤드리스 판정이 그 한 줄로 떨어진다).
         await _drive.Frames(1);
-        Log.Info("gif", $"start id={script.Id} patterns={string.Join(',', script.Patterns)} target={script.Target}");
+        Log.Info("gif", $"start id={script.Id} plans={Game.ScriptText(script.Plans)} target={script.Target}");
 
         // "판이 설 때부터" 의 누름은 판을 세우기 **전에** 누른다 — 판은 씬이 선 첫 물리 프레임부터 틱을 밀고, 아래 고리는 판이 몇 틱 돈 뒤에
         // 돈다(재 보니 5틱째부터 걸었다). 레벨이라 씬이 바뀌는 동안에도 눌린 채 남는다.
         var held = new Dictionary<string, bool>(StringComparer.Ordinal);
         Drive(script, _battleStart, int.MinValue, held);
-        Overfit.Battle.Battle? battle = await _drive.NewBattle(script.Patterns);
+        Overfit.Battle.Battle? battle = await _drive.NewBattle(script.Plans);
         if (battle is null)
         {
             Log.Error("gif", $"battle_missing id={script.Id}");
@@ -203,5 +204,5 @@ public partial class GifRunner : Node
 
     /// <summary>대본 하나 — 단계 · 패턴 순서(대본 고르기) · 겨냥한 패턴 · 입력 · 잡을 구간 [From, To)(패턴 틱).</summary>
     private sealed record GifScript(
-        string Id, string[] Patterns, string Target, GifInput[] Inputs, int From, int To);
+        string Id, ScriptPlan[] Plans, string Target, GifInput[] Inputs, int From, int To);
 }

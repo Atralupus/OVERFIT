@@ -122,6 +122,22 @@ public static class Det
         /// </summary>
         public const uint PickerArm = 10;
 
+        /// <summary>
+        /// 계획의 <b>끊나</b> (설계 2026-09-29 조각1 §3.5) — 첫 동작에 캔슬 지점이 있으면 <c>RollInt(시도 시드, PlanCancel, 100, k1: 계획 번호)</c> 를
+        /// <c>balance.json</c> 의 <c>picker.cancel_percent</c> 와 견준다. 계획의 결정마다 스트림을 따로 둔다 — 한 결정의 칸 수가 바뀌어도(명부에 동작을
+        /// 더해도) 다른 결정의 좌표가 안 밀린다. 첫 동작은 옛 uniform 의 <see cref="PatternPick"/> 를 그대로 쓴다. 번호는 뒤에 더할 뿐이다.
+        /// </summary>
+        public const uint PlanCancel = 11;
+
+        /// <summary>계획의 <b>어디서</b> 끊나 — 그 동작의 캔슬 지점에서 고르게(<c>RollInt(시도 시드, PlanPoint, 지점 수, k1: 계획 번호)</c>).</summary>
+        public const uint PlanPoint = 12;
+
+        /// <summary>계획의 <b>무엇으로</b> 잇나 — 첫 동작을 뺀 명부에서 고르게(<c>RollInt(시도 시드, PlanNext, 명부 수 − 1, k1: 계획 번호)</c>).</summary>
+        public const uint PlanNext = 13;
+
+        /// <summary>계획의 <b>쉬는 길이</b> — <c>bosses.json</c> 의 <c>rest_seconds</c> 에서 고르게(<c>RollInt(시도 시드, PlanRest, 쉬기 수, k1: 계획 번호)</c>).</summary>
+        public const uint PlanRest = 14;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -135,6 +151,10 @@ public static class Det
             FleetAct => "fleet_act",
             FleetTiming => "fleet_timing",
             PickerArm => "picker_arm",
+            PlanCancel => "plan_cancel",
+            PlanPoint => "plan_point",
+            PlanNext => "plan_next",
+            PlanRest => "plan_rest",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

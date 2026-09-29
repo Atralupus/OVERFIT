@@ -44,6 +44,16 @@ public class BalanceDataTests
     }
 
     [Fact]
+    public void 고르기의_수치는_퍼센트다()
+    {
+        // 설계 2026-09-29 조각1 §3.5 — 무작위 고르기는 RollInt(…, 100) 을 이 정수와 견준다. 100 을 넘거나 음수면 늘 끊거나 한 번도 안 끊는
+        // 고르기가 되는데, 그것은 데이터가 틀린 것이다(0 · 100 은 "안 끊는다" · "늘 끊는다" 로 뜻이 있다).
+        BalanceData data = JsonData<BalanceData>.ParseOne(ReadData("balance.json"), "balance.json");
+
+        data.Picker.CancelPercent.ShouldBeInRange(0, 100);
+    }
+
+    [Fact]
     public void DTO_가_안_읽는_키가_balance_json_에_없다()
     {
         // JsonData 는 DTO 가 모르는 키를 조용히 버린다. 부팅의 `required` 검사는 "DTO 가 원하는 키가 JSON 에 있나" 한 방향만
@@ -57,6 +67,7 @@ public class BalanceDataTests
         unread.AddRange(UnreadKeys(root, typeof(BalanceData), ""));
         unread.AddRange(UnreadKeys(root.GetProperty("battle"), typeof(BattleBalance), "battle."));
         unread.AddRange(UnreadKeys(root.GetProperty("feel"), typeof(FeelBalance), "feel."));
+        unread.AddRange(UnreadKeys(root.GetProperty("picker"), typeof(PickerBalance), "picker."));
 
         unread.ShouldBeEmpty("DTO 에 짝이 없는 키 — 아무도 안 읽는 수치다. 프로퍼티와 키는 같이 걷는다");
     }

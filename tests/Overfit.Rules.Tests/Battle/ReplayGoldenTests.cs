@@ -104,9 +104,14 @@ public class ReplayGoldenTests
         Dictionary<string, StageDef> stages = JsonData<StageDef>.ParseTable(
             File.ReadAllText(Path.Combine("data", "stages.json")), "stages.json");
 
-        // 게임처럼 **그 단계의 명부와 고르기**로 선다 (#72 · 설계 §4.4) — 1단계의 picker 를 바꾸면 여기가 움직인다.
+        // 게임처럼 **그 단계의 명부와 고르기**로 선다 (#72 · 설계 §4.4) — 1단계의 picker 를 바꾸면 여기가 움직인다. 계획을 고르는 재료(동작 정의 ·
+        // 쉬는 길이 · picker 수치 — 설계 2026-09-29 조각1 §4.1)도 실제 데이터다: 쉬는 길이나 cancel_percent 를 바꾸면 여기가 움직인다.
         // 기록은 비어 있다: 골든의 시드는 시도 시드 그 자체이고(데모의 --seed 와 같다), uniform 은 기록을 안 읽는다.
-        StageSetup stage = StageRoster.Setup(stages, 1, seed, Array.Empty<AttemptRecord>())
+        Dictionary<string, PatternDef> patterns = JsonData<PatternDef>.ParseTable(
+            File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json");
+        BossConfig boss = TestConfigs.Boss();
+        StageSetup stage = StageRoster.Setup(
+                stages, 1, seed, Array.Empty<AttemptRecord>(), patterns, BattleSim.RestTicks(boss), TestConfigs.Balance().Picker)
             ?? throw new InvalidOperationException("stages.json 에 1단계가 안 선다");
 
         var sim = new BattleSim(new BattleSetup
@@ -114,14 +119,13 @@ public class ReplayGoldenTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(),
+            Boss = boss,
             // 패턴 id 를 여기 베껴 적지 않는다 — 베끼면 stages.json 이 바뀌어도 골든이 초록이라
             // "실제로 도는 전투" 와 "골든이 도는 전투" 가 조용히 갈린다.
             // **1단계로 돈다** (#72 · 설계 §9) — 2단계 명부는 #78 이 통째로 바꿨다: 거기 걸었으면 그 PR 이 결정론과 무관하게
             // 골든을 움직였다. 1단계는 망이 들어와도 uniform 이라(설계 §4.4) 이 판의 순서도 시드만으로 선다.
             PatternIds = stage.PatternIds,
-            Patterns = JsonData<PatternDef>.ParseTable(
-                File.ReadAllText(Path.Combine("data", "patterns.json")), "patterns.json"),
+            Patterns = patterns,
             Seed = seed,
             Picker = stage.Picker,
             MaxTicks = TestConfigs.MaxTicks(),
