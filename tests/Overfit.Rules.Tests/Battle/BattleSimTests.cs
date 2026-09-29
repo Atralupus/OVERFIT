@@ -1441,10 +1441,12 @@ public class BattleSimTests
     });
 
     [Fact]
-    public void 실제_점프_공격의_착지는_가드로_막고_패리로는_못_받는다()
+    public void 실제_점프_공격의_착지는_가드로도_패리로도_못_받는다()
     {
-        // 설계 §4.2 — 착지는 바닥 전체 · 높이 0 ~ 60 · 패리 불가다. 답은 가드와 점프다. 가드는 12 × 1.8 = 21.6 스태미나 ·
-        // 칩 3 을 낸다. 창 안에서 누른 패리는 맨몸이다 — 받아치지 못하고 그냥 맞는다(보스도 안 무너진다).
+        // 설계 2026-09-29 조각1 §2.3 — 착지는 바닥 전체 · 높이 0 ~ 60 · 피해 24 · 대시 · 가드 · 패리 불가다(판정의 답 셋이 거짓). 답은 점프 하나다.
+        // ↓ 를 붙든 가드는 맨몸이라 전액을 맞고, 막아 낸 것이 없어 스태미나도 안 낸다. 창 안에서 누른 패리도 맨몸이다 — 받아치지 못하고 그냥 맞는다
+        // (보스도 안 무너진다). 옛 이름: 실제_점프_공격의_착지는_가드로_막고_패리로는_못_받는다 — 조각 1 전에는 가드가 12 × 1.8 = 21.6 스태미나 ·
+        // 칩 3 으로 막았다.
         BattleSim guarded = Leaper();
         for (int i = 0; i < 300 && guarded.Events.Count == 0; i++)
         {
@@ -1452,11 +1454,11 @@ public class BattleSimTests
         }
 
         DodgeEvent g = guarded.Events.Single();
-        g.Verdict.ShouldBe(HitVerdict.Guarded);
-        g.ParryAvailable.ShouldBeFalse();
+        (g.Verb, g.Verdict).ShouldBe((DodgeVerb.Guard, HitVerdict.Hit), "가드를 못 받는 착지를 막았다");
+        (g.GuardAvailable, g.ParryAvailable).ShouldBe((false, false));
         g.JumpAvailable.ShouldBeTrue("착지 띠는 점프로 넘는다 — 기준 파이터도 발이 60 위에 창보다 오래 있다");
-        guarded.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth - 3);
-        guarded.Fighter.Stamina.ShouldBe(TestConfigs.Fighter().MaxStamina - 21.6, 1e-9);
+        guarded.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth - 24);
+        guarded.Fighter.Stamina.ShouldBe(TestConfigs.Fighter().MaxStamina, "막아 낸 것이 없는데 가드 값을 냈다");
 
         BattleSim parried = Leaper();
         for (int i = 0; i < 300 && parried.Events.Count == 0; i++)

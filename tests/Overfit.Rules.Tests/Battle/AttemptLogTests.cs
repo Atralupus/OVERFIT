@@ -15,8 +15,8 @@ public class AttemptLogTests
     private static readonly DodgeEvent[] _events =
     [
         new("엇박 3연격", DodgeVerb.Parry, HitVerdict.Hit, 0.1 + 0.2, -1, true, 123.456789012345, true, true, false, true, true),
-        new("1타 잡기", DodgeVerb.Dash, HitVerdict.Grabbed, -0.05000000000000002, 1, false, 0, false, false, true, false, false),
-        new("점프 3연속", DodgeVerb.Guard, HitVerdict.GuardBroken, 0, 0, false, 1e-300, false, true, true, false, true),
+        new("잡기", DodgeVerb.Dash, HitVerdict.Grabbed, -0.05000000000000002, 1, false, 0, false, false, true, false, false),
+        new("빠른 3연격", DodgeVerb.Guard, HitVerdict.GuardBroken, 0, 0, false, 1e-300, false, true, true, false, true),
     ];
 
     private static AttemptEntry Entry() => new(
@@ -24,7 +24,7 @@ public class AttemptLogTests
         Run: 3,
         Record: new AttemptRecord(12, 2, 16800346292054821908UL, BattleOutcome.Lose, _events),
         PickerId: "uniform",
-        Drawn: ["1타 잡기", "점프 3연속", "1타 잡기"],
+        Drawn: ["잡기", "빠른 3연격", "잡기"],
         Ticks: 2345);
 
     private static void ShouldMatch(AttemptEntry back, AttemptEntry entry)
@@ -45,7 +45,7 @@ public class AttemptLogTests
 
         line.ShouldNotContain('\n');
         line.ShouldContain("\"picker\":\"uniform\"");
-        line.ShouldContain("1타 잡기", Case.Sensitive, "한글 id 는 그대로 싣는다 — 사람이 grep 한다");
+        line.ShouldContain("빠른 3연격", Case.Sensitive, "한글 id 는 그대로 싣는다 — 사람이 grep 한다");
         ShouldMatch(AttemptLog.Parse(line, "시험"), entry);
     }
 
@@ -53,12 +53,12 @@ public class AttemptLogTests
     public void 사례를_싣고_그대로_읽는다()
     {
         // 같은 패턴이 연달아 선 두 사례가 따로 남는다 — 관측만으로는 그 경계를 모른다.
-        PatternInstance[] instances = [new("1타 잡기", true), new("1타 잡기", false), new("3연격", false)];
+        PatternInstance[] instances = [new("잡기", true), new("잡기", false), new("3연격", false)];
         AttemptEntry entry = Entry() with { Instances = instances };
 
         string line = AttemptLog.Line(entry);
 
-        line.ShouldContain("\"instances\":[{\"pattern_id\":\"1타 잡기\",\"hit\":true},{\"pattern_id\":\"1타 잡기\",\"hit\":false}");
+        line.ShouldContain("\"instances\":[{\"pattern_id\":\"잡기\",\"hit\":true},{\"pattern_id\":\"잡기\",\"hit\":false}");
         AttemptEntry back = AttemptLog.Parse(line, "시험");
         ShouldMatch(back, entry);
         back.Instances.ShouldNotBeNull().ShouldBe(instances);

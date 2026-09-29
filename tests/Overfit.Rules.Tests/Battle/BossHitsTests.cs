@@ -52,6 +52,38 @@ public class BossHitsTests
     }
 
     [Fact]
+    public void 손으로_적은_사각형은_그대로_판정이_된다()
+    {
+        // 설계 2026-09-29 조각1 §2.1 — 올려베기의 판정은 그림에서 뽑지 않고 손으로 적는다(rects · 공격자 기준 [x0, x1, y0, y1] · hitboxes.json 과
+        // 같은 좌표). hitbox · band 에 이은 셋째 모양이고, 판을 세울 때 그대로 판정의 사각형이 된다.
+        HitBox?[] hits = BossHits.Of(Rects([0, 396, 0, 360], [-20, 0, 100, 200]), TestConfigs.HitShapes());
+
+        hits[0].ShouldNotBeNull().Shape.Local.ShouldBe(new[] { new HitRect(0, 396, 0, 360), new HitRect(-20, 0, 100, 200) });
+        hits[0]!.Value.Damage.ShouldBe(14);
+    }
+
+    [Fact]
+    public void 손으로_적은_사각형이_네_수가_아니거나_뒤집혔으면_판을_못_세운다()
+    {
+        // 사람이 손으로 적는 수라 틀리면 판을 세울 때 멈춘다 — 모양이 없는 판정과 같은 길(모은 뒤 한 번에 거절)이다.
+        Should.Throw<System.ArgumentException>(() => BossHits.Of(Rects([396, 0, 0, 360]), TestConfigs.HitShapes()))
+            .Message.ShouldContain("rects");
+        Should.Throw<System.ArgumentException>(() => BossHits.Of(Rects([0, 396, 0]), TestConfigs.HitShapes()))
+            .Message.ShouldContain("rects");
+    }
+
+    /// <summary>판정 하나(피해 14)가 손으로 적은 <paramref name="rects"/> 로 치는 패턴.</summary>
+    private static PatternDef Rects(params double[][] rects) => new()
+    {
+        Tags = TestConfigs.Sweep(100, 0).Tags,
+        Timeline = new List<PatternStep>
+        {
+            new() { T = 0.5, Kind = "active", Rects = rects, Damage = 14, ActiveSeconds = 0.125 },
+            new() { T = 1.0, Kind = "end" },
+        },
+    };
+
+    [Fact]
     public void 판정의_답은_단계의_키에서_오고_없으면_받는다()
     {
         // 설계 §8.1 — 판정의 답 dash · guard · parry 는 없으면 태그대로(받는다)이고, 적으면 그 판정만 좁힌다. 판을 세울 때 판정에 싣는다 —
@@ -83,7 +115,7 @@ public class BossHitsTests
     public void 관측의_대시_가드_패리_가능은_판정의_답이다()
     {
         // 설계 §7.3 — 대시 · 가드 · 패리의 "고를 수 있었나" 는 판정 단위다. 태그에서 가져오면 한 패턴 안에서 1타는 다 되고 잡기는 점프만
-        // 되는 자리(1타 잡기)에서 거짓을 싣는다 — 대시 의존도의 분모가 "대시로는 못 피하는 판정" 으로 부푼다. 태그로는 셋 다 되는 패턴에서
+        // 되는 자리(옛 1타 잡기 · #78)에서 거짓을 싣는다 — 대시 의존도의 분모가 "대시로는 못 피하는 판정" 으로 부푼다. 태그로는 셋 다 되는 패턴에서
         // 둘째 · 셋째 · 넷째 판정이 대시 · 가드 · 패리를 **하나씩** 막는다 — 셋을 한꺼번에 막으면 어느 답이 어느 칸으로 가는지를 못 가른다
         // (패리 가능이 Dashable 을 읽는 배선이 그대로 통과했다). 가만히 선 파이터가 넷 다 맞는다.
         PatternTags tags = new()

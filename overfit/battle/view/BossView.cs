@@ -144,7 +144,8 @@ public partial class BossView : Node2D
 
         // 스프라이트 원본은 오른쪽을 본다 — 팩의 규약이고 FighterView 도 같다.
         // **뒤집어도 자리가 안 어긋난다**: Offset 의 x 는 0 이다(AlignToGround 는 y 만 건드린다).
-        _sprite.FlipH = frame.Facing < 0;
+        // 단계가 그림을 뒤집으라면(mirror · 올려베기) 보는 쪽의 반대로 그린다 — 판정이 아니라 그림만이다(설계 2026-09-29 조각1 §2.1).
+        _sprite.FlipH = (frame.Facing < 0) != frame.Mirror;
 
         BossPhase phase = frame.Phase;
 

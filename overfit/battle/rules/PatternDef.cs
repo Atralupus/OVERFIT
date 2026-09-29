@@ -75,7 +75,7 @@ public sealed class PatternStep
 
     /// <summary>
     /// 판정 모양 — <c>hitboxes.json</c> 의 id(<c>팩/애니메이션/장</c> · 그림의 흰 궤적에서 뽑았다 · 설계 §3.3). active 에서
-    /// <see cref="Band"/> 와 <b>꼭 하나</b>만 갖는다(데이터 테스트가 막는다). 모양은 판을 세울 때 한 번 찾는다(<c>BossHits</c>).
+    /// <see cref="Band"/> · <see cref="Rects"/> 와 셋 중 <b>꼭 하나</b>만 갖는다(데이터 테스트가 막는다). 모양은 판을 세울 때 한 번 찾는다(<c>BossHits</c>).
     /// </summary>
     public string? Hitbox { get; init; }
 
@@ -85,6 +85,20 @@ public sealed class PatternStep
     /// 둘이 늘 짝이었고, 모양으로는 <see cref="HitShape.Band"/> 한 가지다.
     /// </summary>
     public IReadOnlyList<double>? Band { get; init; }
+
+    /// <summary>
+    /// 손으로 적은 판정 모양 — 사각형마다 <c>[x0, x1, y0, y1]</c> (공격자 기준 · <c>hitboxes.json</c> 과 같은 좌표 — x 는 보는 쪽이 +, y 는 발바닥에서 위로).
+    /// 그림의 궤적과 다르게 잡아야 하는 판정의 자리다 — 올려베기가 첫 쓰임이다(설계 2026-09-29 조각1 §2.1: 그림은 attack2 의 궤적을 뒤집어 그리되,
+    /// 판정은 점프를 못 넘게 크게 잡는다). <see cref="Hitbox"/> · <see cref="Band"/> 와 셋 중 꼭 하나다.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<double>>? Rects { get; init; }
+
+    /// <summary>
+    /// 이 단계의 그림을 <b>보는 쪽의 반대로</b> 그린다 — <b>뷰만 읽는다</b>(<see cref="Anim"/> · <see cref="Frame"/> 과 같다). 규칙은 안 읽는다: 판정은
+    /// 모양이 정하고, 그림에서 뽑은 모양(<see cref="Hitbox"/>)을 뒤집어 싣는 길은 없다. 올려베기가 attack2 를 뒤집어 그리는 자리다 — attack2 의 높은
+    /// 궤적은 보스 등 뒤라 그대로 그리면 앞의 공중을 치는 그림이 안 된다(설계 2026-09-29 조각1 §2.1).
+    /// </summary>
+    public bool Mirror { get; init; }
 
     public int Damage { get; init; }
 

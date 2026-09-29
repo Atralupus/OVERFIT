@@ -1,0 +1,516 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Overfit.Battle.Rules;
+using Overfit.Battle.View;
+using Overfit.Rules.Tests.Support;
+using Shouldly;
+using Xunit;
+
+namespace Overfit.Rules.Tests.Battle;
+
+/// <summary>
+/// 일곱 동작이 <b>겨냥한 사람을 실제로 잡는가</b> (설계 2026-09-29 조각1 §2 — 옛 이름 Stage2BattleTests · #78). 실제 캐릭터(fighters.json) ·
+/// 실제 보스 · 실제 동작에 대본(<see cref="ScriptPicker"/>)으로 동작을 고정한다. 틱은 <b>패턴의 틱</b>(스펙 §2.5 의 표와 같은 자 · 첫 틱 1)이다:
+/// 패턴이 선 판의 틱이 B 면 판의 B + p 틱이 패턴의 p 틱이다.
+///
+/// <para>
+/// 판은 파이터 480 · 보스 1440 에서 서고, 보스는 첫 패턴 앞의 간격(0.8초 = 48틱)에 128px 걸어 와 1312 에서 첫 패턴을 세운다. 보스는
+/// 안 죽는다(체력 999_999) — 판이 패턴 도중에 끝나지 않게. 대본은 끝나면 처음부터 다시 돈다 — 같은 동작을 둘 잇는 판은 첫째 뒤의 쉬는 동안
+/// 보스가 다가온 자리에서 둘째를 본다.
+/// </para>
+///
+/// <para>
+/// 옛 1타 돌진 · 1타 잡기 · 점프 3연속에만 있던 테스트(1타 뒤 경직에 3타 · 1타를 받아치면 돌진도 잡기도 없다 · 점프 ×3 에 가드 붕괴 등)는
+/// 동작과 같이 걷었다 — 그 조합(3연격 1타 뒤에 무엇이 오나)은 캔슬이 받는다(조각1 §3).
+/// </para>
+/// </summary>
+public class MoveBattleTests
+{
+    private static readonly InputFrame _right = new(1, false, false, false, false);
+    private static readonly InputFrame _dash = new(0, false, true, false, false);
+    private static readonly InputFrame _parry = new(0, false, false, true, false);
+    private static readonly InputFrame _jump = new(0, true, false, false, false);
+    private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
+    private static readonly InputFrame _guard = new(0, false, false, false, false, GuardHeld: true);
+
+    /// <summary>파이터의 한 틱 걸음(px) — 실제 캐릭터와 기준 파이터가 같다(move_speed 420 · 틱당 7).</summary>
+    private static readonly double _stride = Real().MoveSpeed * BattleSim.Dt;
+
+    private static FighterConfig Real() => TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter];
+
+    /// <summary>보스전의 명부 위에 대본을 얹은 판. 파이터는 <paramref name="fighter"/> — 없으면 실제 캐릭터다.</summary>
+    private static BattleSim Sim(FighterConfig? fighter, params string[] script)
+    {
+        IReadOnlyList<string> roster = StageRoster.For(TestConfigs.Stages(), 1);
+        return new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = fighter ?? Real(),
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999),
+            PatternIds = roster,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Picker = new ScriptPicker(roster, script),
+            MaxTicks = TestConfigs.MaxTicks(),
+        });
+    }
+
+    /// <summary>
+    /// <paramref name="pattern"/> 이 설 때까지 <paramref name="before"/> 를 넣으며 민다 — 그 패턴이 선 판의 틱(B)을 돌려준다. 그 뒤 패턴의
+    /// p 틱은 판의 B + p 틱이다(러너의 첫 틱은 선 다음 틱이다 · 설계 §3.6 ⑤). <paramref name="before"/> 는 판의 틱을 받는다.
+    /// </summary>
+    private static int UntilBegins(BattleSim sim, string pattern, Func<int, InputFrame>? before = null)
+    {
+        for (int i = 0; i < 60 * 30 && sim.Boss.CurrentPattern != pattern; i++)
+        {
+            sim.Tick(before?.Invoke(sim.Ticks + 1) ?? default);
+        }
+
+        sim.Boss.CurrentPattern.ShouldBe(pattern, $"{pattern} 이 안 섰다");
+        return sim.Ticks;
+    }
+
+    /// <summary>지금 패턴이 끝나고(쉬는 간격) 다음 <paramref name="pattern"/> 이 설 때까지 민다 — 대본이 같은 동작을 다시 세운 틱도 잡는다.</summary>
+    private static int UntilNextBegins(BattleSim sim, string pattern, Func<int, InputFrame>? before = null)
+    {
+        for (int i = 0; i < 60 * 30 && sim.Boss.CurrentPattern is not null; i++)
+        {
+            sim.Tick(before?.Invoke(sim.Ticks + 1) ?? default);
+        }
+
+        return UntilBegins(sim, pattern, before);
+    }
+
+    /// <summary>패턴의 <paramref name="p"/> 틱까지(그 틱 포함) 민다 — 틱마다 <paramref name="input"/> 이 그 패턴 틱의 입력을 낸다.</summary>
+    private static void UntilTick(BattleSim sim, int begun, int p, Func<int, InputFrame>? input = null)
+    {
+        for (int i = 0; i < 60 * 30 && sim.Ticks < begun + p; i++)
+        {
+            sim.Tick(input?.Invoke(sim.Ticks + 1 - begun) ?? default);
+        }
+
+        sim.Ticks.ShouldBe(begun + p);
+    }
+
+    /// <summary>
+    /// 보스 앞 <paramref name="gap"/>(보스 중심에서 파이터 중심까지) 자리로 한 걸음 — 한 걸음 안에 들면 선다. 쉬는 동안 보스가 다가오면 물러서
+    /// 간격을 지킨다(보스가 더 느리다 · 160 대 420). 자리는 한 걸음(7px) 안으로 맞는다. 물러서면 파이터는 보스를 등진다.
+    /// </summary>
+    private static InputFrame Toward(BattleSim sim, double gap)
+    {
+        double off = sim.Boss.X + (sim.Boss.Facing * gap) - sim.Fighter.X;
+        return Math.Abs(off) < _stride ? default : new InputFrame((sbyte)Math.Sign(off), false, false, false, false);
+    }
+
+    /// <summary>1타 사거리 안(보스와 356 떨어진 956)으로 걸어 들어가는 입력 — 판이 선 뒤 68틱 동안 오른쪽을 누른다(476px).</summary>
+    private static InputFrame WalkIn(int tick) => tick <= 68 ? _right : default;
+
+    [Theory]
+    [InlineData(150, 16)]
+    [InlineData(150, 35)]
+    [InlineData(250, 16)]
+    [InlineData(250, 35)]
+    [InlineData(400, 16)]
+    [InlineData(400, 35)]
+    public void 올려베기는_3연격_1타의_박자에_뛴_사람을_어느_거리에서든_잡는다(int gap, int jumpAt)
+    {
+        // 설계 2026-09-29 조각1 §2.1 — 3연격 1타(51틱)를 보스 앞 어디서든 점프로 넘는 누름은 16 ~ 35틱이다(발이 궤적 윗끝 236.5 위에 누른 틱 + 16 ~
+        // + 42 · 아래 대조군). 올려베기는 같은 51틱에 [0, 396, 0, 360] 을 친다 — 점프의 정점에서 발이 300 이라 창(51 ~ 58) 내내 사각형 안이다. 그
+        // 누름의 양 끝으로 보스 앞 150 · 250 · 400 어디서 뛰어도 공중에서 맞는다. 첫 올려베기는 멀리서 헛치게 두고(832 · 사거리 밖), 창이 닫힌 뒤
+        // 걸어가 둘째 앞에서 그 자리에 선다.
+        BattleSim sim = Sim(null, "올려베기");
+        int first = UntilBegins(sim, "올려베기");
+        UntilTick(sim, first, 58);
+        int second = UntilNextBegins(sim, "올려베기", _ => Toward(sim, gap));
+        UntilTick(sim, second, jumpAt - 1, _ => Toward(sim, gap));
+        double stood = Math.Abs(sim.Boss.X - sim.Fighter.X);
+        UntilTick(sim, second, 58, p => p == jumpAt ? _jump : default);
+
+        stood.ShouldBe(gap, _stride, "뛰기 전에 그 자리에 못 섰다");
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
+        {
+            (DodgeVerb.Spacing, HitVerdict.MissedTooFar),
+            (DodgeVerb.Jump, HitVerdict.Hit),
+        }, "올려베기가 뛴 사람을 못 잡았다");
+        sim.Events[1].Airborne.ShouldBeTrue("땅에서 맞았다 — 이 테스트가 점프를 안 본다");
+        sim.Events[1].JumpAvailable.ShouldBeFalse("올려베기를 점프로 넘을 수 있었다고 실렸다");
+    }
+
+    [Theory]
+    [InlineData(150, 16)]
+    [InlineData(150, 35)]
+    [InlineData(250, 16)]
+    [InlineData(250, 35)]
+    [InlineData(400, 16)]
+    [InlineData(400, 35)]
+    public void 같은_점프가_3연격_1타는_넘는다(int gap, int jumpAt)
+    {
+        // 위 테스트의 대조군 — 올려베기 자리에 3연격이 오면 같은 자리 · 같은 누름이 1타를 넘는다. 둘을 가르는 것은 선딜의 그림뿐이다(attack2 · attack).
+        // 15틱 앞이나 36틱 뒤의 누름은 보스 앞 250 안에서 1타에 맞는다 — 궤적이 가장 높은 자리다(보스 앞 300 밖에서는 12 · 13 틱의 누름도 넘는다).
+        BattleSim sim = Sim(null, "올려베기", "3연격");
+        int first = UntilBegins(sim, "올려베기");
+        UntilTick(sim, first, 58);
+        int second = UntilNextBegins(sim, "3연격", _ => Toward(sim, gap));
+        UntilTick(sim, second, jumpAt - 1, _ => Toward(sim, gap));
+        UntilTick(sim, second, 59, p => p == jumpAt ? _jump : default);
+
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
+        {
+            (DodgeVerb.Spacing, HitVerdict.MissedTooFar),
+            (DodgeVerb.Jump, HitVerdict.MissedByHeight),
+        }, "같은 점프가 3연격 1타를 못 넘었다 — 대조군이 무너졌다");
+    }
+
+    [Theory]
+    [InlineData("none", DodgeVerb.None, HitVerdict.Hit)]
+    [InlineData("dash", DodgeVerb.Dash, HitVerdict.Dodged)]
+    [InlineData("guard", DodgeVerb.Guard, HitVerdict.Guarded)]
+    [InlineData("parry", DodgeVerb.Parry, HitVerdict.Parried)]
+    public void 올려베기는_선_사람을_치고_대시_가드_패리로는_받는다(string answer, DodgeVerb verb, HitVerdict verdict)
+    {
+        // 설계 2026-09-29 조각1 §2.1 — 점프만 잡는 칼이 아니다: 서 있으면 맞고, 선 사람의 답(대시 무적 · 가드 · 패리)은 다 받는다. 대시는 창의 첫 틱에,
+        // 패리는 창 2틱 앞에 누르고 가드는 창 앞부터 붙든다. 보스 앞 250 에 선다.
+        BattleSim sim = Sim(null, "올려베기");
+        int first = UntilBegins(sim, "올려베기");
+        UntilTick(sim, first, 58);
+        int second = UntilNextBegins(sim, "올려베기", _ => Toward(sim, 250));
+        UntilTick(sim, second, 40, _ => Toward(sim, 250));
+        UntilTick(sim, second, 58, p => answer switch
+        {
+            "dash" when p == 51 => _dash,
+            "guard" => _guard,
+            "parry" when p == 49 => _parry,
+            _ => default,
+        });
+
+        sim.Events.Count.ShouldBe(2, "둘째 올려베기의 관측이 안 섰다");
+        (sim.Events[1].Verb, sim.Events[1].Verdict).ShouldBe((verb, verdict));
+    }
+
+    [Theory]
+    [InlineData("none", DodgeVerb.None, HitVerdict.Hit)]
+    [InlineData("dash", DodgeVerb.Dash, HitVerdict.Hit)]
+    [InlineData("guard", DodgeVerb.Guard, HitVerdict.Hit)]
+    [InlineData("parry", DodgeVerb.Parry, HitVerdict.Hit)]
+    [InlineData("jump", DodgeVerb.Jump, HitVerdict.MissedByHeight)]
+    public void 점프_공격의_착지는_대시_무적도_가드도_패리도_맨몸이고_뛴_사람만_넘는다(string answer, DodgeVerb verb, HitVerdict verdict)
+    {
+        // 설계 2026-09-29 조각1 §2.3 — 유저: "점프공격은 대시로도 안피해지고 점프로만 회피 가능해야합니다." 착지(60틱)의 답 셋이 거짓이라 창의 첫 틱에
+        // 누른 대시의 무적도 · 창 앞부터 붙든 가드도 · 창 2틱 앞에 누른 패리도 맨몸에 24 를 맞는다. 띠가 아레나 전체라 거리로도 못 피한다. 30틱에 뛴
+        // 사람만 넘는다(발이 누른 틱 + 3 ~ + 55 동안 60 위 — 창 60 ~ 67 을 덮는다). 파이터는 480 에 서 있고 보스는 그 앞 115(595)에 내린다.
+        BattleSim sim = Sim(null, "점프 공격");
+        int begun = UntilBegins(sim, "점프 공격");
+        UntilTick(sim, begun, 68, p => answer switch
+        {
+            "dash" when p == 60 => _dash,
+            "guard" => _guard,
+            "parry" when p == 58 => _parry,
+            "jump" when p == 30 => _jump,
+            _ => default,
+        });
+
+        DodgeEvent landing = sim.Events.ShouldHaveSingleItem("착지의 관측이 하나가 아니다");
+        (landing.Verb, landing.Verdict).ShouldBe((verb, verdict));
+        (landing.DashAvailable, landing.GuardAvailable, landing.ParryAvailable, landing.JumpAvailable).ShouldBe((false, false, false, true),
+            "관측이 착지의 답과 다른 말을 한다");
+        sim.Fighter.Health.ShouldBe(Real().MaxHealth - (verdict == HitVerdict.Hit ? 24 : 0));
+    }
+
+    [Theory]
+    [InlineData(false, DodgeVerb.Dash, HitVerdict.Dodged)]
+    [InlineData(true, DodgeVerb.None, HitVerdict.Hit)]
+    public void 빠른_3연격은_앞_3연격의_마지막_창_뒤_2연격을_시작한_사람을_잡고_1타만_친_사람은_못_잡는다(bool chain, DodgeVerb verb, HitVerdict verdict)
+    {
+        // 설계 2026-09-29 조각1 §2.2 — 3연격의 마지막 창(159 ~ 166)이 닫힌 뒤 남은 후딜 28틱 + 쉬는 간격 48틱 = 76틱. 창이 닫힌 다음 틱(167)에 J 를
+        // 누르고 2타를 이은 사람(2연격 · 106틱)은 빠른 3연격이 선 뒤에도 묶여 있어, 1타(24틱)에 누른 대시가 버려지고 맞는다 — 칼질 중이라 욕심으로
+        // 남는다. 1타만 친 사람(40틱)은 이미 풀려 같은 대시로 흘린다. 3연격은 사거리 밖(보스 앞 440)에서 헛치게 두고 — 셋 다 피하려면 427 넘게
+        // 떨어져야 한다 — 쉬는 동안 보스가 다가와(128px) 빠른 3연격이 닿는 자리(보스 앞 300 남짓)에 선다.
+        BattleSim sim = Sim(null, "3연격", "빠른 3연격");
+        int triple = UntilBegins(sim, "3연격", _ => Toward(sim, 440));
+        UntilTick(sim, triple, 166, _ => Toward(sim, 440));
+        UntilTick(sim, triple, 180, p => p == 167 || (chain && p == 170) ? _attack : default);
+        int fast = UntilBegins(sim, "빠른 3연격");
+        UntilTick(sim, fast, 31, p => p == 24 ? _dash : default);
+
+        sim.Events.Take(3).ShouldAllBe(e => e.Verdict == HitVerdict.MissedTooFar, "3연격이 사거리 밖에서 헛치지 않았다 — 이 테스트가 칼질을 안 본다");
+        DodgeEvent first = sim.Events.Skip(3).ShouldHaveSingleItem("빠른 3연격 1타의 관측이 하나가 아니다");
+        (first.Verb, first.Verdict).ShouldBe((verb, verdict));
+        first.GreedWindow.ShouldBe(chain, "2연격에 묶인 사람만 욕심으로 남는다");
+    }
+
+    [Fact]
+    public void 돌진은_멀리_선_사람에게_달려와_도착_뒤_3타를_꽂는다()
+    {
+        // 설계 2026-09-29 조각1 §2.4 · 설계 §4.6 — 멀리 서서 지켜보는 사람(480)에게 보스(1312)가 곧장 달린다: 앞쪽 거리 832 에서 멈출 자리(760)까지
+        // 552 는 ⌈552 / 60⌉ = 10틱이라 10틱에 닿는다(A). 달리는 동안 패턴 시계가 1 에 서 있다가 도착 다음 틱부터 다시 가 3타가 시계 24 에 선다 —
+        // A + 23 = 33틱이다. 서 있던 사람은 맞는다(3타의 땅 사거리 +80 ~ +404 안).
+        BattleSim sim = Sim(null, "돌진");
+        int begun = UntilBegins(sim, "돌진");
+        sim.Boss.X.ShouldBe(1312, 1e-9);
+
+        UntilTick(sim, begun, 9);
+        sim.Boss.X.ShouldBeGreaterThan(760, "9틱에 벌써 닿았다");
+        UntilTick(sim, begun, 10);
+        sim.Boss.X.ShouldBe(760, 1e-9, "돌진이 10틱에 파이터 앞 280 에 안 멈췄다");
+        UntilTick(sim, begun, 32);
+        sim.Events.ShouldBeEmpty("3타가 33틱보다 먼저 섰다");
+        UntilTick(sim, begun, 33);
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[] { (DodgeVerb.None, HitVerdict.Hit) }, "3타가 33틱에 안 섰다");
+        sim.Fighter.Health.ShouldBe(Real().MaxHealth - 14);
+    }
+
+    [Fact]
+    public void 돌진은_280_안의_사람에게_24틱에_친다()
+    {
+        // 설계 2026-09-29 조각1 §2.4 「단독으로 나올 때의 예고」 — 파이터가 280 안이면 돌진은 0틱이고(움직이지 않고 그 틱에 끝난다 · 뒤로도 안 간다)
+        // 선딜만 남는다: 3타가 24틱(0.40초 — 빠른 3연격의 첫 타와 같다)에 선다. 옛 0.25초면 15틱이었다. 첫 돌진이 가만히 선 사람(480) 앞 280(760)에
+        // 달려와 친 뒤, 쉬는 동안 보스가 128px 더 걸어와(632) 둘째 돌진은 152 앞에서 선다.
+        BattleSim sim = Sim(null, "돌진");
+        UntilBegins(sim, "돌진");
+        int second = UntilNextBegins(sim, "돌진");
+        double x = sim.Boss.X;
+        x.ShouldBe(632, 1e-6, "둘째 돌진이 첫 돌진이 멈춘 자리(760)에서 128px 걸어 온 자리에 안 섰다");
+        (x - sim.Fighter.X).ShouldBe(152, 1e-6, "둘째 돌진이 280 안에서 안 섰다 — 이 테스트가 0틱 돌진을 안 본다");
+        int seen = sim.Events.Count;
+
+        UntilTick(sim, second, 23);
+        sim.Boss.X.ShouldBe(x, "280 안의 사람에게 달렸다");
+        sim.Events.Count.ShouldBe(seen, "3타가 24틱보다 먼저 섰다");
+        UntilTick(sim, second, 24);
+        sim.Events.Count.ShouldBe(seen + 1, "3타가 24틱에 안 섰다");
+        (sim.Events[^1].Verb, sim.Events[^1].Verdict).ShouldBe((DodgeVerb.None, HitVerdict.Hit));
+    }
+
+    [Theory]
+    [InlineData("jump", 13, DodgeVerb.Jump, HitVerdict.MissedByHeight)]
+    [InlineData("jump", 33, DodgeVerb.Jump, HitVerdict.MissedByHeight)]
+    [InlineData("jump", 34, DodgeVerb.Jump, HitVerdict.Grabbed)]
+    [InlineData("dash", 32, DodgeVerb.Dash, HitVerdict.Grabbed)]
+    public void 잡기는_보고_뛴_사람을_못_잡고_대시한_사람을_붙든다(string answer, int at, DodgeVerb verb, HitVerdict verdict)
+    {
+        // 설계 2026-09-29 조각1 §2.4 — 흰 구가 나는 선딜(0.60초)이 예고의 전부다. 동작이 선 틱(1)에 보고 반응 0.2초(12틱) 뒤 13틱에 뛴 사람은
+        // 넘는다. 점프는 누른 틱 + 3 부터 발이 60 위라 창(36틱)에 닿는 마지막 누름은 33틱이다 — 반응할 틈 33틱(옛 0.40초면 21틱). 한 틱 늦으면
+        // 잡힌다. 대시 무적 8틱(32 ~ 39)이 창의 첫 틱을 덮어도 잡힌다 — 잡기는 무적을 안 받는다.
+        BattleSim sim = Sim(null, "잡기");
+        int begun = UntilBegins(sim, "잡기");
+        UntilTick(sim, begun, 44, p => p == at ? (answer == "jump" ? _jump : _dash) : default);
+
+        DodgeEvent grab = sim.Events.ShouldHaveSingleItem("잡기의 관측이 하나가 아니다");
+        (grab.Verb, grab.Verdict).ShouldBe((verb, verdict));
+        grab.DashAvailable.ShouldBeFalse("잡기가 대시를 받는다고 실렸다");
+        sim.Fighter.Held.ShouldBe(verdict == HitVerdict.Grabbed);
+        sim.Fighter.Health.ShouldBe(Real().MaxHealth - (verdict == HitVerdict.Grabbed ? 25 : 0));
+    }
+
+    [Fact]
+    public void 잡기에_죽으면_판이_그_틱에_끝나고_그_잡힘은_관측으로_남는다()
+    {
+        // Review Focus 4 (#78) — 체력이 25 이하인 채 잡힌다. 가만히 선 사람(480)에게 잡기를 되풀이하면 25씩 닿아 마지막 잡기에 죽는다 — 몇 번째인지는
+        // 파이터 체력(fighters.json)에 달려 세지 않는다. 판은 그 틱에 진다(reason=dead) — 죽인 잡기가 닿은 틱이 판이 끝난 틱이고(붙들림 60틱을
+        // 기다리지 않는다) 파이터는 붙들린 채다. 판을 끝낸 그 한 대는 닿은 것이라 관측이 있다(설계 §3.6 ③ — 끊기는 것은 남은 창뿐이다): 마지막 관측이
+        // Grabbed 이고, 끊긴 창(cut_swing)은 없다.
+        BattleSim sim = Sim(null, "잡기");
+        using var log = new LogCapture();
+        BattleOutcome? outcome = null;
+        int grabs = 0, lastGrab = 0;
+        for (int i = 0; i < 60 * 90 && outcome is null; i++)
+        {
+            outcome = sim.Tick(default);
+            int now = sim.Events.Count(e => e.Verdict == HitVerdict.Grabbed);
+            if (now > grabs)
+            {
+                (grabs, lastGrab) = (now, sim.Ticks);
+            }
+        }
+
+        outcome.ShouldBe(BattleOutcome.Lose);
+        grabs.ShouldBeGreaterThan(1, "잡기가 한 번에 죽였다 — 체력 25 이하로 시작한 판은 이 테스트가 보려는 것이 아니다");
+        sim.Ticks.ShouldBe(lastGrab, "판이 죽인 잡기의 틱에 안 끝났다 — 붙들림이 끝나기를 기다렸다");
+        sim.Fighter.Held.ShouldBeTrue("죽인 잡기에 붙들리지 않았다");
+        sim.Fighter.Health.ShouldBe(0);
+        sim.Events[^1].Verdict.ShouldBe(HitVerdict.Grabbed, "죽인 잡기가 관측으로 안 남았다");
+        log.Lines.ShouldContain($"[result][I] lose reason=dead ticks={sim.Ticks} boss_hp={sim.Boss.Health}");
+        log.Lines.ShouldNotContain(l => l.StartsWith("[boss][D] cut_swing ", StringComparison.Ordinal), "죽인 잡기를 끊긴 창으로 버렸다");
+    }
+
+    [Fact]
+    public void 흰_구가_나는_자리는_잡기_창_바로_앞_단계이고_창이_산_동안_기다린다()
+    {
+        // 설계 §4.7 · §6 「잡기」 — 흰 구가 날고 · 붙들고 · 흩어지는 시각은 규칙의 단계와 잡힘이 정한다(규칙은 흰 구를 모른다). 뷰가 읽는 두 자리를
+        // 못박는다. ① 지금 단계 바로 다음이 판정이면 그 판정과 지난 몫(BossHitAhead) — 잡기는 idle 한 장에서 곧장 창이라 동작의 첫 틱(1)부터 난다:
+        // 몫은 idle 이 든 틱(1)에서 창(36)까지의 몫이라 첫 틱에 0 · 창 한 틱 앞(35)에 34/35 다. 쉬는 동안은 비었다. ② 잡기 창이 산 동안(GrabLive) —
+        // 뛰어넘은 사람에게는 창 8틱
+        // (36 ~ 43)이 끝날 때까지 참이고, 흰 구는 그동안 바닥에서 기다렸다 흩어진다.
+        BattleSim sim = Sim(null, "잡기");
+        for (int i = 0; i < 40; i++)
+        {
+            sim.Tick(default);
+            sim.BossHitAhead.ShouldBeNull($"쉬는 동안({sim.Ticks}틱) 흰 구가 날 자리가 있다");
+        }
+
+        int begun = UntilBegins(sim, "잡기");
+        for (int p = 1; p <= 35; p++)
+        {
+            UntilTick(sim, begun, p, q => q == 20 ? _jump : default);
+            (HitBox hit, double progress) = sim.BossHitAhead.ShouldNotBeNull($"{p}틱: 흰 구가 날 자리가 비었다");
+            hit.GrabHoldSeconds.ShouldBeGreaterThan(0);
+            progress.ShouldBe((p - 1) / 35.0, 1e-9, $"{p}틱: 지난 몫이 idle 에서 창까지의 몫이 아니다");
+            sim.GrabLive.ShouldBeFalse();
+        }
+
+        for (int p = 36; p <= 43; p++)
+        {
+            UntilTick(sim, begun, p);
+            sim.BossHitAhead.ShouldBeNull($"{p}틱: 창이 열렸는데 아직 날고 있다");
+            sim.GrabLive.ShouldBe(p < 43, $"{p}틱: 뛰어넘은 사람 앞의 잡기 창");
+        }
+
+        sim.Fighter.Held.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void 흰_구가_나는_동안_보스가_무너지면_날_자리도_잡기_창도_없다()
+    {
+        // Review Focus 5 (#78) — 설계 §4.3: 게이지는 보스가 무엇을 하고 있었든 무너뜨린다. 흰 구가 나는 선딜 동안 보스를 무너뜨리면 패턴이 끊겨 날
+        // 자리(BossHitAhead)가 그 틱에 사라지고 잡기 창은 안 선다 — 뷰의 흰 구는 그 자리에서 흩어진다(GrabOrb). 뷰가 앞 틱의 값을 붙들면 무너진 보스
+        // 앞에 흰 구가 날아와 파이터를 감싼다. 칼 한 번에 게이지가 차는 기준 파이터가 보스 앞 150 까지 걸어가다 첫 잡기에 붙들리고, 풀린 뒤 마저
+        // 다가가 둘째 잡기가 서면 칼을 넣는다.
+        BattleSim sim = Sim(TestConfigs.Breaker(), "잡기");
+        InputFrame Approach() => sim.Boss.X - sim.Fighter.X > 150 ? _right : default;
+        UntilBegins(sim, "잡기", _ => Approach());
+        int begun = UntilNextBegins(sim, "잡기", _ => Approach());
+        UntilTick(sim, begun, 1);
+        sim.BossHitAhead.ShouldNotBeNull("잡기의 첫 틱인데 날 자리가 없다 — 이 테스트가 나는 동안을 안 본다");
+
+        for (int i = 0; i < 35 && !sim.Boss.Exhausted; i++)
+        {
+            sim.Tick(sim.Fighter.Action == FighterAction.Idle ? _attack : default);
+        }
+
+        sim.Boss.Exhausted.ShouldBeTrue("흰 구가 나는 동안 못 무너뜨렸다");
+        (sim.Ticks - begun).ShouldBeLessThan(36, "잡기 창이 열린 뒤에 무너졌다");
+        sim.BossHitAhead.ShouldBeNull("무너졌는데 흰 구가 날 자리가 남았다");
+        UntilTick(sim, begun, 60);
+        sim.GrabLive.ShouldBeFalse();
+        sim.Fighter.Held.ShouldBeFalse("무너진 보스의 잡기가 섰다");
+    }
+
+    [Fact]
+    public void 잡히면_그_틱에_잡기_창이_닫힌다()
+    {
+        // 한 번 휘두르면 한 번만 맞는다(설계 §3.5) — 잡은 창은 그 틱에 끝난다. 흰 구는 그때부터 창이 아니라 붙들림(Fighter.Held)을 따라간다.
+        BattleSim sim = Sim(null, "잡기");
+        int begun = UntilBegins(sim, "잡기");
+        UntilTick(sim, begun, 36);
+
+        sim.Fighter.Held.ShouldBeTrue();
+        sim.GrabLive.ShouldBeFalse("잡은 창이 살아 있다");
+    }
+
+    [Fact]
+    public void 잡기의_띠는_착지와_같은_모양이지만_대_본_판정이_붙드는_판정이라고_말한다()
+    {
+        // #83 · 설계 §4.7 — 착지의 흰 충격파는 "바닥에 닿은 사각형을 이으면 바닥 [0, 폭] 을 다 덮는 판정" 에 선다(FloorWave.Find · 패턴 이름으로 안
+        // 가른다). 잡기의 띠 [0, 1920, 0, 60] 은 착지 띠와 모양이 같아 그 규칙만으로는 잡기에도 선다 — 그런데 잡기의 그림은 흰 구다(유저: "흰색 구가
+        // 캐릭터를 잡도록"). 충격파는 보스가 바닥을 내리치는 그림이라 idle 로 선 보스 발밑에서 퍼지면 착지로 읽힌다. 그래서 뷰(BattleCues)가 이 틱에 대
+        // 본 판정이 붙드는 판정이면(BossTestedGrab) 충격파를 안 건다 — 판정의 깃발로 가른다(CLAUDE.md §2). 뛰어넘은 사람 앞에서 창 8틱 내내 본다.
+        BattleSim grab = Sim(null, "잡기");
+        int begun = UntilBegins(grab, "잡기");
+        for (int p = 36; p <= 43; p++)
+        {
+            UntilTick(grab, begun, p, q => q == 20 ? _jump : default);
+            FloorWave.Find(grab.BossTestedRects, grab.Boss.X, TestConfigs.Arena().Width).ShouldNotBeNull($"{p}틱: 잡기의 띠가 바닥 전체가 아니다");
+            grab.BossTestedGrab.ShouldBeTrue($"{p}틱: 잡기 창인데 붙드는 판정이라고 안 한다");
+        }
+
+        BattleSim leap = Sim(null, "점프 공격");
+        begun = UntilBegins(leap, "점프 공격");
+        UntilTick(leap, begun, 60);
+        FloorWave.Find(leap.BossTestedRects, leap.Boss.X, TestConfigs.Arena().Width).ShouldNotBeNull("착지가 바닥 전체가 아니다");
+        leap.BossTestedGrab.ShouldBeFalse("착지를 붙드는 판정이라고 한다 — 충격파가 안 선다");
+    }
+
+    [Fact]
+    public void 점프_공격의_도약_중에_무너지면_그_자리에_내리고_착지는_없다()
+    {
+        // #59 의 4/6 넘김 — 공중 탈진은 _fall 이 내리고 EndPattern 이 착지를 걷는다(설계 §4.2). 가만히 선 파이터(480)에게 첫 도약이 내려(595)
+        // 착지를 맞히고, 둘째 점프 공격은 같은 자리를 겨냥해 제자리에서 솟는다. 떠 있는 동안 칼을 넣어 게이지로 무너뜨리면: 공중에서 무너지고
+        // (cause=poise) · 포물선의 높이만 따라 그 자리에 내리고 · 둘째 착지는 없다.
+        BattleSim sim = Sim(TestConfigs.Breaker(), "점프 공격");
+        int first = UntilBegins(sim, "점프 공격");
+        using var log = new LogCapture();
+        UntilTick(sim, first, 68);
+        sim.Events.ShouldHaveSingleItem("첫 착지의 관측이 하나가 아니다").Verdict.ShouldBe(HitVerdict.Hit, "첫 착지가 안 맞았다");
+
+        int second = UntilNextBegins(sim, "점프 공격");
+        for (int i = 0; i < 200 && !sim.Boss.Exhausted; i++)
+        {
+            bool airborne = sim.Ticks - second > 24 && sim.Boss.Y > 0 && sim.Fighter.Action == FighterAction.Idle;
+            sim.Tick(airborne ? _attack : default);
+        }
+
+        sim.Boss.Exhausted.ShouldBeTrue("둘째 도약 중에 무너지지 않았다");
+        sim.Boss.Y.ShouldBeGreaterThan(0, "땅에서 무너졌다 — 공중 탈진을 못 본다");
+        double x = sim.Boss.X;
+        for (int i = 0; i < 120 && sim.Boss.Exhausted; i++)
+        {
+            sim.Tick(default);
+            sim.Boss.X.ShouldBe(x, "무너진 보스가 가로로 움직였다");
+        }
+
+        sim.Boss.Exhausted.ShouldBeFalse("120틱 안에 탈진이 안 풀렸다 — 아래의 단언이 탈진 도중을 본다");
+        sim.Boss.Y.ShouldBe(0, "탈진 안에 안 내렸다");
+        log.Lines.Count(l => l.StartsWith("[boss][D] motion_begin id=leap ", StringComparison.Ordinal)).ShouldBe(2, "무너진 뒤에 또 뛰었다");
+        log.Lines.ShouldContain(l => l.StartsWith("[boss][D] exhaust cause=poise id=점프 공격 ", StringComparison.Ordinal));
+        log.Lines.ShouldContain(l => l.StartsWith("[boss][D] exhaust_landed ", StringComparison.Ordinal));
+        sim.Events.Count.ShouldBe(1, "끊긴 도약의 착지가 관측을 남겼다");
+    }
+
+    [Fact]
+    public void 엇박_3연격은_3연격의_박자에_누른_패리를_창_밖_커밋_안에서_맞힌다()
+    {
+        // 설계 §4.9 · §6.2 — 패리를 많이 하는 사람. 3연격의 1타(51틱)에 맞춰 2틱 앞(49틱)에 누른 K 는 3연격이면 받아친다. 엇박의 1타는 60틱
+        // (누름 + 11)이라 창(+ 6)을 지나 커밋(+ 18) 안에 떨어진다 — 맨몸이다. 관측의 수단은 패리 · 결과는 맞음이다.
+        foreach ((string pattern, HitVerdict expected) in new[] { ("3연격", HitVerdict.Parried), ("엇박 3연격", HitVerdict.Hit) })
+        {
+            BattleSim sim = Sim(null, pattern);
+            int begun = UntilBegins(sim, pattern, WalkIn);
+            UntilTick(sim, begun, 60, p => p == 49 ? _parry : WalkIn(begun + p));
+
+            sim.Events.Count.ShouldBe(1, $"{pattern}: 1타의 관측이 안 섰다");
+            (sim.Events[0].Verb, sim.Events[0].Verdict).ShouldBe((DodgeVerb.Parry, expected), $"{pattern}: 박자로 누른 패리");
+        }
+    }
+
+    [Fact]
+    public void 엇박_3연격에_박자로_누른_사람은_맞은_뒤_3연격의_간격으로_잰_2타에서도_또_맞는다()
+    {
+        // 설계 §4.9 · §5.3 · #82 — 셋 다 늦추므로 맞은 뒤 다음 타를 3연격의 간격(1 → 2타 42틱)으로 재어도 또 늦다. 49틱의 K 는 커밋(20틱)과 패리 뒤
+        // 경직(15틱)에 묶여 83틱까지 선다 — 헛친 한 번이 0.583초다. 풀린 뒤 1타에 맞은 틱(60)에서 42틱 뒤의 2타를 겨냥해 2틱 앞(100틱)에 누른 K 는
+        // 엇박의 2타(111틱 · 누름 + 11)를 창(+ 6) 밖 커밋 안에서 맞는다. 두 관측 모두 수단 패리 · 결과 맞음이다. GIF offbeat 의 사람이다(GifRunner).
+        BattleSim sim = Sim(null, "엇박 3연격");
+        int begun = UntilBegins(sim, "엇박 3연격", WalkIn);
+        UntilTick(sim, begun, 111, p => p is 49 or 100 ? _parry : WalkIn(begun + p));
+
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
+        {
+            (DodgeVerb.Parry, HitVerdict.Hit),
+            (DodgeVerb.Parry, HitVerdict.Hit),
+        }, "박자로 누른 사람이 1타 · 2타 중 하나를 받아쳤다");
+    }
+
+    [Fact]
+    public void 엇박_3연격도_칼이_안_오르는_것을_보고_누르면_받아친다()
+    {
+        // 설계 §4.9 — 3연격이면 칼이 오르는 44틱에 엇박은 f0 에 그대로 서 있다. 판정(60틱) 16틱 앞에 보이는 다름이라 반응 0.2초(12틱) 뒤
+        // 56틱에 누르면 창(54 ~ 60)에 든다. 받아치면 어느 타든 연격이 끊기고 보스가 탈진한다(설계 §4.3).
+        BattleSim sim = Sim(null, "엇박 3연격");
+        int begun = UntilBegins(sim, "엇박 3연격", WalkIn);
+        UntilTick(sim, begun, 60, p => p == 56 ? _parry : WalkIn(begun + p));
+
+        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
+        sim.Boss.Exhausted.ShouldBeTrue("받아쳤는데 보스가 안 무너졌다");
+    }
+}

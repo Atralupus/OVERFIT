@@ -12,7 +12,7 @@ namespace Overfit.Rules.Tests.Factory;
 /// </summary>
 public class FactoryStatsTests
 {
-    private static readonly string[] _roster = ["3연격", "점프 3연속", "1타 돌진", "1타 잡기", "엇박 3연격"];
+    private static readonly string[] _roster = ["3연격", "점프 공격", "엇박 3연격", "빠른 3연격", "돌진"];
 
     /// <summary>봇 하나 — <paramref name="labels"/> 는 (칸, 맞았나) 들이다.</summary>
     private static BotResult Bot(int bot, BotHabit habit, double rhythm, params (int Slot, bool Hit)[] labels) =>

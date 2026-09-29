@@ -606,11 +606,12 @@ public partial class Battle : Node2D
             // 돌진의 run 만 빠르다 (#78 · 설계 §4.6) — 단계가 단 움직임의 배속이다(_motionAnimSpeed). 규칙은 이 배속을 모른다.
             _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
                 ? speed(_feel)
-                : 1.0));
+                : 1.0,
+            _sim.BossStep?.Mirror ?? false));
 
         // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림 · 산 창)이 그 틱에 멈춰 남는다. 거르지 않으면
         // 흰 구가 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 잡기에 죽은 판도 같다: 판은 그 잡기가 닿은 틱에 끝나고
-        // (붙들림 60틱을 안 기다린다 · Stage2BattleTests) 파이터는 규칙에서 붙들린 채라, 안 거르면 흰 구가 죽는 모션 위에 결과 화면까지 감싸 있다.
+        // (붙들림 60틱을 안 기다린다 · MoveBattleTests) 파이터는 규칙에서 붙들린 채라, 안 거르면 흰 구가 죽는 모션 위에 결과 화면까지 감싸 있다.
         // 셋(날기 · 붙듦 · 기다림)을 다 거른다 — 하나라도 남으면 그 상태로 멈춘다. 거르면 그 자리에서 흩어진다(GrabOrb 의 흩어짐 · 끝난 판도
         // 그리기는 계속 부른다).
         bool live = !_over;

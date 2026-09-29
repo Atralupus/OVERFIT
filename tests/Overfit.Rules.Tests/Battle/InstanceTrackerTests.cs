@@ -76,11 +76,11 @@ public class InstanceTrackerTests
     {
         // 막아 낸 가드(칩 피해)는 막은 것이다 — 가드로 버티던 사람이 무너진 것(GuardBroken)만 맞은 것이다.
         List<PatternInstance> instances = new Script()
-            .Tick("점프 3연속", Event("점프 3연속", verdict))
+            .Tick("점프 공격", Event("점프 공격", verdict))
             .Tick(null)
             .Finish();
 
-        instances.ShouldBe(new[] { new PatternInstance("점프 3연속", false) });
+        instances.ShouldBe(new[] { new PatternInstance("점프 공격", false) });
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class InstanceTrackerTests
         List<PatternInstance> instances = new Script()
             .Tick("3연격", Event("3연격", HitVerdict.Dodged))
             .Tick(null)
-            .Tick("1타 잡기", Event("1타 잡기", HitVerdict.Dodged))
+            .Tick("잡기", Event("잡기", HitVerdict.Dodged))
             .Finish();
 
         instances.ShouldBe(new[] { new PatternInstance("3연격", false) });
@@ -101,10 +101,10 @@ public class InstanceTrackerTests
     {
         // 맞아서 쓰러진 사례 — 판을 끝낸 그 한 대가 곧 답이다.
         List<PatternInstance> instances = new Script()
-            .Tick("1타 잡기", Event("1타 잡기", HitVerdict.Grabbed))
+            .Tick("잡기", Event("잡기", HitVerdict.Grabbed))
             .Finish();
 
-        instances.ShouldBe(new[] { new PatternInstance("1타 잡기", true) });
+        instances.ShouldBe(new[] { new PatternInstance("잡기", true) });
     }
 
     [Fact]
@@ -127,12 +127,12 @@ public class InstanceTrackerTests
         List<PatternInstance> instances = new Script()
             .Tick("3연격", Event("3연격", HitVerdict.Dodged))
             .Tick(null)
-            .Tick("1타 돌진")
-            .Tick("1타 돌진", Event("3연격", HitVerdict.Hit), Event("1타 돌진", HitVerdict.Dodged))
+            .Tick("돌진")
+            .Tick("돌진", Event("3연격", HitVerdict.Hit), Event("돌진", HitVerdict.Dodged))
             .Tick(null)
             .Finish();
 
-        instances.ShouldBe(new[] { new PatternInstance("3연격", false), new PatternInstance("1타 돌진", false) });
+        instances.ShouldBe(new[] { new PatternInstance("3연격", false), new PatternInstance("돌진", false) });
     }
 
     [Fact]
@@ -141,11 +141,11 @@ public class InstanceTrackerTests
         // 판은 늘 간격을 두지만(패턴 사이 쉬는 틱이 1 이상) 가르기가 그 가정에 기대지 않는다.
         List<PatternInstance> instances = new Script()
             .Tick("3연격", Event("3연격", HitVerdict.Hit))
-            .Tick("1타 돌진", Event("1타 돌진", HitVerdict.Dodged))
+            .Tick("돌진", Event("돌진", HitVerdict.Dodged))
             .Tick(null)
             .Finish();
 
-        instances.ShouldBe(new[] { new PatternInstance("3연격", true), new PatternInstance("1타 돌진", false) });
+        instances.ShouldBe(new[] { new PatternInstance("3연격", true), new PatternInstance("돌진", false) });
     }
 
     [Fact]

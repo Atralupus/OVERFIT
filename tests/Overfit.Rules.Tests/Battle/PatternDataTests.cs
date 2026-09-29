@@ -59,11 +59,11 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 판정_단계는_hitbox_와_band_중_꼭_하나를_갖는다()
+    public void 판정_단계는_hitbox_band_rects_중_꼭_하나를_갖는다()
     {
-        // 설계 §8.1 — 판정 단계는 그림에서 뽑은 모양의 id(hitbox) 또는 바닥 띠(band) 중 **꼭 하나**를 갖는다. 둘 다 있으면 어느 것이
-        // 치는지 데이터만 보고 모르고, 둘 다 없으면 판을 세울 때 거절된다(BossHits). id 는 hitboxes.json 에 있어야 한다 —
-        // JsonData 는 모르는 키를 조용히 버리므로 "hitbx" 같은 오타는 빌드를 그냥 지나간다.
+        // 설계 §8.1 · 설계 2026-09-29 조각1 §2.1 — 판정 단계는 그림에서 뽑은 모양의 id(hitbox) · 바닥 띠(band) · 손으로 적은 사각형(rects) 중
+        // **꼭 하나**를 갖는다. 둘 이상이면 어느 것이 치는지 데이터만 보고 모르고, 없으면 판을 세울 때 거절된다(BossHits). id 는 hitboxes.json 에
+        // 있어야 한다 — JsonData 는 모르는 키를 조용히 버리므로 "hitbx" 같은 오타는 빌드를 그냥 지나간다.
         Dictionary<string, HitShape> shapes = TestConfigs.HitShapes();
         int checkedSteps = 0;
         foreach ((string id, PatternDef def) in Load())
@@ -72,28 +72,57 @@ public class PatternDataTests
             {
                 if (step.Kind != "active")
                 {
-                    (step.Hitbox is null && step.Band is null).ShouldBeTrue($"{id}: t={step.T} 판정이 아닌 단계({step.Kind})에 모양이 있다");
+                    (step.Hitbox is null && step.Band is null && step.Rects is null)
+                        .ShouldBeTrue($"{id}: t={step.T} 판정이 아닌 단계({step.Kind})에 모양이 있다");
                     continue;
                 }
 
                 checkedSteps++;
-                (step.Hitbox is null).ShouldNotBe(step.Band is null, $"{id}: t={step.T} 판정 단계는 hitbox 와 band 중 꼭 하나다");
+                new object?[] { step.Hitbox, step.Band, step.Rects }.Count(o => o is not null)
+                    .ShouldBe(1, $"{id}: t={step.T} 판정 단계는 hitbox · band · rects 중 꼭 하나다");
                 step.Damage.ShouldBeGreaterThan(0, $"{id}: t={step.T} 판정인데 피해가 0 이다");
                 if (step.Hitbox is { } hitbox)
                 {
                     shapes.ShouldContainKey(hitbox, $"{id}: t={step.T} 의 hitbox {hitbox} 가 hitboxes.json 에 없다");
                 }
-                else
+                else if (step.Band is { } b)
                 {
-                    IReadOnlyList<double> b = step.Band!;
                     b.Count.ShouldBe(4, $"{id}: t={step.T} band 는 [안쪽, 바깥쪽, 아래, 위] 넷이다");
                     b[0].ShouldBeLessThanOrEqualTo(b[1], $"{id}: t={step.T} band 의 안쪽이 바깥쪽보다 멀다");
                     b[2].ShouldBeLessThanOrEqualTo(b[3], $"{id}: t={step.T} band 의 아래가 위보다 높다");
+                }
+                else
+                {
+                    step.Rects!.ShouldNotBeEmpty($"{id}: t={step.T} rects 가 비었다");
+                    foreach (IReadOnlyList<double> r in step.Rects!)
+                    {
+                        r.Count.ShouldBe(4, $"{id}: t={step.T} rects 의 사각형은 [x0, x1, y0, y1] 넷이다");
+                        r[0].ShouldBeLessThanOrEqualTo(r[1], $"{id}: t={step.T} rects 의 x0 이 x1 보다 크다");
+                        r[2].ShouldBeLessThanOrEqualTo(r[3], $"{id}: t={step.T} rects 의 y0 이 y1 보다 크다");
+                    }
                 }
             }
         }
 
         checkedSteps.ShouldBeGreaterThan(0, "판정이 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
+    [Fact]
+    public void 그림을_뒤집는_단계는_그림이_있다()
+    {
+        // 설계 2026-09-29 조각1 §2.1 — mirror 는 뷰만 읽는 칸이다(anim · frame 과 같다): 그 단계의 그림을 보는 쪽의 반대로 그린다. 그림이 없는 단계
+        // (end)에 적으면 뒤집을 것이 없다 — 오타이거나 단계를 잘못 짚은 것이다.
+        int mirrored = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            foreach (PatternStep step in def.Timeline.Where(s => s.Mirror))
+            {
+                mirrored++;
+                step.Anim.ShouldNotBeNull($"{id}: t={step.T} 그림이 없는 단계에 mirror 가 있다");
+            }
+        }
+
+        mirrored.ShouldBeGreaterThan(0, "뒤집는 단계가 하나도 없다 — 이 가드가 아무것도 안 본다");
     }
 
     [Fact]

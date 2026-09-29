@@ -96,7 +96,7 @@ public static class TestConfigs
     /// <summary>
     /// 칼질 한 칸을 베끼며 몇 값만 바꾼다. <see cref="ComboStepDef"/> 는 record 가 아니라 <c>with</c> 가 없다 — 테스트마다 열두 줄을 옮겨 적으면
     /// 칸에 키가 느는 날 베낀 곳마다 따라 고쳐야 하고, 하나를 빠뜨리면 그 테스트만 다른 칼질을 잰다. 그래서 베끼는 곳은 여기 하나다(#96 —
-    /// 전에는 BossExhaustTests · BossMotionTests · Stage2BattleTests 가 <c>Breaker</c> 를, BossPoiseTests · SwordTests 가 제 사본을 들고 있었다).
+    /// 전에는 BossExhaustTests · BossMotionTests · Stage2BattleTests(지금의 MoveBattleTests)가 <c>Breaker</c> 를, BossPoiseTests · SwordTests 가 제 사본을 들고 있었다).
     /// </summary>
     public static ComboStepDef Step(ComboStepDef s, double? stiff = null, int? poise = null, string? hitbox = null)
     {

@@ -36,24 +36,34 @@ public partial class ShotRunner : Node
 
     /// <summary>
     /// 붙든 가드가 <b>깨지기를</b> 기다리는 상한(초) — <c>battle-10b-guard-break</c> 하나가 쓴다. 기본 상한보다 길다 — 가드는
-    /// 두세 패턴에 걸쳐 깨지므로 한 주기가 아니라 여러 주기다(주기 = 간격 0.8 + 3연격 3.25 또는 점프 공격 1.5초).
+    /// 3연격 두 바퀴에 걸쳐 깨지므로 한 주기가 아니라 여러 주기다(주기 = 간격 0.8 + 3연격 3.25초).
     /// 넘기면 경고만 남기고 그냥 찍는다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다.
     /// 정해진 패턴 하나를 기다리는 것은 이것이 아니라 <see cref="_patternTimeout"/> 이다.
     /// </summary>
     private const double _guardBreakTimeout = 16.0;
 
     /// <summary>
-    /// <b>정해진 패턴</b>의 한 순간을 기다리는 상한(초) (#72). 두 가지 판에서 쓴다.
-    /// <list type="bullet">
-    /// <item><b>대본 판</b>(<see cref="NewBattle"/> 에 패턴을 준 판 · #78) — 그 패턴이 첫 뽑기(판의 48틱)부터 오므로 기다림은 그 패턴 안의 한 순간뿐이고,
-    /// 이 상한은 울타리일 뿐이다(규칙이 깨져 그 순간이 영영 안 올 때 셔터가 30초 뒤에 그냥 누른다).</item>
-    /// <item><b>대본 없는 1단계 판</b>(보스 피격 · 방향 잠금) — uniform 이라 한 주기(간격 0.8 + 3.25 또는 1.5초)마다 반반이다. 30초면 예닐곱 번
-    /// 뽑아 못 볼 확률이 1% 밑이지만, 세션 시드가 51 로 고정이라 그 1% 에 든 판은 <b>실행마다</b> 빗나간다 — 실제로 밟았다(공중 사진의 판은
-    /// 3연격만 여덟 번 뽑아 첫 점프 공격이 1992틱이었다). 그래서 특정 패턴이 꼭 와야 하는 장은 전부 대본 판으로 옮겼고(#78 — 그때 쓰던
-    /// "첫 패턴이 원하는 것인 판을 여덟 번까지 새로 세우는" 되풀이도 걷었다), 남은 둘은 어느 3연격이든 되는 장이다.</item>
-    /// </list>
+    /// <b>정해진 패턴</b>의 한 순간을 기다리는 상한(초) (#72). 판은 전부 대본 판이다(<see cref="NewBattle"/> 에 패턴을 준 판 · #78) — 기다리는 패턴이
+    /// 첫 뽑기(판의 48틱)부터 오거나 대본의 다음 칸으로 한 주기 뒤에 오므로, 이 상한은 울타리일 뿐이다(규칙이 깨져 그 순간이 영영 안 올 때 셔터가
+    /// 30초 뒤에 그냥 누른다).
+    ///
+    /// <para>
+    /// <b>대본 없는 판을 걷은 길.</b> 옛 1단계 판(보스 피격 · 방향 잠금)은 uniform 이라 한 주기(간격 0.8 + 3.25 또는 1.5초)마다 반반이었다. 30초면
+    /// 예닐곱 번 뽑아 못 볼 확률이 1% 밑이지만, 세션 시드가 51 로 고정이라 그 1% 에 든 판은 <b>실행마다</b> 빗나간다 — 실제로 밟았다(공중 사진의 판은
+    /// 3연격만 여덟 번 뽑아 첫 점프 공격이 1992틱이었다). 그래서 특정 패턴이 꼭 와야 하는 장을 대본 판으로 옮겼고(#78 — 그때 쓰던 "첫 패턴이 원하는
+    /// 것인 판을 여덟 번까지 새로 세우는" 되풀이도 걷었다), 남은 판도 명부가 일곱이 된 뒤 대본(<see cref="_classic"/>)으로 옮겼다(설계 2026-09-29
+    /// 조각1 §2) — 거기서도 밟았다(<see cref="_classic"/> 의 주석).
+    /// </para>
     /// </summary>
     private const double _patternTimeout = 30.0;
+
+    /// <summary>
+    /// 대본 없이 찍던 판들의 대본 — 옛 1단계의 두 동작을 번갈아 돈다(설계 2026-09-29 조각1 §2). 이 파일의 장면들(보스 피격 · 선딜 · 결과 · 2연격 ·
+    /// 경직 게이지 · 방향 잠금)은 그 명부에 맞춰 짰다: 3연격의 선딜에 칼을 넣고, 3연격은 보스가 선 자리에서 427px 까지만 친다. 명부가 일곱이 되자
+    /// 무작위 판에서 3연격은 한 뽑기에 1/7 이라 — 실제로 4/8 의 명부에서 첫 판(시도 1)은 3연격을 한 번도 안 뽑은 채 파이터가 30초에 죽었고(잡기 ·
+    /// 올려베기 · 빠른 3연격 …) 보스 피격 · 선딜 · 피격 세 장이 기다리다 빈손으로 넘어갔다. 대본이면 명부와 시드가 바뀌어도 같은 장이 찍힌다.
+    /// </summary>
+    private static readonly string[] _classic = { "3연격", "점프 공격" };
 
     /// <summary>손과 기다림 — 새 판 · 누르기 · 프레임과 상태 (<see cref="SceneDriver"/>).</summary>
     private readonly SceneDriver _drive;
@@ -78,8 +88,8 @@ public partial class ShotRunner : Node
         await _drive.Frames(6);
         await Screenshot.CaptureAsync(this, "credits");
 
-        // 1단계에서 찍는다 — 유저가 처음 만나는 판이다(#72).
-        await NewBattle();
+        // 옛 1단계의 두 동작으로 찍는다(_classic) — 아래 장면들이 그 명부에 맞춰 짜였다.
+        await NewBattle(_classic);
 
         await Shoot("battle-1-approach", 1.0);
 
@@ -188,11 +198,11 @@ public partial class ShotRunner : Node
             await Hitboxes();
         }
 
-        // 옛 2단계의 그림 (#78). 넷 다 대본 판이라 패턴 순서가 시도 시드에 안 달린다(대본 고르기 · 설계 §4.4) — 어디에 두어도 같은 장이 찍힌다.
-        // 판정 보기의 판들 뒤에 둔 것은 들인 순서일 뿐이다. 그 판들도 대본이라 이 넷이 앞에 끼어 시도 번호가 밀려도 안 바뀐다.
+        // 동작마다 한 장 (#78 · 설계 2026-09-29 조각1 §2). 넷 다 대본 판이라 패턴 순서가 시도 시드에 안 달린다(대본 고르기 · 설계 §4.4) — 어디에
+        // 두어도 같은 장이 찍힌다. 판정 보기의 판들 뒤에 둔 것은 들인 순서일 뿐이다. 그 판들도 대본이라 이 넷이 앞에 끼어 시도 번호가 밀려도 안 바뀐다.
         await Rush();
         await Grab();
-        await Jump3();
+        await Uppercut();
         await Offbeat();
 
         Log.Marker("shots", "shots=done");
@@ -209,7 +219,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Combo()
     {
-        await NewBattle();
+        await NewBattle(_classic);
 
         // 보스에게서 멀어진다. **벽까지 가지 않는다** — 벽에 붙으면 몸이 화면 왼쪽 끝에서 잘린다(실제로 그렇게 찍혔다).
         Hold("move_left", true);
@@ -256,7 +266,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Guarding()
     {
-        await NewBattle();
+        await NewBattle("3연격");
 
         // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
         Hold("move_right", true);
@@ -272,7 +282,8 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "battle-10-guard");
 
         // ── 붕괴: 스태미나가 바닥난 그 대 ─────────────────────────────────
-        // 붙든 가드는 3연격 한 바퀴에 54(8 · 8 · 14 의 1.8배)를, 점프 공격의 착지에 21.6 을 문다 — 두세 패턴이면 깨진다.
+        // 붙든 가드는 3연격 한 바퀴에 54(8 · 8 · 14 의 1.8배)를 문다 — 둘째 바퀴의 3타에서 깨진다. 3연격만 도는 판(대본)인 까닭: 점프 공격의
+        // 착지와 잡기는 가드를 안 받아(설계 2026-09-29 조각1 §2.3 · §2.4) 스태미나를 안 쓰고 맨몸에 맞는다 — 그런 판이 끼면 깨지기 전에 체력이 준다.
         // 깨지는 것은 **사건**이라 상태로는 못 노린다. 그래서 횟수가 늘어난 것을 보고 셔터를 누른다.
         int broke = _battle?.FighterGuardBreaks ?? 0;
         await _drive.Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _guardBreakTimeout);
@@ -282,8 +293,8 @@ public partial class ShotRunner : Node
         // ── 받아친 순간 (이슈 #53) ────────────────────────────────────────
         // **↓ 로는 못 받아친다.** 받아치는 것은 K 다 — 판정 <b>직전에</b> 눌러야 창(0.133초) 안에 선다.
         // 프레임을 세지 않고 남은 시간을 보고 누른다(봇이 쓰는 것과 같은 규칙이다): 세어 두면
-        // parry_precise_window 를 고치는 순간 이 장이 조용히 맞는 사진이 된다. 점프 공격의 착지는 패리를 못 받으므로
-        // 거기 누른 것은 맞고 지나간다 — 받아칠 때까지 누른다.
+        // parry_precise_window 를 고치는 순간 이 장이 조용히 맞는 사진이 된다. 누른 것이 빗나가면(타이밍) 맞고 지나간다 — 받아칠 때까지
+        // 누른다(3연격만 도는 판이라 판정마다 받아칠 수 있다).
         Hold("guard", false);
         int parried = _battle?.FighterParries ?? 0;
         for (int i = 0; i < 60 * 12 && (_battle?.FighterParries ?? 0) == parried; i++)
@@ -333,7 +344,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Poise()
     {
-        await NewBattle();
+        await NewBattle(_classic);
         Hold("move_right", true);
         await _drive.Wait(1.1);
         Hold("move_right", false);
@@ -435,7 +446,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Facing()
     {
-        await NewBattle();
+        await NewBattle(_classic);
 
         // 파이터는 아레나의 25% · 보스는 75% 에 선다 — 보스는 처음부터 왼쪽을 본다.
         await _drive.Wait(0.8);
@@ -549,24 +560,24 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 돌진 중 한 장 (#78 · 설계 §4.6 · §9). 1타 돌진만 도는 판(대본)에서 가만히 선 파이터(480)에게 보스가 달려오는 한가운데다 —
-    /// 앞쪽 거리 832 에서 멈출 자리(760)까지 10틱을 달리므로 <c>run</c> 에 든 뒤 5틱이다. 그림은 <c>run</c> 을 3배속(30fps)으로 돈다.
+    /// 돌진 중 한 장 (#78 · 설계 §4.6 · §9 · 설계 2026-09-29 조각1 §2.4). 돌진만 도는 판(대본)에서 가만히 선 파이터(480)에게 보스가 달려오는
+    /// 한가운데다 — 앞쪽 거리 832 에서 멈출 자리(760)까지 10틱을 달리므로 <c>run</c> 에 든 뒤 5틱이다. 그림은 <c>run</c> 을 3배속(30fps)으로 돈다.
     /// </summary>
     private async Task Rush()
     {
-        await NewBattle("1타 돌진");
+        await NewBattle("돌진");
         await _drive.Until(() => _battle is { BossStepAnim: "run" }, _patternTimeout);
         await _drive.Frames(5);
         await Screenshot.CaptureAsync(this, "battle-13-rush");
     }
 
     /// <summary>
-    /// 흰 구가 붙든 파이터 한 장 (#78 · 설계 §4.7 · §6 · §9). 1타 잡기만 도는 판에서 가만히 선 파이터는 1타가 멀리서 헛친 뒤 1.70초의 창에
-    /// 잡힌다. 붙들린 파이터는 take-hit(10fps · 4장 = 24프레임)를 다 돌고 마지막 장에 선다 — 붙들린 뒤 30프레임이다(붙드는 60틱의 한가운데).
+    /// 흰 구가 붙든 파이터 한 장 (#78 · 설계 §4.7 · §6 · §9). 잡기만 도는 판에서 가만히 선 파이터는 0.60초의 창에 잡힌다(띠가 바닥 전체다).
+    /// 붙들린 파이터는 take-hit(10fps · 4장 = 24프레임)를 다 돌고 마지막 장에 선다 — 붙들린 뒤 30프레임이다(붙드는 60틱의 한가운데).
     /// </summary>
     private async Task Grab()
     {
-        await NewBattle("1타 잡기");
+        await NewBattle("잡기");
         await _drive.Until(() => _battle is { FighterHeld: true }, _patternTimeout);
         if (_battle is { FighterHeld: false })
         {
@@ -578,15 +589,14 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 점프 ×3 의 공중 한 장 (#78 · 설계 §4.8 · §9). 점프 3연속만 도는 판에서 <b>둘째 도약의 정점</b>이다 — 첫 착지를 맞은 파이터(480) 앞 115 에
-    /// 내린 보스가 같은 자리를 다시 겨냥해 제자리에서 솟는다. 첫 도약의 정점은 <c>battle-6a-leap</c> 과 같은 그림이라 둘째를 찍는다. 사진 앞에는
-    /// 첫 착지의 흰 충격파 하나가 섰다(#83 — 로그 <c>landing_wave</c> 하나). 셋째 착지까지 가는 것은 GIF <c>jump3</c> 다 — 이 판은 찍고 곧장 다음
-    /// 장면으로 넘어간다.
+    /// 올려베기의 칼 한 장 (설계 2026-09-29 조각1 §2.1). 올려베기만 도는 판에서 판정이 서는 틱(51)이다 — 그림은 attack2 의 셋째 장(f2)을
+    /// <b>좌우로 뒤집어</b> 그린다(<c>mirror</c> · 뷰만 읽는다). 뒤집지 않으면 attack2 의 높은 궤적이 보스 등 뒤에 선다 — 이 장에서 흰 궤적이 보스
+    /// <b>앞</b>(가만히 선 파이터 쪽)의 공중을 긋고 있어야 한다. 파이터는 멀리(480) 서 있어 안 맞는다 — 칼 그림만 본다.
     /// </summary>
-    private async Task Jump3()
+    private async Task Uppercut()
     {
-        await NewBattle("점프 3연속");
-        await Apex("battle-13c-jump3", "점프 3연속", leap: 2);
+        await NewBattle("올려베기");
+        await CaptureTested("battle-13c-uppercut", _patternTimeout);
     }
 
     /// <summary>
@@ -604,7 +614,7 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 판정 보기 일곱 장 (설계 §9) — <c>HITBOXES=1 tools/build.sh shots</c> 에서만 찍고 <c>out/shots</c> 에만 남는다.
+    /// 판정 보기 여덟 장 (설계 §9) — <c>HITBOXES=1 tools/build.sh shots</c> 에서만 찍고 <c>out/shots</c> 에만 남는다.
     ///
     /// <para>
     /// ① <b>3연격의 세 장</b> — 판정마다 규칙이 대 본 틱에 한 장. 채운 사각형(규칙이 대 본 모양)이 그림의 흰 궤적과 겹쳐야 한다.
@@ -616,9 +626,10 @@ public partial class ShotRunner : Node
     /// </para>
     ///
     /// <para>
-    /// (#78 · 설계 §9 의 5번 PR) ④ <b>잡기 띠</b> — 1.70초의 바닥 전체 띠. 가만히 선 몸에 첫 틱에 닿아 잡힌다 — 몸통은 맨몸의 색이다: 잡기는
+    /// (#78 · 설계 §9 의 5번 PR) ④ <b>잡기 띠</b> — 0.60초의 바닥 전체 띠. 가만히 선 몸에 첫 틱에 닿아 잡힌다 — 몸통은 맨몸의 색이다: 잡기는
     /// 대시 · 가드 · 패리를 안 받는다. 착지 띠와 같은 모양이지만 흰 충격파가 없고 흰 구가 파이터를 감싼다. ⑤ <b>돌진 뒤 3타</b> — 달려와 멈춘
-    /// 자리(파이터 앞 280)에서 3타의 궤적이 파이터에 닿는다.
+    /// 자리(파이터 앞 280)에서 3타의 궤적이 파이터에 닿는다. ⑥ <b>올려베기</b>(설계 2026-09-29 조각1 §2.1) — 손으로 적은 사각형 [0, 396, 0, 360] 이
+    /// 뒤집어 그린 attack2 의 흰 궤적을 덮는다. 사각형이 그림보다 크다(유저 확인 — 그림과 달라도 크게). 멀리 선 몸이라 창 8틱을 다 산다.
     /// </para>
     ///
     /// <para>
@@ -651,13 +662,17 @@ public partial class ShotRunner : Node
         Tap("parry");
         await CaptureTested("hitbox-3-landing-parry", _pollTimeout);
 
-        // ④ 1타(사거리 밖이라 빗나간다)가 아니라 idle 의 잡기 띠를 찍는다.
-        await NewBattle("1타 잡기");
-        await CaptureOn("hitbox-4-grab", () => _battle is { BossSwingTested: true, BossStepAnim: "idle" }, _patternTimeout);
+        // ④ 잡기의 띠 — 동작의 판정이 이것 하나다.
+        await NewBattle("잡기");
+        await CaptureTested("hitbox-4-grab", _patternTimeout);
 
-        // ⑤ 1타가 아니라 달려와 멈춘 뒤의 3타(attack3)를 찍는다.
-        await NewBattle("1타 돌진");
-        await CaptureOn("hitbox-5-rush-strike", () => _battle is { BossSwingTested: true, BossStepAnim: "attack3" }, _patternTimeout);
+        // ⑤ 달려와 멈춘 뒤의 3타(attack3) — 동작의 판정이 이것 하나다.
+        await NewBattle("돌진");
+        await CaptureTested("hitbox-5-rush-strike", _patternTimeout);
+
+        // ⑥ 올려베기의 손으로 적은 사각형.
+        await NewBattle("올려베기");
+        await CaptureTested("hitbox-6-uppercut", _patternTimeout);
     }
 
     /// <summary>
