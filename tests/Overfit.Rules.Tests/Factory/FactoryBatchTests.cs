@@ -24,7 +24,7 @@ public class FactoryBatchTests
         var samples = new StringBuilder(SampleCsv.SamplesHeader).Append('\n');
         var bots = new StringBuilder(SampleCsv.BotsHeader).Append('\n');
         var chunks = new List<int[]>();
-        FactoryBatch.Run(from, to, threads, bot => BotRun.Run(51, bot, _tables.Value, 3, 3), results =>
+        FactoryBatch.Run(from, to, threads, bot => BotRun.Run(51, bot, _tables.Value, 3), results =>
         {
             chunks.Add(results.Select(r => r.Bot).ToArray());
             foreach (BotResult result in results)
@@ -43,7 +43,7 @@ public class FactoryBatchTests
     [Fact]
     public void 스레드_수와_무관하게_같은_글자다()
     {
-        // 봇 24 ~ 31 — 26 이 1단계를 넘어 2단계 사례를 낸다(FleetBots · #126). 0 ~ 7 은 보스 체력 400 에서 아무도 못 넘는다.
+        // 보스전이 하나라 판마다 사례가 선다 — 봇 24 ~ 31 이 사례를 낸다.
         (string samples1, string bots1, List<int[]> chunks1) = Csv(24, 32, threads: 1, chunk: 3);
         (string samples4, string bots4, List<int[]> chunks4) = Csv(24, 32, threads: 4, chunk: 3);
 
@@ -53,7 +53,7 @@ public class FactoryBatchTests
         // 묶음은 봇 번호 순서로, 묶음 안도 번호 순서로 온다 — 끝 묶음은 남은 만큼이다.
         chunks1.Select(c => string.Join(' ', c)).ShouldBe(new[] { "24 25 26", "27 28 29", "30 31" });
         chunks4.Select(c => string.Join(' ', c)).ShouldBe(chunks1.Select(c => string.Join(' ', c)));
-        samples1.Split('\n').Length.ShouldBeGreaterThan(2, "봇 여덟 대가 2단계 사례를 하나도 안 냈다");
+        samples1.Split('\n').Length.ShouldBeGreaterThan(2, "봇 여덟 대가 사례를 하나도 안 냈다");
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class FactoryBatchTests
     public void 성향의_수는_왕복_서식이다()
     {
         // 같은 double 은 같은 글자다 — 되읽으면 비트까지 같아야 분석(파이썬)이 공장과 같은 수를 본다. 칸은 봇 · 습관 뒤의 열셋이다(TraitsHeader).
-        BotResult result = BotRun.Run(51, 0, _tables.Value, 1, 1);
+        BotResult result = BotRun.Run(51, 0, _tables.Value, 1);
         var builder = new StringBuilder();
 
         SampleCsv.AppendBot(builder, result);
@@ -88,7 +88,7 @@ public class FactoryBatchTests
     public void 봇의_줄은_머리와_칸_수가_같다()
     {
         var builder = new StringBuilder();
-        BotResult result = BotRun.Run(51, 0, _tables.Value, 1, 1);
+        BotResult result = BotRun.Run(51, 0, _tables.Value, 1);
 
         SampleCsv.AppendBot(builder, result);
 

@@ -16,9 +16,7 @@ public class FactoryStatsTests
 
     /// <summary>봇 하나 — <paramref name="labels"/> 는 (칸, 맞았나) 들이다.</summary>
     private static BotResult Bot(int bot, BotHabit habit, double rhythm, params (int Slot, bool Hit)[] labels) =>
-        new(
-            bot, FleetPlay.Mid with { Habit = habit, Rhythm = rhythm }, 1, labels.Length > 0, labels.Length > 0 ? 1 : 0, false, 100,
-            labels.Select(l => new FactorySample(bot, 2, l.Slot, l.Hit)).ToList());
+        new(bot, FleetPlay.Mid with { Habit = habit, Rhythm = rhythm }, 1, labels.Length > 1, 100, labels.Select(l => new FactorySample(bot, 1, l.Slot, l.Hit)).ToList());
 
     [Fact]
     public void 칸마다_기저율을_센다()
@@ -35,6 +33,6 @@ public class FactoryStatsTests
         stats.Slots[3].Rate.ShouldBe(1.0);
         stats.Slots[1].Samples.ShouldBe(0);
         stats.Slots[1].Rate.ShouldBe(0, "사례가 없는 칸은 0 이다 — NaN 을 매니페스트에 안 싣는다");
-        (stats.Bots, stats.ReachedStage2, stats.Samples, stats.Ticks).ShouldBe((3, 2, 5L, 300L));
+        (stats.Bots, stats.Won, stats.Samples, stats.Ticks).ShouldBe((3, 2, 5L, 300L));
     }
 }

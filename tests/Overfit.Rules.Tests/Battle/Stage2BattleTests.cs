@@ -322,29 +322,29 @@ public class Stage2BattleTests
     [Fact]
     public void 잡기에_죽으면_판이_그_틱에_끝나고_그_잡힘은_관측으로_남는다()
     {
-        // Review Focus 4 — 체력이 25 이하인 채 잡힌다. 가만히 선 사람(480)에게 1타 잡기를 되풀이하면 1타는 멀리서 헛치고 잡기가 다섯 번
-        // 닿는다 — 110 → 85 → 60 → 35 → 10, 다섯째 패턴에서는 걸어 온 보스(거리 320)의 1타(8)까지 맞아 2 가 남고 다섯째 잡기에 죽는다.
-        // 판은 그 틱에 진다(reason=dead) — 다섯째 잡기가 닿은 틱이 판이 끝난 틱이고(붙들림 60틱을 기다리지 않는다) 파이터는 붙들린 채다.
+        // Review Focus 4 — 체력이 25 이하인 채 잡힌다. 가만히 선 사람(480)에게 1타 잡기를 되풀이하면 1타는 멀리서 헛치고 잡기가 되풀이해
+        // 닿아(25씩 · 걸어 온 보스의 1타도 섞인다) 마지막 잡기에 죽는다 — 몇 번째인지는 파이터 체력(fighters.json)에 달려 세지 않는다.
+        // 판은 그 틱에 진다(reason=dead) — 죽인 잡기가 닿은 틱이 판이 끝난 틱이고(붙들림 60틱을 기다리지 않는다) 파이터는 붙들린 채다.
         // 판을 끝낸 그 한 대는 닿은 것이라 관측이 있다(설계 §3.6 ③ — 끊기는 것은 남은 창뿐이다): 마지막 관측이 Grabbed 이고, 끊긴 창(cut_swing)은 없다.
         BattleSim sim = Sim(null, "1타 잡기");
         using var log = new LogCapture();
         BattleOutcome? outcome = null;
-        int killed = 0;
-        for (int i = 0; i < 60 * 30 && outcome is null; i++)
+        int grabs = 0, lastGrab = 0;
+        for (int i = 0; i < 60 * 90 && outcome is null; i++)
         {
             outcome = sim.Tick(default);
-            if (killed == 0 && sim.Events.Count(e => e.Verdict == HitVerdict.Grabbed) == 5)
+            int now = sim.Events.Count(e => e.Verdict == HitVerdict.Grabbed);
+            if (now > grabs)
             {
-                killed = sim.Ticks;
+                (grabs, lastGrab) = (now, sim.Ticks);
             }
         }
 
         outcome.ShouldBe(BattleOutcome.Lose);
-        killed.ShouldBeGreaterThan(0, "다섯째 잡기가 안 닿았다");
-        sim.Ticks.ShouldBe(killed, "판이 죽인 잡기의 틱에 안 끝났다 — 붙들림이 끝나기를 기다렸다");
+        grabs.ShouldBeGreaterThan(1, "잡기가 한 번에 죽였다 — 체력 25 이하로 시작한 판은 이 테스트가 보려는 것이 아니다");
+        sim.Ticks.ShouldBe(lastGrab, "판이 죽인 잡기의 틱에 안 끝났다 — 붙들림이 끝나기를 기다렸다");
         sim.Fighter.Held.ShouldBeTrue("죽인 잡기에 붙들리지 않았다");
         sim.Fighter.Health.ShouldBe(0);
-        sim.Events.Count(e => e.Verdict == HitVerdict.Grabbed).ShouldBe(5);
         sim.Events[^1].Verdict.ShouldBe(HitVerdict.Grabbed, "죽인 잡기가 관측으로 안 남았다");
         log.Lines.ShouldContain($"[result][I] lose reason=dead ticks={sim.Ticks} boss_hp={sim.Boss.Health}");
         log.Lines.ShouldNotContain(l => l.StartsWith("[boss][D] cut_swing ", StringComparison.Ordinal), "죽인 잡기를 끊긴 창으로 버렸다");

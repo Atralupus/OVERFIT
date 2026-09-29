@@ -79,7 +79,7 @@ public partial class ShotRunner : Node
         await Screenshot.CaptureAsync(this, "credits");
 
         // 1단계에서 찍는다 — 유저가 처음 만나는 판이다(#72).
-        await NewBattle(1);
+        await NewBattle();
 
         await Shoot("battle-1-approach", 1.0);
 
@@ -181,7 +181,6 @@ public partial class ShotRunner : Node
         await Exhaustion();
         await Facing();
         await Leap();
-        await StageTwo();
 
         // 판정이 그려진 사진은 판정 보기로 띄웠을 때만 뜻이 있다 — 안 켰으면 흰 궤적 위에 아무것도 없다(설계 §6.1 · §9).
         if (GetTree().DebugCollisionsHint)
@@ -189,7 +188,7 @@ public partial class ShotRunner : Node
             await Hitboxes();
         }
 
-        // 2단계의 그림 (#78). 넷 다 대본 판이라 패턴 순서가 시도 시드에 안 달린다(대본 고르기 · 설계 §4.4) — 어디에 두어도 같은 장이 찍힌다.
+        // 옛 2단계의 그림 (#78). 넷 다 대본 판이라 패턴 순서가 시도 시드에 안 달린다(대본 고르기 · 설계 §4.4) — 어디에 두어도 같은 장이 찍힌다.
         // 판정 보기의 판들 뒤에 둔 것은 들인 순서일 뿐이다. 그 판들도 대본이라 이 넷이 앞에 끼어 시도 번호가 밀려도 안 바뀐다.
         await Rush();
         await Grab();
@@ -210,7 +209,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Combo()
     {
-        await NewBattle(1);
+        await NewBattle();
 
         // 보스에게서 멀어진다. **벽까지 가지 않는다** — 벽에 붙으면 몸이 화면 왼쪽 끝에서 잘린다(실제로 그렇게 찍혔다).
         Hold("move_left", true);
@@ -257,7 +256,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Guarding()
     {
-        await NewBattle(1);
+        await NewBattle();
 
         // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
         Hold("move_right", true);
@@ -334,7 +333,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Poise()
     {
-        await NewBattle(1);
+        await NewBattle();
         Hold("move_right", true);
         await _drive.Wait(1.1);
         Hold("move_right", false);
@@ -392,7 +391,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Exhaustion()
     {
-        await NewBattle(1, "3연격");
+        await NewBattle("3연격");
         foreach (string way in new[] { "move_left", "move_right", "move_left", "move_right" })
         {
             await _drive.Until(() => _battle is { FighterFree: true } or { FighterExhausted: true }, _pollTimeout);
@@ -436,7 +435,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Facing()
     {
-        await NewBattle(1);
+        await NewBattle();
 
         // 파이터는 아레나의 25% · 보스는 75% 에 선다 — 보스는 처음부터 왼쪽을 본다.
         await _drive.Wait(0.8);
@@ -496,7 +495,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Leap()
     {
-        await NewBattle(1, "점프 공격");
+        await NewBattle("점프 공격");
         await Apex("battle-6a-leap", "점프 공격", leap: 1);
 
         await _drive.Until(
@@ -550,37 +549,24 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 2단계 전투 한 장 (#72 · 설계 §9). 그 판의 <b>결과 화면</b>을 찍는다: "2단계 · 보스 체력 …" 이 그 판이 2단계였다는 것을 글로 말한다.
-    /// 아무것도 안 하고 맞아 죽는다(<c>battle-8-result</c> 와 같은 길). 2단계의 패턴마다의 그림은 대본으로 따로 찍는다(<see cref="Rush"/> ·
-    /// <see cref="Grab"/> · <see cref="Jump3"/> · <see cref="Offbeat"/> · #78).
-    /// </summary>
-    private async Task StageTwo()
-    {
-        await NewBattle(2);
-        await _drive.Until(() => _battle?.ResultVisible == true, _battleTimeout);
-        await _drive.Frames(2);
-        await Screenshot.CaptureAsync(this, "battle-11-stage-2");
-    }
-
-    /// <summary>
-    /// 돌진 중 한 장 (#78 · 설계 §4.6 · §9). 1타 돌진만 도는 2단계 판(대본)에서 가만히 선 파이터(480)에게 보스가 달려오는 한가운데다 —
+    /// 돌진 중 한 장 (#78 · 설계 §4.6 · §9). 1타 돌진만 도는 판(대본)에서 가만히 선 파이터(480)에게 보스가 달려오는 한가운데다 —
     /// 앞쪽 거리 832 에서 멈출 자리(760)까지 10틱을 달리므로 <c>run</c> 에 든 뒤 5틱이다. 그림은 <c>run</c> 을 3배속(30fps)으로 돈다.
     /// </summary>
     private async Task Rush()
     {
-        await NewBattle(2, "1타 돌진");
+        await NewBattle("1타 돌진");
         await _drive.Until(() => _battle is { BossStepAnim: "run" }, _patternTimeout);
         await _drive.Frames(5);
         await Screenshot.CaptureAsync(this, "battle-13-rush");
     }
 
     /// <summary>
-    /// 흰 구가 붙든 파이터 한 장 (#78 · 설계 §4.7 · §6 · §9). 1타 잡기만 도는 2단계 판에서 가만히 선 파이터는 1타가 멀리서 헛친 뒤 1.70초의 창에
+    /// 흰 구가 붙든 파이터 한 장 (#78 · 설계 §4.7 · §6 · §9). 1타 잡기만 도는 판에서 가만히 선 파이터는 1타가 멀리서 헛친 뒤 1.70초의 창에
     /// 잡힌다. 붙들린 파이터는 take-hit(10fps · 4장 = 24프레임)를 다 돌고 마지막 장에 선다 — 붙들린 뒤 30프레임이다(붙드는 60틱의 한가운데).
     /// </summary>
     private async Task Grab()
     {
-        await NewBattle(2, "1타 잡기");
+        await NewBattle("1타 잡기");
         await _drive.Until(() => _battle is { FighterHeld: true }, _patternTimeout);
         if (_battle is { FighterHeld: false })
         {
@@ -599,7 +585,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Jump3()
     {
-        await NewBattle(2, "점프 3연속");
+        await NewBattle("점프 3연속");
         await Apex("battle-13c-jump3", "점프 3연속", leap: 2);
     }
 
@@ -610,7 +596,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Offbeat()
     {
-        await NewBattle(2, "엇박 3연격");
+        await NewBattle("엇박 3연격");
         await CaptureOn(
             "battle-13d-offbeat",
             () => _battle is { BossPattern: "엇박 3연격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.2 + 1e-9,
@@ -643,7 +629,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task Hitboxes()
     {
-        await NewBattle(1, "3연격", "점프 공격");
+        await NewBattle("3연격", "점프 공격");
 
         // ① 3연격의 선딜을 기다려 셋을 차례로 — 대 본 틱을 찍고, 대 보기가 그친 것을 보고 다음 판정을 기다린다.
         await _drive.Until(() => _battle is { BossPattern: "3연격", BossWindingUp: true }, _patternTimeout);
@@ -658,7 +644,7 @@ public partial class ShotRunner : Node
         await CaptureTested("hitbox-2-landing", _pollTimeout);
 
         // ③ 판정까지 5틱(0.08초) 안이면 누른다 — 패리 창(0.133초 = 8틱)이 착지 창의 첫 틱을 덮는다(battle-10d 와 같은 규칙).
-        await NewBattle(1, "점프 공격");
+        await NewBattle("점프 공격");
         await _drive.Until(
             () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08,
             _patternTimeout);
@@ -666,11 +652,11 @@ public partial class ShotRunner : Node
         await CaptureTested("hitbox-3-landing-parry", _pollTimeout);
 
         // ④ 1타(사거리 밖이라 빗나간다)가 아니라 idle 의 잡기 띠를 찍는다.
-        await NewBattle(2, "1타 잡기");
+        await NewBattle("1타 잡기");
         await CaptureOn("hitbox-4-grab", () => _battle is { BossSwingTested: true, BossStepAnim: "idle" }, _patternTimeout);
 
         // ⑤ 1타가 아니라 달려와 멈춘 뒤의 3타(attack3)를 찍는다.
-        await NewBattle(2, "1타 돌진");
+        await NewBattle("1타 돌진");
         await CaptureOn("hitbox-5-rush-strike", () => _battle is { BossSwingTested: true, BossStepAnim: "attack3" }, _patternTimeout);
     }
 
@@ -694,16 +680,16 @@ public partial class ShotRunner : Node
         CaptureOn(name, () => _battle is { BossSwingTested: true }, timeout);
 
     /// <summary>
-    /// 그 단계의 새 판을 세워 <see cref="_battle"/> 에 둔다 — <paramref name="script"/> 를 주면 그 판 하나를 대본으로 세운다(<see cref="SceneDriver.NewBattle"/>).
+    /// 새 판을 세워 <see cref="_battle"/> 에 둔다 — <paramref name="script"/> 를 주면 그 판 하나를 대본으로 세운다(<see cref="SceneDriver.NewBattle"/>).
     /// 판이 안 섰으면 <c>[W] battle_scene_missing</c> 이다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다(<c>shots</c> 는 PNG 개수를 세어
     /// 0장이면 실패시킨다). 같은 사건을 GIF 러너는 <c>[E]</c> 로 본다 — 무게는 부르는 쪽이 정한다(<see cref="SceneDriver"/> 의 주석 · #96).
     /// </summary>
-    private async Task NewBattle(int stage, params string[] script)
+    private async Task NewBattle(params string[] script)
     {
-        _battle = await _drive.NewBattle(stage, script);
+        _battle = await _drive.NewBattle(script);
         if (_battle is null)
         {
-            Log.Warn("shots", $"battle_scene_missing stage={stage} script={string.Join(',', script)}");
+            Log.Warn("shots", $"battle_scene_missing script={string.Join(',', script)}");
         }
     }
 

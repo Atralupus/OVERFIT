@@ -25,7 +25,9 @@ public partial class BattleDemo : Node
         // 로그의 [run][I] attempt=… seed=X 를 --seed=X 로 넘기면 그 시도의 보스 순서가 되살아난다. 전에는 Double 로 읽어
         // 2^53 을 넘는 시드(시도 시드는 거의 다 그렇다)가 다른 판을 돌렸다.
         ulong seed = CmdArgs.UInt64(args, "--seed=") ?? 51;
-        int stage = (int)(CmdArgs.Double(args, "--stage=") ?? 1);
+        // 보스전은 하나다(설계 2026-09-29 조각1 §1) — stages.json 의 유일한 키. 옛 기록(두 단계 시절)을 되살리면 그 줄의 단계를 쓰고,
+        // StageRoster 가 범위 밖을 가장 가까운 단계로 잘라 [W] 를 남긴다.
+        int stage = 1;
 
         // 되살리기 (#112 · 설계 2026-09-28 §6.5) — 게임이 남긴 시도 기록(user://attempts/<세션 시드>.jsonl)에서 그 시도의 시드 · 단계와 **같은 런의 앞
         // 기록**을 읽어 고르기를 다시 세운다. 고르기는 상태 없는 조회라 보스의 순서가 그대로 선다 — 봇이 싸우므로 판의 길이는 달라도 앞머리가 같다.

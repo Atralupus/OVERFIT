@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Overfit.Factory;
 
 /// <summary>칸 하나의 원본 기저율 — 그 칸의 사례 수와 맞은 수.</summary>
-/// <param name="Pattern">2단계 명부의 그 칸의 패턴.</param>
+/// <param name="Pattern">명부의 그 칸의 패턴.</param>
 /// <param name="Samples">사례 수.</param>
 /// <param name="Hits">맞은 사례 수.</param>
 public readonly record struct SlotRate(string Pattern, long Samples, long Hits)
@@ -34,9 +34,8 @@ public sealed class FactoryStats
 
     public long Bots { get; private set; }
 
-    public long ReachedStage2 { get; private set; }
-
-    public long WonStage2 { get; private set; }
+    /// <summary>이긴 봇의 수.</summary>
+    public long Won { get; private set; }
 
     public long Ticks { get; private set; }
 
@@ -47,8 +46,7 @@ public sealed class FactoryStats
     {
         ArgumentNullException.ThrowIfNull(result);
         Bots++;
-        ReachedStage2 += result.ReachedStage2 ? 1 : 0;
-        WonStage2 += result.WonStage2 ? 1 : 0;
+        Won += result.Won ? 1 : 0;
         Ticks += result.Ticks;
         Samples += result.Samples.Count;
         foreach (FactorySample sample in result.Samples)

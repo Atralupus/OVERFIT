@@ -20,7 +20,7 @@
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
 #   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
 #                                      시드는 시도 시드다(기본 51) — 게임 로그의 [run][I] attempt=… seed=X 를 그대로 넘기면
-#                                      그 시도의 보스 순서가 되살아난다(단계는 EXTRA="--stage=S"). 64비트 그대로 읽는다
+#                                      그 시도의 보스 순서가 되살아난다. 64비트 그대로 읽는다
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
 #                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
 #                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000
@@ -30,7 +30,6 @@
 #                                      창과 Movie Maker 로 모든 프레임을 받고 대본이 남긴 구간만 ffmpeg 로 엮는다(480px · 15fps)
 #                                      잡은 구간 4초 · 1MB 를 넘으면 실패다. ffmpeg 가 필요하다(brew install ffmpeg)
 #   tools/build.sh export [프리셋]     플레이 가능한 빌드 → out/OVERFIT.app 과 out/OVERFIT-macos.zip (기본 프리셋 macOS)
-#   EXTRA="--stage=2" tools/build.sh demo        단계 지정 (캐릭터는 하나라 --fighter= 는 그 하나만 가리킨다)
 #   LOG_LEVEL=trace tools/build.sh …   로그 레벨 지정 (trace|debug|info|warn|error)
 #   HITBOXES=1 tools/build.sh run|shots  판정 보기 — Godot 의 Visible Collision Shapes 를 켠다(--debug-collisions).
 #                                        규칙이 이 틱에 댄 판정 사각형이 그려진다. shots 는 그 사진을 docs/shots/ 로 안 넘긴다
@@ -396,20 +395,14 @@ cmd_smoke() {
   # 단계까지 본다. "battle ready" 만 보면 단계 진행이 통째로 빠져도 초록이다 —
   # 그 값은 Autoload 가 들고 있어서 씬만 떠서는 증명되지 않는다.
   expect_log "$log" info '^\[scene\]\[I\] battle ready stage=[0-9]+ fighter=' "Battle 씬의 스크립트가 안 붙었거나 단계를 못 읽었습니다."
-  # 단계 점프 디버그 키 (이슈 #54). 순회가 전투에서 debug_stage_2 를 한 번 누른다 — 키가 InputMap 에 있는지,
-  # 입력이 Game._UnhandledInput 까지 오는지, 전투가 **정말 2단계로 다시 섰는지**를 본다(보스가 두 단계다 · #72). 앞의 줄만 보면
-  # 키가 먹었다는 로그만 있고 단계는 그대로인 경우를 못 본다. (릴리즈에서 안 먹는 것은 IsDebugBuild 가드가
-  # 지고, 여기 smoke 는 디버그 빌드라 그 반대쪽은 못 본다 — 익스포트한 빌드로 따로 본다.)
-  expect_log "$log" debug '^\[scene\]\[D\] input action=debug_stage_2 stage_jump from=[0-9]+ to=2$' "단계 점프 키(2)가 안 먹었습니다."
-  expect_log "$log" info '^\[scene\]\[I\] battle ready stage=2 fighter=' "단계 점프 뒤에 2단계 전투가 안 섰습니다."
-  # 시도마다 시드 (#72 · 설계 §4.4). 세션 시드 51 에서 첫 전투(1단계)와 단계 점프로 선 전투(2단계)가 시도 1 · 2 이고, 시드는
+  # 시도마다 시드 (#72 · 설계 §4.4). 세션 시드 51 에서 순회가 세운 두 전투가 시도 1 · 2 이고, 시드는
   # Hash64(51, attempt, k1: 번호) 다 — RunHistoryTests 가 첫 값을 박아 뒀다. 시도 2 의 줄이 "전투가 설 때마다 시드가 바뀐다" 를 본다.
   expect_log "$log" info '^\[run\]\[I\] session_seed=51$' "세션 시드 51 이 안 넘어갔습니다 — 스모크가 실행마다 다른 판을 돕니다."
   # 대본 칸 (#96 · 설계 §4.4). 순회가 첫 전투에만 대본을 넣는다(Game._tourScript) — 첫 줄의 picker=script 가 칸이 전투에 닿은 것이고,
-  # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 단계 점프로 선 전투도 script 로 선다.
+  # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 둘째 전투도 script 로 선다.
   expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=script history=0$' "첫 전투가 시도 1 의 시드와 순회의 대본으로 안 섰습니다."
-  # 2단계도 무작위다 — 옛 망의 동전(Det 10 picker_arm)은 걷었다(설계 2026-09-29 조각1 §6). 시도 2 의 줄이 "전투가 설 때마다 새 시도 · 새 시드" 를 본다.
-  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=2 seed=9131751153949564229 picker=uniform history=0$' "단계 점프로 선 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
+  # 둘째 전투 — 보스전이 하나라 같은 단계(1)이고 새 시도 · 새 시드다(설계 2026-09-29 조각1 §1). 첫 전투는 끝까지 안 가 기록이 없다(history=0).
+  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=1 seed=9131751153949564229 picker=uniform history=0$' "둘째 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."
@@ -435,8 +428,8 @@ cmd_demo() {
   ok "전투 데모 통과 ($log)"
 }
 
-# 데이터 공장 (#108 · 설계 2026-09-28 §4). 봇 함대가 1단계 · 2단계를 게임과 같은 순서로 치고, 2단계의 사례(패턴이 선 것 하나)마다
-# 라벨(맞았나)을 samples.csv 에 싣는다. 봇 · 매니페스트는 bots.csv · manifest.json. Release 로 빌드해 돈다 — 디버그의 규칙은
+# 데이터 공장 (#108 · 설계 2026-09-28 §4). 봇 함대가 보스전을 게임과 같은 순서로 치고(이길 때까지 · 많아야 --tries 번), 판의 사례(패턴이 선 것
+# 하나)마다 라벨(맞았나)을 samples.csv 에 싣는다. 봇 · 매니페스트는 bots.csv · manifest.json. Release 로 빌드해 돈다 — 디버그의 규칙은
 # 몇 배 느리다. 판정은 헤드리스와 같은 함수다(judge_headless): [E] 가 하나라도 있으면(규칙 위반) · 표지가 없으면(끝까지 못 갔다) ·
 # 종료 코드가 0 이 아니면 실패다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
 cmd_factory() {
@@ -520,9 +513,9 @@ cmd_shots() {
 # 고정하지만 스크린샷처럼 실행마다 같은 판이어야 한다).
 #
 # 대본 목록은 GifRunner.cs 의 표(_scripts) 하나다 — 여기 따로 적어 두면 대본을 더하는 날 한쪽만 는다(#96 · 전에는 GIF_IDS 가 따로 있었다).
-# 인자 없이 돌면 그 표의 줄 `new("<id>", Stage: …` 에서 id 를 읽는다. 줄의 꼴을 바꾸면 여기도 같이 고친다(GifRunner.Ids 의 주석).
+# 인자 없이 돌면 그 표의 줄 `new("<id>", Patterns: …` 에서 id 를 읽는다. 줄의 꼴을 바꾸면 여기도 같이 고친다(GifRunner.Ids 의 주석).
 gif_ids() {
-  sed -n 's/^[[:space:]]*new("\([a-z0-9]*\)", Stage:.*/\1/p' "$PROJECT/battle/debug/GifRunner.cs"
+  sed -n 's/^[[:space:]]*new("\([a-z0-9]*\)", Patterns:.*/\1/p' "$PROJECT/battle/debug/GifRunner.cs"
 }
 GIF_MAX_FRAMES=240
 GIF_MAX_BYTES=1048576
@@ -538,7 +531,7 @@ brew install ffmpeg 로 깔거나 FFMPEG 환경변수로 경로를 알려주세�
   local ids=("$@")
   # 낱말로 갈라 담는다 — id 는 ASCII 소문자 · 숫자라 안전하다(macOS 의 bash 3.2 에는 mapfile 이 없다).
   [[ ${#ids[@]} -gt 0 ]] || ids=($(gif_ids))
-  [[ ${#ids[@]} -gt 0 ]] || die "GifRunner.cs 에서 대본 id 를 못 읽었습니다 — 표의 줄 꼴(new(\"<id>\", Stage: …)이 바뀌었나요? gif_ids 를 고치세요."
+  [[ ${#ids[@]} -gt 0 ]] || die "GifRunner.cs 에서 대본 id 를 못 읽었습니다 — 표의 줄 꼴(new(\"<id>\", Patterns: …)이 바뀌었나요? gif_ids 를 고치세요."
   mkdir -p "$ROOT/docs/gifs" "$OUT/gifs"
 
   local id

@@ -50,8 +50,8 @@ public class StageRosterTests
     [Fact]
     public void 명부가_적힌_그대로_순서까지_나온다()
     {
-        // 순서가 계약이다 — Det 의 뽑기 좌표가 이 리스트의 인덱스다.
-        StageRoster.For(Stages(), 1).ShouldBe(new[] { "3연격", "점프 공격" });
+        // 순서가 계약이다 — Det 의 뽑기 좌표가 이 리스트의 인덱스다. 옛 1단계 둘 뒤에 옛 2단계의 나머지를 그 순서로 이었다(설계 2026-09-29 조각1 §1).
+        StageRoster.For(Stages(), 1).ShouldBe(new[] { "3연격", "점프 공격", "점프 3연속", "1타 돌진", "1타 잡기", "엇박 3연격" });
     }
 
     [Fact]
@@ -78,21 +78,16 @@ public class StageRosterTests
     }
 
     [Fact]
-    public void 단계가_오를수록_명부가_줄지_않는다()
+    public void 보스전은_하나다()
     {
-        IReadOnlyList<string> before = StageRoster.For(Stages(), 1);
-        for (int stage = 2; stage <= LastStage(); stage++)
-        {
-            IReadOnlyList<string> now = StageRoster.For(Stages(), stage);
-            now.Count.ShouldBeGreaterThanOrEqualTo(before.Count, $"{stage}단계가 앞 단계보다 짧다");
-            before = now;
-        }
+        // 옛 두 단계(#72)를 합쳤다(설계 2026-09-29 조각1 §1 — 우산 설계 §2). 전투(Battle)가 키 "1" 로 선다 — 키가 늘면 그 전투는 아무도 안 부른다.
+        Stages().Keys.ShouldBe(new[] { "1" });
     }
 
     [Fact]
     public void 명부가_설계한_패턴_수를_넘지_않는다()
     {
-        // want 는 설계가 정한 단계별 패턴 수(설계 §4 — 1단계 2 · 2단계 5 · #78)다. 모자란 것은 로그로 드러나지만
+        // want 는 설계가 정한 패턴 수다(설계 2026-09-29 조각1 §1 — 옛 두 단계를 합친 여섯). 모자란 것은 로그로 드러나지만
         // 넘치는 것은 아무 데도 안 남는다 — 새 패턴을 명부에 끼워 넣을 때 아직 자리가 없는
         // 낮은 단계에 얹으면 그 단계의 난이도 곡선이 조용히 달라진다.
         foreach ((string stage, StageDef def) in Stages())
@@ -107,8 +102,8 @@ public class StageRosterTests
         // 모자람을 조용히 삼키면 나중에 "단계가 올라도 왜 안 어려워지지" 를 로그에서 찾을 수 없다.
         //
         // ⚠ **손으로 세운 명부로 본다.** 전에는 진짜 stages.json 의 5단계를 물어봤다 — 백장의 패턴이
-        // 셋뿐이라 3~5단계가 설계(5·7·10)에 늘 못 미쳤기 때문이다. 지금은 **두 단계 모두 want 를 정확히
-        // 채운다**(2 · 5 · #78). 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
+        // 셋뿐이라 3~5단계가 설계(5·7·10)에 늘 못 미쳤기 때문이다. 지금은 **명부가 want 를 정확히
+        // 채운다**. 그래서 진짜 데이터로는 이 경고를 볼 수 없고,
         // 그렇다고 이 가드를 지우면 다음에 모자란 단계가 생겼을 때 아무 데도 안 남는다.
         // 단언은 그대로 두고 **보는 대상만** 옮긴다.
         using var log = new LogCapture();
@@ -125,7 +120,7 @@ public class StageRosterTests
     [Fact]
     public void 지금_명부는_설계한_수를_정확히_채운다()
     {
-        // 위 가드가 진짜 데이터에서 떠난 이유를 **데이터로** 못박는다 (이슈 #48). 두 단계가
+        // 위 가드가 진짜 데이터에서 떠난 이유를 **데이터로** 못박는다 (이슈 #48). 명부가
         // want 를 정확히 채우는 것이 지금의 사실이고, 그게 깨지면 위 가드가 아니라 여기가 빨개진다 —
         // "모자란 단계가 생겼다" 를 아무도 안 보는 채로 두지 않기 위해서다.
         foreach ((string stage, StageDef def) in Stages())
@@ -138,8 +133,7 @@ public class StageRosterTests
     public void 단계마다_고르기가_등록표에_있고_1단계는_uniform_이다()
     {
         // 모르는 id 는 판을 세울 때 [E] 로 멈춘다(Battle) — 이 테스트가 그 전에 막는다(설계 §4.4 · §8.1).
-        // 1단계는 망이 들어와도 uniform 이다: 이 단계가 "무엇에 기대는가" 를 재는 자리라, 고르기가 기록을 읽으면
-        // 2단계가 읽을 측정이 기운다.
+        // 조각 1 의 고르기는 무작위다(설계 2026-09-29 조각1 §3.5) — 예측 망은 조각 4 에서 들어온다.
         foreach ((string stage, StageDef def) in Stages())
         {
             PatternPickers.Ids.ShouldContain(def.Picker, $"{stage}단계의 picker={def.Picker} 가 등록표에 없다");
@@ -232,9 +226,9 @@ public class StageRosterTests
 
         StageSetup setup = StageRoster.Setup(Stages(), 1, seed, System.Array.Empty<AttemptRecord>()).ShouldNotBeNull();
 
-        setup.PatternIds.ShouldBe(new[] { "3연격", "점프 공격" });
+        setup.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
         setup.PickerId.ShouldBe("uniform");
-        var uniform = new UniformPicker(seed, 2);
+        var uniform = new UniformPicker(seed, setup.PatternIds.Count);
         Enumerable.Range(0, 50).Select(setup.Picker.Pick).ShouldBe(Enumerable.Range(0, 50).Select(uniform.Pick));
     }
 

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using Godot;
 using Overfit.Battle.Rules;
 using Overfit.Battle.View;
@@ -60,8 +59,11 @@ public partial class Battle : Node2D
 
     private FeelBalance _feel = null!;
 
-    private int _stage;
-    private bool _hasNextStage;
+    /// <summary>
+    /// 싸우는 단계 — <c>stages.json</c> 의 유일한 키다(보스전은 하나 · 설계 2026-09-29 조각1 §1). 로그의 <c>stage=</c> 와 시도 기록이 싣는다. 이기면
+    /// 곧 클리어다 — 오를 다음 단계가 없다.
+    /// </summary>
+    private const int _stage = 1;
 
     /// <summary>이 전투의 시도 — 번호와 시드 (#72 · 설계 §4.4). 설 때 열고, 끝나면 그 판의 관측과 함께 기록에 붙인다.</summary>
     private (int Number, ulong Seed) _attempt;
@@ -286,10 +288,6 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
-
-        // 단계는 Autoload 가 들고 있다 — 씬은 다시 시작할 때마다 새로 만들어지므로 여기 두면 사라진다.
-        _stage = Game.Instance.Stage;
-        _hasNextStage = data.Stages.ContainsKey((_stage + 1).ToString(CultureInfo.InvariantCulture));
 
         // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
         // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup). 대본 칸이 차
@@ -518,47 +516,29 @@ public partial class Battle : Node2D
     }
 
     /// <summary>
-    /// 결과 화면을 띄운다. 이겼으면 여기서 단계가 오른다 — 그래야 [다음 단계] 가 정말 다음을 연다.
-    ///
-    /// <para>
-    /// 단계 진행만 남기고 캐릭터 3택 · 스탯 강화는 만들지 않는다(이슈 #22). 단계는 성장 루프가 아니라
-    /// 보스 설계의 축이다 — 보스는 두 단계이고(#72 · 설계 §4) 2단계를 이기면 클리어다. 다음 단계가
-    /// <c>stages.json</c> 에 없으면 클리어라, 단계 수를 여기 적지 않는다.
-    /// </para>
+    /// 결과 화면을 띄운다. 보스전이 하나라(설계 2026-09-29 조각1 §1) 이기면 곧 클리어다 — [처음부터] 가 기록을 비우고 새 런을 연다. 지면
+    /// [다시] 가 같은 런의 다음 시도를 연다(새 시드 · 설계 §4.4).
     /// </summary>
     private void Reveal()
     {
         _resultShown = true;
         bool won = _outcome == BattleOutcome.Win;
-        bool cleared = won && !_hasNextStage;
-
-        if (won && _hasNextStage)
-        {
-            Game.Instance.SetStage(_stage + 1);
-        }
-
-        string headline = cleared ? "클리어" : won ? "승리" : "패배";
-        string detail = cleared
-            ? $"{_stage}단계까지 전부 넘었다"
-            : won
-                ? $"{_stage}단계 돌파 — 다음은 {_stage + 1}단계"
-                : $"{_stage}단계 · 보스 체력 {_sim.Boss.Health}/{_bossConfig.MaxHealth} 남음";
-
-        // 이긴 판에서 [다시] 는 거짓말이다 — 단계가 이미 올랐으므로 같은 판이 아니다.
-        string againLabel = cleared ? "처음부터" : won ? "다음 단계" : "다시";
+        string headline = won ? "클리어" : "패배";
+        string detail = won ? "보스를 쓰러뜨렸다" : $"보스 체력 {_sim.Boss.Health}/{_bossConfig.MaxHealth} 남음";
+        string againLabel = won ? "처음부터" : "다시";
 
         _result.Reveal(won, headline, detail, againLabel, string.Join('\n', _report));
     }
 
     private void OnAgain()
     {
-        // 클리어했으면 판을 처음으로 되돌린다 — 안 그러면 없는 3단계를 달라고 하게 된다.
-        if (_outcome == BattleOutcome.Win && !_hasNextStage)
+        // 클리어했으면 판을 처음으로 되돌린다 — 새 런이다.
+        if (_outcome == BattleOutcome.Win)
         {
             Game.Instance.ResetRun();
         }
 
-        Log.Info("scene", $"battle action=again stage={Game.Instance.Stage}");
+        Log.Info("scene", "battle action=again");
         Game.Instance.GoTo(Game.Scene.Battle);
     }
 

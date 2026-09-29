@@ -8,7 +8,7 @@ namespace Overfit.Battle.Rules;
 /// <summary>한 단계가 쓰는 패턴 명부와 고르기. <c>data/stages.json</c> 의 값 하나다.</summary>
 public sealed class StageDef
 {
-    /// <summary>설계가 이 단계에 요구하는 패턴 수 — 지금 두 단계 모두 2 다(#72 · 설계 §4). 명부가 이보다 짧으면 <c>[W] short</c>.</summary>
+    /// <summary>설계가 이 단계에 요구하는 패턴 수 (#72 · 설계 §4). 명부가 이보다 짧으면 <c>[W] short</c>.</summary>
     public required int Want { get; set; }
 
     /// <summary>실제로 쓰는 패턴 id 들. <b>이 순서가 계약이다</b> — 뽑기 좌표가 여기 인덱스다.</summary>

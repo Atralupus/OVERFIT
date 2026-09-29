@@ -31,8 +31,7 @@ public static class Program
 
           --fleet-seed=N      함대 시드 (기본 0) — 봇의 성향 · 세션 시드가 여기서 나온다
           --from=N --to=M     봇 번호 N ~ M-1 (기본 0 ~ 1000)
-          --stage1-tries=N    1단계 시도 상한 (기본 5)
-          --stage2-tries=N    2단계 시도 상한 (기본 5)
+          --tries=N           봇 한 대의 시도 상한 — 이기면 멈춘다 (기본 5)
           --threads=N         동시에 도는 봇 수 (기본 코어 수) — 결과는 스레드 수와 무관하다
           --chunk=N           한 번에 들고 있는 봇 수 (기본 1000)
           --out=DIR           출력 폴더 (기본 out/factory/<시드>-<from>-<to>)
@@ -60,17 +59,16 @@ public static class Program
         ulong fleetSeed = CmdArgs.UInt64(args, "--fleet-seed=") ?? 0;
         int from = Int(args, "--from=") ?? 0;
         int to = Int(args, "--to=") ?? from + 1000;
-        int stage1Tries = Int(args, "--stage1-tries=") ?? 5;
-        int stage2Tries = Int(args, "--stage2-tries=") ?? 5;
+        int tries = Int(args, "--tries=") ?? 5;
         int threads = Int(args, "--threads=") ?? Environment.ProcessorCount;
         int chunk = Int(args, "--chunk=") ?? 1000;
         string data = CmdArgs.Text(args, "--data=") ?? Path.Combine("overfit", "data");
         string fleetPath = CmdArgs.Text(args, "--fleet=") ?? Path.Combine("tools", "factory", "fleet.json");
         string commit = CmdArgs.Text(args, "--commit=") ?? "unknown";
         string outDir = CmdArgs.Text(args, "--out=") ?? Path.Combine("out", "factory", $"{fleetSeed}-{from}-{to}");
-        if (to <= from || stage1Tries < 1 || stage2Tries < 1 || threads < 1 || chunk < 1)
+        if (to <= from || tries < 1 || threads < 1 || chunk < 1)
         {
-            Console.Error.WriteLine($"인자가 틀렸다 — from={from} to={to} stage1-tries={stage1Tries} stage2-tries={stage2Tries} threads={threads} chunk={chunk}");
+            Console.Error.WriteLine($"인자가 틀렸다 — from={from} to={to} tries={tries} threads={threads} chunk={chunk}");
             Console.Error.Write(_usage);
             return 2;
         }
@@ -90,10 +88,10 @@ public static class Program
             return 1;
         }
 
-        IReadOnlyList<string> roster = StageRoster.For(tables.Stages, 2);
+        IReadOnlyList<string> roster = StageRoster.For(tables.Stages, 1);
         var stats = new FactoryStats(roster);
         Directory.CreateDirectory(outDir);
-        Say($"start fleet_seed={fleetSeed} bots={from}..{to - 1} tries={stage1Tries}/{stage2Tries} threads={threads} chunk={chunk}"
+        Say($"start fleet_seed={fleetSeed} bots={from}..{to - 1} tries={tries} threads={threads} chunk={chunk}"
             + $" data_digest={digest[..12]} fleet={fleetSha[..12]} commit={commit} out={outDir}");
 
         var watch = Stopwatch.StartNew();
@@ -102,7 +100,7 @@ public static class Program
         {
             try
             {
-                FactoryBatch.Run(from, to, threads, bot => BotRun.Run(fleetSeed, bot, tables, stage1Tries, stage2Tries), results =>
+                FactoryBatch.Run(from, to, threads, bot => BotRun.Run(fleetSeed, bot, tables, tries), results =>
                 {
                     var sampleText = new StringBuilder();
                     var botText = new StringBuilder();
@@ -134,7 +132,7 @@ public static class Program
 
             watch.Stop();
             double seconds = Math.Max(watch.Elapsed.TotalSeconds, 1e-9);
-            Say($"done bots={stats.Bots} reached_stage2={stats.ReachedStage2} won_stage2={stats.WonStage2} samples={stats.Samples}"
+            Say($"done bots={stats.Bots} won={stats.Won} samples={stats.Samples}"
                 + $" ticks={stats.Ticks} seconds={seconds:0.0} bots_per_s={stats.Bots / seconds:0.0} ticks_per_s={stats.Ticks / seconds:0}");
 
             foreach (SlotRate slot in stats.Slots)
@@ -143,7 +141,7 @@ public static class Program
             }
 
             Manifest(Path.Combine(outDir, "manifest.json"), new ManifestFacts(
-                fleetSeed, from, to, stage1Tries, stage2Tries, threads, fleetSha, commit, digest, samples, bots, seconds), stats);
+                fleetSeed, from, to, tries, threads, fleetSha, commit, digest, samples, bots, seconds), stats);
             Say($"wrote samples={samples.Rows} bots={bots.Rows} out={outDir}");
 
             Log.Marker("factory", "factory=done");
@@ -153,7 +151,7 @@ public static class Program
 
     /// <summary>매니페스트의 사실들 — 인자 · 해시 · 파일.</summary>
     private sealed record ManifestFacts(
-        ulong FleetSeed, int From, int To, int Stage1Tries, int Stage2Tries, int Threads, string FleetSha, string Commit, string DataDigest,
+        ulong FleetSeed, int From, int To, int Tries, int Threads, string FleetSha, string Commit, string DataDigest,
         CsvFile Samples, CsvFile Bots, double Seconds);
 
     /// <summary><c>manifest.json</c> — 설계 §4.4 의 칸. 한글 id 는 그대로 싣는다(사람이 읽는다).</summary>
@@ -166,8 +164,7 @@ public static class Program
         json.WriteNumber("fleet_seed", facts.FleetSeed);
         json.WriteNumber("bot_from", facts.From);
         json.WriteNumber("bot_to", facts.To);
-        json.WriteNumber("stage1_tries", facts.Stage1Tries);
-        json.WriteNumber("stage2_tries", facts.Stage2Tries);
+        json.WriteNumber("tries", facts.Tries);
         json.WriteString("fleet_sha256", facts.FleetSha);
         json.WriteString("commit", facts.Commit);
         json.WriteString("data_digest", facts.DataDigest);
@@ -184,8 +181,7 @@ public static class Program
         json.WriteNumber("ticks", stats.Ticks);
         json.WriteNumber("ticks_per_second", Math.Round(stats.Ticks / facts.Seconds));
         json.WriteNumber("bots_per_second", Math.Round(stats.Bots / facts.Seconds, 2));
-        json.WriteNumber("reached_stage2", stats.ReachedStage2);
-        json.WriteNumber("won_stage2", stats.WonStage2);
+        json.WriteNumber("won", stats.Won);
         json.WriteStartArray("base_rates");
         foreach (SlotRate slot in stats.Slots)
         {
