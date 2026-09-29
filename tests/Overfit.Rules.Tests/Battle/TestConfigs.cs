@@ -233,7 +233,7 @@ public static class TestConfigs
             Arena = Arena(),
             Fighter = fighter ?? Fighter(),
             HitShapes = shapes ?? HitShapes(),
-            Boss = Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            Boss = Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
             PatternIds = new[] { id },
             Patterns = new Dictionary<string, PatternDef> { [id] = pattern },
             Seed = 1,
@@ -326,13 +326,29 @@ public static class TestConfigs
     public static int MaxTicks() => Balance().Battle.MaxTicks;
 
     /// <summary>
-    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="patternGap"/> ·
-    /// <paramref name="exhaustSeconds"/> 는 <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
-    /// 속도 0 으로 보스를 세운다 · 탈진 길이를 바꿔 그 길이를 규칙에게서 읽는지 본다). 반폭은 절대 안 받는다 — 몸 충돌 간격이 그 값을
-    /// 쓰므로 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
+    /// 실제 단계의 명부와 고르기 — 게임 · 데모와 같은 자리(<see cref="StageRoster.Setup"/>)에서 실제 동작 정의 · 실제 보스의 쉬는 길이 · 실제
+    /// <c>picker</c> 수치로 세운다(설계 2026-09-29 조각1 §4.1). 테스트마다 넷을 베껴 넘기면 한 곳이 실제와 갈린다.
     /// </summary>
+    public static StageSetup Stage(ulong seed, IReadOnlyList<ScriptPlan>? script = null, int stage = 1) =>
+        StageRoster.Setup(
+            Stages(), stage, seed, Array.Empty<AttemptRecord>(), Patterns(), BattleSim.RestTicks(Boss()), Balance().Picker, script)
+        ?? throw new InvalidOperationException($"stages.json 의 {stage}단계가 안 선다");
+
+    /// <summary>
+    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="rest"/> ·
+    /// <paramref name="exhaustSeconds"/> 는 <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
+    /// 속도 0 으로 보스를 세운다 · 쉬기를 하나로 굳혀 동작이 서는 틱을 센다 · 탈진 길이를 바꿔 그 길이를 규칙에게서 읽는지 본다). 반폭은 절대
+    /// 안 받는다 — 몸 충돌 간격이 그 값을 쓰므로 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
+    /// </summary>
+    /// <param name="maxHealth">체력.</param>
+    /// <param name="moveSpeed">걷는 빠르기.</param>
+    /// <param name="rest">
+    /// 쉬는 길이 하나(초) — 주면 <c>rest_seconds</c> 가 이것 하나다(설계 2026-09-29 조각1 §3.4 — 실제는 셋 중 하나를 계획마다 고른다). 옛 이름
+    /// <c>patternGap</c> 이 받던 자리다.
+    /// </param>
+    /// <param name="exhaustSeconds">탈진 길이.</param>
     public static BossConfig Boss(
-        int? maxHealth = null, double? moveSpeed = null, double? patternGap = null, double? exhaustSeconds = null)
+        int? maxHealth = null, double? moveSpeed = null, double? rest = null, double? exhaustSeconds = null)
     {
         BalanceData balance = Balance();
         BossConfig data = Bosses()[balance.Battle.Boss];
@@ -342,7 +358,7 @@ public static class TestConfigs
             MoveSpeed = moveSpeed ?? data.MoveSpeed,
             HalfWidth = data.HalfWidth,
             Height = data.Height,
-            PatternGap = patternGap ?? data.PatternGap,
+            RestSeconds = rest is { } r ? new[] { r } : data.RestSeconds,
             ExhaustSeconds = exhaustSeconds ?? data.ExhaustSeconds,
             PoiseMax = data.PoiseMax,
             PoiseDecayDelay = data.PoiseDecayDelay,

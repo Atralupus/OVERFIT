@@ -11,7 +11,7 @@ namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
 /// 일곱 동작이 <b>겨냥한 사람을 실제로 잡는가</b> (설계 2026-09-29 조각1 §2 — 옛 이름 Stage2BattleTests · #78). 실제 캐릭터(fighters.json) ·
-/// 실제 보스 · 실제 동작에 대본(<see cref="ScriptPicker"/>)으로 동작을 고정한다. 틱은 <b>패턴의 틱</b>(스펙 §2.5 의 표와 같은 자 · 첫 틱 1)이다:
+/// 실제 보스 · 실제 동작에 대본(<see cref="ScriptPlanPicker"/>)으로 동작을 고정한다. 틱은 <b>패턴의 틱</b>(스펙 §2.5 의 표와 같은 자 · 첫 틱 1)이다:
 /// 패턴이 선 판의 틱이 B 면 판의 B + p 틱이 패턴의 p 틱이다.
 ///
 /// <para>
@@ -39,10 +39,14 @@ public class MoveBattleTests
 
     private static FighterConfig Real() => TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter];
 
-    /// <summary>보스전의 명부 위에 대본을 얹은 판. 파이터는 <paramref name="fighter"/> — 없으면 실제 캐릭터다.</summary>
+    /// <summary>
+    /// 보스전의 명부 위에 대본을 얹은 판 — 대본의 칸마다 0.8초 쉬고 끊지 않는다(옛 간격 그대로라 아래 틱들이 그 위에서 잰 값이다). 파이터는
+    /// <paramref name="fighter"/> — 없으면 실제 캐릭터다.
+    /// </summary>
     private static BattleSim Sim(FighterConfig? fighter, params string[] script)
     {
         IReadOnlyList<string> roster = StageRoster.For(TestConfigs.Stages(), 1);
+        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
         return new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -50,9 +54,9 @@ public class MoveBattleTests
             HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = roster,
-            Patterns = TestConfigs.Patterns(),
+            Patterns = patterns,
             Seed = 51,
-            Picker = new ScriptPicker(roster, script),
+            Picker = new ScriptPlanPicker(roster, patterns, script.Select(id => new ScriptPlan(0.8, id)).ToArray()),
             MaxTicks = TestConfigs.MaxTicks(),
         });
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Overfit.Core;
 
 namespace Overfit.Battle.Rules;
@@ -46,7 +47,7 @@ public sealed class FleetBot
     /// <summary>지난 틱의 패턴(null = 쉬는 중). 바뀌는 순간이 새 사례다.</summary>
     private string? _pattern;
 
-    /// <summary>지난 패턴이 끝난 틱 — 다음 패턴은 보스의 간격(<see cref="Boss.PatternGap"/>) 뒤에 선다. 판의 처음은 0 이다.</summary>
+    /// <summary>지난 패턴이 끝난 틱 — 다음 패턴은 보스의 쉬기(<see cref="Boss.RestSeconds"/> 중 하나) 뒤에 선다. 판의 처음은 0 이다.</summary>
     private int _patternEnd;
 
     /// <summary>지금 사례가 선 틱 — 리듬형의 시각표가 여기서 잰다.</summary>
@@ -314,7 +315,9 @@ public sealed class FleetBot
         bool chain = Det.Roll01(_seed, Det.Domain.FleetAct, k1: swing, k2: 5) < _traits.Chain;
         if (!reckless && !sim.Boss.Exhausted && Det.Roll01(_seed, Det.Domain.FleetAct, k1: swing, k2: 6) >= _traits.Greed)
         {
-            int gapTicks = Ticks(sim.Boss.PatternGap);
+            // 다음 패턴이 설 수 있는 가장 이른 틱 — 쉬는 길이는 계획마다 달라(설계 2026-09-29 조각1 §3.4) 봇은 앞의 계획을 모른다. 조심하는 사람은
+            // 가장 짧은 쉬기를 친다(그보다 길게 쉬면 남는 것은 덤이다). 캔슬로 이어지는 동작은 쉬기 없이 서지만 그 첫 판정은 선딜 뒤라 이 셈에 안 넣는다.
+            int gapTicks = Ticks(sim.Boss.RestSeconds.Min());
             int danger = sim.Boss.CurrentPattern is null ? _patternEnd + gapTicks : sim.Ticks + gapTicks;
             chain = chain && sim.Ticks + _chainTicks <= danger;
             if (sim.Ticks + _swingTicks > danger)

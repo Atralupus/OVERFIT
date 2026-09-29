@@ -126,6 +126,54 @@ public class PatternDataTests
     }
 
     [Fact]
+    public void 캔슬_지점은_단계의_경계고_정수_틱이고_패턴_안이며_판정_창과_움직임_밖이다()
+    {
+        // 설계 2026-09-29 조각1 §3.1 — 캔슬하는 틱에 러너는 그 단계에 안 들고 하던 동작을 걷는다(§3.2). 그래서 지점마다 넷을 본다.
+        // ① 그 틱에 드는 단계가 있다 — 장의 경계라 뷰가 반 장을 안 그린다. ② t × 60 이 정수다 — 반 틱이면 반올림이 지점을 옆 장으로 민다.
+        // ③ 0 < t < 끝 — 첫 틱이나 끝에서 끊으면 끊을 것이 없다. ④ 앞 판정 창이 닫힌 뒤이고 움직임(도약 · 돌진) 밖이다 — 끊는 틱에 열린 창도
+        // 도는 움직임도 없어야 걷을 것이 러너 하나다. 지점은 시간순이고 겹치지 않는다(계획은 칸 번호로 고른다).
+        int points = 0;
+        foreach ((string id, PatternDef def) in Load())
+        {
+            IReadOnlyList<CancelPointDef> cancel = def.CancelPoints ?? [];
+            for (int k = 0; k < cancel.Count; k++)
+            {
+                points++;
+                double t = cancel[k].T;
+                int tick = BattleSim.TicksFor(t);
+                string where = $"{id}: 캔슬 지점 {k}(t={t})";
+
+                (t * 60).ShouldBe(Math.Round(t * 60), 1e-9, $"{where} 가 정수 틱이 아니다");
+                def.Timeline.ShouldContain(s => TickOf(s) == tick, $"{where} 에 드는 단계가 없다 — 장의 경계가 아니다");
+                t.ShouldBeGreaterThan(0, $"{where} 가 패턴의 첫 틱이다");
+                t.ShouldBeLessThan(def.Duration, $"{where} 가 패턴의 끝이거나 그 뒤다");
+                if (k > 0)
+                {
+                    t.ShouldBeGreaterThan(cancel[k - 1].T, $"{where} 가 앞 지점보다 이르거나 같다");
+                }
+
+                foreach (PatternStep step in def.Timeline.Where(s => TickOf(s) < tick))
+                {
+                    if (step.Kind == "active")
+                    {
+                        (TickOf(step) + BattleSim.TicksFor(step.ActiveSeconds)).ShouldBeLessThanOrEqualTo(tick,
+                            $"{where} 에 t={step.T} 의 판정 창이 아직 열려 있다");
+                    }
+
+                    if (step.Motion is { Id: "leap" } leap)
+                    {
+                        (TickOf(step) + BattleSim.TicksFor(leap.Air)).ShouldBeLessThanOrEqualTo(tick, $"{where} 에 t={step.T} 의 도약이 아직 떠 있다");
+                    }
+                }
+
+                def.Timeline.Where(s => s.Motion is { Id: "rush" }).ShouldAllBe(s => TickOf(s) != tick, $"{where} 가 돌진이 서는 틱이다");
+            }
+        }
+
+        points.ShouldBeGreaterThan(0, "캔슬 지점이 하나도 없다 — 이 가드가 아무것도 안 본다");
+    }
+
+    [Fact]
     public void Multi_hit_태그가_active_개수와_같다()
     {
         foreach ((string id, PatternDef def) in Load())

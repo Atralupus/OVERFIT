@@ -67,7 +67,7 @@ public class InputFrameTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,

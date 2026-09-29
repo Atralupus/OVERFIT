@@ -43,11 +43,12 @@ public sealed class BattleSetup
     public Func<MotionDef, MotionBounds, IBossMotion?>? Motions { get; set; }
 
     /// <summary>
-    /// 패턴 고르기 (#72 · 설계 §4.4) — <b>선택</b>이다. 비우면 (<see cref="Seed"/>, <see cref="PatternIds"/>) 위의
-    /// <see cref="UniformPicker"/> 라, 고르기를 모르는 테스트의 판이 그대로 선다. 게임과 데모는 단계의 <c>picker</c> 로
-    /// 등록표(<see cref="PatternPickers"/>)에서 세워 넣는다.
+    /// 계획 고르기 (#72 · 설계 2026-09-29 조각1 §4.1) — <b>선택</b>이다. 비우면 (<see cref="Seed"/>, <see cref="PatternIds"/>) 위의
+    /// <see cref="UniformPlanPicker"/> 인데 <b>끊지 않는다</b>(<c>cancel_percent</c> 0) — 쉬기는 보스의 <c>rest_seconds</c> 에서 고른다. 고르기를
+    /// 모르는 테스트의 판이 캔슬 없이 선다. 게임 · 데모 · 공장 · 골든은 단계의 <c>picker</c> 로 등록표(<see cref="PatternPickers"/>)에서 세워
+    /// 넣는다(<c>StageRoster.Setup</c> — <c>balance.json</c> 의 수치로).
     /// </summary>
-    public IPatternPicker? Picker { get; set; }
+    public IPlanPicker? Picker { get; set; }
 
     /// <summary>이 틱을 넘기면 시간 초과로 패배. <b>한 판이 반드시 끝나게 하는 안전장치다.</b></summary>
     public required int MaxTicks { get; set; }
@@ -63,9 +64,11 @@ public sealed class BattleSetup
 /// </para>
 ///
 /// <para>
-/// 패턴 선택은 <see cref="IPatternPicker"/> 한 자리다 (#72 · 설계 §4.4). 게임의 단계는 지금 <b>무작위</b>(<c>uniform</c>)뿐이다. 일부러다 —
-/// 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다. 무작위지만 <see cref="Det"/> 로
-/// 뽑으므로 같은 시드는 같은 순서를 낸다. 대본(<c>script</c> · #78)은 단계의 고르기가 아니다 — GIF · 스크린샷이 패턴을 고정하는 데만 쓴다.
+/// 보스가 다음을 고르는 것은 <see cref="IPlanPicker"/> 한 자리다 (#72 · 설계 2026-09-29 조각1 §4.1) — <b>계획</b>(쉬기 · 첫 동작 · 캔슬 지점 ·
+/// 잇는 동작)을 통째로 고르고, 흐름(쉬기 → 첫 동작 → 끊고 잇기 → 다음 계획)은 <see cref="PlanFlow"/> 가 센다. 게임의 단계는 지금 <b>무작위</b>
+/// (<c>uniform</c>)뿐이다. 일부러다 — 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
+/// 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 계획을 낸다. 대본(<c>script</c> · #78)은 단계의 고르기가 아니다 — GIF · 스크린샷 ·
+/// 순회가 계획을 고정하는 데만 쓴다.
 /// </para>
 /// </summary>
 public sealed class BattleSim
@@ -74,9 +77,6 @@ public sealed class BattleSim
     public const double Dt = 1.0 / 60.0;
 
     private readonly BattleSetup _setup;
-
-    /// <summary>패턴 고르기 — <see cref="BattleSetup.Picker"/>, 비었으면 시드 위의 uniform.</summary>
-    private readonly IPatternPicker _picker;
 
     /// <summary>
     /// 칼질 단계마다의 칼 — <c>hitboxes.json</c> 에서 그림의 흰 궤적으로 뽑은 모양 (이슈 #59 · 설계 §5.1).
@@ -93,12 +93,14 @@ public sealed class BattleSim
     private PatternRunner? _runner;
     private PatternDef? _current;
 
-    /// <summary>다음 패턴까지 남은 쉬는 틱 (설계 §3.6 ⑤ — 간격도 틱으로 센다: 0.8초 = 48틱).</summary>
-    private int _gapLeft;
-    private int _picks;
+    /// <summary>계획의 흐름 — 쉬기 · 첫 동작 · 캔슬 · 잇는 동작 (설계 2026-09-29 조각1 §3.3). 쉬는 틱도 틱으로 센다(설계 §3.6 ⑤).</summary>
+    private readonly PlanFlow _flow;
 
-    /// <summary>뽑혀 선 패턴 id 들, 선 순서 — <see cref="Drawn"/>.</summary>
+    /// <summary>선 동작 id 들, 선 순서 — <see cref="Drawn"/>. 잇는 동작도 든다.</summary>
     private readonly List<string> _drawn = new();
+
+    /// <summary>실제로 끊은 캔슬들 — <see cref="Cancels"/>.</summary>
+    private readonly List<(string From, string To)> _cancels = new();
 
     /// <summary>
     /// 지금 도는 움직임 (설계 §8.1) — 러너가 움직임을 단 단계에 들 때 서고, 스스로 끝났다고 말하면 걷는다.
@@ -156,7 +158,7 @@ public sealed class BattleSim
 
         // 빈 명부는 여기서 막는다. 고르기가 낼 칸이 없다 — 전에는 첫 패턴을 고를 때 Det.RollInt(n: 0) 이
         // ArgumentOutOfRangeException 으로 터졌는데 판이 한참 돈 뒤라, 무엇이 잘못됐는지가 그 스택에 안 적혔다.
-        // 넘겨받은 고르기(#72)라면 터지지도 않고 간격마다 pick_out_of_range 만 쌓으며 보스 없는 판이 돈다.
+        // 넘겨받은 고르기(#72)라면 터지지도 않고 쉬기마다 plan_invalid 만 쌓으며 보스 없는 판이 돈다.
         // 세울 때 거절하면 부른 자리가 그대로 남는다.
         if (setup.PatternIds.Count == 0)
         {
@@ -164,7 +166,6 @@ public sealed class BattleSim
         }
 
         _setup = setup;
-        _picker = setup.Picker ?? new UniformPicker(setup.Seed, setup.PatternIds.Count);
         _swords = Swords(setup);
         _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
@@ -175,8 +176,33 @@ public sealed class BattleSim
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
         // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
         Boss.Face(Fighter.X);
-        _gapLeft = GapTicks;
+
+        // 판이 서면 첫 계획의 쉬기부터다 (설계 2026-09-29 조각1 §3.4) — 첫 계획을 지금 고른다.
+        IReadOnlyList<int> rest = RestTicks(setup.Boss);
+        IPlanPicker picker = setup.Picker ?? new UniformPlanPicker(
+            new PickerInputs(setup.PatternIds, setup.Patterns, rest, new PickerBalance { CancelPercent = 0 }, Array.Empty<AttemptRecord>(), setup.Seed));
+        _flow = new PlanFlow(picker, setup.PatternIds, setup.Patterns, rest, Request);
+        _flow.Choose();
     }
+
+    /// <summary>
+    /// 쉬는 길이들을 틱으로 (설계 2026-09-29 조각1 §3.4) — 판과 고르기(<c>StageRoster.Setup</c>)가 같은 값을 쓰게 한 자리다. 반올림은
+    /// <see cref="TicksFor"/> 한 곳이다.
+    /// </summary>
+    public static IReadOnlyList<int> RestTicks(BossConfig boss)
+    {
+        ArgumentNullException.ThrowIfNull(boss);
+        var ticks = new int[boss.RestSeconds.Count];
+        for (int i = 0; i < ticks.Length; i++)
+        {
+            ticks[i] = TicksFor(boss.RestSeconds[i]);
+        }
+
+        return ticks;
+    }
+
+    /// <summary>계획 번호 → 고르기에 넘길 것 — 이 판의 틱 · 관측 · 자리 (설계 2026-09-29 조각1 §4.1).</summary>
+    private PlanRequest Request(int number) => new(number, Ticks, Events, Boss.X, Boss.Facing, Fighter.X);
 
     /// <summary>
     /// 칼질 단계마다 칼의 모양을 찾는다. <b>판을 세울 때</b> 한 번이다 — 칼이 처음 서는 틱에 찾다 틀리면 판이 한참
@@ -237,10 +263,16 @@ public sealed class BattleSim
     public IReadOnlyList<DodgeEvent> Events => _swings.Events;
 
     /// <summary>
-    /// 이 판에서 뽑혀 선 패턴 id 의 순서 (#112 · 설계 2026-09-28 §6.5) — 시도 기록과 로그가 싣고, 되살리기가 기록의 순서와 앞머리를 견준다. 명부 밖을
-    /// 뽑았거나 없는 패턴이라 안 선 것은 안 싣는다.
+    /// 이 판에서 선 동작 id 의 순서 (#112 · 설계 2026-09-28 §6.5) — 잇는 동작도 든다. 시도 기록과 로그가 싣고, 되살리기가 기록의 순서와 앞머리를
+    /// 견준다. 버린 계획의 동작은 안 선다.
     /// </summary>
     public IReadOnlyList<string> Drawn => _drawn;
+
+    /// <summary>이 판에서 고른 계획들, 고른 순서로 (설계 2026-09-29 조각1 §3.3) — 버린 계획은 빠진다. 끝나지 않은 마지막 계획도 든다.</summary>
+    public IReadOnlyList<BossPlan> Plans => _flow.Plans;
+
+    /// <summary>이 판에서 실제로 끊은 캔슬들 — (끊은 동작, 이은 동작). 탈진으로 못 쓴 캔슬은 안 든다(설계 2026-09-29 조각1 §3.2).</summary>
+    public IReadOnlyList<(string From, string To)> Cancels => _cancels;
 
     /// <summary>
     /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
@@ -412,12 +444,9 @@ public sealed class BattleSim
     /// </summary>
     private double Standoff => Boss.HalfWidth + Fighter.HalfWidth;
 
-    /// <summary>패턴과 패턴 사이의 쉬는 틱. 반올림은 <see cref="TicksFor"/> 한 곳이다.</summary>
-    private int GapTicks => TicksFor(Boss.PatternGap);
-
     /// <summary>
-    /// 보스: 탈진했으면 아무것도 안 하고(공중에서 무너졌으면 내리기만 한다 · <see cref="Fall"/>), 쉬는 중이면 다가가고, 패턴 중이면
-    /// 타임라인을 민다.
+    /// 보스: 탈진했으면 아무것도 안 하고(공중에서 무너졌으면 내리기만 한다 · <see cref="Fall"/>), 쉬는 중이면 다가가고 계획의 쉬기를 세고, 동작 중이면
+    /// 캔슬 지점에서 끊거나 타임라인을 민다.
     /// </summary>
     private void AdvanceBoss()
     {
@@ -436,8 +465,6 @@ public sealed class BattleSim
 
         if (_runner is null)
         {
-            _gapLeft--;
-
             // 방향은 **쉬는 동안에만** 바꾼다. 여기 두는 것 자체가 잠금의 절반이고
             // (나머지 절반은 Boss.Face 안의 가드다), 그래서 패턴이 서는 순간의 방향이
             // 그 패턴이 끝날 때까지 그대로 간다 — 예고가 거짓말이 되지 않는다. 예외는 움직임 하나다
@@ -453,11 +480,19 @@ public sealed class BattleSim
             // 파이터의 중심이 아니라 **자기 쪽으로 Standoff 떨어진 자리**를 목표로 한다.
             // 중심을 노리면 보스가 파이터 위에 정확히 겹쳐 서서 교전 거리가 늘 0 이 된다.
             Boss.Approach(Fighter.X + ((Boss.X >= Fighter.X ? 1 : -1) * Standoff), Dt);
-            if (_gapLeft <= 0)
+            if (_flow.RestTick() is int move)
             {
-                Begin();
+                Begin(move);
             }
 
+            return;
+        }
+
+        // 캔슬 지점의 틱이면 러너를 안 민다 — 그 단계에 들지 않고 끊는다(설계 2026-09-29 조각1 §3.2). 시계를 세운 틱에는 러너가 안 가므로 끊지
+        // 않는다(지점은 움직임 밖이라 오지 않는 자리다 · PatternDataTests).
+        if (!_holdClock && _flow.CancelAt is int at && _runner.Ticks + 1 == at)
+        {
+            Cancel(at);
             return;
         }
 
@@ -482,10 +517,20 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 패턴을 걷는다 — 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같은 여덟 줄이다 (#71 · #59 의 3/6 넘김 —
-    /// 둘이 따로 적혀 있으면 하나만 고치는 날 끊긴 패턴이 무언가를 남긴다). 다음 패턴은 간격을 처음부터 센 뒤에 고른다.
+    /// 계획이 끝났다 — 동작을 걷고 다음 계획을 고른다. 끝까지 돌았든(러너의 end) 끊겼든(탈진 · <see cref="Exhaust"/>) 같다 — 다음 계획의 쉬기는
+    /// 여기서부터 센다(탈진이면 풀린 뒤부터 · 설계 2026-09-29 조각1 §3.2).
     /// </summary>
     private void EndPattern()
+    {
+        ClearPattern();
+        _flow.Choose();
+    }
+
+    /// <summary>
+    /// 동작을 걷는다 — 계획이 끝날 때(<see cref="EndPattern"/>)와 캔슬(<see cref="Cancel"/>)이 같은 일곱 줄이다 (#71 · #59 의 3/6 넘김 — 따로 적혀
+    /// 있으면 하나만 고치는 날 끊긴 동작이 무언가를 남긴다).
+    /// </summary>
+    private void ClearPattern()
     {
         _runner = null;
         _current = null;
@@ -494,7 +539,23 @@ public sealed class BattleSim
         _holdClock = false;
         _holdTicks = 0;
         _goalX = null;
-        _gapLeft = GapTicks;
+    }
+
+    /// <summary>
+    /// 캔슬 (설계 2026-09-29 조각1 §3.2) — 러너가 지점의 단계에 들기 전에 ① 하던 동작을 걷고(쉬지 않는다) ② 파이터 쪽으로 돌아서고(방향 잠금은
+    /// 동작이 도는 동안의 것이라 동작 사이인 이 틱에는 풀린다 · <see cref="Boss.Face"/>) ③ 잇는 동작을 이 틱에 세운다 — 다음 틱에 그 첫 단계에
+    /// 든다. 지점은 판정 창과 움직임 밖이라(<c>PatternDataTests</c>) 걷을 것은 러너 하나다.
+    /// </summary>
+    /// <param name="at">끊은 러너 틱 — 로그의 <c>at=</c>.</param>
+    private void Cancel(int at)
+    {
+        string from = Boss.CurrentPattern ?? "-";
+        ClearPattern();
+        Boss.Face(Fighter.X);
+        Begin(_flow.Cancel());
+        string to = Boss.CurrentPattern ?? "-";
+        _cancels.Add((from, to));
+        Log.Debug("boss", () => $"cancel id={from} at={at} next={to} facing={Boss.Facing} tick={Ticks}");
     }
 
     /// <summary>
@@ -568,8 +629,8 @@ public sealed class BattleSim
     /// <b>탈진 루틴 — 하나다</b> (#72 · #71 · 설계 §4.3). 원인이 패리든 경직 게이지든 같은 상태 · 같은 그림에 닿아야
     /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격은 안 온다 · 움직임은 공중이면 높이만
     /// 따라 내리고 땅이면 멈춘다 — <see cref="Fall"/>), 열린 창은 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 게이지는 원인과
-    /// 무관하게 비운다 — 안 비우면 반쯤 찬 게이지가 탈진이 풀리자마자 한 대에 무너진다. 탈진이 풀리면 간격을 처음부터 세어 다음 패턴을
-    /// 고른다.
+    /// 무관하게 비운다 — 안 비우면 반쯤 찬 게이지가 탈진이 풀리자마자 한 대에 무너진다. 계획이 끝난다 — 남은 캔슬 · 잇는 동작은 버리고 다음
+    /// 계획을 이 틱에 고르며, 그 쉬기는 탈진이 풀린 뒤부터 센다(설계 2026-09-29 조각1 §3.2).
     /// </summary>
     /// <param name="cause">무엇이 무너뜨렸나 — <c>parry</c> · <c>poise</c>. 로그의 <c>cause=</c> 다.</param>
     private void Exhaust(string cause)
@@ -587,7 +648,7 @@ public sealed class BattleSim
         // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
         // 땅이면 남길 것이 없다: 돌진(#78)처럼 땅을 가는 움직임은 그 자리에서 멈춘다.
         _fall = Boss.Y > 0 ? _motion : null;
-        EndPattern();
+        ClearPattern();
         _poise.Empty();
         Boss.Exhaust(TicksFor(_setup.Boss.ExhaustSeconds));
         Log.Debug("boss", () => $"exhaust cause={cause} id={id} tick={Ticks}");
@@ -595,6 +656,8 @@ public sealed class BattleSim
         {
             Log.Debug("boss", () => $"exhaust_fall y={Boss.Y:0} x={Boss.X:0} tick={Ticks}");
         }
+
+        _flow.Choose();
     }
 
     /// <summary>
@@ -614,43 +677,25 @@ public sealed class BattleSim
     /// </summary>
     private void LogFighterHeld() => Log.Debug("fighter", () => $"held exhausted={Fighter.Exhausted} tick={Ticks}");
 
-    /// <summary>다음 패턴을 고른다 — 고르기(<see cref="IPatternPicker"/>)에 몇 번째로 뽑는지를 넘긴다.</summary>
-    private void Begin()
+    /// <summary>
+    /// 명부의 <paramref name="index"/> 칸 동작을 세운다 — 계획의 첫 동작(쉬기가 끝난 틱)이든 잇는 동작(캔슬한 틱)이든. 칸과 정의는 계획을 고를 때
+    /// 이미 봤다(<see cref="PlanFlow"/> 가 틀린 계획을 버린다).
+    /// </summary>
+    private void Begin(int index)
     {
-        int draw = _picks;
-        int index = _picker.Pick(draw);
-        _picks++;
-        if ((uint)index >= (uint)_setup.PatternIds.Count)
-        {
-            // 아래 pattern_missing 과 같은 이유로 간격을 되돌린다 — 매 틱 [E] 를 쏟지 않게. 예외로 두면 엔진의 ERROR 블록으로만
-            // 나와 어느 고르기가 무엇을 냈는지가 안 남는다. 망이 들어오면 고르기가 데이터(기록)를 읽으므로 올 수 있는 자리다.
-            _gapLeft = GapTicks;
-            Log.Error("boss", $"pick_out_of_range index={index} roster={_setup.PatternIds.Count} draw={draw} tick={Ticks}");
-            return;
-        }
-
         string id = _setup.PatternIds[index];
-        if (!_setup.Patterns.TryGetValue(id, out PatternDef? def))
-        {
-            // 간격을 되돌려 놓고 나간다. 안 그러면 _gapLeft 가 0 이하로 남아 다음 틱에도
-            // 곧장 이 갈래로 떨어져, 유효한 id 가 뽑힐 때까지 매 틱 [E] 를 쏟는다 —
-            // 헤드리스 판정이 읽는 로그가 그것으로 뒤덮인다.
-            _gapLeft = GapTicks;
-            Log.Error("boss", $"pattern_missing id={id}");
-            return;
-        }
-
+        PatternDef def = _setup.Patterns[id];
         _current = def;
         _runner = new PatternRunner(def, _hits[id]);
         Boss.CurrentPattern = id;
         _drawn.Add(id);
-        Log.Debug("boss", () => $"pattern_begin id={id} pick={_picks} tick={Ticks}");
+        Log.Debug("boss", () => $"pattern_begin id={id} tick={Ticks}");
     }
 
     /// <summary>
     /// 초를 틱으로. <b>규칙의 초→틱 반올림은 여기 한 곳이다</b> (설계 §3.5 · §3.6 ⑤) — 반 틱은 0 에서 먼 쪽으로 간다.
     /// 쓰는 곳은 아홉이다: 판정 창의 길이(<see cref="BossSwings.Open"/> — 점프 가능도 그 창의 틱 수로 잰다 · #85), 타임라인 단계의
-    /// 시각 T(<see cref="PatternRunner"/>), 패턴 사이 간격(0.8초 = 48틱), 보스의 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>),
+    /// 시각 T(<see cref="PatternRunner"/>), 쉬는 길이(0.4 · 0.8 · 1.2초 = 24 · 48 · 72틱 · <see cref="RestTicks"/>), 보스의 탈진(1.5초 = 90틱), 도약의 뜬 시간(<see cref="LeapMotion"/>),
     /// 경직 게이지의 유예(1.2초 = 72틱 · <see cref="PoiseGauge"/>), 파이터의 탈진(1.1초 = 66틱)과 행동 뒤 경직(#82 · <see cref="Fighter"/>),
     /// 잡기가 붙드는 시간(1.0초 = 60틱 · #78 · <see cref="BossSwings"/> 가 <see cref="Fighter.Grab"/> 에 넘긴다).
     /// 8fps 한 장은 0.125초 = 7.5틱이라, 이 중 둘이 각자 반올림하면 반 틱씩 어긋난다.

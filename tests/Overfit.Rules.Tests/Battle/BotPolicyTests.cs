@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -44,8 +43,7 @@ public class BotPolicyTests
     private static (BattleOutcome Outcome, BattleSim Sim) PlayDemo()
     {
         BalanceData balance = TestConfigs.Balance();
-        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), 1, 51, Array.Empty<AttemptRecord>())
-            ?? throw new InvalidOperationException("stages.json 에 보스전이 안 선다");
+        StageSetup setup = TestConfigs.Stage(51);
         var sim = new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),

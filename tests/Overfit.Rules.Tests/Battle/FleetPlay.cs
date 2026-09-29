@@ -32,9 +32,10 @@ internal static class FleetPlay
     public static BeatTable Beats => _beats.Value;
 
     /// <summary><paramref name="stage"/> 단계의 판 — 대본을 주면 그 전투만 대본으로 선다(스크린샷 · GIF 와 같은 길).</summary>
-    public static BattleSim Sim(int stage, ulong seed, IReadOnlyList<string>? script = null)
+    public static BattleSim Sim(int stage, ulong seed, IReadOnlyList<ScriptPlan>? script = null)
     {
-        StageSetup setup = StageRoster.Setup(_stages.Value, stage, seed, Array.Empty<AttemptRecord>(), script)
+        StageSetup setup = StageRoster.Setup(
+                _stages.Value, stage, seed, Array.Empty<AttemptRecord>(), _patterns.Value, BattleSim.RestTicks(_boss.Value), _balance.Value.Picker, script)
             ?? throw new InvalidOperationException($"stages.json 에 {stage}단계가 안 선다");
         return new BattleSim(new BattleSetup
         {
@@ -53,7 +54,7 @@ internal static class FleetPlay
     public static FleetBot Bot(BotTraits traits, ulong seed) => new(traits, seed, Beats, Fighter);
 
     /// <summary>한 판을 끝까지 민다.</summary>
-    public static (BattleOutcome Outcome, BattleSim Sim) Play(BotTraits traits, ulong seed, int stage = 1, IReadOnlyList<string>? script = null)
+    public static (BattleOutcome Outcome, BattleSim Sim) Play(BotTraits traits, ulong seed, int stage = 1, IReadOnlyList<ScriptPlan>? script = null)
     {
         BattleSim sim = Sim(stage, seed, script);
         FleetBot bot = Bot(traits, seed);

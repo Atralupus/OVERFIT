@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Godot;
+using Overfit.Battle.Rules;
 using Overfit.Core;
 
 namespace Overfit.Battle.Debug;
@@ -24,6 +25,9 @@ namespace Overfit.Battle.Debug;
 /// </summary>
 public sealed class SceneDriver
 {
+    /// <summary><see cref="Moves"/> 의 쉬기(초) — 옛 간격 그대로다. 대본이 쓰는 수라 여기 한 곳에 둔다.</summary>
+    private const double _rest = 0.8;
+
     private readonly Node _host;
 
     /// <summary>로그 태그 — 부르는 쪽의 이름(<c>shots</c> · <c>gif</c>)이다. 기다림이 넘쳤을 때 그 이름으로 남긴다.</summary>
@@ -47,12 +51,13 @@ public sealed class SceneDriver
     /// </para>
     ///
     /// <para>
-    /// <paramref name="script"/> 를 주면 그 판 하나를 대본(패턴 id 의 순서)으로 세운다 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」) — <c>Game</c> 의
-    /// 다음 전투 한 칸에 넣고 전투로 가면 <c>Battle</c> 이 가져간다. 무엇이 올지 알아야 "그 패턴이 왔을 때" 를 찍는다. <c>params</c> 인 까닭:
-    /// 부르는 자리가 <c>new[] { "잡기" }</c> 를 적으면 분석기(CA1861 · 상수 배열 인수)가 그 줄마다 경고한다.
+    /// <paramref name="script"/> 를 주면 그 판 하나를 대본(계획의 목록 · 설계 2026-09-29 조각1 §4.2)으로 세운다 (#78 · 설계 §4.4 「대본이 전투에
+    /// 닿는 길」) — <c>Game</c> 의 다음 전투 한 칸에 넣고 전투로 가면 <c>Battle</c> 이 가져간다. 무엇이 올지 알아야 "그 동작이 왔을 때" 를 찍는다.
+    /// 동작만 적을 때는 <see cref="Moves"/> 로 짓는다. <c>params</c> 인 까닭: 부르는 자리가 배열을 새로 적으면 분석기(CA1861 · 상수 배열 인수)가
+    /// 그 줄마다 경고한다.
     /// </para>
     /// </summary>
-    public async Task<Overfit.Battle.Battle?> NewBattle(params string[] script)
+    public async Task<Overfit.Battle.Battle?> NewBattle(params ScriptPlan[] script)
     {
         if (script.Length > 0)
         {
@@ -62,6 +67,22 @@ public sealed class SceneDriver
         Game.Instance.GoTo(Game.Scene.Battle);
         await Frames(4);
         return _host.GetTree().CurrentScene as Overfit.Battle.Battle;
+    }
+
+    /// <summary>
+    /// 동작만 적은 대본 — 칸마다 0.8초 쉬고 끊지 않는다(설계 2026-09-29 조각1 §4.2). 옛 간격(0.8초) 그대로라 대본의 장면들이 잰 틱이 안 움직인다.
+    /// 쉬기나 캔슬을 적어야 하는 대본은 <see cref="ScriptPlan"/> 을 그대로 쓴다.
+    /// </summary>
+    public static ScriptPlan[] Moves(params string[] ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var plans = new ScriptPlan[ids.Length];
+        for (int i = 0; i < ids.Length; i++)
+        {
+            plans[i] = new ScriptPlan(_rest, ids[i]);
+        }
+
+        return plans;
     }
 
     /// <summary>

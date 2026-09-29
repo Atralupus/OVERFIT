@@ -54,7 +54,7 @@ public class HitDebugTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
             PatternIds = new[] { "1타" },
             Patterns = new Dictionary<string, PatternDef> { ["1타"] = pattern },
             Seed = 1,

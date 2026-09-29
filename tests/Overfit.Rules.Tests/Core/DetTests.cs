@@ -198,9 +198,22 @@ public class DetTests
     }
 
     [Fact]
+    public void 계획의_도메인은_11_12_13_14_다()
+    {
+        // 계획의 결정마다 스트림을 따로 둔다 (설계 2026-09-29 조각1 §3.5) — 끊나 · 어디서 · 무엇으로 · 쉬는 길이. 첫 동작은 옛 uniform 의
+        // pattern_pick(1)을 그대로 쓴다. 한 스트림을 나눠 쓰면 한 결정의 칸 수가 바뀔 때(명부에 동작을 더할 때) 다른 결정의 좌표가 밀린다.
+        // 번호는 은퇴한 10 뒤에 더할 뿐이다.
+        (Det.Domain.PlanCancel, Det.Domain.PlanPoint, Det.Domain.PlanNext, Det.Domain.PlanRest).ShouldBe((11u, 12u, 13u, 14u));
+        Det.Domain.Name(Det.Domain.PlanCancel).ShouldBe("plan_cancel");
+        Det.Domain.Name(Det.Domain.PlanPoint).ShouldBe("plan_point");
+        Det.Domain.Name(Det.Domain.PlanNext).ShouldBe("plan_next");
+        Det.Domain.Name(Det.Domain.PlanRest).ShouldBe("plan_rest");
+    }
+
+    [Fact]
     public void 도메인_이름은_모르는_번호를_숫자_그대로_돌려준다()
     {
         Det.Domain.Name(0).ShouldBe("0");
-        Det.Domain.Name(11).ShouldBe("11");
+        Det.Domain.Name(99).ShouldBe("99");
     }
 }

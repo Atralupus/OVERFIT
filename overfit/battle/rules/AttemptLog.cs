@@ -19,7 +19,7 @@ namespace Overfit.Battle.Rules;
 /// <param name="Run">런 번호(<see cref="RunHistory.Run"/>) — 같은 런의 앞 기록을 찾는 열쇠다.</param>
 /// <param name="Record">시도 — 번호 · 실제로 싸운 단계 · 시드 · 결과 · 관측 전부.</param>
 /// <param name="PickerId">그 판을 세운 고르기 id(대본이면 <c>script</c>).</param>
-/// <param name="Drawn">그 판에서 뽑힌 패턴 id 의 순서(<see cref="BattleSim.Drawn"/>).</param>
+/// <param name="Drawn">그 판에서 선 동작 id 의 순서(<see cref="BattleSim.Drawn"/>) — 캔슬로 이은 동작도 든다. 6/8 에서 고른 계획(<c>plans</c>)이 대신한다.</param>
 /// <param name="Ticks">판의 길이.</param>
 /// <param name="Instances">
 /// 그 판의 사례와 라벨(<see cref="InstanceTracker"/> — 공장과 같은 정의 · 끝나지 않은 사례는 빠진다) (#114). 관측만으로는 같은 패턴이 연달아 선 사례의

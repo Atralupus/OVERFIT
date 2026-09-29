@@ -72,6 +72,36 @@ public class MoveDataTests
     }
 
     [Fact]
+    public void 캔슬_지점은_3연격_계열의_다음_타_선딜이다()
+    {
+        // 설계 2026-09-29 조각1 §3.1 의 표 — 지점은 다음 타의 선딜이 서는 시각이다(앞 타의 후딜 장을 보여 준 뒤 · 다음 타를 들기 직전). 3연격의
+        // 1.30초(78틱)가 옛 1타 돌진 · 1타 잡기가 3연격과 갈리던 그 시각이다. 나머지 넷은 지점이 없다(우산 §3.1) — 한 번에 끝나는 동작이다.
+        var table = new Dictionary<string, int[]>(StringComparer.Ordinal)
+        {
+            ["3연격"] = [78, 144],
+            ["엇박 3연격"] = [87, 162],
+            ["빠른 3연격"] = [36, 69],
+            ["돌진"] = [],
+            ["잡기"] = [],
+            ["점프 공격"] = [],
+            ["올려베기"] = [],
+        };
+        Dictionary<string, PatternDef> patterns = Patterns();
+
+        table.Keys.Order(StringComparer.Ordinal)
+            .ShouldBe(TestConfigs.Stages()["1"].Patterns.Order(StringComparer.Ordinal), "표가 명부의 일곱을 다 안 본다");
+        foreach ((string id, int[] points) in table)
+        {
+            (patterns[id].CancelPoints ?? []).Select(c => BattleSim.TicksFor(c.T)).ShouldBe(points, $"{id}: 캔슬 지점");
+            foreach (CancelPointDef point in patterns[id].CancelPoints ?? [])
+            {
+                PatternStep at = patterns[id].Timeline.Single(s => TickOf(s) == BattleSim.TicksFor(point.T));
+                (at.Kind, at.Frame).ShouldBe(("windup", 0), $"{id}: {point.T}초가 다음 타의 첫 선딜 장이 아니다");
+            }
+        }
+    }
+
+    [Fact]
     public void 엇박_3연격은_3연격과_같은_세_타에_칼이_오르기_전의_f0_만_0_15초씩_더_붙든다()
     {
         // 설계 §4.9 — 같은 판정 · 같은 피해이고, 다른 것은 박자 하나다: 타마다 f0 을 0.15초(9틱) 더 붙든다. 그래서 k 번째 타의 모든 장이

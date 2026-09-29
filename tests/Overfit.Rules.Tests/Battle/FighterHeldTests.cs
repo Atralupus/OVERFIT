@@ -199,8 +199,9 @@ public class FighterHeldTests
     [Fact]
     public void 탈진한_채_잡히면_고정은_남은_것과_새_것_중_긴_쪽이다()
     {
-        // 설계 §4.7 「붙들림과 탈진이 겹치면」 — 1타(51틱)에 가드가 깨져 117틱까지 탈진인 사람은 못 뛰어 102틱에 잡힌다: 탈진이 15틱
-        // 남았을 때 60틱 잡힌다 — 고정은 max(15, 60) = 60틱이다. 덮어쓰기(옛 Fighter.Exhaust)면 새 것만 남아 같은 값이지만, 남은 것이
+        // 설계 §4.7 「붙들림과 탈진이 겹치면」 — 옛 1타 잡기(#78)에서 1타(51틱)에 가드가 깨져 117틱까지 탈진인 사람은 못 뛰어 102틱에 잡혔다: 탈진이
+        // 15틱 남았을 때 60틱 잡힌다 — 고정은 max(15, 60) = 60틱이다. 지금은 캔슬로 같은 겹침이 선다(3연격 1타 뒤 78틱에 끊고 잡기 · 설계 2026-09-29
+        // 조각1 §3.2 — 창은 114틱이라 탈진이 3틱 남는다). 덮어쓰기(옛 Fighter.Exhaust)면 새 것만 남아 같은 값이지만, 남은 것이
         // 길면(아래 테스트) 일찍 풀린다. 상태는 따로 센다: 탈진은 15틱 뒤 풀리고 붙들림은 그대로다.
         Fighter f = Spawn();
         f.GuardBreak(8);
@@ -349,7 +350,7 @@ public class FighterHeldTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 0.2),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
         PatternIds = new[] { "잡기" },
         Patterns = new Dictionary<string, PatternDef> { ["잡기"] = Grab() },
         Seed = 1,

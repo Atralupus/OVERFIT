@@ -701,7 +701,7 @@ public partial class ShotRunner : Node
     /// </summary>
     private async Task NewBattle(params string[] script)
     {
-        _battle = await _drive.NewBattle(script);
+        _battle = await _drive.NewBattle(Moves(script));
         if (_battle is null)
         {
             Log.Warn("shots", $"battle_scene_missing script={string.Join(',', script)}");

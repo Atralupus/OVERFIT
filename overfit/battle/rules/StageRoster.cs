@@ -26,9 +26,9 @@ public sealed class StageDef
 /// </summary>
 /// <param name="PatternIds">명부 — <c>BattleSetup.PatternIds</c>.</param>
 /// <param name="PickerId">고르기 id — 로그의 <c>picker=</c>. 대본을 넘긴 전투면 <c>script</c>, 아니면 단계의 id 그대로다.</param>
-/// <param name="Picker">그 시도의 시드와 기록으로 세운 고르기 — <c>BattleSetup.Picker</c>.</param>
+/// <param name="Picker">그 시도의 시드와 기록으로 세운 계획 고르기 — <c>BattleSetup.Picker</c>.</param>
 /// <param name="Stage">실제로 싸우는 단계 — 범위 밖을 물으면 가장 가까운 단계로 잘라 쓴 값이다(#112 · 설계 2026-09-28 §6.5). 기록이 이것을 싣는다.</param>
-public sealed record StageSetup(IReadOnlyList<string> PatternIds, string PickerId, IPatternPicker Picker, int Stage);
+public sealed record StageSetup(IReadOnlyList<string> PatternIds, string PickerId, IPlanPicker Picker, int Stage);
 
 /// <summary>
 /// 단계 번호 → 그 단계가 쓰는 패턴 id 목록과 고르기.
@@ -46,7 +46,7 @@ public static class StageRoster
     /// <paramref name="stage"/> 단계의 명부와 고르기를 세운다 (#72 · 설계 §4.4). <b>게임(<c>Battle</c>)과 데모(<c>BattleDemo</c>)가
     /// 이 한 자리에서 세운다</b> — 따로 세우면 로그의 <c>seed=</c> 를 데모에 넘겨도 다른 고르기로 돌 수 있다. 고르기는 시도를
     /// 시작할 때 그때까지의 기록으로 한 번 세운다 — 판 도중에는 안 바뀐다. 단계를 못 찾거나(<see cref="Resolve(IReadOnlyDictionary{string, StageDef}, int)"/> 가 <c>[E]</c> 를
-    /// 남겼다) 고르기가 등록표에 없거나 대본이 명부 밖이면(<c>script</c> 고르기에 대본이 없는 것도) <c>[E]</c> 를 남기고 null 이다 — <b>던지지
+    /// 남겼다) 고르기가 등록표에 없거나 대본이 틀렸으면(명부 밖 동작 · 없는 지점 · <c>script</c> 고르기에 대본이 없는 것도) <c>[E]</c> 를 남기고 null 이다 — <b>던지지
     /// 않는다</b>: <c>Battle</c> 은 null 을 받아 판을 깨진 채로 멈추지만, 예외는 <c>_Ready</c> 를 빠져나가 반쯤 선 노드를 남긴다.
     ///
     /// <para>
@@ -57,13 +57,17 @@ public static class StageRoster
     /// <param name="stage">단계.</param>
     /// <param name="seed">시도 시드.</param>
     /// <param name="history">그때까지 끝난 시도들 — 데모는 빈 목록을 넘긴다(기록 없이 시드만으로 선다).</param>
+    /// <param name="patterns">동작 정의 — 고르기가 캔슬 지점을 읽는다(설계 2026-09-29 조각1 §3.6).</param>
+    /// <param name="restTicks">쉬는 길이들(틱) — 보스의 <c>rest_seconds</c> 를 <see cref="BattleSim.RestTicks"/> 로 바꾼 것.</param>
+    /// <param name="knobs">고르기의 수치 — <c>balance.json</c> 의 <c>picker</c>.</param>
     /// <param name="script">
     /// 대본 — 있으면 이 전투만 단계의 <c>picker</c> 대신 <c>script</c> 로 선다 (#78 · 설계 §4.4 「대본이 전투에 닿는 길」). <c>Game</c> 의 다음
-    /// 전투 한 칸이 GIF 러너 · 스크린샷에게서 받아 넘긴다. 명부는 그대로 그 단계의 것이다 — 대본은 명부 안의 순서만 정한다.
+    /// 전투 한 칸이 GIF 러너 · 스크린샷 · 순회에게서 받아 넘긴다. 명부는 그대로 그 단계의 것이다 — 대본은 명부 안에서 계획만 정한다.
     /// </param>
     public static StageSetup? Setup(
         IReadOnlyDictionary<string, StageDef> stages, int stage, ulong seed, IReadOnlyList<AttemptRecord> history,
-        IReadOnlyList<string>? script = null)
+        IReadOnlyDictionary<string, PatternDef> patterns, IReadOnlyList<int> restTicks, PickerBalance knobs,
+        IReadOnlyList<ScriptPlan>? script = null)
     {
         if (Resolve(stages, stage, out int used) is not { } def)
         {
@@ -71,14 +75,14 @@ public static class StageRoster
         }
 
         string id = script is null ? def.Picker : "script";
-        IPatternPicker? picker;
+        IPlanPicker? picker;
         try
         {
-            picker = PatternPickers.Create(id, new PickerInputs(def.Patterns, history, seed, used, script));
+            picker = PatternPickers.Create(id, new PickerInputs(def.Patterns, patterns, restTicks, knobs, history, seed, script));
         }
         catch (ArgumentException e)
         {
-            // 대본이 명부 밖이거나 script 고르기에 대본이 없으면 세울 때 던진다. 여기서 받지 않으면 예외가 Battle._Ready 를 빠져나가고, Godot 은
+            // 대본이 틀렸거나(명부 밖 · 없는 지점 · 첫 동작과 같은 잇는 동작) script 고르기에 대본이 없으면 세울 때 던진다. 여기서 받지 않으면 예외가 Battle._Ready 를 빠져나가고, Godot 은
             // 찍기만 하고 노드를 그대로 둔다 — _broken 은 거짓 · _sim 은 null 인 채로 매 프레임 NRE 가 나 이 한 줄이 그 밑에 묻혔다(#78 T6-I1).
             // 다른 실패와 같이 [E] 를 남기고 null — Battle 이 판을 깨진 채로 멈춘다.
             Log.Error("stage", id == "script"

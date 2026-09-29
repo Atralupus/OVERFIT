@@ -256,7 +256,7 @@ public class FighterExhaustTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 1000),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 1000),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,
@@ -277,7 +277,7 @@ public class FighterExhaustTests
         }
 
         // 보스가 다가와(960 − 115 = 845px · 초당 160 · 5.3초) 3연격을 연다 — 붙든 가드에 1타가 닿는다.
-        still.Boss = TestConfigs.Boss(maxHealth: 999_999, patternGap: 6.0);
+        still.Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 6.0);
         var guarded = new BattleSim(still);
         guarded.Fighter.Spend(guarded.Fighter.Stamina - 5);   // 3연격 1타(8)의 값 14.4 에 모자라다 — 붕괴다
         using (var log = new LogCapture())
@@ -302,7 +302,7 @@ public class FighterExhaustTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, patternGap: 6.0),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 6.0),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,
@@ -347,7 +347,7 @@ public class FighterExhaustTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, patternGap: 3.0),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3.0),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,
