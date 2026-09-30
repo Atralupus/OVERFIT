@@ -573,16 +573,18 @@ public partial class Battle : Node2D
         Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
         List<PatternInstance> instances = _instances.Finish(_sim.Events);
         var entry = new AttemptEntry(
-            history.SessionSeed, history.Run, record, _setup.PickerId, _sim.PlanEntries, _sim.Ticks, instances, [.. _tape.Runs], _dataSha256);
+            history.SessionSeed, history.Run, record, _setup.PickerId, _sim.PlanEntries, _sim.Ticks, instances, [.. _tape.Runs], _dataSha256,
+            [.. _sim.BombRecords]);
         if (AttemptFile.Append(entry) is { } path)
         {
             Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} plans={entry.Plans.Count} inputs={_tape.Runs.Count}"
-                + $" path={path}");
+                + $" bombs={_sim.BombRecords.Count} path={path}");
         }
 
         // 리포트 (#122 · 설계 2026-09-29 조각1 §4.5) — 모든 판의 결과 화면에 선다. 계획 수 · 캔슬 수가 머리이고 끊은 짝마다 한 줄이다.
-        // 옛 망이 걷혀 확률 줄이 없다.
-        _report = PickReport.Lines(_setup.PickerId, _setup.PatternIds, _sim.Plans.Count, _sim.Cancels, _sim.Events, _sim.Drawn, instances);
+        // 옛 망이 걷혀 확률 줄이 없다. 폭탄은 회피 다음 한 줄이다(설계 2026-09-30 조각2 §4).
+        _report = PickReport.Lines(
+            _setup.PickerId, _setup.PatternIds, _sim.Plans.Count, _sim.Cancels, _sim.Events, _sim.BombRecords, _sim.Drawn, instances);
         foreach (string line in _report)
         {
             Log.Debug("report", $"line=\"{line}\"");

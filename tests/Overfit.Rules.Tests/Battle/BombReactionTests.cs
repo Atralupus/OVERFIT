@@ -508,6 +508,62 @@ public class BombReactionTests
     }
 
     [Fact]
+    public void 기록_쉬는_보스가_끊은_던지기는_cut_과_끊은_틱이다()
+    {
+        // 설계 2026-09-30 조각2 §4 — 던지기마다 (던진 틱, 그때의 동작, 결과, 보스가 끊은 틱). 쉬는 보스라 동작이 없고, 반응의 돌진이 놓기 전에 끊는다.
+        BattleSim sim = Sim([new ScriptPlan(3.0, "3연격")]);
+        ThrowAt(sim, 1);
+        for (int i = 0; i < 200 && !sim.Fighter.ThrowLost; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.BombRecords.ShouldBe([new BombRecord(1, null, BombOutcome.Cut, 1 + Delay)]);
+    }
+
+    [Fact]
+    public void 기록_끊으려_했지만_늦은_던지기는_landed_와_끊은_틱이다()
+    {
+        // 3연격이 서자마자 던진다 — 보스는 첫 캔슬 지점(78)에서 끊지만 놓기 전에 못 닿는다(제때_못_닿아도_끊으려_한다). landed 인데 끊은 틱이 있다.
+        BattleSim sim = Sim([new ScriptPlan(0.8, "3연격")]);
+        int begun = UntilBegins(sim, "3연격");
+        ThrowAt(sim, begun + 1);
+        TestConfigs.UntilTick(sim, begun + 1 + ReleaseAfter + BattleSim.TicksFor(Real().Bomb.FlightSeconds));
+
+        sim.BombRecords.ShouldBe([new BombRecord(begun + 1, "3연격", BombOutcome.Landed, begun + 78)]);
+    }
+
+    [Fact]
+    public void 기록_끊을_자리가_안_온_던지기는_landed_와_null_이다()
+    {
+        string[] roster = [_waitId, "돌진"];
+        BattleSim sim = Sim([new ScriptPlan(0.2, _waitId)], roster, extra: new() { [_waitId] = Waiting() });
+        int begun = UntilBegins(sim, _waitId);
+        ThrowAt(sim, begun + 1);
+        TestConfigs.UntilTick(sim, begun + 1 + ReleaseAfter + BattleSim.TicksFor(Real().Bomb.FlightSeconds));
+
+        sim.BombRecords.ShouldBe([new BombRecord(begun + 1, _waitId, BombOutcome.Landed, null)]);
+    }
+
+    [Fact]
+    public void 기록_동작의_판정에_잃은_던지기는_hit_이다()
+    {
+        // 잡기(0.6초에 바닥 전체를 붙든다 · 캔슬 지점이 없다)가 서자마자 던진다 — 보스는 18틱 뒤에 알지만 잡기가 끝나야 끊을 자리가 온다. 그 전에 잡기가
+        // 던지는 손을 붙든다. 보스가 끊지 않았으니 끊은 틱이 없다.
+        string[] roster = ["잡기", "돌진"];
+        BattleSim sim = Sim([new ScriptPlan(0.8, "잡기")], roster);
+        int begun = UntilBegins(sim, "잡기");
+        ThrowAt(sim, begun + 1);
+        for (int i = 0; i < 200 && !sim.Fighter.ThrowLost; i++)
+        {
+            sim.Tick(default);
+        }
+
+        sim.Fighter.ThrowLost.ShouldBeTrue("잡기가 던지기를 못 끊었다");
+        sim.BombRecords.ShouldBe([new BombRecord(begun + 1, "잡기", BombOutcome.Hit, null)]);
+    }
+
+    [Fact]
     public void 반응의_동작은_명부에_없어도_선다()
     {
         BattleSim sim = Sim([new ScriptPlan(3.0, "3연격")], ["3연격"]);

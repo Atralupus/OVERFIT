@@ -108,6 +108,7 @@ public class BombTests
         sim.Boss.Health.ShouldBe(hp - Bomb.Damage, $"놓은 틱 + {FlightTicks} 에 떨어져야 한다");
         sim.BombsInFlight.ShouldBeEmpty();
         sim.BombsLanded.ShouldBe(1, "뷰가 터지는 불꽃을 세우는 수다");
+        sim.BombRecords.ShouldBe([new BombRecord(1, null, BombOutcome.Landed, null)], "쉬는 보스 앞에서 던졌고 보스는 모른다");
     }
 
     [Fact]
@@ -219,6 +220,7 @@ public class BombTests
         }
 
         sim.Boss.Health.ShouldBe(hp);
+        sim.BombRecords.ShouldBe([new BombRecord(1, null, BombOutcome.End, null)], "나는 중에 판이 끝났다 — 기록의 결과는 end 다(설계 2026-09-30 조각2 §4)");
     }
 
     [Fact]
