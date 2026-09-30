@@ -3,16 +3,18 @@
 [한국어](README.ko.md)
 
 OVERFIT is a 2D side-scrolling soulslike with one boss fight. Before each attack the boss makes a whole plan: how long to rest,
-whether to run in, which move to open with, and whether to cancel that move into another one. In this version the boss plans at random.
-A later version will read the player's dodging habits and plan against them.
+whether to run in, which move to open with, and whether to cancel that move into another one. In this version the boss plans at random,
+and when the player throws a bomb, the boss sees it and tries to interrupt the throw. A later version will read the player's habits and
+plan against them.
 
-The purpose is to check whether a boss that adapts to the player's dodging habits is fair and fun to fight. This version builds the moves,
-the cancels, and the running that the adaptive boss will plan with.
+The purpose is to check whether a boss that adapts to the player's habits is fair and fun to fight. This version builds the moves,
+the cancels, and the running that the adaptive boss will plan with, plus the player's bombs and a boss that tries to interrupt them.
 
 ## The fight
 
 - One boss with 1,000 HP. The fighter has 220 HP and one life. A fight that lasts 10 minutes is a loss.
-- The fighter can dash (a short invincibility), jump, guard (costs stamina), parry, and attack (one or two hits).
+- The fighter can dash (a short invincibility), jump, guard (costs stamina), parry, attack (one or two hits), and throw bombs
+  (10 per fight).
 - A parry at the right moment stops the boss's move and exhausts the boss for 1.5 seconds. Hits also fill the boss's poise gauge,
   and a full gauge exhausts the boss the same way.
 
@@ -59,17 +61,54 @@ rest (in place, turning to face the player) → [run] → first move → [cancel
 - **Data only.** A move added to `overfit/data/patterns.json` and to the roster in `stages.json` becomes both a first move and a follow-up
   for every cancel point, without code changes. A cancel point added to a move adds a cancel to that move's plans.
 
+## Bombs
+
+- 10 per fight, thrown with L. Bombs cost no stamina; the count is the cost.
+- Throwing works only on the ground and commits the fighter: nothing else can be done during the 1.5-second windup, and **a hit before
+  the release interrupts the throw and the bomb is lost.** After the release the fighter is stiff for 0.25 seconds.
+- A released bomb flies for 0.5 seconds, follows the boss, and lands on it for 60 damage (1.5 times a 2-hit combo). The only defence
+  is to interrupt the throw before the release. Bombs do not fill the poise gauge.
+
+## The boss tries to interrupt
+
+The boss sees a throw start and knows about it 0.3 seconds later; a "!" appears above its head. From then on it **always tries to
+interrupt, whatever it is doing,** at the nearest chance:
+
+| What the boss is doing | Chance to interrupt |
+|---|---|
+| Resting, running | The tick it knows |
+| A move | The move's next cancel point, even one the plan did not pick |
+| A move without cancel points (rush, grab, jump attack, uppercut) | After the move ends |
+| Exhausted | After the exhaustion ends |
+
+- When it interrupts, the plan ends, the boss turns toward the thrower, pauses for 0.25 seconds, and rushes. If the rush hits before the
+  release, the throw is interrupted. The boss tries even when it will be too late; whether it gets there depends on the distance and the
+  cancel points.
+- A throw in front of a resting boss is interrupted at any distance. Thrown at random moments from a middle distance (760 px), three bombs
+  in four are lost: the boss interrupts 52% and the move it is doing hits the fighter in another 23%.
+- **Timing makes bombs land:** right after a cancel point passes (as a 3-hit combo starts, or after its first or second hit), in the
+  last 0.3 seconds of a rest (the boss only knows once its next move has started), and right after exhausting the boss with a parry or
+  a single hit (a 2-hit combo leaves the fighter stiff for too long). No bomb lands during the moves that close in on the fighter (rush,
+  grab, jump attack).
+- This boss cannot interrupt "throw as soon as a 3-hit combo starts"; the first cancel point comes too late. Reading such a habit and
+  standing ready to interrupt it is the job of the prediction in slice 4. The reaction delay, pause, and move are `bomb_reaction` in
+  `overfit/data/bosses.json`. The measurements are in §2.5 of the
+  [slice 2 design](docs/superpowers/specs/2026-09-30-조각2-폭탄과-반응-design.md) (Korean).
+
 ## Replays
 
 Each finished attempt adds one JSON line to `user://attempts/<session seed>.jsonl`: the plans, the inputs (run-length encoded;
-the longest fight is about 27 KB), the dodge events, and a hash of the game data. Nothing is uploaded.
+the longest fight is about 27 KB), the dodge events, the bombs (the throw tick, the boss's move at that moment, the outcome — landed,
+interrupted by the boss, lost to another hit, or cut short by the end of the fight — and the tick the boss interrupted), and a hash of the
+game data. Nothing is uploaded.
 
 - `EXTRA="--history=<file> --attempt=N" tools/build.sh demo` replays an attempt with its saved inputs and compares the plans,
-  the length, the result, and every dodge event. It logs `replay_match`, `[E] replay_mismatch` (determinism broke),
+  the length, the result, every dodge event, and every bomb. It logs `replay_match`, `[E] replay_mismatch` (determinism broke),
   or `[W] replay_data_changed` (the game data changed since the attempt).
-- Lines written by earlier versions have no inputs and cannot be replayed (`[E] replay_no_inputs`).
-- The result screen shows how the boss planned: the number of plans and cancels, the dodges used in the fight,
-  how many times each move appeared and hit, and each cancel pair.
+- Lines written by version 0.9 and earlier have no inputs and cannot be replayed (`[E] replay_no_inputs`). Lines written by 0.10 have
+  no bombs, so bombs are not compared for them.
+- The result screen shows how the boss planned: the number of plans and cancels, the dodges used in the fight, what happened to the
+  bombs, how many times each move appeared and hit, and each cancel pair.
 
 ## The adaptive boss
 
@@ -83,10 +122,12 @@ slice 4 of the [design](docs/superpowers/specs/2026-09-29-똑똑한-보스-desig
 | Part | Location |
 |---|---|
 | Moves, cancel points | `overfit/data/patterns.json` |
-| Boss numbers (rest, run) | `overfit/data/bosses.json` |
+| Boss numbers (rest, run, bomb reaction) | `overfit/data/bosses.json` |
+| Bomb numbers | `overfit/data/fighters.json` (`bomb`) |
 | Picker settings | `overfit/data/balance.json` (`picker`) |
 | Plans and cancels | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `PlanFlow.cs`, `BattleSim.cs` |
 | Running | `overfit/battle/rules/BattleSim.cs`, `RushMotion.cs` |
+| Bombs, the boss's reaction | `overfit/battle/rules/Fighter.cs`, `Bombs.cs`, `BombWatch.cs`, `BombRecord.cs`, `BattleSim.cs` |
 | Attempt log, replay | `overfit/battle/rules/AttemptLog.cs`, `InputTape.cs`, `Replay.cs`, `overfit/battle/debug/BattleDemo.cs` |
 | Bot fleet, data factory | `overfit/battle/rules/FleetBot.cs`, `BotTraits.cs`, `tools/factory/` |
 
@@ -103,6 +144,7 @@ If macOS blocks it, open System Settings → Privacy & Security and choose Open 
 | Attack | J (press again for a 2-hit combo) |
 | Guard | ↓ (S), hold |
 | Parry | K |
+| Bomb | L |
 
 Building from source needs Godot 4.7 (mono) and .NET 8. See [CONTRIBUTING.md](CONTRIBUTING.md) (Korean).
 
