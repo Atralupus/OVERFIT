@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Overfit.Battle.Rules;
 using Overfit.Core;
+using Overfit.Rules.Tests.Support;
 using Shouldly;
 using Xunit;
 
@@ -70,15 +72,19 @@ public class BotPolicyTests
     public void 데모의_봇이_폭탄을_던진다()
     {
         // 설계 2026-09-30 조각2 §6 — 봇이 못 내는 기술은 스모크 · 데모 · 리플레이 골든이 못 본다(가드가 여기 있는 것과 같은 까닭). 새 동작이 서는
-        // 틱에 셋에 하나 · 보스가 무너진 틱에 둘에 하나 던지므로 한 판에 몇 개는 던지고, 열 개를 넘을 수는 없다. 동작마다의 던지기는 봇이 보스 곁에
-        // 붙어 있어 대개 끊기고, 무너진 보스 앞의 던지기가 떨어진다 — 둘 다 있어야 데모가 끊김과 떨어짐을 다 돈다.
+        // 틱에 셋에 하나 · 보스가 무너진 틱에 둘에 하나 던지므로 한 판에 몇 개는 던지고, 열 개를 넘을 수는 없다. 보스가 끊으려 하므로(§2) 곁에 붙어
+        // 싸우는 봇의 던지기는 대개 끊긴다 — 데모가 반응(멈칫 · 돌진)과 끊김을 돈다. 시드 51 의 데모는 셋 던져 셋 다 끊겼다: 무너진 보스 앞의
+        // 던지기도 2타로 무너뜨린 뒤라 50틱 뒤에야 던져 늦었다(§2.2 — 곁에서는 40틱 안). 떨어지는 길은 리플레이 골든의 대본과 BombTests 가 본다.
+        using var log = new LogCapture(LogLevel.Debug);
         (_, BattleSim sim) = PlayDemo();
 
         int count = TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter].Bomb.Count;
-        sim.Fighter.BombsLeft.ShouldBeLessThan(count, "데모 봇이 한 번도 안 던졌다");
+        int thrown = count - sim.Fighter.BombsLeft;
+        thrown.ShouldBeGreaterThan(0, "데모 봇이 한 번도 안 던졌다");
         sim.Fighter.BombsLeft.ShouldBeGreaterThanOrEqualTo(0);
-        sim.BombsLanded.ShouldBeGreaterThan(0, "데모의 폭탄이 하나도 안 떨어졌다 — 떨어지는 길을 데모가 안 돈다");
-        (count - sim.Fighter.BombsLeft).ShouldBeGreaterThan(sim.BombsLanded, "데모의 폭탄이 하나도 안 끊겼다 — 끊기는 길을 데모가 안 돈다");
+        thrown.ShouldBeGreaterThan(sim.BombsLanded, "데모의 폭탄이 하나도 안 끊겼다 — 끊기는 길을 데모가 안 돈다");
+        log.Lines.ShouldContain(
+            l => l.StartsWith("[boss][D] bomb_react ", StringComparison.Ordinal), "데모의 보스가 한 번도 안 끊었다 — 반응의 길을 데모가 안 돈다");
     }
 
     [Fact]

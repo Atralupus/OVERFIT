@@ -267,6 +267,14 @@ public sealed class FeelBalance
 
     /// <summary>폭탄이 터지는 불꽃 원의 길이(초) — 반지름은 <c>parry_ring_from</c> → <c>parry_ring_to</c> 의 두 배로 퍼진다(보스 몸을 덮을 만큼).</summary>
     public required double BombBurstSeconds { get; init; }
+
+    /// <summary>
+    /// 알아챔 표시("!")가 보스 머리 위로 뜨는 틈(px · 설계 2026-09-30 조각2 §5) — 보스 몸의 키(<c>bosses.json</c> 의 <c>height</c>) 위에서 잰다.
+    /// </summary>
+    public required double AlertOffsetY { get; init; }
+
+    /// <summary>알아챔 표시의 키(px) — 막대와 점을 합친 높이다. 보스 키 297 의 1/5 남짓이라 멀리서도 읽힌다.</summary>
+    public required double AlertSize { get; init; }
 }
 
 /// <summary>

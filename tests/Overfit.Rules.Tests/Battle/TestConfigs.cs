@@ -362,8 +362,11 @@ public static class TestConfigs
     /// <param name="exhaustSeconds">탈진 길이.</param>
     /// <param name="runSpeed">달리기의 빠르기(px/s).</param>
     /// <param name="runStop">달리기가 멈추는 파이터 앞 거리(px).</param>
+    /// <param name="reaction">폭탄 반응(설계 2026-09-30 조각2 §2.4) — 지연 · 멈칫 · 동작을 바꿔 그 값을 규칙이 데이터에서 읽는지 보거나, 반응의 동작을 긴 것으로
+    /// 바꿔 버린 계획의 캔슬이 그 동작을 끊지 않는지 보거나, 지연을 한 판보다 길게 두어 던지기를 끝내 모르는 보스를 세운다(<c>BombTests</c>).</param>
     public static BossConfig Boss(
-        int? maxHealth = null, double? rest = null, double? exhaustSeconds = null, double? runSpeed = null, double? runStop = null)
+        int? maxHealth = null, double? rest = null, double? exhaustSeconds = null, double? runSpeed = null, double? runStop = null,
+        BombReactionDef? reaction = null)
     {
         BalanceData balance = Balance();
         BossConfig data = Bosses()[balance.Battle.Boss];
@@ -380,6 +383,7 @@ public static class TestConfigs
             PoiseMax = data.PoiseMax,
             PoiseDecayDelay = data.PoiseDecayDelay,
             PoiseDecayPerSecond = data.PoiseDecayPerSecond,
+            BombReaction = reaction ?? data.BombReaction,
             Sprite = data.Sprite,
         };
     }

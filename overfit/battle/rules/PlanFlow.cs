@@ -150,6 +150,17 @@ public sealed class PlanFlow
         return next;
     }
 
+    /// <summary>
+    /// 지금 계획을 버린다 — 보스가 폭탄 던지기에 반응해 끊었다(설계 2026-09-30 조각2 §2.3 · 탈진과 같다). 남은 캔슬 · 잇는 동작 · 쉬기가 사라진다 — 안 버리면
+    /// 옛 계획의 캔슬 지점(<see cref="CancelAt"/>)이 반응의 동작을 끊는다. 고른 계획은 <see cref="Plans"/> 에 남는다. 다음 계획은 반응의 동작이 끝날 때 판이
+    /// <see cref="Choose"/> 로 고른다 — 그 사이에는 계획이 없다.
+    /// </summary>
+    public void Drop()
+    {
+        _plan = null;
+        _cancelPending = false;
+    }
+
     private PlanEntry Entry(BossPlan plan)
     {
         string move = _roster[plan.Move];
