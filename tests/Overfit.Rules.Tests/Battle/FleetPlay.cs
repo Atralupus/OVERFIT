@@ -31,13 +31,16 @@ internal static class FleetPlay
 
     public static BeatTable Beats => _beats.Value;
 
-    /// <summary><paramref name="stage"/> 단계의 판 — 대본을 주면 그 전투만 대본으로 선다(스크린샷 · GIF 와 같은 길).</summary>
-    public static BattleSim Sim(int stage, ulong seed, IReadOnlyList<ScriptPlan>? script = null)
+    /// <summary>
+    /// <paramref name="stage"/> 단계의 판을 세울 차림 — 대본을 주면 그 전투만 대본으로 선다(스크린샷 · GIF 와 같은 길). 되살리기(<c>ReplayTests</c>)가
+    /// 같은 차림에 저장한 입력만 다시 넣는다.
+    /// </summary>
+    public static BattleSetup Setup(int stage, ulong seed, IReadOnlyList<ScriptPlan>? script = null)
     {
         StageSetup setup = StageRoster.Setup(
                 _stages.Value, stage, seed, Array.Empty<AttemptRecord>(), _patterns.Value, BattleSim.RestTicks(_boss.Value), _balance.Value.Picker, script)
             ?? throw new InvalidOperationException($"stages.json 에 {stage}단계가 안 선다");
-        return new BattleSim(new BattleSetup
+        return new BattleSetup
         {
             Arena = new Arena(_balance.Value.Battle.ArenaWidth),
             Fighter = _fighter.Value,
@@ -48,8 +51,17 @@ internal static class FleetPlay
             Seed = seed,
             Picker = setup.Picker,
             MaxTicks = _balance.Value.Battle.MaxTicks,
-        });
+        };
     }
+
+    /// <summary><paramref name="stage"/> 단계의 판 — <see cref="Setup"/> 으로 선다.</summary>
+    public static BattleSim Sim(int stage, ulong seed, IReadOnlyList<ScriptPlan>? script = null) => new(Setup(stage, seed, script));
+
+    /// <summary>실제 동작 정의 — 되살리기가 대본의 캔슬 지점(초)을 칸으로 되찾을 때 읽는다.</summary>
+    public static IReadOnlyDictionary<string, PatternDef> Patterns => _patterns.Value;
+
+    /// <summary><paramref name="stage"/> 단계의 명부.</summary>
+    public static IReadOnlyList<string> Roster(int stage) => StageRoster.For(_stages.Value, stage);
 
     public static FleetBot Bot(BotTraits traits, ulong seed) => new(traits, seed, Beats, Fighter);
 

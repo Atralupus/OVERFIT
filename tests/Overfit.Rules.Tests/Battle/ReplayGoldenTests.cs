@@ -64,7 +64,7 @@ public class ReplayGoldenTests
     /// 그걸로 박아두면 골든이 실행할 때마다 깨진다. 실수를 못 하게 여기 이유를 적어 둔다.
     /// </para>
     /// </summary>
-    private static string Digest(IReadOnlyList<DodgeEvent> events)
+    internal static string Digest(IReadOnlyList<DodgeEvent> events)
     {
         var text = new StringBuilder();
         foreach (DodgeEvent e in events)

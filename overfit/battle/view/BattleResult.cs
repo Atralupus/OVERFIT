@@ -49,8 +49,8 @@ public partial class BattleResult : Control
     }
 
     /// <summary>
-    /// 결과를 띄운다. <paramref name="againLabel"/> 은 이겼는지에 따라 달라진다. <paramref name="report"/> 는 2단계의 패턴 리포트(#122 · 여러 줄)이고,
-    /// 비었으면 그 칸을 접는다 — 빈 Label 도 VBox 의 간격을 먹어 1단계 결과가 아래로 밀린다.
+    /// 결과를 띄운다. <paramref name="againLabel"/> 은 이겼는지에 따라 달라진다. <paramref name="report"/> 는 판의 리포트(#122 · 설계 2026-09-29
+    /// 조각1 §4.5 · 여러 줄)이고, 비었으면 그 칸을 접는다 — 빈 Label 도 VBox 의 간격을 먹어 결과가 아래로 밀린다.
     /// </summary>
     public void Reveal(bool won, string headline, string detail, string againLabel, string report)
     {

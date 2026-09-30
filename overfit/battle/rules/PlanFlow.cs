@@ -69,8 +69,14 @@ public sealed class PlanFlow
         _request = request;
     }
 
-    /// <summary>고른 계획들, 고른 순서로 — 버린 계획은 빠진다. 시도 기록이 싣는다(6/8).</summary>
+    /// <summary>고른 계획들, 고른 순서로 — 버린 계획은 빠진다.</summary>
     public IReadOnlyList<BossPlan> Plans => _plans;
+
+    /// <summary>
+    /// <see cref="Plans"/> 를 기록의 모양으로(§4.3) — 칸 대신 id, 틱 대신 초, 캔슬 지점 대신 그 시각. 시도 기록이 싣고 되살리기가 견준다. 부를 때마다
+    /// 새로 짓는다 — 판이 끝날 때 한 번 부르는 값이다.
+    /// </summary>
+    public IReadOnlyList<PlanEntry> Entries => [.. _plans.Select(Entry)];
 
     /// <summary>
     /// 지금 동작이 끊길 러너 틱 — 첫 동작이 돌고 계획에 캔슬이 남았을 때만. 러너의 시계가 이 틱에 닿기 <b>전에</b> 판이 끊는다: 그 틱의 단계에는
@@ -136,6 +142,16 @@ public sealed class PlanFlow
 
         _cancelPending = false;
         return next;
+    }
+
+    private PlanEntry Entry(BossPlan plan)
+    {
+        string move = _roster[plan.Move];
+        return new PlanEntry(
+            plan.RestTicks * BattleSim.Dt,
+            move,
+            plan.CancelPoint is int k ? _patterns[move].CancelPoints![k].T : null,
+            plan.Next is int next ? _roster[next] : null);
     }
 
     /// <summary>계획의 틀린 곳 — 로그의 <c>reason=</c> 과 그 값들. 없으면 null.</summary>

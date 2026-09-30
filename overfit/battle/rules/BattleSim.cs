@@ -259,17 +259,23 @@ public sealed class BattleSim
     /// <summary>지금까지 진행한 틱 수.</summary>
     public int Ticks { get; private set; }
 
+    /// <summary>판이 끝났으면 그 결과 — <see cref="Tick"/> 이 돌려준 첫 결과다. 되살리기(<see cref="Replay"/>)가 기록의 결과와 견준다.</summary>
+    public BattleOutcome? Result { get; private set; }
+
     /// <summary>이 판에서 일어난 회피 관측 전부. <see cref="PlayerAxes.From"/> 에 그대로 넣는다.</summary>
     public IReadOnlyList<DodgeEvent> Events => _swings.Events;
 
     /// <summary>
-    /// 이 판에서 선 동작 id 의 순서 (#112 · 설계 2026-09-28 §6.5) — 잇는 동작도 든다. 시도 기록과 로그가 싣고, 되살리기가 기록의 순서와 앞머리를
-    /// 견준다. 버린 계획의 동작은 안 선다.
+    /// 이 판에서 선 동작 id 의 순서 (#112 · 설계 2026-09-28 §6.5) — 잇는 동작도 든다. 결과 화면의 리포트가 동작마다 몇 번 나왔는지를 센다.
+    /// 버린 계획의 동작은 안 선다.
     /// </summary>
     public IReadOnlyList<string> Drawn => _drawn;
 
     /// <summary>이 판에서 고른 계획들, 고른 순서로 (설계 2026-09-29 조각1 §3.3) — 버린 계획은 빠진다. 끝나지 않은 마지막 계획도 든다.</summary>
     public IReadOnlyList<BossPlan> Plans => _flow.Plans;
+
+    /// <summary><see cref="Plans"/> 를 기록의 모양으로(id · 초 — 설계 2026-09-29 조각1 §4.3). 시도 기록이 싣고 되살리기가 견준다.</summary>
+    public IReadOnlyList<PlanEntry> PlanEntries => _flow.Entries;
 
     /// <summary>이 판에서 실제로 끊은 캔슬들 — (끊은 동작, 이은 동작). 탈진으로 못 쓴 캔슬은 안 든다(설계 2026-09-29 조각1 §3.2).</summary>
     public IReadOnlyList<(string From, string To)> Cancels => _cancels;
@@ -403,6 +409,7 @@ public sealed class BattleSim
         BattleOutcome? outcome = Outcome();
         if (outcome is not null)
         {
+            Result ??= outcome;
             // 판이 끝날 때 열린 창은 버린다 (#72 · 설계 §3.6 ③). 판을 끝낸 그 한 대는 닿은 것이라 관측이 있고, 남은 창에는
             // 결과가 없다 — 지어낸 한 줄이 시도 기록으로 가 망의 입력이 된다.
             _swings.Cut(Ticks, "end");

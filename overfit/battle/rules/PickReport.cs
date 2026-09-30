@@ -5,7 +5,8 @@ using System.Linq;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 결과 화면의 패턴 리포트 (#122) — 보스가 이 판의 패턴을 어떻게 골랐고, 무엇이 몇 번 나와 몇 번 맞았나. 씬(<c>Battle</c>)은 줄을 받아 그리기만 한다.
+/// 결과 화면의 리포트 (#122 · 설계 2026-09-29 조각1 §4.5) — 보스가 이 판의 계획을 어떻게 골랐고(몇 개 · 몇 번 끊었나), 무엇이 몇 번 나와 몇 번
+/// 맞았고, 무엇을 무엇으로 끊었나. 씬(<c>Battle</c>)은 줄을 받아 그리기만 한다.
 ///
 /// <para>
 /// <b>망이 없으니 확률 줄이 없다</b>(설계 2026-09-29 조각1 §4.5 · §6). 옛 리포트는 2단계의 망이 패턴마다 낸 맞을 확률과 좁힌 명부를 적었다 — 그 망은
@@ -26,24 +27,28 @@ public static class PickReport
         (DodgeVerb.None, "무대응"),
     ];
 
-    /// <summary>리포트의 줄들 — 머리 · 이 판의 회피 · 명부 순서로 패턴마다 한 줄.</summary>
+    /// <summary>리포트의 줄들 — 머리 · 이 판의 회피 · 명부 순서로 동작마다 한 줄 · 끊은 짝마다 한 줄.</summary>
     /// <param name="pickerId">이 판을 세운 고르기 — 대본(<c>script</c>)으로 선 판은 그렇다고 적는다.</param>
     /// <param name="roster">이 판의 명부 — 줄의 순서다.</param>
+    /// <param name="plans">이 판에서 고른 계획의 수(<c>BattleSim.Plans</c>) — 끝나지 않은 마지막 계획도 든다.</param>
+    /// <param name="cancels">이 판에서 실제로 끊은 캔슬들(<c>BattleSim.Cancels</c>) — 탈진으로 못 쓴 캔슬은 안 든다.</param>
     /// <param name="events">이 판의 회피 관측(<c>BattleSim.Events</c>).</param>
-    /// <param name="drawn">이 판에 선 패턴들(<c>BattleSim.Drawn</c>) — 플레이어가 본 횟수다.</param>
+    /// <param name="drawn">이 판에 선 동작들(<c>BattleSim.Drawn</c>) — 잇는 동작도 든다. 플레이어가 본 횟수다.</param>
     /// <param name="instances">이 판의 사례들(<see cref="InstanceTracker"/>) — 맞은 횟수를 센다.</param>
     public static IReadOnlyList<string> Lines(
-        string pickerId, IReadOnlyList<string> roster, IReadOnlyList<DodgeEvent> events, IReadOnlyList<string> drawn,
-        IReadOnlyList<PatternInstance> instances)
+        string pickerId, IReadOnlyList<string> roster, int plans, IReadOnlyList<(string From, string To)> cancels, IReadOnlyList<DodgeEvent> events,
+        IReadOnlyList<string> drawn, IReadOnlyList<PatternInstance> instances)
     {
         ArgumentNullException.ThrowIfNull(roster);
+        ArgumentNullException.ThrowIfNull(cancels);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(drawn);
         ArgumentNullException.ThrowIfNull(instances);
 
+        string how = pickerId == "script" ? "보스가 정해진 대본대로 골랐습니다" : "보스가 계획을 무작위로 골랐습니다";
         var lines = new List<string>
         {
-            pickerId == "script" ? "보스가 정해진 대본대로 골랐습니다" : "보스가 패턴을 무작위로 골랐습니다",
+            $"{how} — 계획 {plans}개 · 캔슬 {cancels.Count}번",
             Dodges(events),
         };
         foreach (string id in roster)
@@ -51,6 +56,7 @@ public static class PickReport
             lines.Add($"{id} — {Seen(id, drawn, instances)}");
         }
 
+        lines.AddRange(Cancels(roster, cancels));
         return lines;
     }
 
@@ -68,6 +74,32 @@ public static class PickReport
             .OrderByDescending(c => c.Count)
             .ThenBy(c => c.order);
         return $"이 판의 회피 {events.Count}건: " + string.Join(" · ", counts.Select(c => $"{c.Name} {c.Count}"));
+    }
+
+    /// <summary>
+    /// 끊은 짝마다 한 줄 — 많은 순, 같으면 명부 순(끊은 동작 · 이은 동작). 명부 순으로 가르는 까닭은 같은 판을 두 번 봐도 줄이 같은 자리에
+    /// 서야 해서다(나온 순서로 두면 수가 같은 두 짝이 판마다 자리를 바꾼다).
+    /// </summary>
+    private static IEnumerable<string> Cancels(IReadOnlyList<string> roster, IReadOnlyList<(string From, string To)> cancels) =>
+        cancels
+            .GroupBy(c => c)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => Order(roster, g.Key.From))
+            .ThenBy(g => Order(roster, g.Key.To))
+            .Select(g => $"{g.Key.From} → {g.Key.To} — {g.Count()}번");
+
+    /// <summary>명부의 칸 — 명부 밖이면 맨 뒤.</summary>
+    private static int Order(IReadOnlyList<string> roster, string id)
+    {
+        for (int k = 0; k < roster.Count; k++)
+        {
+            if (string.Equals(roster[k], id, StringComparison.Ordinal))
+            {
+                return k;
+            }
+        }
+
+        return int.MaxValue;
     }
 
     private static string Seen(string id, IReadOnlyList<string> drawn, IReadOnlyList<PatternInstance> instances)

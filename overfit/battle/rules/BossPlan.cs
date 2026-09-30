@@ -51,3 +51,13 @@ public interface IPlanPicker
 /// <param name="CancelPoint">캔슬 지점 — 첫 동작의 <see cref="PatternDef.CancelPoints"/> 의 칸. 끊지 않으면 null.</param>
 /// <param name="Next">잇는 동작의 id — <paramref name="CancelPoint"/> 와 같이 있거나 같이 없다.</param>
 public sealed record ScriptPlan(double RestSeconds, string Move, int? CancelPoint = null, string? Next = null);
+
+/// <summary>
+/// 기록에 싣는 계획 하나 (설계 2026-09-29 조각1 §4.3) — <see cref="BossPlan"/> 을 사람이 읽는 모양으로: 칸 대신 id, 틱 대신 초. 명부의 칸 번호는
+/// 명부가 바뀌면 다른 동작을 가리킨다. 대본으로 선 시도는 이것이 곧 대본이다(<see cref="Replay.Script"/>).
+/// </summary>
+/// <param name="Rest">쉬는 길이(초).</param>
+/// <param name="Move">첫 동작의 id.</param>
+/// <param name="Cancel">캔슬 지점의 시각(초 · <c>patterns.json</c> 의 <c>cancel_points[].t</c> 그대로). 끊지 않으면 null.</param>
+/// <param name="Next">잇는 동작의 id. 끊지 않으면 null.</param>
+public sealed record PlanEntry(double Rest, string Move, double? Cancel, string? Next);

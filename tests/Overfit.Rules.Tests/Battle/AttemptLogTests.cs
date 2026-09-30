@@ -7,8 +7,8 @@ using Xunit;
 namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
-/// 시도 기록의 한 줄 (#112 · 설계 2026-09-28 §6.5) — 디스크의 <c>user://attempts/&lt;세션 시드&gt;.jsonl</c> 이 이 한 줄씩이다. 되살리기의
-/// 재료라 <b>그대로 되읽혀야</b> 한다 — double 은 비트까지.
+/// 시도 기록의 한 줄 (#112 · 설계 2026-09-28 §6.5 · 2026-09-29 조각1 §4.3) — 디스크의 <c>user://attempts/&lt;세션 시드&gt;.jsonl</c> 이 이 한 줄씩이다.
+/// 되살리기(<see cref="Replay"/>)의 재료라 <b>그대로 되읽혀야</b> 한다 — double 은 비트까지, 입력은 칸 하나까지.
 /// </summary>
 public class AttemptLogTests
 {
@@ -24,7 +24,7 @@ public class AttemptLogTests
         Run: 3,
         Record: new AttemptRecord(12, 2, 16800346292054821908UL, BattleOutcome.Lose, _events),
         PickerId: "uniform",
-        Drawn: ["잡기", "빠른 3연격", "잡기"],
+        Plans: [new PlanEntry(0.8, "잡기", null, null), new PlanEntry(0.1 + 0.2, "3연격", 1.3, "돌진"), new PlanEntry(1.2, "잡기", null, null)],
         Ticks: 2345);
 
     private static void ShouldMatch(AttemptEntry back, AttemptEntry entry)
@@ -33,7 +33,16 @@ public class AttemptLogTests
         (back.Record.Number, back.Record.Stage, back.Record.Seed, back.Record.Outcome)
             .ShouldBe((entry.Record.Number, entry.Record.Stage, entry.Record.Seed, entry.Record.Outcome));
         back.Record.Events.SequenceEqual(entry.Record.Events).ShouldBeTrue("관측이 되읽히지 않았다");
-        back.Drawn.ShouldBe(entry.Drawn);
+        back.Plans.ShouldBe(entry.Plans);
+        back.DataSha256.ShouldBe(entry.DataSha256);
+        if (entry.Inputs is null)
+        {
+            back.Inputs.ShouldBeNull();
+        }
+        else
+        {
+            back.Inputs.ShouldNotBeNull().ShouldBe(entry.Inputs);
+        }
     }
 
     [Fact]
@@ -47,6 +56,41 @@ public class AttemptLogTests
         line.ShouldContain("\"picker\":\"uniform\"");
         line.ShouldContain("빠른 3연격", Case.Sensitive, "한글 id 는 그대로 싣는다 — 사람이 grep 한다");
         ShouldMatch(AttemptLog.Parse(line, "시험"), entry);
+    }
+
+    [Fact]
+    public void 입력과_계획과_지문이_왕복한다()
+    {
+        // 되살리기의 재료 셋(설계 2026-09-29 조각1 §4.3) — 계획은 id 와 초로(명부의 칸 번호는 명부가 바뀌면 다른 동작을 가리킨다), 입력은
+        // [코드, 틱 수] 칸으로, 지문은 판을 세운 데이터의 sha256 이다. 쉬기의 0.1 + 0.2 는 비트까지 돌아와야 한다(0.30000000000000004).
+        const string sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        AttemptEntry entry = Entry() with { Inputs = [[32, 3], [33, 1], [95, 2]], DataSha256 = sha };
+
+        string line = AttemptLog.Line(entry);
+
+        line.ShouldContain("\"plans\":[{\"rest\":0.8,\"move\":\"잡기\",\"cancel\":null,\"next\":null},"
+            + "{\"rest\":0.30000000000000004,\"move\":\"3연격\",\"cancel\":1.3,\"next\":\"돌진\"}");
+        line.ShouldContain($"\"data_sha256\":\"{sha}\"");
+        line.ShouldEndWith("\"inputs\":[[32,3],[33,1],[95,2]]}", Case.Sensitive, "입력은 줄의 끝이다 — 가장 길어 사람이 머리를 먼저 읽는다");
+        ShouldMatch(AttemptLog.Parse(line, "시험"), entry);
+    }
+
+    [Fact]
+    public void 입력이_없는_옛_줄도_읽힌다()
+    {
+        // 5/8 까지의 게임이 남긴 줄 — 계획 대신 선 동작의 순서(drawn)가 있고 입력 · 지문이 없다. 읽히되(모르는 키 drawn 은 버린다) 계획은 비고
+        // 입력이 null 이다 — 되살리기가 그 줄을 NoInputs 로 가른다(ReplayTests).
+        const string old = "{\"session_seed\":51,\"run\":1,\"attempt\":3,\"stage\":1,\"seed\":9131751153949564229,\"picker\":\"uniform\","
+            + "\"drawn\":[\"3연격\",\"돌진\"],\"outcome\":\"win\",\"ticks\":900,\"events\":[],"
+            + "\"instances\":[{\"pattern_id\":\"3연격\",\"hit\":false}]}";
+
+        AttemptEntry back = AttemptLog.Parse(old, "옛 줄");
+
+        (back.Record.Number, back.PickerId, back.Record.Outcome, back.Ticks).ShouldBe((3, "uniform", BattleOutcome.Win, 900));
+        back.Plans.ShouldBeEmpty();
+        back.Inputs.ShouldBeNull();
+        back.DataSha256.ShouldBeNull();
+        back.Instances.ShouldNotBeNull().ShouldBe([new PatternInstance("3연격", false)]);
     }
 
     [Fact]
@@ -77,7 +121,8 @@ public class AttemptLogTests
         AttemptEntry back = AttemptLog.Parse(old, "옛 줄");
 
         (back.Record.Number, back.Record.Stage, back.PickerId, back.Record.Outcome).ShouldBe((2, 2, "network", BattleOutcome.Lose));
-        back.Drawn.ShouldBe(["3연격"]);
+        back.Plans.ShouldBeEmpty();
+        back.Inputs.ShouldBeNull();
         back.Instances.ShouldBeNull();
     }
 
@@ -86,5 +131,11 @@ public class AttemptLogTests
     {
         Should.Throw<DataException>(() => AttemptLog.Parse("{\"run\": 1}", "attempts.jsonl:7")).Message.ShouldContain("attempts.jsonl:7");
         Should.Throw<DataException>(() => AttemptLog.Parse("{깨짐", "attempts.jsonl:8")).Message.ShouldContain("attempts.jsonl:8");
+
+        // 입력의 틀린 칸은 읽을 때 멈춘다 — 되살리기가 판 한가운데서 예외로 죽으면 어느 줄의 어느 칸인지가 안 남는다.
+        string line = AttemptLog.Line(Entry() with { Inputs = [[32, 3], [96, 1]] });
+        DataException e = Should.Throw<DataException>(() => AttemptLog.Parse(line, "attempts.jsonl:9"));
+        e.Message.ShouldContain("attempts.jsonl:9");
+        e.Message.ShouldContain("1번 칸 [96, 1]");
     }
 }

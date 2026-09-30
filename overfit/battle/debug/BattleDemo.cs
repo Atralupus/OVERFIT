@@ -14,6 +14,12 @@ namespace Overfit.Battle.Debug;
 /// <para>
 /// 뷰를 하나도 안 만든다 — 규칙 층만 돌린다. 씬이 뜨는지는 <c>smoke</c> 가 따로 본다.
 /// </para>
+///
+/// <para>
+/// 되살리기 (#112 · 설계 2026-09-29 조각1 §4.4) — <c>--history=&lt;파일&gt; --attempt=N</c> 이면 봇 대신 그 시도의 <b>저장한 입력</b>을 틱마다 넣어
+/// 판 전체를 다시 세우고 기록과 견준다(<see cref="Replay"/>). <c>--record=&lt;파일&gt;</c> 이면 봇의 판을 게임과 같은 모양의 시도 한 줄로 덧붙인다 —
+/// 게임 없이 되살리기를 확인하는 길이다.
+/// </para>
 /// </summary>
 public partial class BattleDemo : Node
 {
@@ -22,16 +28,19 @@ public partial class BattleDemo : Node
         string[] args = OS.GetCmdlineUserArgs();
 
         // 시드는 **시도 시드 그 자체**다 — 게임을 안 타므로 세션도 번호도 없다. 64비트 그대로 읽는다 (#72 · 설계 §4.4): 게임
-        // 로그의 [run][I] attempt=… seed=X 를 --seed=X 로 넘기면 그 시도의 보스 순서가 되살아난다. 전에는 Double 로 읽어
+        // 로그의 [run][I] attempt=… seed=X 를 --seed=X 로 넘기면 그 시도의 보스 계획이 되살아난다(판은 봇이 싸운다). 전에는 Double 로 읽어
         // 2^53 을 넘는 시드(시도 시드는 거의 다 그렇다)가 다른 판을 돌렸다.
         ulong seed = CmdArgs.UInt64(args, "--seed=") ?? 51;
         // 보스전은 하나다(설계 2026-09-29 조각1 §1) — stages.json 의 유일한 키. 옛 기록(두 단계 시절)을 되살리면 그 줄의 단계를 쓰고,
         // StageRoster 가 범위 밖을 가장 가까운 단계로 잘라 [W] 를 남긴다.
         int stage = 1;
 
-        // 되살리기 (#112 · 설계 2026-09-28 §6.5) — 게임이 남긴 시도 기록(user://attempts/<세션 시드>.jsonl)에서 그 시도의 시드 · 단계와 **같은 런의 앞
-        // 기록**을 읽어 고르기를 다시 세운다. 고르기는 상태 없는 조회라 보스의 순서가 그대로 선다 — 봇이 싸우므로 판의 길이는 달라도 앞머리가 같다.
-        IReadOnlyList<AttemptRecord> history = Array.Empty<AttemptRecord>();
+        // 게임과 같은 자리에서 읽는다 — 둘이 다른 판을 세우지 않게 (BattleTables). 되살리기가 대본을 되찾고 지문을 대 보므로 먼저 읽는다.
+        BattleTables data = BattleTables.Load();
+
+        // 되살리기 — 게임이 남긴 시도 기록(user://attempts/<세션 시드>.jsonl)에서 그 시도의 시드 · 단계와 **같은 런의 앞 기록**을 읽어 판과
+        // 고르기를 다시 세운다. 대본으로 선 시도(GIF · 스크린샷 · 순회)는 기록된 계획이 곧 대본이다.
+        IReadOnlyList<AttemptRecord> history = [];
         IReadOnlyList<ScriptPlan>? script = null;
         AttemptEntry? replay = null;
         if (CmdArgs.Text(args, "--history=") is { } historyPath && CmdArgs.UInt64(args, "--attempt=") is { } wanted)
@@ -56,18 +65,31 @@ public partial class BattleDemo : Node
                 return;
             }
 
+            // 입력이 없는 줄(5/8 까지의 게임)은 판을 되살릴 수 없다 — 봇으로 대신 싸우면 기록과 다른 판을 "되살렸다" 고 말하게 된다(Review Focus 3).
+            if (replay.Inputs is null)
+            {
+                Log.Error("battle-demo", $"replay_no_inputs attempt={wanted} path={historyPath} — 입력이 없는 옛 줄이라 판을 되살릴 수 없다");
+                GetTree().Quit(1);
+                return;
+            }
+
             seed = replay.Record.Seed;
             stage = replay.Record.Stage;
             history = [.. entries.Where(e => e.SessionSeed == replay.SessionSeed && e.Run == replay.Run && e.Record.Number < replay.Record.Number).Select(e => e.Record)];
+            if (replay.PickerId == "script")
+            {
+                script = Replay.Script(replay.Plans, StageRoster.For(data.Stages, stage), data.Patterns, out string? problem);
+                if (script is null)
+                {
+                    Unbuilt(replay, data.DataSha256, problem);
+                    GetTree().Quit(1);
+                    return;
+                }
+            }
 
-            // 대본으로 선 시도(GIF · 스크린샷 · 순회)는 대본이 기록에 없다 — 선 동작의 순서가 곧 대본이다(대본은 돌며 되풀이된다). 그 대본들은 칸마다
-            // 0.8초 쉬고 끊지 않으므로(설계 2026-09-29 조각1 §4.2) 그렇게 되살린다. 기록이 계획을 싣는 것은 6/8 이다 — 그때 이 추정을 걷는다.
-            script = replay.PickerId == "script" ? [.. replay.Drawn.Select(id => new ScriptPlan(0.8, id))] : null;
-            Log.Info("battle-demo", $"replay attempt={wanted} run={replay.Run} history={history.Count} seed={seed} stage={stage} picker={replay.PickerId}");
+            Log.Info("battle-demo", $"replay attempt={wanted} run={replay.Run} history={history.Count} seed={seed} stage={stage} picker={replay.PickerId}"
+                + $" plans={replay.Plans.Count} inputs={replay.Inputs.Count}");
         }
-
-        // 게임과 같은 자리에서 읽는다 — 둘이 다른 판을 세우지 않게 (BattleTables).
-        BattleTables data = BattleTables.Load();
 
         BattleBalance battle = Balance.Data.Battle;
 
@@ -93,7 +115,7 @@ public partial class BattleDemo : Node
         }
 
         // 단계 명부와 고르기는 data/stages.json 이 정하고, 게임과 같은 자리에서 세운다(StageRoster.Setup). 기록은 되살리기가 아니면 비어 있다 —
-        // 지금 고르기는 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 순서가 선다.
+        // 지금 고르기는 기록을 안 읽으므로 시드만으로 게임의 그 시도와 같은 계획이 선다.
         if (StageRoster.Setup(data.Stages, stage, seed, history, data.Patterns, BattleSim.RestTicks(boss), Balance.Data.Picker, script) is not { } setup)
         {
             GetTree().Quit(1);
@@ -102,7 +124,7 @@ public partial class BattleDemo : Node
 
         Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={setup.Stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}");
 
-        var sim = new BattleSim(new BattleSetup
+        var battleSetup = new BattleSetup
         {
             Arena = new Arena(battle.ArenaWidth),
             Fighter = fighter,
@@ -113,13 +135,40 @@ public partial class BattleDemo : Node
             Seed = seed,
             Picker = setup.Picker,
             MaxTicks = battle.MaxTicks,
-        });
+        };
 
-        var bot = new BotPolicy(seed);
-        BattleOutcome? outcome = null;
-        while (outcome is null)
+        BattleSim sim;
+        if (replay is { Inputs: { } inputs })
         {
-            outcome = sim.Tick(bot.Next(sim));
+            sim = Replay.Run(battleSetup, inputs);
+        }
+        else
+        {
+            sim = new BattleSim(battleSetup);
+            var bot = new BotPolicy(seed);
+            var tape = new InputTape();
+            var instances = new InstanceTracker();
+            BattleOutcome? outcome = null;
+            while (outcome is null)
+            {
+                InputFrame input = bot.Next(sim);
+                tape.Add(input);
+                outcome = sim.Tick(input);
+                instances.Observe(sim.Boss.CurrentPattern, sim.Events.Count);
+            }
+
+            // 게임이 남기는 줄과 같은 모양으로 덧붙인다 — 세션 시드는 데모의 시드 · 런 1 · 시도 1 이라 --attempt=1 로 되살린다(같은 파일에 여러 판을
+            // 덧붙이면 첫 줄을 찾는다 — 확인할 때는 새 파일에 남긴다).
+            if (CmdArgs.Text(args, "--record=") is { } recordPath)
+            {
+                var entry = new AttemptEntry(
+                    seed, 1, new AttemptRecord(1, setup.Stage, seed, outcome.Value, [.. sim.Events]), setup.PickerId, sim.PlanEntries, sim.Ticks,
+                    instances.Finish(sim.Events), [.. tape.Runs], data.DataSha256);
+                if (AttemptFile.AppendTo(recordPath, entry) is { } written)
+                {
+                    Log.Info("battle-demo", $"recorded attempt=1 plans={entry.Plans.Count} inputs={tape.Runs.Count} ticks={sim.Ticks} path={written}");
+                }
+            }
         }
 
         PlayerAxes axes = PlayerAxes.From(sim.Events);
@@ -146,27 +195,55 @@ public partial class BattleDemo : Node
 
         if (replay is not null)
         {
-            Replayed(replay, sim);
+            Replayed(replay, sim, data.DataSha256);
         }
 
-        Log.Marker("battle-demo", $"battle-demo=done outcome={outcome} ticks={sim.Ticks} events={sim.Events.Count}");
+        Log.Marker("battle-demo", $"battle-demo=done outcome={sim.Result?.ToString() ?? "none"} ticks={sim.Ticks} events={sim.Events.Count}");
         GetTree().Quit();
     }
 
     /// <summary>
-    /// 되살린 판이 기록과 같은가 — 뽑힌 순서의 앞머리. 봇이 싸우므로 판의 길이는 달라도 앞머리가 같아야 한다 — 다르면 규칙 위반이다(<c>[E]</c> — 고르기가
-    /// 기록과 시드만으로 안 선다). 저장한 입력으로 판 전체를 되살리는 것은 조각 1 의 6/8 이다(설계 2026-09-29 조각1 §4.4).
+    /// 되살린 판이 기록과 같은가 (설계 2026-09-29 조각1 §4.4) — 계획 전부 · 틱 수 · 결과 · 관측. 다르면 데이터의 지문이 까닭을 가른다: 같으면 결정론이
+    /// 깨진 것이라 <c>[E]</c>, 다르면 데이터가 바뀌어 다른 판일 수 있어 <c>[W]</c> 다. 줄에는 기록/지금 값을 나란히 싣는다(<see cref="Replay.Compare"/>).
     /// </summary>
-    private static void Replayed(AttemptEntry replay, BattleSim sim)
+    private static void Replayed(AttemptEntry replay, BattleSim sim, string dataSha256)
     {
-        int common = Math.Min(replay.Drawn.Count, sim.Drawn.Count);
-        if (replay.Drawn.Take(common).SequenceEqual(sim.Drawn.Take(common), StringComparer.Ordinal))
+        string compare = Replay.Compare(replay, sim);
+        switch (Replay.Verdict(replay, sim, dataSha256))
         {
-            Log.Info("battle-demo", $"replay_match attempt={replay.Record.Number} prefix={common}/{replay.Drawn.Count}");
+            case ReplayVerdict.Match:
+                Log.Info("battle-demo", $"replay_match attempt={replay.Record.Number} {compare}");
+                break;
+            case ReplayVerdict.DataChanged:
+                Log.Warn("battle-demo", $"replay_data_changed attempt={replay.Record.Number} {compare}"
+                    + $" data_logged={Short(replay.DataSha256)} data_now={Short(dataSha256)}");
+                break;
+            case ReplayVerdict.Mismatch:
+                Log.Error("battle-demo", $"replay_mismatch attempt={replay.Record.Number} {compare} data={Short(dataSha256)}");
+                break;
+            case ReplayVerdict.NoInputs:
+                // _Ready 가 판을 세우기 전에 멈춘다 — 여기 오면 그 길이 빠진 것이다.
+                Log.Error("battle-demo", $"replay_no_inputs attempt={replay.Record.Number}");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 대본으로 선 시도의 대본을 못 세웠다 — 기록의 동작이나 캔슬 지점이 지금 데이터에 없다(<see cref="Replay.Script"/>). 지문이 다르면 데이터가 바뀐
+    /// 것이라 <c>[W]</c>, 같으면 줄이 데이터와 안 맞는 것이라 <c>[E]</c> 다. 판은 안 세운다.
+    /// </summary>
+    private static void Unbuilt(AttemptEntry replay, string dataSha256, string? problem)
+    {
+        if (string.Equals(replay.DataSha256, dataSha256, StringComparison.Ordinal))
+        {
+            Log.Error("battle-demo", $"replay_mismatch attempt={replay.Record.Number} reason=script {problem}");
             return;
         }
 
-        Log.Error("battle-demo", $"replay_mismatch attempt={replay.Record.Number}"
-            + $" drawn_logged={string.Join(',', replay.Drawn.Take(common))} drawn_now={string.Join(',', sim.Drawn.Take(common))}");
+        Log.Warn("battle-demo", $"replay_data_changed attempt={replay.Record.Number} reason=script {problem}"
+            + $" data_logged={Short(replay.DataSha256)} data_now={Short(dataSha256)}");
     }
+
+    /// <summary>지문의 앞 12자 — 로그에서 둘이 같은지 · 다른지만 보면 된다.</summary>
+    private static string Short(string? sha) => sha is null ? "none" : sha[..Math.Min(12, sha.Length)];
 }
