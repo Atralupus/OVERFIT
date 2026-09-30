@@ -392,4 +392,52 @@ public class FighterDataTests
         }
     }
 
+    [Fact]
+    public void 폭탄의_시간_셋은_틱에_딱_떨어진다()
+    {
+        // 던지기는 틱으로 센다 (설계 2026-09-30 조각2 §1.1) — 선딜 · 놓은 뒤 경직 · 나는 시간이 반 틱이면 반올림(TicksFor)이 한 틱을 정하고, 반응이
+        // 닿아야 하는 "누른 틱 + 88" 이 데이터가 아니라 부동소수의 말이 된다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            BombDef b = c.Bomb;
+            foreach ((string key, double seconds) in new[]
+            {
+                ("throw_seconds", b.ThrowSeconds), ("recover_seconds", b.RecoverSeconds), ("flight_seconds", b.FlightSeconds),
+            })
+            {
+                seconds.ShouldBeGreaterThan(0, $"{id}: bomb.{key} 가 0 이하다");
+                double ticks = seconds / BattleSim.Dt;
+                ticks.ShouldBe(Math.Round(ticks), 1e-9, $"{id}: bomb.{key} {seconds}초가 {ticks}틱이다 — 틱에 안 떨어진다");
+            }
+
+            b.Count.ShouldBeGreaterThan(0, $"{id}: 폭탄이 하나도 없다");
+            b.Damage.ShouldBeGreaterThan(0, $"{id}: 폭탄이 안 아프다");
+        }
+    }
+
+    [Fact]
+    public void 폭탄은_2연격보다_한_번에_크게_깎는다()
+    {
+        // 큰 피해 (우산 §5) — 선딜이 1.5초로 2연격(약 1.8초)만큼 묶이는데 덜 아프면 던질 까닭이 없다. 칼보다 한 번에 크게 깎이는 것이 보여야
+        // 투척이 끊기는 싸움(설계 2026-09-30 조각2 §2)이 걸 만한 것이 된다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            int combo = c.Combo.Sum(s => s.Damage);
+            c.Bomb.Damage.ShouldBeGreaterThan(combo, $"{id}: 폭탄({c.Bomb.Damage})이 2연격({combo})보다 안 아프다");
+        }
+    }
+
+    [Fact]
+    public void 던지는_그림은_파이터_팩에_있는_이름과_장이다()
+    {
+        // 팩에 던지는 모션이 없어 칼질 시트를 빌린다 (설계 2026-09-30 조각2 §1.4) — 가드와 같은 대조다: 이름이 팩에 없거나 장이 모자라면 뷰가
+        // 조용히 다른 그림을 그린다. JsonData 는 모르는 키를 버리므로 오타가 빌드를 그냥 지나간다.
+        foreach ((string id, FighterConfig c) in Load())
+        {
+            Dictionary<string, int> pack = TestConfigs.PackFrames(c.Sprite);
+            pack.ShouldContainKey(c.Bomb.Anim, $"{id}: 던지는 그림 {c.Bomb.Anim} 이 팩({c.Sprite})에 없다");
+            c.Bomb.WindupFrame.ShouldBeInRange(0, pack[c.Bomb.Anim] - 1, $"{id}: {c.Bomb.Anim} 에 {c.Bomb.WindupFrame} 번 장이 없다");
+            c.Bomb.ReleaseFrame.ShouldBeInRange(0, pack[c.Bomb.Anim] - 1, $"{id}: {c.Bomb.Anim} 에 {c.Bomb.ReleaseFrame} 번 장이 없다");
+        }
+    }
 }

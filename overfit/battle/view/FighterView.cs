@@ -160,10 +160,13 @@ public partial class FighterView : Node2D
     /// <paramref name="parry"/> 는 패리가 도는 시트다 — 칼이 나가는 장은 없다(<c>BladeFrame</c> 은 안 쓴다).
     /// <paramref name="parryFrames"/> 는 그 시트에서 패리가 도는 장 수다(<c>parry_anim_frames</c>).
     /// <paramref name="guard"/> 는 가드가 멈춰 서는 장이다(<c>guard_anim</c> · <c>guard_frame</c> · #96).
+    /// <paramref name="throwWindup"/> · <paramref name="throwRelease"/> 는 폭탄의 선딜과 놓은 뒤에 멈춰 서는 장이다(설계 2026-09-30 조각2 §5).
     /// </summary>
-    public void Load(string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard)
+    public void Load(
+        string spriteId, IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard, StillFrame throwWindup,
+        StillFrame throwRelease)
     {
-        _animator.SetSheets(swings, parry, parryFrames, guard);
+        _animator.SetSheets(swings, parry, parryFrames, guard, throwWindup, throwRelease);
 
         var frames = GD.Load<SpriteFrames>($"res://assets/spriteframes/{spriteId}.tres");
         if (frames is null)
@@ -454,6 +457,8 @@ public partial class FighterView : Node2D
             FighterPose.Parry => _animator.ParryAnim,
             // 가드 그림이 팩에 없다 — 위 주석을 보라. 칼을 세운 장에 멈춰 서는 것은 FighterAnimator 가 한다.
             FighterPose.Guard => _animator.GuardAnim,
+            // 폭탄 — 칼질 시트의 한 장에 멈춰 선다(설계 2026-09-30 조각2 §5). 멈추는 것은 FighterAnimator 가 한다.
+            FighterPose.ThrowWindup or FighterPose.ThrowRelease => _animator.ThrowAnim,
             // 탈진은 take-hit 를 제 속도로 한 번 돌고 마지막 장에 선다(#71 · 설계 §6) — 반복하지 않는 애니메이션이라 엔진이 거기서
             // 멈춘다. 이름이 바뀔 때만 틀므로(Animate) 탈진 동안 맞아도 처음부터 다시 돌지 않는다. 붙들림(#78 · 설계 §6 「잡힌 파이터」)도
             // 같은 장이다 — 같은 이름이라 붙들림 뒤에 탈진이 남아 넘어가도 처음부터 다시 안 돈다. 가르는 것은 흰 구와 색이다(Battle 이

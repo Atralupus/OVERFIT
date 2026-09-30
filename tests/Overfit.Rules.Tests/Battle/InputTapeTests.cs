@@ -13,15 +13,18 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class InputTapeTests
 {
-    /// <summary>입력 96 가지 전부 — 이동 셋 × 버튼 다섯의 켜고 끔.</summary>
+    /// <summary>입력 192 가지 전부 — 이동 셋 × 버튼 다섯의 켜고 끔 × 폭탄(설계 2026-09-30 조각2 §4).</summary>
     private static IEnumerable<InputFrame> Every()
     {
-        for (sbyte move = -1; move <= 1; move++)
+        foreach (bool bomb in new[] { false, true })
         {
-            for (int bits = 0; bits < 32; bits++)
+            for (sbyte move = -1; move <= 1; move++)
             {
-                yield return new InputFrame(
-                    move, (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0, (bits & 16) != 0);
+                for (int bits = 0; bits < 32; bits++)
+                {
+                    yield return new InputFrame(
+                        move, (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0, (bits & 16) != 0, bomb);
+                }
             }
         }
     }
@@ -29,13 +32,13 @@ public class InputTapeTests
     private static InputFrame Idle => new(0, false, false, false, false);
 
     [Fact]
-    public void 코드는_96_가지_입력을_하나씩_왕복한다()
+    public void 코드는_192_가지_입력을_하나씩_왕복한다()
     {
         InputFrame[] every = [.. Every()];
 
         int[] codes = [.. every.Select(InputTape.Code)];
 
-        codes.Distinct().Count().ShouldBe(96, "두 입력이 한 코드로 접혔다");
+        codes.Distinct().Count().ShouldBe(192, "두 입력이 한 코드로 접혔다");
         codes.ShouldAllBe(code => code >= 0 && code < InputTape.Codes);
         every.Select(f => InputTape.Frame(InputTape.Code(f))).ShouldBe(every);
 
@@ -45,6 +48,23 @@ public class InputTapeTests
         InputTape.Code(new InputFrame(1, false, false, false, Attack: true)).ShouldBe(72);
         InputTape.Code(new InputFrame(0, false, Dash: true, Parry: true, false, GuardHeld: true)).ShouldBe(54);
         InputTape.Code(new InputFrame(1, true, true, true, true, true)).ShouldBe(95);
+
+        // 폭탄은 96 위에 얹었다 (설계 2026-09-30 조각2 §4) — 있는 비트는 안 옮긴다.
+        InputTape.Code(new InputFrame(0, false, false, false, false, Bomb: true)).ShouldBe(128);
+        InputTape.Code(new InputFrame(1, true, true, true, true, true, Bomb: true)).ShouldBe(191);
+    }
+
+    [Fact]
+    public void 폭탄_칸이_생기기_전의_코드는_뜻이_그대로다()
+    {
+        // 조각 1 이 쓴 줄은 0 ~ 95 뿐이다 — 그 코드들이 폭탄을 안 누른 같은 입력으로 읽혀야 옛 줄이 같은 판으로 되살아난다. 폭탄을 누른 입력은
+        // 같은 입력의 코드에 96 을 더한 것이다.
+        for (int code = 0; code < 96; code++)
+        {
+            InputFrame old = InputTape.Frame(code);
+            old.Bomb.ShouldBeFalse($"옛 코드 {code} 가 폭탄을 누른다");
+            InputTape.Frame(code + 96).ShouldBe(old with { Bomb = true });
+        }
     }
 
     [Fact]
@@ -81,7 +101,7 @@ public class InputTapeTests
         }
 
         InputTape.Play(tape.Runs).ShouldBe(inputs);
-        tape.Runs.Count.ShouldBe(96);
+        tape.Runs.Count.ShouldBe(192);
         InputTape.Play([]).ShouldBeEmpty();
     }
 
@@ -89,16 +109,16 @@ public class InputTapeTests
     public void 틀린_코드는_거절한다()
     {
         Should.Throw<ArgumentOutOfRangeException>(() => InputTape.Frame(-1));
-        Should.Throw<ArgumentOutOfRangeException>(() => InputTape.Frame(96));
+        Should.Throw<ArgumentOutOfRangeException>(() => InputTape.Frame(192));
 
         // 이동은 −1 · 0 · +1 뿐이다 — 2 를 받으면 파이터가 두 배로 걷는데(Fighter) 코드에는 그 자리가 없다.
         Should.Throw<ArgumentOutOfRangeException>(() => InputTape.Code(new InputFrame(2, false, false, false, false)));
 
         // 줄에서 읽은 칸 — 모양 · 코드 · 틱 수. 어느 칸이 왜 틀렸는지 말한다.
-        InputTape.Problem([[32, 3], [96, 1]]).ShouldBe("1번 칸 [96, 1] — 코드가 0 ~ 95 밖이다");
+        InputTape.Problem([[32, 3], [192, 1]]).ShouldBe("1번 칸 [192, 1] — 코드가 0 ~ 191 밖이다");
         InputTape.Problem([[32, 0]]).ShouldBe("0번 칸 [32, 0] — 틱 수가 1 보다 작다");
         InputTape.Problem([[32]]).ShouldBe("0번 칸 [32] — [코드, 틱 수] 둘이 아니다");
-        InputTape.Problem([[32, 3], [33, 1]]).ShouldBeNull();
+        InputTape.Problem([[32, 3], [33, 1], [128, 1]]).ShouldBeNull();
         Should.Throw<ArgumentException>(() => InputTape.Play([[32, 1], [-1, 2]])).Message.ShouldContain("1번 칸");
     }
 }

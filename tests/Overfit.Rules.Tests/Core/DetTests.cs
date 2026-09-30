@@ -220,6 +220,15 @@ public class DetTests
     }
 
     [Fact]
+    public void 데모_봇의_폭탄_도메인은_16_이다()
+    {
+        // 설계 2026-09-30 조각2 §6 — 데모 봇이 이 동작에 던지나도 제 스트림이다. 가드(4)와 같은 키(본 동작 수)를 쓰지만 도메인이 달라 둘이 따로
+        // 굴린다. 15 뒤에 더할 뿐이다 — 있는 번호는 안 바꾼다.
+        Det.Domain.BotBomb.ShouldBe(16u);
+        Det.Domain.Name(Det.Domain.BotBomb).ShouldBe("bot_bomb");
+    }
+
+    [Fact]
     public void 도메인_이름은_모르는_번호를_숫자_그대로_돌려준다()
     {
         Det.Domain.Name(0).ShouldBe("0");

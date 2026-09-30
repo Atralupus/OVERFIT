@@ -35,6 +35,12 @@ public sealed class FighterAnimator
     /// <summary>가드가 멈춰 서는 장 — 칼을 사선으로 세운 <c>attack2</c> f1 (#96 · 설계 §6). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
     private StillFrame _guard;
 
+    /// <summary>폭탄의 선딜에 멈춰 서는 장 (설계 2026-09-30 조각2 §5 · <c>bomb.anim</c> · <c>bomb.windup_frame</c>). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
+    private StillFrame _throwWindup;
+
+    /// <summary>폭탄을 놓은 뒤 경직에 멈춰 서는 장 (<c>bomb.release_frame</c>).</summary>
+    private StillFrame _throwRelease;
+
     /// <summary>지금 그리는 칼질이 몇 번째인가 (<see cref="SwingBegan"/> 이 정한다).</summary>
     private int _swing;
 
@@ -71,6 +77,9 @@ public sealed class FighterAnimator
     /// </summary>
     public string GuardAnim => HasAnimation(_guard.Anim) ? _guard.Anim : "idle";
 
+    /// <summary>던지는 시트 이름 — 팩에 없으면 <c>idle</c> 로 물러선다(가드와 같다).</summary>
+    public string ThrowAnim => HasAnimation(_throwWindup.Anim) ? _throwWindup.Anim : "idle";
+
     /// <summary>지금 칼질의 시트. 목록이 비었으면(스프라이트가 없는 판) 빈 이름이라 아래 갈래가 전부 시트 없음으로 빠진다.</summary>
     private SwingSheet Sheet => _swings.Length == 0 ? default : _swings[System.Math.Clamp(_swing, 0, _swings.Length - 1)];
 
@@ -79,11 +88,15 @@ public sealed class FighterAnimator
     /// <paramref name="parry"/> 는 칼이 나가는 장이 없다(<c>BladeFrame</c> 은 안 쓴다).
     /// <paramref name="parryFrames"/> 는 그 시트에서 패리가 도는 장 수다(<c>parry_anim_frames</c>).
     /// <paramref name="guard"/> 는 가드가 멈춰 서는 장이다(<c>guard_anim</c> · <c>guard_frame</c>).
+    /// <paramref name="throwWindup"/> · <paramref name="throwRelease"/> 는 폭탄의 선딜과 놓은 뒤에 멈춰 서는 장이다(<c>bomb</c>).
     /// </summary>
-    public void SetSheets(IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard)
+    public void SetSheets(
+        IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard, StillFrame throwWindup, StillFrame throwRelease)
     {
         _parry = parry;
         _guard = guard;
+        _throwWindup = throwWindup;
+        _throwRelease = throwRelease;
         _parryFrames = parryFrames;
         _swings = new SwingSheet[swings.Count];
         for (int i = 0; i < _swings.Length; i++)
@@ -125,6 +138,7 @@ public sealed class FighterAnimator
                 HoldDash(frame, anim);
                 HoldParry(frame);
                 HoldGuard(frame);
+                HoldThrow(frame);
             }
         }
     }
@@ -426,6 +440,38 @@ public sealed class FighterAnimator
         if (_sprite.Frame != still || _sprite.IsPlaying())
         {
             _sprite.Frame = still;
+            _sprite.Pause();
+        }
+    }
+
+    /// <summary>
+    /// 폭탄 (설계 2026-09-30 조각2 §5) — 선딜 동안 <c>bomb.windup_frame</c>, 놓은 뒤 경직 동안 <c>bomb.release_frame</c> 에 멈춰 선다. 가드와 같은
+    /// 규칙이다(<see cref="HoldGuard"/>): 시트가 그 이름일 때만 · 장이 모자라면 있는 마지막 장 · 한 장도 없으면 안 세운다. 팩에 던지는 모션이 없어
+    /// 칼질 시트를 빌린다 — 1타는 3장부터 쓰므로 앞 장들은 칼질에 안 보인다.
+    /// </summary>
+    private void HoldThrow(FighterFrame frame)
+    {
+        StillFrame still = frame.Pose switch
+        {
+            FighterPose.ThrowWindup => _throwWindup,
+            FighterPose.ThrowRelease => _throwRelease,
+            _ => default,
+        };
+        if (still.Anim is null || !HasAnimation(still.Anim) || _sprite.Animation != still.Anim)
+        {
+            return;
+        }
+
+        int count = _sprite.SpriteFrames!.GetFrameCount(still.Anim);
+        if (count <= 0)
+        {
+            return;
+        }
+
+        int at = System.Math.Max(0, System.Math.Min(still.Frame, count - 1));
+        if (_sprite.Frame != at || _sprite.IsPlaying())
+        {
+            _sprite.Frame = at;
             _sprite.Pause();
         }
     }

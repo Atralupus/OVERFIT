@@ -5,7 +5,7 @@ namespace Overfit.Battle.Rules;
 /// 나중에 봇으로 만든 학습 데이터가 사람에게 의미를 갖는다.
 ///
 /// <para>
-/// <see cref="Jump"/> · <see cref="Dash"/> · <see cref="Parry"/> · <see cref="Attack"/> 넷은
+/// <see cref="Jump"/> · <see cref="Dash"/> · <see cref="Parry"/> · <see cref="Attack"/> · <see cref="Bomb"/> 다섯은
 /// 전부 <b>눌린 틱에만</b> true 다(엣지). 누르고 있는 상태(레벨)로 두면 봇이 "계속 누르고 있기" 로
 /// 공짜 성능을 얻고, 그 데이터는 사람의 판단을 담지 않는다.
 /// </para>
@@ -26,13 +26,16 @@ namespace Overfit.Battle.Rules;
 /// 2연격도 엣지 두 번이다 (설계 §5.1 · §5.4).</param>
 /// <param name="GuardHeld">↓ (또는 S) 를 <b>지금 누르고 있나</b>(레벨). 누르고 있고 땅에 서 있고 커밋된 행동이
 /// 없으면 그 틱이 가드다 (설계 §5.2). <b>기본값 false 가 계약이다</b> — 이 칸을 안 적은 입력은 가드를 안 든다.</param>
+/// <param name="Bomb">이 틱에 폭탄(L)을 눌렀나(엣지 · 설계 2026-09-30 조각2 §1.1). <see cref="GuardHeld"/> 처럼 <b>기본값 false</b> 로 맨 뒤에
+/// 더했다(우산 §5) — 이 칸을 모르는 입력(봇 · 테스트 · 옛 기록)은 안 던진다.</param>
 public readonly record struct InputFrame(
     sbyte Move,
     bool Jump,
     bool Dash,
     bool Parry,
     bool Attack,
-    bool GuardHeld = false)
+    bool GuardHeld = false,
+    bool Bomb = false)
 {
     /// <summary>
     /// 앞서 누른 엣지를 이번 입력에 싣는다 — 히트스톱 동안 누른 키를 끝난 첫 틱에 넘기는 자리다 (#71 · 설계 §1 「대화로 정한 것」).
@@ -40,9 +43,9 @@ public readonly record struct InputFrame(
     /// "눌렀는데 안 나간" 칼이 된다.
     ///
     /// <para>
-    /// 엣지 넷(점프 · 대시 · 패리 · 공격)은 <b>둘 중 하나라도</b> 눌렀으면 눌린 것이다. 레벨 둘(이동 · 가드)은 <b>지금</b> 값이다 —
+    /// 엣지 다섯(점프 · 대시 · 패리 · 공격 · 폭탄)은 <b>둘 중 하나라도</b> 눌렀으면 눌린 것이다. 레벨 둘(이동 · 가드)은 <b>지금</b> 값이다 —
     /// 누르고 있는 동안이 전부라 앞의 값을 들고 오면 뗀 손이 가드를 든다. 누른 순서는 안 싣는다: 한 틱에 엣지가 여럿이면 규칙이 한
-    /// 틱에 고르는 순서(대시 → 패리 → 공격 · <c>Fighter.Begin</c>)가 고른다. 실을 것이 없으면(<paramref name="held"/> 가 기본값)
+    /// 틱에 고르는 순서(대시 → 패리 → 공격 → 폭탄 · <c>Fighter.Begin</c>)가 고른다. 실을 것이 없으면(<paramref name="held"/> 가 기본값)
     /// <paramref name="now"/> 그대로라, 히트스톱이 없는 틱의 판은 한 글자도 안 달라진다.
     /// </para>
     /// </summary>
@@ -52,5 +55,6 @@ public readonly record struct InputFrame(
         held.Dash || now.Dash,
         held.Parry || now.Parry,
         held.Attack || now.Attack,
-        now.GuardHeld);
+        now.GuardHeld,
+        held.Bomb || now.Bomb);
 }

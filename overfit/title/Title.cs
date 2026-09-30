@@ -28,6 +28,7 @@ public partial class Title : Control
         ("가드", new[] { "guard" }),
         ("패리", new[] { "parry" }),
         ("공격", new[] { "attack" }),
+        ("폭탄", new[] { "bomb" }),
     };
 
     /// <summary>디버그 전용 액션의 접두어. 조작 안내에 안 싣는다 — <see cref="_rows"/> 의 주석.</summary>

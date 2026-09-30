@@ -205,6 +205,19 @@ offset_bottom = 1012.0
 theme_type_variation = &"StaminaBar"
 show_percentage = false
 
+; 남은 폭탄 (설계 2026-09-30 조각2 §5) — 스태미나 막대 오른쪽. 숫자가 전부다: 열 개를 세는 칸이라 막대로는 "몇 개" 가 안 읽힌다.
+[node name="Bombs" type="Label" parent="HudLayer/Hud"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 484.0
+offset_top = 976.0
+offset_right = 724.0
+offset_bottom = 1020.0
+mouse_filter = 2
+theme_type_variation = &"BarNumber"
+theme_override_font_sizes/font_size = 28
+vertical_alignment = 1
+
 ; 결과 화면. HUD 보다 위 레이어라 체력바를 덮는다.
 ; 이게 없던 때는 죽어도 게임이 끝나지 않았다 — 틱만 멈추고 렌더는 영원히 돌았다.
 [node name="ResultLayer" type="CanvasLayer" parent="."]

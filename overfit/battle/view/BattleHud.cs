@@ -3,7 +3,7 @@ using Godot;
 namespace Overfit.Battle.View;
 
 /// <summary>
-/// 체력바 · 스태미나바 · 보스의 경직 게이지. 프로토타입의 UI 는 이것뿐이다.
+/// 체력바 · 스태미나바 · 남은 폭탄 · 보스의 경직 게이지. 프로토타입의 UI 는 이것뿐이다.
 ///
 /// <para>
 /// <b>색은 여기 없다.</b> 전부 <c>ui/theme/main.tres</c> 가 정하고 씬은 이름(<c>theme_type_variation</c>)만
@@ -29,6 +29,7 @@ public partial class BattleHud : Control
     private ProgressBar _poise = null!;
     private Label _healthNumber = null!;
     private Label _bossNumber = null!;
+    private Label _bombs = null!;
 
     public override void _Ready()
     {
@@ -38,6 +39,7 @@ public partial class BattleHud : Control
         _poise = GetNode<ProgressBar>("%Poise");
         _healthNumber = GetNode<Label>("%HealthNumber");
         _bossNumber = GetNode<Label>("%BossNumber");
+        _bombs = GetNode<Label>("%Bombs");
         _poise.MaxValue = 1;
     }
 
@@ -54,6 +56,9 @@ public partial class BattleHud : Control
         // 스태미나는 "얼마 남았나" 가 아니라 "한 번 더 되나" 라 길이만으로 충분하다.
         _healthNumber.Text = $"{frame.Health} / {frame.MaxHealth}";
         _bossNumber.Text = $"{frame.BossHealth} / {frame.BossMaxHealth}";
+
+        // 남은 폭탄 (설계 2026-09-30 조각2 §5) — 누를 때 손에 들며 준다. 끊겨 잃은 것도 안 돌아온다.
+        _bombs.Text = $"폭탄 {frame.Bombs}";
 
         // 파이터가 탈진한 동안 스태미나 바가 파랗다 (#71 · 설계 §6) — 보스 게이지의 탈진과 같은 파랑이다. 길이는 그대로 스태미나를
         // 그린다: 탈진 동안에도 스태미나는 차고(1.1초에 44), 풀릴 때 "한 번 더 되나" 가 그 길이다.

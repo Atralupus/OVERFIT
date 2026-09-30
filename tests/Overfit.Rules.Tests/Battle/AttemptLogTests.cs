@@ -145,9 +145,10 @@ public class AttemptLogTests
         Should.Throw<DataException>(() => AttemptLog.Parse("{깨짐", "attempts.jsonl:8")).Message.ShouldContain("attempts.jsonl:8");
 
         // 입력의 틀린 칸은 읽을 때 멈춘다 — 되살리기가 판 한가운데서 예외로 죽으면 어느 줄의 어느 칸인지가 안 남는다.
-        string line = AttemptLog.Line(Entry() with { Inputs = [[32, 3], [96, 1]] });
+        // 코드는 0 ~ 191 이다 — 폭탄 칸(설계 2026-09-30 조각2 §4)이 96 위에 얹혀 96 은 이제 폭탄을 누른 선 입력이다.
+        string line = AttemptLog.Line(Entry() with { Inputs = [[32, 3], [192, 1]] });
         DataException e = Should.Throw<DataException>(() => AttemptLog.Parse(line, "attempts.jsonl:9"));
         e.Message.ShouldContain("attempts.jsonl:9");
-        e.Message.ShouldContain("1번 칸 [96, 1]");
+        e.Message.ShouldContain("1번 칸 [192, 1]");
     }
 }
