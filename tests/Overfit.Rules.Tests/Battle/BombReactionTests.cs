@@ -573,4 +573,33 @@ public class BombReactionTests
 
         reaction.ShouldBe(1 + Delay + Hesitate);
     }
+    [Fact]
+    public void GIF_bombcut_3연격_50틱의_던지기는_첫_캔슬_지점에서_끊겨_놓기_전에_잃는다()
+    {
+        // GifRunner 의 bombcut 대본(#147) — 960 떨어져 3연격 50틱에 던지면 68 에 알고 첫 캔슬 지점(78)에서 끊어, 멈칫 · 달림 · 돌진 선딜 뒤 놓는
+        // 틱(139) 전에 닿는다.
+        BattleSim sim = Sim([new ScriptPlan(0.8, "3연격")]);
+        int begun = UntilBegins(sim, "3연격");
+        using var log = new LogCapture();
+        ThrowAt(sim, begun + 50);
+        TestConfigs.UntilTick(sim, begun + 50 + ReleaseAfter);
+
+        Reacts(log).ShouldBe([$"[boss][D] bomb_react from=3연격 at=78 tick={begun + 78}"]);
+        log.Lines.ShouldContain(l => l.StartsWith($"[fighter][D] bomb_lost by={Data.Move} react=1 ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GIF_bomb_3연격_2틱의_던지기는_첫_캔슬_지점에서_끊겨도_늦어_떨어진다()
+    {
+        // GifRunner 의 bomb 대본(#147) — 위의 「제때_못_닿아도_끊으려_한다」 를 대본이 누를 수 있는 첫 틱(2)으로.
+        BattleSim sim = Sim([new ScriptPlan(0.8, "3연격")]);
+        int begun = UntilBegins(sim, "3연격");
+        int hp = sim.Boss.Health;
+        using var log = new LogCapture();
+        ThrowAt(sim, begun + 2);
+        TestConfigs.UntilTick(sim, begun + 2 + ReleaseAfter + BattleSim.TicksFor(Real().Bomb.FlightSeconds));
+
+        Reacts(log).ShouldBe([$"[boss][D] bomb_react from=3연격 at=78 tick={begun + 78}"]);
+        sim.Boss.Health.ShouldBe(hp - Real().Bomb.Damage, "끊으려 했지만 늦었다 — 폭탄은 떨어져야 한다");
+    }
 }

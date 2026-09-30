@@ -528,4 +528,72 @@ public class MoveBattleTests
         sim.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
         sim.Boss.Exhausted.ShouldBeTrue("받아쳤는데 보스가 안 무너졌다");
     }
+    // ── GIF 대본의 사람 (#147) ── GifRunner 의 대본과 같은 입력을 규칙 위에서 틱까지 못박는다. 대본의 숫자를 바꾸면 여기서 먼저 잰다.
+
+    [Fact]
+    public void GIF_rush_3연격을_1타_뒤에_끊은_돌진이_멀리_선_사람을_친다()
+    {
+        // 파이터는 480 에 선 채다 — 3연격은 960 밖에서 헛치고(1타), 첫 캔슬 지점(78)에서 끊어 돌진으로 잇는다. 돌진은 12틱에 닿고 35틱에 친다
+        // (위의 돌진 테스트) — 3연격의 틱으로 78 + 35 = 113 이다.
+        BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격", CancelPoint: 0, Next: "돌진"));
+        int begun = UntilBegins(sim, "3연격");
+        UntilTick(sim, begun, 78);
+        sim.Boss.CurrentPattern.ShouldBe("돌진", "78틱에 돌진으로 안 이었다");
+        UntilTick(sim, begun, 113);
+
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
+        {
+            (DodgeVerb.Spacing, HitVerdict.MissedTooFar),
+            (DodgeVerb.None, HitVerdict.Hit),
+        }, "1타가 헛치고 돌진이 113틱에 맞혀야 한다");
+    }
+
+    [Fact]
+    public void GIF_grab_가드로_버틴_사람을_3연격_2타_뒤에_끊은_잡기가_붙든다()
+    {
+        // 1타 사거리 안(보스 앞 358)으로 걸어 들어가 ↓ 를 붙든다 — 1타 · 2타는 가드로 받고, 둘째 캔슬 지점(144)에서 잡기로 이어 36틱(180)에
+        // 가드째 붙든다. 잡기는 가드를 안 받는다.
+        BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격", CancelPoint: 1, Next: "잡기"));
+        int begun = UntilBegins(sim, "3연격", WalkIn);
+        UntilTick(sim, begun, 180, p => begun + p <= 86 ? _right : _guard);
+
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
+        {
+            (DodgeVerb.Guard, HitVerdict.Guarded),
+            (DodgeVerb.Guard, HitVerdict.Guarded),
+            (DodgeVerb.Guard, HitVerdict.Grabbed),
+        }, "가드로 받은 두 타 뒤 잡기가 붙들어야 한다");
+        sim.Fighter.Held.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void GIF_uppercut_걸어_들어와_3연격_1타의_박자에_뛴_사람을_올려베기가_공중에서_친다()
+    {
+        // 보스 쪽으로 걸어가다 35틱에 뛴다(보스 앞 386) — 3연격이면 1타(51)를 넘는 누름이다(16 ~ 35 · 위의 대조군). 올려베기는 같은 51틱에
+        // 공중을 친다([0, 396] 안).
+        BattleSim sim = Sim(null, "올려베기");
+        int begun = UntilBegins(sim, "올려베기", _ => _right);
+        UntilTick(sim, begun, 58, p => p < 35 ? _right : p == 35 ? _jump : default);
+
+        DodgeEvent hit = sim.Events.ShouldHaveSingleItem("올려베기의 관측이 하나가 아니다");
+        (hit.Verb, hit.Verdict).ShouldBe((DodgeVerb.Jump, HitVerdict.Hit));
+        hit.Airborne.ShouldBeTrue("땅에서 맞았다");
+    }
+
+    [Fact]
+    public void GIF_fast_3연격_뒤_2연격을_시작한_사람을_달려온_빠른_3연격이_친다()
+    {
+        // 위의 빠른 3연격 테스트를 정해진 입력으로 — 판이 선 뒤 74틱 걸어 보스 앞 442(3연격이 안 닿는 427 밖)에 선다. 3연격이 헛친 뒤 167 · 170 에
+        // J 두 번(2연격), 보스는 0.4초 쉬고 달려와 빠른 3연격을 연다. 1타(24)에 누른 대시는 2연격에 묶여 버려지고 맞는다.
+        BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true));
+        int triple = UntilBegins(sim, "3연격", t => t <= 74 ? _right : default);
+        UntilTick(sim, triple, 180, p => p is 167 or 170 ? _attack : default);
+        int fast = UntilBegins(sim, "빠른 3연격");
+        UntilTick(sim, fast, 31, p => p == 24 ? _dash : default);
+
+        sim.Events.Take(3).ShouldAllBe(e => e.Verdict == HitVerdict.MissedTooFar, "3연격이 헛치지 않았다");
+        DodgeEvent first = sim.Events.Skip(3).ShouldHaveSingleItem("빠른 3연격 1타의 관측이 하나가 아니다");
+        first.Verdict.ShouldBe(HitVerdict.Hit);
+        first.GreedWindow.ShouldBeTrue("2연격에 묶인 사람이 욕심으로 안 남았다");
+    }
 }

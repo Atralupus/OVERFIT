@@ -10,6 +10,18 @@ plan against them.
 The purpose is to check whether a boss that adapts to the player's habits is fair and fun to fight. This version builds the moves,
 the cancels, and the running that the adaptive boss will plan with, plus the player's bombs and a boss that tries to interrupt them.
 
+## Scenes
+
+| <img src="docs/gifs/rush.gif" width="420"> | <img src="docs/gifs/grab.gif" width="420"> |
+|---|---|
+| **3-hit combo → rush.** Cancelled after the first hit | **3-hit combo → grab.** Cancelled after the second hit; a guard does not stop the grab |
+| <img src="docs/gifs/jump.gif" width="420"> | <img src="docs/gifs/uppercut.gif" width="420"> |
+| **Jump attack.** Only a jump clears the landing | **Uppercut.** Hits a player who jumped early to clear the combo |
+| <img src="docs/gifs/fast.gif" width="420"> | <img src="docs/gifs/offbeat.gif" width="420"> |
+| **Fast 3-hit combo.** Catches a player still in a 2-hit combo | **Off-beat 3-hit combo.** Catches a parry timed to the normal rhythm |
+| <img src="docs/gifs/bombcut.gif" width="420"> | <img src="docs/gifs/bomb.gif" width="420"> |
+| **Bomb, interrupted.** The boss cancels at the next cancel point and rushes in before the release | **Bomb, landed.** Thrown as the combo starts, the first cancel point comes too late |
+
 ## The fight
 
 - One boss with 1,000 HP. The fighter has 220 HP and one life. A fight that lasts 10 minutes is a loss.
@@ -31,15 +43,6 @@ Seven moves. Ticks are 1/60 s, counted from the tick the move starts. Each hit s
 | Grab | 36 | 25, held 1 s | jump only | A white orb flies to the player for 0.6 s first |
 | Jump attack | 60 | 24 | jump only | One leap. The landing covers the whole floor; dash invincibility, guard, and parry do not help |
 | Uppercut | 51 | 14 | dash, guard, parry | Same timing as the 3-hit combo's first hit, but it reaches high. A player who jumps early to clear the combo is hit |
-
-| <img src="docs/gifs/rush.gif" width="420"> | <img src="docs/gifs/grab.gif" width="420"> |
-|---|---|
-| **3-hit combo → rush** | **3-hit combo → grab** |
-| <img src="docs/gifs/offbeat.gif" width="420"> | <img src="docs/gifs/jump3.gif" width="420"> |
-| **Off-beat 3-hit combo** | **Jump attack** |
-
-The GIFs were recorded from fixed scripts before this version. The first two show the old "1 hit → rush" and "1 hit → grab" patterns,
-which are now a 3-hit combo cancelled after its first hit. The last one shows the old three-jump version of the jump attack.
 
 ## Plans
 
