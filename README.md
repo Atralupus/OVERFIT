@@ -2,148 +2,93 @@
 
 [한국어](README.ko.md)
 
-OVERFIT is a 2D side-scrolling soulslike with one boss fought in two stages. Stage 1 records how the player avoids attacks.
-In stage 2, a neural network reads the record and the boss picks its attack patterns from the network's predictions.
+OVERFIT is a 2D side-scrolling soulslike with one boss fight. Before each attack the boss makes a whole plan: how long to rest,
+whether to run in, which move to open with, and whether to cancel that move into another one. In this version the boss plans at random.
+A later version will read the player's dodging habits and plan against them.
 
-The purpose is to check whether a boss that adapts to the player's dodging habits is fair and fun to fight.
+The purpose is to check whether a boss that adapts to the player's dodging habits is fair and fun to fight. This version builds the moves,
+the cancels, and the running that the adaptive boss will plan with.
 
-## Stage 2 patterns
+## The fight
 
-Each new stage-2 pattern punishes one habit from stage 1.
+- One boss with 1,000 HP. The fighter has 220 HP and one life. A fight that lasts 10 minutes is a loss.
+- The fighter can dash (a short invincibility), jump, guard (costs stamina), parry, and attack (one or two hits).
+- A parry at the right moment stops the boss's move and exhausts the boss for 1.5 seconds. Hits also fill the boss's poise gauge,
+  and a full gauge exhausts the boss the same way.
+
+## Moves
+
+Seven moves. Ticks are 1/60 s, counted from the tick the move starts. Each hit stays active for 8 ticks.
+
+| Move | Hits (tick) | Damage | Avoided by | Notes |
+|---|---|---|---|---|
+| 3-hit combo | 51 · 93 · 159 | 8 · 8 · 14 | dash, guard, parry | A well-timed jump clears the first hit. Cancel points 78 · 144 |
+| Off-beat 3-hit combo | 60 · 111 · 186 | 8 · 8 · 14 | dash, guard, parry | Same swings, but each windup is held 0.15 s longer. Catches players who parry by rhythm. Cancel points 87 · 162 |
+| Fast 3-hit combo | 24 · 51 · 84 | 8 · 8 · 14 | dash, guard, parry | First hit after 0.4 s. Catches a 2-hit combo started right after the previous move. Cancel points 36 · 69 |
+| Rush | 24 after arriving | 14 | dash, guard, parry | Runs at 3,600 px/s to 280 px in front of the player, then hits |
+| Grab | 36 | 25, held 1 s | jump only | A white orb flies to the player for 0.6 s first |
+| Jump attack | 60 | 24 | jump only | One leap. The landing covers the whole floor; dash invincibility, guard, and parry do not help |
+| Uppercut | 51 | 14 | dash, guard, parry | Same timing as the 3-hit combo's first hit, but it reaches high. A player who jumps early to clear the combo is hit |
 
 | <img src="docs/gifs/rush.gif" width="420"> | <img src="docs/gifs/grab.gif" width="420"> |
 |---|---|
-| **1 hit → rush → 3 hits**<br>Targets players who stay back and attack only during the boss's recovery. | **1 hit → grab**<br>Targets players who only dash. |
+| **3-hit combo → rush** | **3-hit combo → grab** |
 | <img src="docs/gifs/offbeat.gif" width="420"> | <img src="docs/gifs/jump3.gif" width="420"> |
-| **Off-beat 3-hit combo**<br>Targets players who parry a lot. | **Jump attack ×3**<br>Targets players who guard. |
+| **Off-beat 3-hit combo** | **Jump attack** |
 
-The fifth stage-2 pattern is the stage-1 3-hit combo. The GIFs come from fixed scripts with a fighter that follows
-one habit (`tools/build.sh gifs`). These pairs are the design intent. The pairs the network learned are listed under [Results](#results).
+The GIFs were recorded from fixed scripts before this version. The first two show the old "1 hit → rush" and "1 hit → grab" patterns,
+which are now a 3-hit combo cancelled after its first hit. The last one shows the old three-jump version of the jump attack.
 
-## Neural network
+## Plans
 
 ```
-bot fleet ─▶ data factory ─▶ training (NumPy) ─▶ network.json ─▶ stage-2 pattern picker (C#)
+rest (in place, turning to face the player) → [run] → first move → [cancel] → follow-up move → next plan
 ```
 
-For each of the five stage-2 patterns, the network predicts the chance that the player gets hit by the pattern.
-The network does not choose patterns. A fixed rule turns the five predictions into the boss's pattern list,
-so odd network outputs cannot break the game.
+- **Rest.** 0.4, 0.8, or 1.2 seconds. The rest belongs to the move after it: after a short rest the fast 3-hit combo catches a 2-hit combo
+  pressed during the previous move's recovery, and after a long rest nothing does.
+- **Run.** If the plan runs, the boss runs at 840 px/s (twice the fighter's walking speed) to 280 px in front of the player and starts
+  the first move when it arrives. It turns to face the player on every tick. If the player is already within 280 px, it does not run.
+  A run that lasts more than 3 seconds stops where it is. While resting, the boss stays in place.
+- **Cancel.** The three combos have cancel points at the moment the next hit's windup would start. At a cancel point the boss drops
+  the rest of the move, turns to face the player, and starts the follow-up move on the same tick, without resting.
+  One cancel per plan; the follow-up plays to the end. If the boss is exhausted, the plan ends and the cancel is dropped.
+- **Random picking.** Each decision (first move, rest, run, cancel, cancel point, follow-up) uses its own seeded random stream
+  (`overfit/core/Det.cs`), so the same seed gives the same boss. Half of the combos are cancelled and half of the plans run
+  (`picker` in `overfit/data/balance.json`).
+- **Data only.** A move added to `overfit/data/patterns.json` and to the roster in `stages.json` becomes both a first move and a follow-up
+  for every cancel point, without code changes. A cancel point added to a move adds a cancel to that move's plans.
 
-### Input
+## Replays
 
-19 numbers computed from the player's dodge events in the current run (stage 1 and any stage-2 retries):
+Each finished attempt adds one JSON line to `user://attempts/<session seed>.jsonl`: the plans, the inputs (run-length encoded;
+the longest fight is about 27 KB), the dodge events, and a hash of the game data. Nothing is uploaded.
 
-| Feature | Meaning |
-|---|---|
-| `dash_timing_bias`, `dash_timing_var` | Mean and variance of dash timing error (early or late) |
-| `dash_direction_bias` | Dashes toward the boss or away from it |
-| `jump_timing_bias` | Mean jump timing error |
-| `jump_reliance`, `parry_reliance` | Share of attacks where jump or parry was chosen although another option would also have worked |
-| `airborne_at_impact` | Share of boss attacks that met the player in the air |
-| `parry_rate` | Share of parries that succeeded |
-| `greed` | Share of boss attacks that met the player in the middle of an attack |
-| `distance_bias` | Average distance to the boss (px) |
-| `guard_rate` | Share of boss attacks answered with guard |
-| 8 counts | Number of events behind the values above: total, dash, jump, parry, guard, guard broken, jump possible, parry possible |
+- `EXTRA="--history=<file> --attempt=N" tools/build.sh demo` replays an attempt with its saved inputs and compares the plans,
+  the length, the result, and every dodge event. It logs `replay_match`, `[E] replay_mismatch` (determinism broke),
+  or `[W] replay_data_changed` (the game data changed since the attempt).
+- Lines written by earlier versions have no inputs and cannot be replayed (`[E] replay_no_inputs`).
+- The result screen shows how the boss planned: the number of plans and cancels, the dodges used in the fight,
+  how many times each move appeared and hit, and each cancel pair.
 
-The counts let the network tell a value measured from 3 events apart from the same value measured from 300.
-`PlayerFeatures.From` computes the input. The data factory and the game call the same function.
+## The adaptive boss
 
-The pattern is not an input. Each pattern has its own output. Pattern tags (parryable, dash window, range, …) are not used,
-because the 3-hit combo and the off-beat 3-hit combo have identical tags and differ only in timing.
+Version 0.9 (tag [`v0.9.2`](https://github.com/Atralupus/OVERFIT/tree/v0.9.2)) had a neural network that predicted,
+from the player's stage-1 dodges, how likely the player was to be hit by each stage-2 pattern. It was removed with this version's
+move rework, because its outputs were tied to the old patterns. A new network that plans from recent and accumulated habits comes in
+slice 4 of the [design](docs/superpowers/specs/2026-09-29-똑똑한-보스-design.md) (Korean).
 
-### Training data
-
-One attempt produces about 20 dodge events, and no existing model uses this game's measurements. Training data comes from bots.
-
-- **Bot fleet.** 100,000 bots. Half rely on one option (dash, jump, parry, guard, or keeping distance). The other half mix
-  the four defensive options. Each bot also has a reaction time, timing noise, greed, preferred distance, and combo habits.
-  Bots send the same inputs as a player and fight under the real battle rules, without rendering.
-- **Data factory** (`tools/build.sh factory`, a .NET console). Each bot plays stage 1 until it wins (up to 5 tries), then stage 2
-  (up to 5 tries) with patterns drawn at random. Each stage-2 pattern instance becomes one sample: the 19 inputs at the start of
-  the attempt, the pattern, and a label (hit or not hit). 1,383,287 samples in about 105 seconds on 4 cores.
-- Random numbers are looked up by seed, stream, and key instead of drawn in sequence (`overfit/core/Det.cs`).
-  The same seed and commit give byte-identical data, regardless of thread count.
-
-### Model and training
-
-- MLP 19 → 32 → 32 → 5 with ReLU, about 1,900 parameters. NumPy with hand-written backpropagation, checked against finite differences.
-- Binary cross-entropy on the drawn pattern's output only. Output biases start at each pattern's base-rate logit.
-- Split by bot: 80% train, 10% validation, 10% test. Inputs standardized with training statistics. Adam, batch 1024, early stopping.
-- `tools/build.sh train` writes `overfit/data/network.json` (weights, standardization, base rates, training source) and `ml/report.md`.
-
-Test set (10,000 bots not used in training):
-
-| Pattern | Log loss | Base-rate log loss | ECE | AUC |
-|---|---|---|---|---|
-| 3-hit combo | 0.6131 | 0.6466 | 0.0085 | 0.653 |
-| Jump attack ×3 | 0.4595 | 0.4944 | 0.0052 | 0.687 |
-| 1 hit → rush | 0.6060 | 0.6473 | 0.0123 | 0.669 |
-| 1 hit → grab | 0.3639 | 0.3939 | 0.0090 | 0.695 |
-| Off-beat 3-hit combo | 0.6033 | 0.6296 | 0.0066 | 0.638 |
-
-### In the game
-
-- **Loading.** At boot the game loads `network.json`. `PlayerNet` runs the forward pass in C# with only + − × ÷ and comparisons,
-  in a fixed order. On 20 fixed inputs, Python and C# give bit-identical logits. `tools/build.sh check` compares them on every commit.
-  If the game data changed after training, boot logs `[net][W] stale`.
-- **Selection rule** (`NetworkPicker`), once at the start of each stage-2 attempt:
-  1. Compute the 19 inputs from the run's records. Fewer than 20 events: use all five patterns.
-  2. Get a logit for each pattern. Lift = logit − base-rate logit: how much more likely this player is to be hit than an average bot.
-  3. Targets: up to 2 patterns with lift ≥ 0.405 (1.5× the odds), largest first. No target: use all five patterns.
-  4. Breathing room: the non-target pattern with the lowest logit.
-  5. For the whole attempt, the boss draws only from the targets and the breathing-room pattern.
-
-  Lift is used instead of the raw hit chance so the boss does not simply pick what is hard for everyone.
-  Settings are in `overfit/data/balance.json` (`picker`). With all five patterns, the draw is identical to the random picker.
-- **Control arm.** Each stage-2 attempt flips a coin from the attempt seed: 70% network, 30% random. Logs show `arm=network` or `arm=uniform`.
-  Stage 1 is always random because it is where habits are measured.
-- **Report.** When a stage-2 attempt ends, win or lose, the result screen shows how the patterns were picked: the dodge counts
-  recorded before the attempt, each pattern's predicted hit chance (and the average), whether it was targeted, the breathing room, or unused,
-  and how many times each pattern appeared and hit.
-- **Attempt log.** Each finished attempt adds one JSON line to `user://attempts/<session seed>.jsonl`: arm, drawn patterns, dodge events,
-  the 19 inputs, hit or not for each pattern instance, and the network's decision. Nothing is uploaded.
-  - Replay an attempt with a bot: `EXTRA="--history=<file> --attempt=N" tools/build.sh demo`.
-  - Compare human logs with the bot fleet: copy the files to `ml/human/` and run `ml/.venv/bin/python ml/sim2real.py`.
-
-### Results
-
-50,000 bots not used in training (31,580 reached stage 2) played stage 2 twice with the same seeds: once against the network boss,
-once against the random boss (`tools/build.sh evaluate`, then `tools/build.sh validate`). Brackets are 95% bootstrap intervals over bots.
-
-| Check | Target | Result | |
-|---|---|---|---|
-| Guard bots get grab | Pattern drawn ≥ 1.5× as often as with the random boss, and hit rate up | 2.36×, +3.7 pts [+3.4, +4.1] | pass |
-| Parry bots get jump attack ×3 | Same | 1.93×, +2.9 pts [+2.5, +3.2] | pass |
-| Jump bots get rush | Same | 1.59×, +1.2 pts [+0.8, +1.6] | pass |
-| Dash bots get grab | Same | 1.38×, +1.5 pts [+1.2, +1.8] | fail |
-| Breathing room | In every narrowed attempt, and hit less than targets | Always present, 59% vs 89% hit | pass |
-| Not picking on weak players | ≥ 80% of network attempts by bots with no habit and slow, noisy reactions use all five patterns | 38% [36, 41] | fail |
-| Win rate does not collapse | Stage-2 win rate against the network boss ≥ half of the rate against the random boss | 52% vs 56% | pass |
-| Calibration | ECE ≤ 0.05 for each pattern | 0.004 to 0.022 | pass |
-
-- The pairs the network learned: dash → grab, guard → grab, parry → jump attack ×3, jump → rush.
-  For parry bots the network picks the off-beat combo 7.9% of the time (random: 20%). For guard bots it picks jump attack ×3 1.8% of the time.
-- Dash bots: the network often targets grab and jump attack ×3 together, so grab is one of three patterns.
-- Weak bots: even bots without a habit get uneven lifts across patterns (spread about 0.65), so one pattern often passes 0.405.
-- The network learned from bots, not people. `ml/sim2real.py` measures the gap once human logs exist.
-
-Full report: [`ml/validation.md`](ml/validation.md). Rule variants are compared in the
-[design document §7.1](docs/superpowers/specs/2026-09-28-패턴-고르는-망-design.md#71-같은-봇에게-망-보스와-무작위-보스) (Korean).
-
-### Files
+## Where things are
 
 | Part | Location |
 |---|---|
-| Bot fleet | `overfit/battle/rules/FleetBot.cs`, `BotTraits.cs`, `tools/factory/fleet.json` |
-| Input | `overfit/battle/rules/PlayerAxes.cs`, `PlayerFeatures.cs` |
-| Data factory, evaluation | `tools/factory/` |
-| Training, validation, sim-to-real | `ml/` |
-| Weights | `overfit/data/network.json` |
-| Forward pass | `overfit/battle/rules/PlayerNet.cs` |
-| Selection rule, coin | `overfit/battle/rules/NetworkPicker.cs`, `StageRoster.cs` |
-| Attempt log | `overfit/battle/rules/AttemptLog.cs`, `InstanceTracker.cs`, `overfit/battle/AttemptFile.cs` |
+| Moves, cancel points | `overfit/data/patterns.json` |
+| Boss numbers (rest, run) | `overfit/data/bosses.json` |
+| Picker settings | `overfit/data/balance.json` (`picker`) |
+| Plans and cancels | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `PlanFlow.cs`, `BattleSim.cs` |
+| Running | `overfit/battle/rules/BattleSim.cs`, `RushMotion.cs` |
+| Attempt log, replay | `overfit/battle/rules/AttemptLog.cs`, `InputTape.cs`, `Replay.cs`, `overfit/battle/debug/BattleDemo.cs` |
+| Bot fleet, data factory | `overfit/battle/rules/FleetBot.cs`, `BotTraits.cs`, `tools/factory/` |
 
 ## Play
 
@@ -159,7 +104,16 @@ If macOS blocks it, open System Settings → Privacy & Security and choose Open 
 | Guard | ↓ (S), hold |
 | Parry | K |
 
-Building from source needs Godot 4.7 (mono) and .NET 8. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Building from source needs Godot 4.7 (mono) and .NET 8. See [CONTRIBUTING.md](CONTRIBUTING.md) (Korean).
+
+| Command | What it does |
+|---|---|
+| `tools/build.sh check` | Format, build, rule tests, `.uid` pairs, hitbox shapes. The commit gate |
+| `tools/build.sh smoke` | Boots the game headless and tours the scenes |
+| `tools/build.sh demo [seed]` | One headless fight with a bot |
+| `tools/build.sh factory` | The bot fleet fights the boss and writes samples |
+| `tools/build.sh shots` | Screenshots |
+| `tools/build.sh export` | macOS build |
 
 ## License
 
