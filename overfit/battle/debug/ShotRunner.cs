@@ -211,6 +211,7 @@ public partial class ShotRunner : Node
         await Uppercut();
         await Offbeat();
         await Run();
+        await Bombs();
 
         Log.Marker("shots", "shots=done");
         GetTree().Quit();
@@ -625,6 +626,40 @@ public partial class ShotRunner : Node
 
         await _drive.Frames(24);
         await Screenshot.CaptureAsync(this, "battle-13e-run");
+    }
+
+    /// <summary>
+    /// 폭탄 세 장 (설계 2026-09-30 조각2 §5). 보스가 2.5초 쉬는 판(대본)에서 가만히 선 파이터(480)가 던진다 — 선딜 90틱의 한가운데(손 위의 폭탄 ·
+    /// 칼질 시트의 빌린 장), 놓은 뒤 15틱(나는 30틱의 한가운데 · 포물선의 꼭대기 근처), 떨어진 뒤 3프레임(보스 몸에서 터지는 주황 불꽃). 보스는 960
+    /// 떨어진 채 쉬어 판정이 없다 — 폭탄 그림만 본다.
+    /// </summary>
+    private async Task Bombs()
+    {
+        _battle = await _drive.NewBattle(new ScriptPlan(2.5, "3연격"));
+        if (_battle is null)
+        {
+            Log.Warn("shots", "battle_scene_missing script=bombs");
+            return;
+        }
+
+        await _drive.Until(() => _battle is { FighterFree: true }, _pollTimeout);
+        Tap("bomb");
+        await _drive.Until(() => _battle is { FighterThrowing: true }, _pollTimeout);
+        await _drive.Frames(45);
+        await Screenshot.CaptureAsync(this, "battle-14-bomb-windup");
+
+        await _drive.Until(() => _battle is { BombsInFlight: > 0 }, _patternTimeout);
+        await _drive.Frames(15);
+        await Screenshot.CaptureAsync(this, "battle-14b-bomb-flight");
+
+        await _drive.Until(() => _battle is { BombsLanded: > 0 }, _patternTimeout);
+        if (_battle is { BombsLanded: 0 })
+        {
+            Log.Warn("shots", "bomb_land_not_seen");
+        }
+
+        await _drive.Frames(3);
+        await Screenshot.CaptureAsync(this, "battle-14c-bomb-boom");
     }
 
     /// <summary>

@@ -9,7 +9,7 @@ namespace Overfit.Battle.Rules;
 ///
 /// <para>
 /// ⚠ <b>이것은 학습 데이터용 봇이 아니다.</b> 성향을 받는 봇 함대는 <see cref="FleetBot"/> 다(#104) — 이 봇은 스모크 · 데모 ·
-/// 리플레이 골든이 서는 자리라 동작을 안 바꾼다.
+/// 리플레이 골든이 서는 자리라 동작을 함부로 안 바꾼다(바꾸면 골든이 움직인다 — 폭탄을 던지게 한 조각 2 처럼 까닭을 골든 파일에 적는다).
 /// 다만 회피 수단을 <b>전부</b> 쓰도록 만든다 — 한 수단만 쓰는 봇은 나머지 축을 영원히 0 으로 만들고,
 /// 그러면 계측이 제대로 도는지조차 확인할 수 없다. 가드(이슈 #47)도 같은 이유로 여기 있다:
 /// 봇이 못 내는 기술은 봇 함대가 만드는 데이터에 영영 안 들어간다.
@@ -49,6 +49,18 @@ public sealed class BotPolicy
     /// </summary>
     private const int _chainOdds = 2;
 
+    /// <summary>
+    /// 몇 동작에 한 번 폭탄을 던질까 (설계 2026-09-30 조각2 §6). <see cref="_guardOdds"/> 와 같은 자리 · 같은 이유다 — 봇이 못 내는 기술은 스모크 ·
+    /// 데모 · 리플레이 골든이 못 본다. 넷에 하나면 한 판(동작 수십 번)에 열 개가 다 나가기 전에 판이 여러 번 던지기를 지난다.
+    /// </summary>
+    private const int _bombOdds = 3;
+
+    /// <summary>
+    /// 보스가 무너질 때 몇 번에 한 번 폭탄을 던질까 — 탈진한 보스 앞의 던지기는 산다(설계 2026-09-30 조각2 §2.2). 동작마다의 던지기(<see cref="_bombOdds"/>)는
+    /// 봇이 보스 곁에 붙어 있어 대개 그 동작의 판정에 끊긴다 — 이 갈래가 있어야 데모가 폭탄이 떨어지는 길까지 돈다.
+    /// </summary>
+    private const int _exhaustBombOdds = 2;
+
     private readonly ulong _seed;
     private int _decisions;
 
@@ -60,6 +72,15 @@ public sealed class BotPolicy
 
     /// <summary>이번 패턴을 가드로 받기로 했나.</summary>
     private bool _guardThis;
+
+    /// <summary>이번 동작(또는 탈진)에 폭탄을 던지기로 했나 — 서는 틱에 정하고, 던지거나 동작이 바뀌면 지운다.</summary>
+    private bool _bombThis;
+
+    /// <summary>지난 틱에 보스가 탈진해 있었나 — 꺼졌다 켜진 틱이 무너지는 틱이다.</summary>
+    private bool _lastExhausted;
+
+    /// <summary>본 탈진의 수 — 탈진에 던질지 고르는 좌표의 키다.</summary>
+    private int _exhausts;
 
     /// <summary>지금까지 시작한 칼질의 수. 2타를 이을지 고르는 좌표의 키다.</summary>
     private int _swings;
@@ -83,6 +104,15 @@ public sealed class BotPolicy
         // 가드는 **패턴이 시작할 때** 정한다 — 틱마다 마음이 바뀌면 버티는 일이 없다.
         DecideGuard(sim);
 
+        // 보스가 무너진 틱에 던질지 정한다 (_exhaustBombOdds). 같은 도메인이지만 k2 = 1 이라 동작마다의 좌표(k2 = 0)와 갈린다.
+        if (sim.Boss.Exhausted && !_lastExhausted)
+        {
+            _exhausts++;
+            _bombThis |= Det.RollInt(_seed, Det.Domain.BotBomb, _exhaustBombOdds, k1: _exhausts, k2: 1) == 0;
+        }
+
+        _lastExhausted = sim.Boss.Exhausted;
+
         // 칼질 중이면 할 일은 하나다 — 이을 작정이면 한 번 더 누른다 (설계 §5.1 · §5.4: 2연격도 엣지 두 번이다).
         // **패턴 갈래보다 먼저 본다**: 칼질은 끝까지 커밋이라 판정이 와도 할 수 있는 것이 없다.
         if (sim.Fighter.Action == FighterAction.Attack)
@@ -90,6 +120,17 @@ public sealed class BotPolicy
             bool press = _chainThis && sim.Fighter.ComboStep == 0 && !sim.Fighter.ComboQueued
                 && sim.Fighter.Affords(FighterAction.Attack);
             return new InputFrame(0, false, false, false, Attack: press);
+        }
+
+        // 던지기로 한 동작이면 손이 비는 첫 틱에 던진다 (설계 2026-09-30 조각2 §6) — 서 있거나 가드 중이고 땅이고 폭탄이 남았을 때다. 동작이 끝날
+        // 때까지 손이 안 비면 이번 동작은 건너뛴다(DecideGuard 가 지운다). 처음에는 서는 틱에만 보고 지웠는데, 그 틱의 봇은 대개 앞 판정을 피하는
+        // 중이라 데모 한 판(46초)에 한 번밖에 안 던졌다. **산 창 안에서는 안 던진다** — 판정이 지금이라 피할 차례다(설계 §3.6 ④); 창이 닫히면 던진다.
+        // **회피 갈래보다 먼저 본다**: 던지면 끝까지 커밋이라 이 동작의 다음 판정은 맞든 말든이다.
+        if (_bombThis && !sim.SwingLive && sim.Fighter.Action is FighterAction.Idle or FighterAction.Guard && sim.Fighter.Grounded
+            && sim.Fighter.BombsLeft > 0)
+        {
+            _bombThis = false;
+            return new InputFrame(0, false, false, false, false, Bomb: true);
         }
 
         // 패턴이 돌고 있으면 셋 중 하나로 반응한다. 무엇을 고를지는 좌표 조회로 정한다 —
@@ -160,7 +201,7 @@ public sealed class BotPolicy
     }
 
     /// <summary>
-    /// 새 패턴이 시작됐으면 이번 것을 가드로 받을지 <b>한 번</b> 정한다 (이슈 #47).
+    /// 새 패턴이 시작됐으면 이번 것을 가드로 받을지 · 폭탄을 던질지(설계 2026-09-30 조각2 §6) <b>한 번</b> 정한다 (이슈 #47).
     /// 패턴이 끝나면 가드도 놓는다 — 쉬는 시간에 버티고 있으면 스태미나가 안 차고,
     /// 그건 봇이 아무것도 못 하게 되는 길이다.
     /// </summary>
@@ -176,10 +217,14 @@ public sealed class BotPolicy
         if (now is null)
         {
             _guardThis = false;
+            _bombThis = false;
             return;
         }
 
         _patterns++;
         _guardThis = Det.RollInt(_seed, Det.Domain.BotGuard, _guardOdds, k1: _patterns) == 0;
+
+        // 가드로 받기로 한 동작은 안 던진다 — 둘 다 굴리고(좌표가 안 밀린다) 가드가 이긴다. 던지면 가드를 놓아 "받기로 한 창에서 가드를 놓는다".
+        _bombThis = Det.RollInt(_seed, Det.Domain.BotBomb, _bombOdds, k1: _patterns) == 0 && !_guardThis;
     }
 }

@@ -30,6 +30,12 @@ public sealed class BattleCues
     /// <summary>착지의 흰 충격파 (#83). 바닥 전체를 치는 판정이 서는 틱에 세운다.</summary>
     private readonly LandingWave _landingWave;
 
+    /// <summary>폭탄 (설계 2026-09-30 조각2 §5) — 떨어진 틱에 불꽃이, 끊긴 틱에 연기가 선다.</summary>
+    private readonly BombView _bombView;
+
+    /// <summary>지난 틱까지 보스에게 떨어진 폭탄 수 — 는 틱이 터지는 틱이다.</summary>
+    private int _lastBombsLanded;
+
     /// <summary>바닥의 폭(아레나 폭) — 판정이 이만큼을 다 덮어야 바닥 충격파다(<see cref="FloorWave.Find"/>).</summary>
     private readonly double _floorWidth;
 
@@ -65,6 +71,7 @@ public sealed class BattleCues
         FighterView fighterView,
         BossView bossView,
         LandingWave landingWave,
+        BombView bombView,
         double floorWidth,
         Action<double> shake,
         Action hitstop)
@@ -73,12 +80,14 @@ public sealed class BattleCues
         ArgumentNullException.ThrowIfNull(fighterView);
         ArgumentNullException.ThrowIfNull(bossView);
         ArgumentNullException.ThrowIfNull(landingWave);
+        ArgumentNullException.ThrowIfNull(bombView);
         ArgumentNullException.ThrowIfNull(shake);
         ArgumentNullException.ThrowIfNull(hitstop);
         _sim = sim;
         _fighterView = fighterView;
         _bossView = bossView;
         _landingWave = landingWave;
+        _bombView = bombView;
         _floorWidth = floorWidth;
         _shake = shake;
         _hitstop = hitstop;
@@ -164,6 +173,20 @@ public sealed class BattleCues
         }
 
         _lastBossExhausted = _sim.Boss.Exhausted;
+
+        // **폭탄이 떨어진 틱 · 던지기가 끊긴 틱** (설계 2026-09-30 조각2 §5). 떨어지면 보스 몸에서 불꽃이 터지고 칼보다 크게 흔들린다 — 칼보다 한 번에
+        // 크게 깎인 것이 보여야 한다. 보스의 번쩍임은 체력이 준 것(위)이 이미 건다. 끊기면 손에서 연기가 흩어진다 — 터지지 않았다.
+        if (_sim.BombsLanded > _lastBombsLanded)
+        {
+            _bombView.Boom();
+            _shake(0.9);
+        }
+
+        _lastBombsLanded = _sim.BombsLanded;
+        if (_sim.Fighter.ThrowLost)
+        {
+            _bombView.Fizzle();
+        }
 
         // **바닥 전체를 치는 판정이 서는 틱** (#83) — 착지의 흰 충격파. 패턴 id 가 아니라 규칙이 이 틱에 대 본 사각형으로 가른다
         // (FloorWave.Find): 높이와 끝을 그 사각형에서 읽으므로 띠가 판정과 다른 말을 할 수 없다. 창의 첫 틱이다 — 땅에 선 몸은 첫 틱에

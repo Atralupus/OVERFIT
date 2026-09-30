@@ -55,7 +55,7 @@ public sealed class BattleSetup
 }
 
 /// <summary>
-/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 경직 게이지 · 탈진 · 승패를 한 틱씩 민다.
+/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 폭탄 · 경직 게이지 · 탈진 · 승패를 한 틱씩 민다.
 ///
 /// <para>
 /// 보스의 판정을 파이터 몸에 대고, 그 결과를 몸에 싣고, 관측을 짓는 것은 여기가 아니라 <see cref="BossSwings"/> 다
@@ -127,22 +127,10 @@ public sealed class BattleSim
     private double? _goalX;
 
     /// <summary>
-    /// 계획의 달리기 (설계 2026-09-29 조각1 §5.2) — 쉬기가 끝나고 계획이 달리기를 골랐을 때 서고(<see cref="StartRun"/>), 닿거나 상한을 넘기면 걷고
-    /// 첫 동작을 세운다(<see cref="RunStep"/>). 탈진하면 계획과 같이 걷힌다(<see cref="ClearPattern"/>). 달리지 않으면 null.
+    /// 계획의 달리기 (설계 2026-09-29 조각1 §5.2) — 쉬기가 끝나고 계획이 달리기를 골랐을 때 서고(<see cref="StartRun"/>), 닿거나 상한을 넘기면 끝나
+    /// 첫 동작을 세운다. 탈진하면 계획과 같이 걷힌다(<see cref="ClearPattern"/>).
     /// </summary>
-    private IBossMotion? _run;
-
-    /// <summary>달리기가 끝나면 세울 첫 동작의 칸.</summary>
-    private int _runMove;
-
-    /// <summary>달린 틱 — 쉬기가 끝난 틱이 1 이다. 상한(<see cref="_runMaxTicks"/>)과 견준다.</summary>
-    private int _runTicks;
-
-    /// <summary>달리기를 선 자리(x) — 로그의 <c>moved=</c>(간 거리)를 잰다. 이미 멈출 거리 안이면 0 이다.</summary>
-    private double _runFrom;
-
-    /// <summary>달리기의 상한(틱) — <see cref="BossConfig.RunMaxSeconds"/> 를 판을 세울 때 한 번 바꾼다.</summary>
-    private readonly int _runMaxTicks;
+    private readonly PlanRun _run;
 
     /// <summary>
     /// 공중에서 무너진 보스가 따라 내리는 움직임 (#71 · 설계 §4.2) — 끊긴 도약의 <b>높이만</b> 쓴다. 땅에서 무너졌으면 null 이다.
@@ -170,6 +158,9 @@ public sealed class BattleSim
     /// <summary>이 틱에 보스에게 대 본 파이터 칼 — (모양, 놓은 자리). 안 댔으면 null.</summary>
     private (HitShape Shape, Placement At)? _attackTested;
 
+    /// <summary>나는 폭탄들 (설계 2026-09-30 조각2 §1.3) — 파이터가 놓은 틱에 날리고, 날 시간이 다 되면 보스에게 떨어뜨린다.</summary>
+    private readonly Bombs _bombs;
+
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
@@ -190,7 +181,8 @@ public sealed class BattleSim
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
         _swings = new BossSwings(Fighter, Boss, _credit, new JumpClearance(setup.Fighter));
         _poise = PoiseGauge.For(setup.Boss);
-        _runMaxTicks = TicksFor(setup.Boss.RunMaxSeconds);
+        _bombs = new Bombs(setup.Fighter.Bomb);
+        _run = new PlanRun(setup.Boss);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
         // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
@@ -303,7 +295,7 @@ public sealed class BattleSim
     /// 보스가 계획의 달리기로 파이터 앞까지 달리는 중인가 (설계 2026-09-29 조각1 §5.2) — 뷰가 <c>run</c> 을 돈다. 닿는 틱에는 거짓이다(그 틱에 첫
     /// 동작이 선다). 달리는 몸에는 판정이 없다.
     /// </summary>
-    public bool BossRunning => _run is not null;
+    public bool BossRunning => _run.Active;
 
     /// <summary>
     /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
@@ -385,6 +377,12 @@ public sealed class BattleSim
     public IReadOnlyList<HitRect> FighterTestedRects =>
         _attackTested is { } tested ? tested.Shape.Place(tested.At) : Array.Empty<HitRect>();
 
+    /// <summary>나는 폭탄들 (설계 2026-09-30 조각2 §1.3) — 뷰가 놓은 자리에서 보스의 지금 자리로 그린다. 규칙은 안 읽는다.</summary>
+    public IReadOnlyList<BombFlight> BombsInFlight => _bombs.InFlight;
+
+    /// <summary>이 판에서 보스에게 떨어진 폭탄 수 — 뷰가 앞 틱과 견줘 터지는 불꽃을 세운다(<c>BattleCues</c>). 규칙은 안 읽는다.</summary>
+    public int BombsLanded { get; private set; }
+
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
     {
@@ -399,7 +397,15 @@ public sealed class BattleSim
         // 탈진 · 붙들림에 드는 틱을 잡으려고 틱 시작의 둘을 잡아 둔다 — 로그가 무엇이 바닥냈는지 · 잡혔는지를 말한다(LogFighterExhaust · LogFighterHeld).
         bool wasExhausted = Fighter.Exhausted;
         bool wasHeld = Fighter.Held;
+        int bombsWere = Fighter.BombsLeft;
         Fighter.Tick(input, Dt);
+
+        // 던지는 틱이다 — 폭탄은 보스를 향해 가므로 보스 쪽으로 돌려세운다(설계 2026-09-30 조각2 §1.1). 파이터는 보스를 모른다.
+        if (Fighter.BombsLeft < bombsWere)
+        {
+            Fighter.Face(Boss.X);
+            LogThrow();
+        }
 
         // 보스 판정이 볼 가드 — 파이터를 민 **뒤**의 값이다. 막다가 든 탈진(딱 0 · 붕괴)은 판정이 이 가드를 봤을 때만 난다. 틱 시작에서
         // 잡으면 이 틱에 ↓ 를 눌러 선 가드가 깨져도 action 으로 적혔다(#71 계획 리뷰가 밟았다).
@@ -431,13 +437,16 @@ public sealed class BattleSim
             LogFighterExhaust(guarding);
         }
 
+        Bomb();
+
         BattleOutcome? outcome = Outcome();
         if (outcome is not null)
         {
             Result ??= outcome;
             // 판이 끝날 때 열린 창은 버린다 (#72 · 설계 §3.6 ③). 판을 끝낸 그 한 대는 닿은 것이라 관측이 있고, 남은 창에는
-            // 결과가 없다 — 지어낸 한 줄이 시도 기록으로 가 망의 입력이 된다.
+            // 결과가 없다 — 지어낸 한 줄이 시도 기록으로 가 망의 입력이 된다. 나는 폭탄도 버린다(설계 2026-09-30 조각2 §1.3).
             _swings.Cut(Ticks, "end");
+            _bombs.Clear();
         }
 
         return outcome;
@@ -496,7 +505,7 @@ public sealed class BattleSim
 
         if (_runner is null)
         {
-            if (_run is not null)
+            if (_run.Active)
             {
                 RunStep();
                 return;
@@ -577,7 +586,7 @@ public sealed class BattleSim
         _holdClock = false;
         _holdTicks = 0;
         _goalX = null;
-        _run = null;
+        _run.Clear();
     }
 
     /// <summary>
@@ -681,7 +690,7 @@ public sealed class BattleSim
             return;
         }
 
-        string id = Boss.CurrentPattern ?? (_run is not null ? "run" : "-");
+        string id = Boss.CurrentPattern ?? (_run.Active ? "run" : "-");
         _swings.Cut(Ticks, "exhaust");
 
         // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
@@ -716,6 +725,39 @@ public sealed class BattleSim
     /// </summary>
     private void LogFighterHeld() => Log.Debug("fighter", () => $"held exhausted={Fighter.Exhausted} tick={Ticks}");
 
+    /// <summary>파이터가 폭탄을 손에 든 틱 (설계 2026-09-30 조각2 §1.1) — 남은 개수를 같이 남긴다.</summary>
+    private void LogThrow() => Log.Debug("fighter", () => $"bomb_throw left={Fighter.BombsLeft} tick={Ticks}");
+
+    /// <summary>
+    /// 폭탄의 틱 (설계 2026-09-30 조각2 §1.2 · §1.3) — 칼 뒤 · 승패 앞이다. 날 시간이 다 된 폭탄이 보스에게 떨어지고(폭탄이 보스를 죽이면 이 틱의 승패가
+    /// 이긴다), 이 틱에 놓은 폭탄을 그 <b>뒤에</b> 날린다 — 그래야 놓은 틱 + 나는 틱에 떨어진다. 이 틱에 끊긴 던지기는 무엇이 끊었는지 남긴다: 끊은 판정의
+    /// 관측이 방금 들어왔다(<see cref="BossSwings.Resolve"/>). 경직 게이지는 안 채운다 — 폭탄은 탈진의 도구가 아니다.
+    /// </summary>
+    private void Bomb()
+    {
+        int landed = _bombs.Tick();
+        if (landed > 0)
+        {
+            BombsLanded += landed;
+            Boss.TakeDamage(landed * _bombs.Damage);
+            if (Log.IsEnabled(LogLevel.Debug))
+            {
+                Log.Debug("bomb", $"land dmg={landed * _bombs.Damage} boss_hp={Boss.Health} tick={Ticks}");
+            }
+        }
+
+        if (Fighter.ThrowReleased)
+        {
+            _bombs.Launch(Fighter.X, Fighter.Y);
+            Log.Debug("fighter", () => $"bomb_release x={Fighter.X:0} tick={Ticks}");
+        }
+
+        if (Fighter.ThrowLost)
+        {
+            Log.Debug("fighter", () => $"bomb_lost by={(Events.Count > 0 ? Events[^1].PatternId : "-")} tick={Ticks}");
+        }
+    }
+
     /// <summary>파이터 쪽으로 돌아선다 — 동작 사이(쉬기 · 달리기)의 틱마다. 돌아선 틱을 남긴다.</summary>
     private void FaceFighter()
     {
@@ -733,50 +775,27 @@ public sealed class BattleSim
     /// </summary>
     private void StartRun(int move)
     {
-        var def = new MotionDef { Id = "run", Speed = _setup.Boss.RunSpeed, Stop = _setup.Boss.RunStop };
         var bounds = new MotionBounds(Boss.HalfWidth, _setup.Arena.Width - Boss.HalfWidth, Standoff);
-        _run = BossMotions.Create(def, bounds);
-        _runMove = move;
-        _runTicks = 0;
-        _runFrom = Boss.X;
-        if (_run is null)
+        if (!_run.Start(move, Boss, Fighter.X, bounds, Ticks))
         {
-            // 등록표에서 run 이 빠졌다 — 규칙 위반이다(돌진의 motion_missing 과 같은 대우). 달리지 않고 첫 동작을 세운다.
-            Log.Error("boss", $"motion_missing id=run tick={Ticks}");
             Begin(move);
             return;
         }
 
-        Log.Debug("boss", () => $"run_begin d={Math.Abs(Fighter.X - Boss.X):0} tick={Ticks}");
         RunStep();
     }
 
     /// <summary>
-    /// 달리기 한 걸음 (§5.2) — 파이터 쪽으로 돌아서고(동작 사이라 잠금이 없다 — 파이터가 보스를 넘어가면 돌아서서 따라간다) 앞으로만 간다. 닿으면
-    /// 그 틱에 첫 동작을 세운다. 상한(<see cref="BossConfig.RunMaxSeconds"/>)까지 못 닿으면 <c>[W] run_timeout</c> 을 남기고 그 자리에서 세운다 —
-    /// 대시로 계속 도망가면 넘을 수 있다(안전장치다). 멈출 자리가 설 수 있는 범위 밖이면 움직임이 경계에서 끝낸다(<see cref="RushMotion"/>).
+    /// 달리기 한 걸음 (§5.2) — 파이터 쪽으로 돌아서고(동작 사이라 잠금이 없다 — 파이터가 보스를 넘어가면 돌아서서 따라간다) 앞으로만 간다(<see cref="PlanRun.Step"/>).
+    /// 닿거나 상한을 넘기면 그 틱에 첫 동작을 세운다.
     /// </summary>
     private void RunStep()
     {
         FaceFighter();
-        MotionStep step = _run!.Tick(new MotionContext(Boss.X, Boss.Y, Boss.Facing, Fighter.X, _runTicks++));
-        Boss.Move(step.X, step.Y, 0);
-        if (step.Finished)
+        if (_run.Step(Boss, Fighter.X, Ticks) is int move)
         {
-            // 이미 멈출 거리 안이었으면 ticks=1 · moved=0 이다 — 계획은 달리기를 골랐지만 안 달렸다.
-            Log.Debug("boss", () => $"run_end ticks={_runTicks} moved={Math.Abs(Boss.X - _runFrom):0} x={Boss.X:0} tick={Ticks}");
+            Begin(move);
         }
-        else if (_runTicks >= _runMaxTicks)
-        {
-            Log.Warn("boss", $"run_timeout ticks={_runTicks} d={Math.Abs(Fighter.X - Boss.X):0} x={Boss.X:0} tick={Ticks}");
-        }
-        else
-        {
-            return;
-        }
-
-        _run = null;
-        Begin(_runMove);
     }
 
     /// <summary>

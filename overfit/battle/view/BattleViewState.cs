@@ -25,6 +25,15 @@ public enum FighterPose
     /// 패리와 실루엣이 같아(<see cref="Parry"/>) 한 장면에서 가드를 말하는 것은 그 색과 링이다.
     /// </summary>
     Guard,
+
+    /// <summary>
+    /// 폭탄의 선딜 (설계 2026-09-30 조각2 §5) — 팩에 던지는 모션이 없어 칼질 시트의 한 장(<c>bomb.anim</c> · <c>bomb.windup_frame</c>)에 멈춰 서고,
+    /// 손 위에 폭탄을 그린다(<c>BombView</c>). 이 동안 맞으면 끊기고 폭탄을 잃는다.
+    /// </summary>
+    ThrowWindup,
+
+    /// <summary>폭탄을 놓은 뒤의 경직 — 같은 시트의 <c>bomb.release_frame</c> 에 멈춰 선다. 폭탄은 이미 날아갔다.</summary>
+    ThrowRelease,
     Hit,
 
     /// <summary>
@@ -101,6 +110,7 @@ public readonly record struct FighterFrame(
 /// <param name="BossMaxHealth">보스 최대 체력.</param>
 /// <param name="Poise">보스의 경직 게이지 0~1 (#71 · 설계 §4.5).</param>
 /// <param name="BossExhaustLeft">보스의 남은 탈진 0~1 — 0 이면 탈진이 아니다. 탈진 동안 게이지 자리가 이것을 푸르게 그린다.</param>
+/// <param name="Bombs">남은 폭탄 (설계 2026-09-30 조각2 §5).</param>
 public readonly record struct HudFrame(
     int Health,
     int MaxHealth,
@@ -110,7 +120,36 @@ public readonly record struct HudFrame(
     int BossHealth,
     int BossMaxHealth,
     double Poise,
-    double BossExhaustLeft);
+    double BossExhaustLeft,
+    int Bombs);
+
+/// <summary>나는 폭탄 하나를 그리는 데 필요한 것 — 규칙의 <c>BombFlight</c> 를 <c>Battle</c> 이 옮겨 준다(뷰가 규칙 타입에 안 묶이게 · <see cref="SwingSheet"/> 과 같은 이유).</summary>
+/// <param name="FromX">놓은 자리의 x — 파이터의 발 중심.</param>
+/// <param name="FromY">놓은 자리의 발바닥 높이.</param>
+/// <param name="Progress">난 몫 0 → 1.</param>
+public readonly record struct BombArc(double FromX, double FromY, double Progress);
+
+/// <summary>
+/// 한 렌더 프레임에 폭탄을 그리는 데 필요한 전부 (설계 2026-09-30 조각2 §5) — 손 위의 폭탄(선딜 동안)과 나는 폭탄들. 나는 폭탄은 놓은 자리에서
+/// 보스의 <b>지금</b> 자리로 간다 — 규칙이 보스를 따라가 떨어뜨리므로(§1.3) 그림도 매 프레임 보스를 다시 잰다.
+/// </summary>
+/// <param name="InHand">선딜 중인가 — 손 위에 폭탄을 그린다.</param>
+/// <param name="FighterX">파이터의 발 중심 x.</param>
+/// <param name="FighterY">파이터의 발바닥 높이.</param>
+/// <param name="Facing">파이터가 보는 쪽 — 손이 몸 앞에 있다.</param>
+/// <param name="Flying">나는 폭탄들.</param>
+/// <param name="BossX">보스의 발 중심 x.</param>
+/// <param name="BossY">보스의 발바닥 높이.</param>
+/// <param name="BossBodyHeight">보스의 키 — 폭탄은 몸 가운데에 떨어진다.</param>
+public readonly record struct BombFrame(
+    bool InHand,
+    double FighterX,
+    double FighterY,
+    int Facing,
+    System.Collections.Generic.IReadOnlyList<BombArc> Flying,
+    double BossX,
+    double BossY,
+    double BossBodyHeight);
 
 /// <summary>
 /// 칼질 한 칸을 <b>그리는 데</b> 필요한 것 — 어느 시트를 몇 fps 로, 몇 번 장부터 돌리고 몇 번 장에서 칼이 나가나.

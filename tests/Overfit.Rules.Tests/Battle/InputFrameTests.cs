@@ -17,11 +17,14 @@ public class InputFrameTests
         // 엣지 넷은 둘 중 하나라도 눌렀으면 눌린 것이다 — 멈춘 프레임 여럿에 걸쳐 누른 것도 다 모인다.
         var held = new InputFrame(0, false, Dash: true, false, false);
         held = InputFrame.Carry(held, new InputFrame(0, false, false, false, Attack: true));
+        held = InputFrame.Carry(held, new InputFrame(0, false, false, false, false, Bomb: true));
 
         InputFrame carried = InputFrame.Carry(held, default);
 
         carried.Dash.ShouldBeTrue();
         carried.Attack.ShouldBeTrue();
+        // 폭탄도 엣지다 (설계 2026-09-30 조각2 §4) — 히트스톱 동안 누른 L 이 사라지면 "눌렀는데 안 던진" 폭탄이 된다.
+        carried.Bomb.ShouldBeTrue();
         carried.Jump.ShouldBeFalse();
         carried.Parry.ShouldBeFalse();
     }
@@ -48,6 +51,7 @@ public class InputFrameTests
             default,
             new(1, Jump: true, false, false, false),
             new(-1, false, Dash: true, Parry: true, Attack: true, GuardHeld: true),
+            new(0, false, false, false, false, Bomb: true),
         };
 
         foreach (InputFrame now in frames)

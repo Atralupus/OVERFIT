@@ -67,6 +67,40 @@ public sealed class ComboStepDef
 }
 
 /// <summary>
+/// 파이터의 폭탄 (설계 2026-09-30 조각2 §1). <c>data/fighters.json</c> 의 <c>bomb</c> 이다. 규칙은 개수 · 시간 셋 · 피해를 읽고, 그림 셋
+/// (<see cref="Anim"/> · <see cref="WindupFrame"/> · <see cref="ReleaseFrame"/>)은 뷰만 읽는다 — 가드의 그림과 같은 자리다.
+/// </summary>
+public sealed class BombDef
+{
+    /// <summary>한 판에 드는 개수. 스태미나는 안 쓴다 — 개수가 값이다.</summary>
+    public required int Count { get; init; }
+
+    /// <summary>
+    /// 선딜(초) — 누른 틱이 첫 틱이고 마지막 틱의 끝에 놓는다. 커밋이라 이 동안 아무것도 못 하고, 맞으면 끊기고 폭탄을 잃는다. 틱으로 센다
+    /// (<c>BattleSim.TicksFor</c> · <c>FighterDataTests</c> 가 틱에 떨어지는지 본다).
+    /// </summary>
+    public required double ThrowSeconds { get; init; }
+
+    /// <summary>놓은 뒤 경직(초) — 폭탄은 이미 날아가 이 동안 맞아도 안 잃는다.</summary>
+    public required double RecoverSeconds { get; init; }
+
+    /// <summary>나는 시간(초) — 놓은 틱 뒤 이만큼 지난 틱에 보스에게 떨어진다. 나는 동안 보스를 따라간다(피하는 길이 없다).</summary>
+    public required double FlightSeconds { get; init; }
+
+    /// <summary>떨어질 때의 피해. 경직 게이지는 안 채운다 — 폭탄은 탈진의 도구가 아니다.</summary>
+    public required int Damage { get; init; }
+
+    /// <summary>던지는 그림의 시트 — 팩에 던지는 모션이 없어 칼질 시트를 빌린다. <b>규칙은 안 읽는다.</b></summary>
+    public required string Anim { get; init; }
+
+    /// <summary>선딜 동안 붙드는 장(0부터).</summary>
+    public required int WindupFrame { get; init; }
+
+    /// <summary>놓은 틱부터 경직 동안 붙드는 장(0부터).</summary>
+    public required int ReleaseFrame { get; init; }
+}
+
+/// <summary>
 /// 캐릭터 한 종의 수치. <c>data/fighters.json</c> 의 모양이고 키는 snake_case 로 변환된다.
 /// <b>여기 없는 수치를 C# 에 상수로 두지 않는다.</b>
 /// </summary>
@@ -183,6 +217,9 @@ public sealed class FighterConfig
 
     /// <summary>초당 회복량. 행동 중에는 회복하지 않는다 — <b>가드 중에도 안 찬다.</b></summary>
     public required double StaminaRegen { get; init; }
+
+    /// <summary>폭탄 (설계 2026-09-30 조각2 §1.4).</summary>
+    public required BombDef Bomb { get; init; }
 
     /// <summary>
     /// <c>assets/spriteframes/&lt;id&gt;.tres</c> 의 id. <b>규칙은 이 값을 안 쓴다</b> — 뷰가 읽어 그릴 뿐이다.

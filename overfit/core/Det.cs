@@ -144,6 +144,12 @@ public static class Det
         /// </summary>
         public const uint PlanRun = 15;
 
+        /// <summary>
+        /// 데모 봇이 <b>폭탄을 던지나</b> (설계 2026-09-30 조각2 §6) — 동작이 설 때 <c>RollInt(시드, BotBomb, 3, k1: 본 동작 수)</c>, 보스가 무너질 때
+        /// <c>RollInt(시드, BotBomb, 2, k1: 본 탈진 수, k2: 1)</c> 가 0 이면 던진다. 가드(4)와 같은 키를 쓰지만 도메인이 달라 따로 굴린다.
+        /// </summary>
+        public const uint BotBomb = 16;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -162,6 +168,7 @@ public static class Det
             PlanNext => "plan_next",
             PlanRest => "plan_rest",
             PlanRun => "plan_run",
+            BotBomb => "bot_bomb",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }

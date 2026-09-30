@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using Overfit.Battle.Rules;
 using Overfit.Battle.View;
@@ -48,6 +49,9 @@ public partial class Battle : Node2D
 
     /// <summary>잡기의 흰 구 (#78 · 설계 §4.7) — World 안에 세운다(두 몸과 같이 흔들린다). 규칙의 단계와 잡힘을 받아 그리기만 한다.</summary>
     private GrabOrb _grabOrb = null!;
+
+    /// <summary>폭탄 (설계 2026-09-30 조각2 §5) — 손 위의 폭탄 · 나는 폭탄 · 불꽃 · 연기. 흰 구와 같이 World 안에 세운다.</summary>
+    private BombView _bombView = null!;
     private Node2D _world = null!;
     private Vector2 _worldHome;
 
@@ -231,6 +235,18 @@ public partial class Battle : Node2D
     public bool BossRunning => !_broken && !_over && _sim.BossRunning;
 
     /// <summary>
+    /// 파이터가 폭탄의 선딜 중인가 (설계 2026-09-30 조각2 §5). 위와 같이 디버그 전용 읽기다 — 손 위의 폭탄 장(<c>battle-14-bomb-windup</c>)을 찍으려면
+    /// 던지기에 든 것을 규칙에게 물어야 한다.
+    /// </summary>
+    public bool FighterThrowing => !_broken && !_over && _sim.Fighter.Throwing;
+
+    /// <summary>나는 폭탄 수 (설계 2026-09-30 조각2 §5). 위와 같이 디버그 전용 읽기다 — 나는 폭탄 장을 찍는다.</summary>
+    public int BombsInFlight => _broken ? 0 : _sim.BombsInFlight.Count;
+
+    /// <summary>보스에게 떨어진 폭탄 수 (설계 2026-09-30 조각2 §5). 위와 같이 디버그 전용 읽기다 — 터지는 불꽃 장을 찍는다.</summary>
+    public int BombsLanded => _broken ? 0 : _sim.BombsLanded;
+
+    /// <summary>
     /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82) 중이 아니고 굳어 있지도(탈진 · 붙들림 — <c>Fighter.Locked</c>) 않다.
     /// 위와 같이 디버그 전용 읽기다 — 스크린샷이 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자
     /// 둘째 J 가 1타의 경직에 떨어져 2타가 됐다. 굳음은 탈진만 보던 것을 <c>Locked</c> 로 넓혔다(#96) — 붙들린 파이터도 선 자세(Idle)라, 탈진만
@@ -347,20 +363,25 @@ public partial class Battle : Node2D
             MaxTicks = battle.MaxTicks,
         });
 
-        // 바닥 충격파는 판정이 바닥 전체를 덮었는지를 아레나 폭으로 잰다(#83) — 판을 세운 바로 그 폭이다.
-        _cues = new BattleCues(_sim, _fighterView, _bossView, _landingWave, battle.ArenaWidth, ShakeFor, StartHitstop);
+        _grabOrb = new GrabOrb();
+        _world.AddChild(_grabOrb);
+        _bombView = new BombView();
+        _world.AddChild(_bombView);
 
-        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59). 가드가 멈춰 서는 장도 데이터다(#96).
+        // 바닥 충격파는 판정이 바닥 전체를 덮었는지를 아레나 폭으로 잰다(#83) — 판을 세운 바로 그 폭이다.
+        _cues = new BattleCues(_sim, _fighterView, _bossView, _landingWave, _bombView, battle.ArenaWidth, ShakeFor, StartHitstop);
+
+        // 칼질마다의 시트(시작하는 장 · 칼이 나가는 장 · 속도)를 건넨다 (이슈 #54 · #59). 가드 · 던지기가 멈춰 서는 장도 데이터다(#96 · 조각2 §5).
+        BombDef bomb = _fighterConfig.Bomb;
         _fighterView.Load(
             _fighterConfig.Sprite,
             Swings(_fighterConfig),
             new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
             _fighterConfig.ParryAnimFrames,
-            new StillFrame(_fighterConfig.GuardAnim, _fighterConfig.GuardFrame));
+            new StillFrame(_fighterConfig.GuardAnim, _fighterConfig.GuardFrame),
+            new StillFrame(bomb.Anim, bomb.WindupFrame),
+            new StillFrame(bomb.Anim, bomb.ReleaseFrame));
         _bossView.Load(_bossConfig.Sprite);
-
-        _grabOrb = new GrabOrb();
-        _world.AddChild(_grabOrb);
 
         if (GetTree().DebugCollisionsHint)
         {
@@ -476,14 +497,15 @@ public partial class Battle : Node2D
         // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
         // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
         //
-        // 가드만 레벨이다(↓ 를 누르고 있는 동안 · 설계 §5.2). 패리는 누르는 것 한 번이다(0.333초 커밋 · 설계 §5.3).
+        // 가드만 레벨이다(↓ 를 누르고 있는 동안 · 설계 §5.2). 패리는 누르는 것 한 번이다(0.333초 커밋 · 설계 §5.3). 폭탄도 엣지다(L · 조각2 §1.1).
         return new InputFrame(
             move,
             Input.IsActionJustPressed("jump"),
             Input.IsActionJustPressed("dash"),
             Input.IsActionJustPressed("parry"),
             Input.IsActionJustPressed("attack"),
-            GuardHeld: Input.IsActionPressed("guard"));
+            GuardHeld: Input.IsActionPressed("guard"),
+            Bomb: Input.IsActionJustPressed("bomb"));
     }
 
     /// <summary>
@@ -665,6 +687,17 @@ public partial class Battle : Node2D
             _sim.Fighter.X,
             _sim.Fighter.Y));
 
+        // 폭탄 — 끝난 판은 손 위의 폭탄을 안 그린다(흰 구와 같은 까닭 · 죽는 모션 위에 폭탄이 떠 있다). 나는 폭탄은 규칙이 판 끝에 버렸다.
+        _bombView.Show(new BombFrame(
+            live && _sim.Fighter.Throwing,
+            _sim.Fighter.X,
+            _sim.Fighter.Y,
+            _sim.Fighter.Facing,
+            [.. _sim.BombsInFlight.Select(b => new BombArc(b.FromX, b.FromY, b.Progress))],
+            _sim.Boss.X,
+            _sim.Boss.Y,
+            _bossConfig.Height));
+
         _hud.Show(new HudFrame(
             _sim.Fighter.Health,
             _fighterConfig.MaxHealth,
@@ -674,7 +707,8 @@ public partial class Battle : Node2D
             _sim.Boss.Health,
             _bossConfig.MaxHealth,
             _sim.Poise.Max <= 0 ? 0 : _sim.Poise.Value / _sim.Poise.Max,
-            _sim.Boss.ExhaustLeft));
+            _sim.Boss.ExhaustLeft,
+            _sim.Fighter.BombsLeft));
 
         _hitboxDebug?.Show(
             _sim.BossTestedRects,
@@ -710,6 +744,7 @@ public partial class Battle : Node2D
             FighterAction.Attack => FighterPose.Attack,
             FighterAction.Parry => FighterPose.Parry,
             FighterAction.Guard => FighterPose.Guard,
+            FighterAction.Throw => _sim.Fighter.Throwing ? FighterPose.ThrowWindup : FighterPose.ThrowRelease,
             _ => _cues.Walking ? FighterPose.Run : FighterPose.Idle,
         };
     }

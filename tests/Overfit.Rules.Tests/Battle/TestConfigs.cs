@@ -89,6 +89,19 @@ public static class TestConfigs
             GuardAnim = "attack2",
             GuardFrame = 1,
             StaminaRegen = 40,
+            // 폭탄은 **실제 값 그대로**다 (설계 2026-09-30 조각2 §1.4) — 가드 · 패리와 같이 캐릭터 성능이 아니라 조작의 정의다. 보스가 끊어야 하는
+            // 틱(누른 틱 + 88)이 선딜 90틱에서 나오므로, 여기서 다르면 테스트가 말하는 "끊긴다" 가 게임의 것이 아니게 된다. 90 · 15 · 30틱.
+            Bomb = new BombDef
+            {
+                Count = 10,
+                ThrowSeconds = 1.5,
+                RecoverSeconds = 0.25,
+                FlightSeconds = 0.5,
+                Damage = 60,
+                Anim = "attack",
+                WindupFrame = 1,
+                ReleaseFrame = 4,
+            },
             Sprite = "test_unit",
         };
     }

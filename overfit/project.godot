@@ -62,7 +62,7 @@ move_right={
 "events": [Object(InputEventKey,"keycode":4194321,"pressed":true), Object(InputEventKey,"keycode":68,"pressed":true)]
 }
 
-; 아래 넷은 엣지로 읽는다 (IsActionJustPressed). 레벨로 읽으면 누르고 있는 동안 매 틱 발동한다.
+; 아래 다섯은 엣지로 읽는다 (IsActionJustPressed). 레벨로 읽으면 누르고 있는 동안 매 틱 발동한다.
 jump={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"keycode":32,"pressed":true)]
@@ -78,6 +78,11 @@ parry={
 attack={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"keycode":74,"pressed":true)]
+}
+; 폭탄은 L 이다 (설계 2026-09-30 조각2 §1.1) — 공격 J · 패리 K 옆이라 한 손이 세 키를 다 쥔다.
+bomb={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"keycode":76,"pressed":true)]
 }
 
 ; 가드만 **레벨**로 읽는다 (IsActionPressed) — 누르고 있는 동안이 곧 가드다 (설계 §5.2). ↓ 와 S.

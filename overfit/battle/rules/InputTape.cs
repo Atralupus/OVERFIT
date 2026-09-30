@@ -9,9 +9,10 @@ namespace Overfit.Battle.Rules;
 /// (<see cref="Replay"/>)가 <see cref="Play"/> 로 틱마다 그대로 다시 넣는다.
 ///
 /// <para>
-/// <b>코드는 계약이다</b> — 이동 +1 을 <c>&lt;&lt; 5</c> · 점프 1 · 대시 2 · 패리 4 · 공격 8 · 가드 16 을 더한 0 ~ 95. 디스크에 남는 형식이라 한 번 쓴
-/// 줄은 이 값으로 읽힌다: 비트 하나를 옮기면 옛 줄이 다른 판으로 되살아난다(<c>Det</c> 의 상수와 같은 대우). 입력 칸을 하나 더하면 96 위에 새 비트를
-/// 얹는다 — 있는 비트는 안 옮긴다.
+/// <b>코드는 계약이다</b> — 이동 +1 을 <c>&lt;&lt; 5</c> · 점프 1 · 대시 2 · 패리 4 · 공격 8 · 가드 16 을 더한 0 ~ 95 에, 폭탄(설계 2026-09-30
+/// 조각2 §4)이면 96 을 더한 0 ~ 191. 디스크에 남는 형식이라 한 번 쓴 줄은 이 값으로 읽힌다: 비트 하나를 옮기면 옛 줄이 다른 판으로 되살아난다
+/// (<c>Det</c> 의 상수와 같은 대우). 입력 칸을 하나 더하면 지금 가짓수 위에 새 자리를 얹는다 — 있는 자리는 안 옮긴다. 폭탄이 그렇게 들어왔다:
+/// 조각 1 이 쓴 줄(0 ~ 95)은 폭탄을 안 누른 같은 입력으로 읽힌다.
 /// </para>
 ///
 /// <para>
@@ -21,8 +22,8 @@ namespace Overfit.Battle.Rules;
 /// </summary>
 public sealed class InputTape
 {
-    /// <summary>코드의 가짓수 — 이동 셋 × 버튼 다섯의 켜고 끔.</summary>
-    public const int Codes = 96;
+    /// <summary>코드의 가짓수 — 이동 셋 × 버튼 다섯의 켜고 끔 × 폭탄의 켜고 끔.</summary>
+    public const int Codes = 192;
 
     private const int _jump = 1;
     private const int _dash = 2;
@@ -30,6 +31,9 @@ public sealed class InputTape
     private const int _attack = 8;
     private const int _guard = 16;
     private const int _moveShift = 5;
+
+    /// <summary>폭탄 — 폭탄 칸이 생기기 전의 가짓수(96) 위에 얹는다. 비트가 아니라 더하는 자리다: 이동이 셋이라 96 은 2 의 거듭제곱이 아니다.</summary>
+    private const int _bomb = 96;
 
     private readonly List<int[]> _runs = new();
 
@@ -48,30 +52,34 @@ public sealed class InputTape
             throw new ArgumentOutOfRangeException(nameof(input), input.Move, "이동은 −1 · 0 · +1 뿐이다");
         }
 
-        return ((input.Move + 1) << _moveShift)
+        int code = ((input.Move + 1) << _moveShift)
             | (input.Jump ? _jump : 0)
             | (input.Dash ? _dash : 0)
             | (input.Parry ? _parry : 0)
             | (input.Attack ? _attack : 0)
             | (input.GuardHeld ? _guard : 0);
+        return input.Bomb ? code + _bomb : code;
     }
 
     /// <summary>코드 하나의 입력.</summary>
-    /// <exception cref="ArgumentOutOfRangeException">0 ~ 95 밖이다.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">0 ~ 191 밖이다.</exception>
     public static InputFrame Frame(int code)
     {
         if (code is < 0 or >= Codes)
         {
-            throw new ArgumentOutOfRangeException(nameof(code), code, "코드는 0 ~ 95 다");
+            throw new ArgumentOutOfRangeException(nameof(code), code, "코드는 0 ~ 191 이다");
         }
 
+        bool bomb = code >= _bomb;
+        int rest = bomb ? code - _bomb : code;
         return new InputFrame(
-            (sbyte)((code >> _moveShift) - 1),
-            (code & _jump) != 0,
-            (code & _dash) != 0,
-            (code & _parry) != 0,
-            (code & _attack) != 0,
-            (code & _guard) != 0);
+            (sbyte)((rest >> _moveShift) - 1),
+            (rest & _jump) != 0,
+            (rest & _dash) != 0,
+            (rest & _parry) != 0,
+            (rest & _attack) != 0,
+            (rest & _guard) != 0,
+            bomb);
     }
 
     /// <summary>한 틱의 입력을 넣는다 — 앞 칸과 같으면 그 칸이 한 틱 길어진다.</summary>
@@ -91,7 +99,7 @@ public sealed class InputTape
     }
 
     /// <summary>
-    /// 칸들의 틀린 곳 — 모양(<c>[코드, 틱 수]</c> 둘) · 코드(0 ~ 95) · 틱 수(1 이상). 첫 틀린 칸을 말하고, 없으면 null. 줄을 읽는 쪽
+    /// 칸들의 틀린 곳 — 모양(<c>[코드, 틱 수]</c> 둘) · 코드(0 ~ 191) · 틱 수(1 이상). 첫 틀린 칸을 말하고, 없으면 null. 줄을 읽는 쪽
     /// (<see cref="AttemptLog.Parse"/>)이 파일:줄을 붙여 멈춘다.
     /// </summary>
     public static string? Problem(IReadOnlyList<int[]> runs)
@@ -108,7 +116,7 @@ public sealed class InputTape
 
             if (run[0] is < 0 or >= Codes)
             {
-                return $"{i}번 칸 {shown} — 코드가 0 ~ 95 밖이다";
+                return $"{i}번 칸 {shown} — 코드가 0 ~ {Codes - 1} 밖이다";
             }
 
             if (run[1] < 1)

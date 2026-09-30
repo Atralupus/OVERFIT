@@ -252,6 +252,21 @@ public sealed class FeelBalance
     /// 끝(<c>To</c>)도 같이 고친다 — 전에는 이 주석이 거꾸로 GIF 의 구간을 까닭으로 들었다(#96).
     /// </summary>
     public required double GrabOrbFadeSeconds { get; init; }
+
+    /// <summary>폭탄의 반지름(px · 설계 2026-09-30 조각2 §5) — 손 위와 나는 동안 같은 크기다. 검은 원에 불꽃이 튀는 심지를 단다.</summary>
+    public required double BombRadius { get; init; }
+
+    /// <summary>손의 자리 — 파이터 발 중심에서 앞으로(px). 선딜 동안 폭탄을 여기 그리고 나는 폭탄도 여기서 떠난다.</summary>
+    public required double BombHandX { get; init; }
+
+    /// <summary>손의 자리 — 파이터 발바닥에서 위로(px).</summary>
+    public required double BombHandY { get; init; }
+
+    /// <summary>나는 폭탄의 포물선 높이(px) — 손과 보스 몸 가운데를 잇는 선 위로 가운데에서 이만큼 뜬다.</summary>
+    public required double BombArcHeight { get; init; }
+
+    /// <summary>폭탄이 터지는 불꽃 원의 길이(초) — 반지름은 <c>parry_ring_from</c> → <c>parry_ring_to</c> 의 두 배로 퍼진다(보스 몸을 덮을 만큼).</summary>
+    public required double BombBurstSeconds { get; init; }
 }
 
 /// <summary>

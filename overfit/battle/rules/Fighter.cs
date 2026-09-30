@@ -32,6 +32,13 @@ public enum FighterAction
     /// 풀린다. 땅에서만 서고, 커밋이 아니라 자세라 그 위에서 바로 공격 · 패리 · 대시로 넘어간다.
     /// </summary>
     Guard,
+
+    /// <summary>
+    /// 폭탄을 던진다 (설계 2026-09-30 조각2 §1.1) — 땅에서만 서고 <b>끝까지 커밋한다</b>: 선딜(<c>bomb.throw_seconds</c>)의 마지막 틱에 놓고
+    /// 놓은 뒤 경직(<c>bomb.recover_seconds</c>)까지가 던지기다. 칼질과 달리 <b>놓기 전에 맞으면 끊기고 폭탄을 잃는다</b>(<see cref="Fighter.TakeDamage"/>) —
+    /// 폭탄을 든 손이 맞으면 놓친다. 그래야 보스가 끊으려는 싸움이 선다.
+    /// </summary>
+    Throw,
 }
 
 /// <summary>
@@ -102,6 +109,18 @@ public sealed class Fighter
     /// </summary>
     private bool _parryLanded;
 
+    /// <summary>던지기의 선딜(틱) — <c>bomb.throw_seconds</c> 를 세울 때 한 번 바꾼다. 이 틱 수의 마지막 틱 끝에 놓는다.</summary>
+    private readonly int _throwTicks;
+
+    /// <summary>놓은 뒤 경직(틱) — <c>bomb.recover_seconds</c>. 칼질 뒤 경직과 같은 칸(<see cref="_stiffLeft"/>)을 탄다.</summary>
+    private readonly int _throwRecoverTicks;
+
+    /// <summary>지금 던지기의 선딜을 몇 틱 셌나 — 누른 틱이 1 이다(<see cref="Tick"/> 가 <see cref="Begin"/> 뒤에 <see cref="Advance"/> 를 부른다).</summary>
+    private int _throwTick;
+
+    /// <summary>지금 던지기가 이미 놓았나 — 놓은 뒤에는 맞아도 폭탄을 안 잃는다.</summary>
+    private bool _released;
+
     public Fighter(FighterConfig config, Arena arena, double x)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -121,6 +140,9 @@ public sealed class Fighter
 
         _dashRecoverTicks = StiffTicks(config.DashRecover);
         _parryStiffTicks = StiffTicks(config.ParryStiff);
+        BombsLeft = config.Bomb.Count;
+        _throwTicks = BattleSim.TicksFor(config.Bomb.ThrowSeconds);
+        _throwRecoverTicks = StiffTicks(config.Bomb.RecoverSeconds);
     }
 
     /// <summary>
@@ -245,6 +267,24 @@ public sealed class Fighter
     /// <summary>1타 도중 다음 칼을 눌러 두었나. 봇이 "이미 눌렀다" 를 안 되풀이하려고 본다.</summary>
     public bool ComboQueued => _comboQueued;
 
+    /// <summary>남은 폭탄 — 누를 때 손에 들며 준다. 끊겨 잃은 폭탄은 안 돌아온다(설계 2026-09-30 조각2 §1.2). HUD 가 그린다.</summary>
+    public int BombsLeft { get; private set; }
+
+    /// <summary>던지기의 선딜 중인가 — 놓기 전이다. 이 동안 맞으면 끊기고 폭탄을 잃는다. 뷰가 손 위의 폭탄을 그린다.</summary>
+    public bool Throwing => Action == FighterAction.Throw && !_released;
+
+    /// <summary>
+    /// 이 틱에 폭탄을 놓았나 — <b>한 틱의 일이다</b>: 다음 <see cref="Tick"/> 이 지운다. 판이 이것을 보고 폭탄을 날린다(<c>Bombs</c>). 판은 파이터를
+    /// 먼저 미므로 놓는 틱에 닿은 보스의 판정은 늦다(설계 2026-09-30 조각2 §1.2).
+    /// </summary>
+    public bool ThrowReleased { get; private set; }
+
+    /// <summary>
+    /// 이 틱에 던지기가 끊겨 폭탄을 잃었나 — 맞음 · 잡힘(<see cref="Stop"/>). <b>한 틱의 일이다</b>: 다음 <see cref="Tick"/> 이 지운다. 보스의 판정은
+    /// 파이터의 틱 뒤에 오므로(<c>BattleSim.Tick</c>) 판과 뷰는 그 틱이 끝난 뒤에 읽는다.
+    /// </summary>
+    public bool ThrowLost { get; private set; }
+
     /// <summary>지금 칼질의 한 칸 (<c>fighters.json</c> 의 <c>combo</c>).</summary>
     private ComboStepDef Step => _config.Combo[_step];
 
@@ -262,8 +302,30 @@ public sealed class Fighter
 
     /// <summary>
     /// 맞았다. <b>칼질은 안 끊긴다</b> — 끝까지 커밋이다(설계 §5.1). 행동 뒤 경직(#82)도 안 끊긴다. 맞으면 끊기던 것은 차지였고, 차지는 없어졌다.
+    /// <b>던지기의 선딜만 예외다</b> (설계 2026-09-30 조각2 §1.2) — 폭탄을 든 손이 맞으면 놓친다: 던지기가 끝나고 폭탄을 잃는다. 놓은 뒤(경직)는
+    /// 다른 행동처럼 안 끊긴다. 굳지는 않는다 — 곧장 다시 설 수 있다.
     /// </summary>
-    public void TakeDamage(int amount) => Health = Math.Max(0, Health - amount);
+    public void TakeDamage(int amount)
+    {
+        Health = Math.Max(0, Health - amount);
+        if (Throwing)
+        {
+            Stop();
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="targetX"/> 쪽으로 돌아선다 — 판이 던지는 틱에 부른다(설계 2026-09-30 조각2 §1.1): 폭탄은 보스를 향해 가므로 등을 보이며 던지는
+    /// 그림이 안 나오게 한다. 파이터는 보스를 모르므로(이 클래스의 머리말) 판이 보스의 자리를 준다. 겹치면 보던 쪽 그대로다(<c>Boss.Face</c> 와 같다).
+    /// </summary>
+    public void Face(double targetX)
+    {
+        int toward = Math.Sign(targetX - X);
+        if (toward != 0)
+        {
+            Facing = toward;
+        }
+    }
 
     /// <summary>
     /// 이만한 피해를 가드로 받아내는 데 드는 스태미나. <b>피해에 비례한다</b> —
@@ -362,6 +424,10 @@ public sealed class Fighter
 
     public void Tick(InputFrame input, double dt)
     {
+        // 던지기의 두 표시는 한 틱의 일이다 — 지난 틱에 판 · 뷰가 읽었다.
+        ThrowReleased = false;
+        ThrowLost = false;
+
         // 굳음은 틱 시작의 값으로 막는다 — Begin 이 그 값을 보고 Advance 가 그 뒤에 한 틱을 센다. Move · Fall 이 Advance 뒤의 값만
         // 보면 굳음의 마지막 틱(66번째)에 행동과 가드는 막혔는데 걷고 뛰었다(#71 계획 리뷰가 밟았다 — 옛 붕괴 고정도 같은 순서였다).
         // 이 틱에 든 굳음(끝나는 행동의 탈진)도 그 틱의 걸음부터 막는다.
@@ -404,6 +470,26 @@ public sealed class Fighter
         // 가드는 시간이 안 끝낸다 — 손가락이 끝낸다(Begin 이 본다). 그래서 Duration 표에 자리가 없다.
         if (Action == FighterAction.Guard)
         {
+            return;
+        }
+
+        // 던지기의 선딜 — 틱으로 센다(칼질처럼 초를 더해 가면 부동소수가 틱 수를 정한다 · _stiffTicks 의 주석). 마지막 틱의 끝에 놓고, 놓은 뒤
+        // 경직은 칼질 뒤 경직과 같은 칸을 탄다 — 그 마지막 틱에 행동이 끝난다(End).
+        if (Throwing)
+        {
+            if (++_throwTick < _throwTicks)
+            {
+                return;
+            }
+
+            _released = true;
+            ThrowReleased = true;
+            _stiffLeft = _throwRecoverTicks;
+            if (_stiffLeft == 0)
+            {
+                End();
+            }
+
             return;
         }
 
@@ -495,6 +581,13 @@ public sealed class Fighter
     /// </summary>
     private void Stop()
     {
+        // 놓기 전에 끝난 던지기는 폭탄을 잃는다 (설계 2026-09-30 조각2 §1.2) — 맞음(TakeDamage) · 잡힘(Grab)이 이 길로 온다. 덮어쓰지 않는다: 같은
+        // 틱에 판정 둘이 닿으면 두 번째 Stop 은 이미 선 몸을 멈춘다.
+        if (Throwing)
+        {
+            ThrowLost = true;
+        }
+
         Action = FighterAction.Idle;
         ActionElapsed = 0;
         _stiffLeft = 0;
@@ -548,7 +641,7 @@ public sealed class Fighter
     };
 
     /// <summary>
-    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리 — 행동 뒤 경직까지) 중이거나 굳었으면 입력을 버린다 — 공격 셋만 예외다:
+    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리 · 던지기 — 행동 뒤 경직까지) 중이거나 굳었으면 입력을 버린다 — 공격 셋만 예외다:
     /// 칼질 중의 공격은 다음 칼로 기억하고, 1타의 경직 중의 공격은 곧장 2타를 세우고(#82), <b>받아친</b> 패리의 커밋 · 경직 중의 공격은
     /// 곧장 1타를 세운다(되받아치기). 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
     /// </summary>
@@ -601,6 +694,7 @@ public sealed class Fighter
         FighterAction pressed = input.Dash ? FighterAction.Dash
             : input.Parry ? FighterAction.Parry
             : input.Attack ? FighterAction.Attack
+            : input.Bomb ? FighterAction.Throw
             : FighterAction.Idle;
 
         // 못 하는 행동은 안 누른 것과 같다(스태미나 · 공중 대시 한 번). 누른 것이 없으면 남는 것은 ↓ 하나다 —
@@ -635,6 +729,14 @@ public sealed class Fighter
         {
             _airDashUsed = true;
         }
+
+        // 폭탄은 누를 때 손에 든다 — 끊기면 그대로 잃는다(설계 2026-09-30 조각2 §1.2).
+        if (action == FighterAction.Throw)
+        {
+            BombsLeft--;
+            _throwTick = 0;
+            _released = false;
+        }
     }
 
     /// <summary>
@@ -650,9 +752,15 @@ public sealed class Fighter
     /// 공중 대시는 착지하거나 패리를 성공할 때까지 한 번뿐이다 (나인 솔즈) — 몸 충돌이 없어져 공중이 안전지대가 됐으므로,
     /// 무제한 공중 대시는 "공중에 떠서 계속 무적" 이라는 답 하나로 모든 패턴을 지운다.
     /// </para>
+    ///
+    /// <para>
+    /// 폭탄은 땅에서 · 남은 것이 있을 때만 던진다 (설계 2026-09-30 조각2 §1.1) — 값(스태미나)이 없고 개수가 값이다.
+    /// </para>
     /// </summary>
     private bool CanStart(FighterAction action) =>
-        (Cost(action) <= 0 || Stamina > 0) && !(action == FighterAction.Dash && !Grounded && _airDashUsed);
+        (Cost(action) <= 0 || Stamina > 0)
+        && !(action == FighterAction.Dash && !Grounded && _airDashUsed)
+        && !(action == FighterAction.Throw && (!Grounded || BombsLeft <= 0));
 
     /// <summary>
     /// 행동 중에는 회복하지 않는다 — 그래야 연속 행동에 값이 붙는다. <b>행동 뒤 경직도 행동이다</b>(#82 · Idle 이 아니다): 경직 동안 차면
