@@ -14,7 +14,8 @@ namespace Overfit.Rules.Tests.Battle;
 /// 78 에 들 판의 틱(B + 78)에 끊는다.
 ///
 /// <para>
-/// 판은 파이터 480 · 보스 1440 에서 서고, 보스는 첫 계획의 쉬기(0.8초 = 48틱) 동안 128px 걸어 와 1312 에서 첫 동작을 세운다. 보스는 안 죽는다.
+/// 판은 파이터 480 · 보스 1440 에서 서고, 보스는 첫 계획의 쉬기(0.8초 = 48틱) 동안 제자리라(설계 2026-09-29 조각1 §5.1) 1440 에서 첫 동작을
+/// 세운다. 보스는 안 죽는다.
 /// </para>
 /// </summary>
 public class CancelTests
@@ -70,8 +71,11 @@ public class CancelTests
         sim.Ticks.ShouldBe(begun + p);
     }
 
-    /// <summary>1타 사거리 안(보스와 356 떨어진 956)으로 걸어 들어가는 입력 — 판이 선 뒤 68틱 동안 오른쪽을 누른다(476px).</summary>
-    private static InputFrame WalkIn(int tick) => tick <= 68 ? _right : default;
+    /// <summary>
+    /// 1타 사거리 안(보스와 358 떨어진 1082)으로 걸어 들어가는 입력 — 판이 선 뒤 86틱 동안 오른쪽을 누른다(602px). 첫 동작(48틱에 선다)의 1타
+    /// 창(51틱)보다 한참 앞에 선다.
+    /// </summary>
+    private static InputFrame WalkIn(int tick) => tick <= 86 ? _right : default;
 
     [Theory]
     [InlineData(0, 78)]

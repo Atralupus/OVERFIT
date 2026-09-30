@@ -59,7 +59,7 @@ public class BossPoiseTests
     };
 
     /// <summary>
-    /// 보스는 안 움직이고(속도 0) 패턴 <see cref="Waiting"/> 하나만 돈다. 파이터가 걸어가 칼이 닿는 자리에 선 틱에 돌려준다.
+    /// 보스는 안 움직이고(쉬는 동안 제자리 · 패턴에 움직임이 없다) 패턴 <see cref="Waiting"/> 하나만 돈다. 파이터가 걸어가 칼이 닿는 자리에 선 틱에 돌려준다.
     /// <paramref name="gap"/> 이 크면 패턴이 안 선다 — 게이지의 산수만 볼 때다. 판을 미는 기다림은 이 파일에서 전부 틱 수로 묶는다:
     /// 판은 결과가 난 뒤에도 틱을 받아, 규칙이 깨진 날 묶지 않은 기다림은 실패하지 않고 게이트를 멈춰 세운다.
     /// </summary>
@@ -71,7 +71,7 @@ public class BossPoiseTests
             Arena = TestConfigs.Arena(),
             Fighter = fighter,
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: bossHealth ?? 999_999, moveSpeed: 0, rest: gap),
+            Boss = TestConfigs.Boss(maxHealth: bossHealth ?? 999_999, rest: gap),
             PatternIds = new[] { _waitId },
             Patterns = new Dictionary<string, PatternDef> { [_waitId] = Waiting(at, reach, window) },
             Seed = 1,

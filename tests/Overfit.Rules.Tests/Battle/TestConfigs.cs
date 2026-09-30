@@ -217,7 +217,7 @@ public static class TestConfigs
         PatternSim(SweepId, Sweep(maxDistance, activeSeconds, endAt), maxTicks: maxTicks);
 
     /// <summary>
-    /// 보스가 서서 패턴 하나(<paramref name="pattern"/>)만 되풀이하는 판 — 보스는 안 움직이고 안 죽는다(체력 999_999 · 속도 0) · 간격 0.2초(12틱)
+    /// 보스가 서서 패턴 하나(<paramref name="pattern"/>)만 되풀이하는 판 — 보스는 안 움직이고(쉬는 동안 제자리 · 달리지 않는다) 안 죽는다(체력 999_999) · 간격 0.2초(12틱)
     /// · 시드 1. 시험 패턴을 손으로 지어 규칙 하나를 재는 테스트들이 이 차림을 테스트마다 옮겨 적었다(#96). 파이터 · 모양 표 · 상한 · 움직임
     /// 등록표는 그것을 바꿔야 하는 테스트만 준다 — 없으면 기준 파이터 · 실제 모양 표 · 10초 · 실제 등록표다.
     /// </summary>
@@ -233,7 +233,7 @@ public static class TestConfigs
             Arena = Arena(),
             Fighter = fighter ?? Fighter(),
             HitShapes = shapes ?? HitShapes(),
-            Boss = Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
+            Boss = Boss(maxHealth: 999_999, rest: 0.2),
             PatternIds = new[] { id },
             Patterns = new Dictionary<string, PatternDef> { [id] = pattern },
             Seed = 1,
@@ -335,27 +335,31 @@ public static class TestConfigs
         ?? throw new InvalidOperationException($"stages.json 의 {stage}단계가 안 선다");
 
     /// <summary>
-    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="moveSpeed"/> · <paramref name="rest"/> ·
-    /// <paramref name="exhaustSeconds"/> 는 <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 ·
-    /// 속도 0 으로 보스를 세운다 · 쉬기를 하나로 굳혀 동작이 서는 틱을 센다 · 탈진 길이를 바꿔 그 길이를 규칙에게서 읽는지 본다). 반폭은 절대
-    /// 안 받는다 — 몸 충돌 간격이 그 값을 쓰므로 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다.
+    /// 실제 보스. <paramref name="maxHealth"/> · <paramref name="rest"/> · <paramref name="exhaustSeconds"/> · <paramref name="runSpeed"/> ·
+    /// <paramref name="runStop"/> 는 <b>일부러 이상한 값을 넣어야 하는 테스트</b>만 준다 (체력 999_999 로 시간 초과를 만든다 · 쉬기를 하나로 굳혀
+    /// 동작이 서는 틱을 센다 · 탈진 길이를 바꿔 그 길이를 규칙에게서 읽는지 본다 · 달리기를 늦추거나 멈춤을 줄여 상한과 경계를 밟는다). 반폭은
+    /// 절대 안 받는다 — 몸 충돌 간격이 그 값을 쓰므로 여기서 갈리면 테스트가 실제 전투와 다른 자리를 재게 된다. 옛 <c>moveSpeed</c>(쉬는 동안 걷는
+    /// 빠르기)는 걷기와 같이 걷었다 — 보스는 쉬는 동안 제자리다(설계 2026-09-29 조각1 §5.1).
     /// </summary>
     /// <param name="maxHealth">체력.</param>
-    /// <param name="moveSpeed">걷는 빠르기.</param>
     /// <param name="rest">
     /// 쉬는 길이 하나(초) — 주면 <c>rest_seconds</c> 가 이것 하나다(설계 2026-09-29 조각1 §3.4 — 실제는 셋 중 하나를 계획마다 고른다). 옛 이름
     /// <c>patternGap</c> 이 받던 자리다.
     /// </param>
     /// <param name="exhaustSeconds">탈진 길이.</param>
+    /// <param name="runSpeed">달리기의 빠르기(px/s).</param>
+    /// <param name="runStop">달리기가 멈추는 파이터 앞 거리(px).</param>
     public static BossConfig Boss(
-        int? maxHealth = null, double? moveSpeed = null, double? rest = null, double? exhaustSeconds = null)
+        int? maxHealth = null, double? rest = null, double? exhaustSeconds = null, double? runSpeed = null, double? runStop = null)
     {
         BalanceData balance = Balance();
         BossConfig data = Bosses()[balance.Battle.Boss];
         return new BossConfig
         {
             MaxHealth = maxHealth ?? data.MaxHealth,
-            MoveSpeed = moveSpeed ?? data.MoveSpeed,
+            RunSpeed = runSpeed ?? data.RunSpeed,
+            RunStop = runStop ?? data.RunStop,
+            RunMaxSeconds = data.RunMaxSeconds,
             HalfWidth = data.HalfWidth,
             Height = data.Height,
             RestSeconds = rest is { } r ? new[] { r } : data.RestSeconds,

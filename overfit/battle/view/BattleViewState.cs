@@ -48,7 +48,7 @@ public enum FighterPose
 /// </summary>
 public enum BossPhase
 {
-    /// <summary>패턴이 안 돈다. 다가오는 중이다.</summary>
+    /// <summary>패턴이 안 돈다 — 제자리에서 쉬거나 계획의 달리기로 달리는 중이다(설계 2026-09-29 조각1 §5).</summary>
     Idle,
 
     /// <summary>선딜. 아직 올 판정이 남았다 — 얼마나 남았는지는 안 그린다(#78 · 미끼가 그림으로 새지 않게).</summary>
@@ -147,15 +147,18 @@ public readonly record struct StillFrame(string Anim, int Frame);
 /// <param name="Exhausted">탈진했나 (#72 · 설계 §4.3). take-hit(<c>hit</c>)를 한 번 돌고 마지막 장에 선 채 푸른 톤이다 —
 /// 패리로든 경직 게이지로든(#71) 같은 그림이다. 맞으면 흰 플래시가 그 위에 얹힐 뿐 자세는 안 끊긴다.</param>
 /// <param name="Anim">
-/// 지금 든 타임라인 단계의 그림 — 보스 팩 <c>.tres</c> 의 애니메이션 이름(<c>patterns.json</c> 의 <c>anim</c> · 설계 §8.1).
-/// 패턴이 안 돌면 null. <b>이것이 예고다</b> (#72 · 설계 §6): 옛 예고 표지(칼 · 끌기 · 危)를 걷었고, 3연격의 칼을 든 f0 ·
+/// 지금 든 타임라인 단계의 그림 — 보스 팩 <c>.tres</c> 의 애니메이션 이름(<c>patterns.json</c> 의 <c>anim</c> · 설계 §8.1). 계획의 달리기
+/// 동안은 <c>run</c> 이다(설계 2026-09-29 조각1 §5.4 — 동작 밖이라 단계가 없다). 패턴이 안 돌고 안 달리면 null. <b>이것이 예고다</b> (#72 · 설계 §6): 옛 예고 표지(칼 · 끌기 · 危)를 걷었고, 3연격의 칼을 든 f0 ·
 /// 점프 공격의 웅크린 <c>jump</c> f0 가 무엇이 오는지를 말한다.
 /// </param>
 /// <param name="Frame">
 /// 그 단계가 붙드는 장(0부터). 뷰가 그 장에 세우고 멈춘다 — 장을 제 속도로 흘려 보내면 그림이 규칙의 창보다 먼저
 /// 지나간다(파이터의 <c>HoldWindup</c> 과 같은 이유). null 이면 그 애니메이션을 제 속도로 돈다.
 /// </param>
-/// <param name="AnimSpeed">그 애니메이션을 도는 배속 — 보통 1 이고, 돌진(#78) 동안 <c>feel.rush_anim_speed</c> 다. <c>Battle</c> 이 단계의 움직임을 보고 싣는다.</param>
+/// <param name="AnimSpeed">
+/// 그 애니메이션을 도는 배속 — 보통 1 이고, 돌진(#78) 동안 <c>feel.rush_anim_speed</c> · 계획의 달리기 동안 <c>feel.run_anim_speed</c> 다. <c>Battle</c> 이
+/// 단계의 움직임과 달리기를 보고 싣는다.
+/// </param>
 /// <param name="Mirror">
 /// 그 단계의 그림을 보는 쪽의 반대로 그리나 — 단계의 <c>mirror</c>(설계 2026-09-29 조각1 §2.1). 올려베기가 attack2 를 뒤집어 그린다: 그 궤적의 높은
 /// 부분이 보스 등 뒤라 그대로면 앞의 공중을 치는 그림이 안 된다. 판정은 모양(<c>rects</c>)이 정하고 규칙은 이 값을 안 읽는다.

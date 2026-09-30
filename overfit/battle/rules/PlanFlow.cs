@@ -7,9 +7,9 @@ using Overfit.Core;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 계획의 흐름 (설계 2026-09-29 조각1 §3.2 · §3.3) — 쉬기 → 첫 동작 → [캔슬 지점에서 끊고] 잇는 동작 → 다음 계획. <see cref="BattleSim"/> 이
-/// 계획이 끝날 때(<see cref="Choose"/>) · 쉬는 틱마다(<see cref="RestTick"/>) · 러너를 밀기 전마다(<see cref="CancelAt"/>) 묻고, 여기는 무엇을
-/// 언제 세울지만 말한다. 동작을 세우고 걷는 것 · 돌아서는 것은 판이다.
+/// 계획의 흐름 (설계 2026-09-29 조각1 §3.2 · §3.3) — 쉬기 → [달리기] → 첫 동작 → [캔슬 지점에서 끊고] 잇는 동작 → 다음 계획. <see cref="BattleSim"/>
+/// 이 계획이 끝날 때(<see cref="Choose"/>) · 쉬는 틱마다(<see cref="RestTick"/> · <see cref="Runs"/>) · 러너를 밀기 전마다(<see cref="CancelAt"/>)
+/// 묻고, 여기는 무엇을 언제 세울지만 말한다. 동작을 세우고 걷는 것 · 돌아서는 것 · 달리는 것은 판이다.
 ///
 /// <para>
 /// <b>계획 하나에 캔슬 한 번</b>이고 잇는 동작은 지점이 있어도 끝까지 간다(§3.2). 탈진하면 계획이 끝난다 — 판이 <see cref="Choose"/> 를 불러 남은
@@ -73,6 +73,12 @@ public sealed class PlanFlow
     public IReadOnlyList<BossPlan> Plans => _plans;
 
     /// <summary>
+    /// 지금 계획이 쉬기 뒤에 달리나 (설계 2026-09-29 조각1 §5.2) — <see cref="RestTick"/> 이 첫 동작의 칸을 낸 틱에 판이 묻는다. 참이면 판이 파이터
+    /// 앞까지 달린 뒤에 그 동작을 세운다.
+    /// </summary>
+    public bool Runs => _plan is { Run: true };
+
+    /// <summary>
     /// <see cref="Plans"/> 를 기록의 모양으로(§4.3) — 칸 대신 id, 틱 대신 초, 캔슬 지점 대신 그 시각. 시도 기록이 싣고 되살리기가 견준다. 부를 때마다
     /// 새로 짓는다 — 판이 끝날 때 한 번 부르는 값이다.
     /// </summary>
@@ -106,7 +112,7 @@ public sealed class PlanFlow
         _plan = plan;
         _plans.Add(plan);
         _restLeft = plan.RestTicks;
-        Log.Debug("boss", () => $"plan n={number} rest={plan.RestTicks * BattleSim.Dt:0.##} move={_roster[plan.Move]}"
+        Log.Debug("boss", () => $"plan n={number} rest={plan.RestTicks * BattleSim.Dt:0.##} run={(plan.Run ? 1 : 0)} move={_roster[plan.Move]}"
             + $" cancel={(plan.CancelPoint is int k ? $"{_patterns[_roster[plan.Move]].CancelPoints![k].T:0.##}" : "-")}"
             + $" next={(plan.Next is int next ? _roster[next] : "-")} tick={request.Tick}");
     }
@@ -151,7 +157,8 @@ public sealed class PlanFlow
             plan.RestTicks * BattleSim.Dt,
             move,
             plan.CancelPoint is int k ? _patterns[move].CancelPoints![k].T : null,
-            plan.Next is int next ? _roster[next] : null);
+            plan.Next is int next ? _roster[next] : null,
+            plan.Run);
     }
 
     /// <summary>계획의 틀린 곳 — 로그의 <c>reason=</c> 과 그 값들. 없으면 null.</summary>

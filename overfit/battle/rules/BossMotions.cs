@@ -56,6 +56,12 @@ public interface IBossMotion
 /// <summary>
 /// 움직임 등록표 — id → 구현 (CLAUDE.md §2). 수치는 타임라인 단계의 <c>motion</c> 에 있고(<see cref="MotionDef"/>),
 /// 움직임을 하나 더할 때 이 표에 한 줄을 더한다 — 러너와 <c>BattleSim</c> 은 안 연다.
+///
+/// <para>
+/// <c>run</c> 은 계획의 달리기다(설계 2026-09-29 조각1 §5.2) — 돌진과 같은 구현이고 수치(빠르기 · 멈출 거리)는 단계가 아니라 <c>bosses.json</c>
+/// (<see cref="BossConfig.RunSpeed"/> · <see cref="BossConfig.RunStop"/>)에서 온다. 동작의 단계에는 안 쓴다 — 쉬기 뒤에 <c>BattleSim</c> 이 세운다.
+/// 다른 달리기(가속 · 우회)를 시험하려면 이 줄의 구현만 바꾼다.
+/// </para>
 /// </summary>
 public static class BossMotions
 {
@@ -64,6 +70,7 @@ public static class BossMotions
         {
             ["leap"] = (def, bounds) => new LeapMotion(def, bounds),
             ["rush"] = (def, bounds) => new RushMotion(def, bounds),
+            ["run"] = (def, bounds) => new RushMotion(def, bounds),
         };
 
     /// <summary>등록된 id 들 — 데이터 테스트가 <c>patterns.json</c> 의 <c>motion.id</c> 를 여기와 대 본다.</summary>

@@ -237,6 +237,12 @@ public sealed class FeelBalance
     /// </summary>
     public required double RushAnimSpeed { get; init; }
 
+    /// <summary>
+    /// 달리기의 <c>run</c> 배속 (설계 2026-09-29 조각1 §5.4). 1 이면 제 속도(10fps) — 돌진(3배 · 3600px/s)보다 느린 달리기(840px/s)다. 시작값이고 눈으로
+    /// 고친다. 발은 미끄러질 수 있다 — 규칙의 빠르기를 그림에 안 맞춘다(돌진과 같다).
+    /// </summary>
+    public required double RunAnimSpeed { get; init; }
+
     /// <summary>잡기의 흰 구 반지름(px · #78 · 설계 §6) — 파이터 키 120 의 3/4, 몸을 감쌀 만큼.</summary>
     public required double GrabOrbRadius { get; init; }
 
@@ -258,6 +264,12 @@ public sealed class PickerBalance
     /// 첫 동작에 캔슬 지점이 있을 때 끊는 몫(정수 퍼센트 — <c>RollInt(…, 100)</c> 과 견준다). 0 이면 안 끊고 100 이면 지점이 있는 동작은 늘 끊는다.
     /// </summary>
     public required int CancelPercent { get; init; }
+
+    /// <summary>
+    /// 계획이 쉬기 뒤에 파이터 앞까지 달리는 몫(정수 퍼센트 — 설계 2026-09-29 조각1 §5.2). 0 이면 안 달리고(보스는 제자리에서 첫 동작) 100 이면 늘
+    /// 달린다(이미 <c>run_stop</c> 안이면 안 달린다).
+    /// </summary>
+    public required int RunPercent { get; init; }
 }
 
 /// <summary>모든 수치의 진실 원천. <c>data/balance.json</c> 하나가 이 모양이다.</summary>

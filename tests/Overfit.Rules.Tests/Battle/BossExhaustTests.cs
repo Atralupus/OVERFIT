@@ -42,11 +42,11 @@ public class BossExhaustTests
     });
 
     [Fact]
-    public void 탈진한_보스는_다가가지도_돌아서지도_않는다()
+    public void 탈진한_보스는_움직이지도_돌아서지도_않는다()
     {
-        // 설계 §4.3 — 탈진한 보스는 아무것도 안 한다. 쉬는 보스는 파이터를 향해 돌아서고 다가가는데(BattleSim.AdvanceBoss 의 쉬는
-        // 갈래), 탈진 동안 그 갈래가 돌면 무너진 보스가 파이터를 쫓아 돈다 — 반격 창이 "보스가 멈춘 자리" 가 아니게 된다. 전에는 골든만
-        // 이것을 잡았다(#59 의 3/6 넘김). 파이터가 보스를 가로질러 반대편으로 가도 보스는 안 돌고 안 움직여야 한다.
+        // 설계 §4.3 — 탈진한 보스는 아무것도 안 한다. 쉬는 보스는 파이터를 향해 돌아서는데(BattleSim.AdvanceBoss 의 쉬는 갈래 — 쉬는 동안
+        // 제자리다 · 설계 2026-09-29 조각1 §5.1), 탈진 동안 그 갈래가 돌면 무너진 보스가 파이터를 따라 돈다 — 반격 창이 "보스가 멈춘 자리" 가
+        // 아니게 된다. 전에는 골든만 이것을 잡았다(#59 의 3/6 넘김). 파이터가 보스를 가로질러 반대편으로 가도 보스는 안 돌고 안 움직여야 한다.
         BattleSim sim = Sim(TestConfigs.Breaker(), TestConfigs.Boss(maxHealth: 999_999, rest: 1000), "3연격");
         double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
         for (int i = 0; i < 600 && Math.Abs(sim.Boss.X - sim.Fighter.X) > standoff; i++)
@@ -81,10 +81,11 @@ public class BossExhaustTests
 
         crossed.ShouldBeTrue("파이터가 보스를 못 지나갔다 — 돌아서기를 부를 자리가 없었다");
 
-        // 풀리는 틱부터 쉬는 보스다 — 그 틱에 돌아서고 다가간다. 이것이 없으면 위의 단언은 "원래 안 돌고 안 움직이는 보스" 로도 초록이다.
+        // 풀리는 틱부터 쉬는 보스다 — 그 틱에 돌아선다(쉬는 동안 제자리라 움직이지는 않는다). 이것이 없으면 위의 단언은 "원래 안 도는 보스" 로도
+        // 초록이다.
         sim.Boss.Exhausted.ShouldBeFalse("600틱 안에 탈진이 안 풀렸다");
         sim.Boss.Facing.ShouldBe(-facing, "탈진이 풀렸는데 반대편의 파이터 쪽으로 안 돌았다");
-        sim.Boss.X.ShouldNotBe(x, "탈진이 풀렸는데 안 다가갔다");
+        sim.Boss.X.ShouldBe(x, "쉬는 보스가 움직였다 — 쉬는 동안 제자리다");
     }
 
     [Fact]
@@ -131,7 +132,7 @@ public class BossExhaustTests
         // 설계 §4.2 · §12 「공중 탈진」 — 게이지가 공중에서 차면 하던 패턴(착지 판정)은 끊기고, 보스는 포물선의 높이를 그대로 따라
         // 그 자리에 내린다(가로는 멈춘다). 전에는 탈진이 움직임을 버려 보스가 무너진 높이에 떠 있었다(#59 의 3/6 넘김).
         // 견줄 판(control)은 같은 판에서 칼만 안 휘두른다 — 도약의 높이는 시각에만 달려 두 판이 같은 틱에 같은 높이다.
-        BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 2.0);
+        BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, rest: 2.0);
         BattleSim sim = Sim(TestConfigs.Breaker(), boss, "점프 공격");
         BattleSim control = Sim(TestConfigs.Breaker(), boss, "점프 공격");
 
@@ -179,7 +180,7 @@ public class BossExhaustTests
     public void 공중_탈진은_로그로_무너진_높이와_내린_자리를_남긴다()
     {
         // CLAUDE.md §5 — 판단과 전이는 [D] 로 남긴다. 공중 탈진은 끊긴 착지 판정이 관측도 안 남기므로(설계 §3.5 5) 로그가 유일한 흔적이다.
-        BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 2.0);
+        BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, rest: 2.0);
         BattleSim sim = Sim(TestConfigs.Breaker(), boss, "점프 공격");
         for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > 205; i++)
         {
@@ -205,7 +206,7 @@ public class BossExhaustTests
         // 내림은 보스가 떠 있을 때만 든다(BattleSim.Exhaust 의 Boss.Y > 0). 도약이 서는 틱은 움직임이 이미 섰는데 높이가 0 이다
         // (LeapMotion 의 첫 틱) — 거기서 무너진 보스가 끊긴 도약을 들고 가면 탈진 동안 포물선을 끝까지 날아오른다. 누르는 틱을 한 틱씩
         // 밀며 칼이 도약이 서는 틱에 닿는 판을 찾는다 — 칼질의 선딜과 도약의 시각이 데이터라 틱을 박지 않는다.
-        BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3.0);
+        BossConfig boss = TestConfigs.Boss(maxHealth: 999_999, rest: 3.0);
         bool found = false;
         for (int lead = 0; lead <= 40 && !found; lead++)
         {

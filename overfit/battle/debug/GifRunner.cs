@@ -47,13 +47,14 @@ public partial class GifRunner : Node
     /// </summary>
     private static readonly GifScript[] _scripts =
     {
-        // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
+        // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
+        // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
         // 1타는 60틱이라 패리의 창(+6)을 지나 커밋(+18) 안에 떨어져 맨몸으로 맞는다. 헛친 한 번(커밋과 패리 뒤 경직 · 0.583초 · #82)이 84틱에 풀리면
         // 맞은 틱(60)에서 3연격의 간격(42틱)을 재어 2틱 앞(100)에 또 누른다 — 늦은 2타(111)에 또 맞는다. 둘째 + 30 까지 잡는다.
         new("offbeat", Plans: SceneDriver.Moves("엇박 3연격"), Target: "엇박 3연격",
             Inputs: new[]
             {
-                new GifInput(_battleStart, 68, "move_right", OnBattleClock: true),
+                new GifInput(_battleStart, 86, "move_right", OnBattleClock: true),
                 new GifInput(49, 49, "parry"),
                 new GifInput(100, 100, "parry"),
             },
