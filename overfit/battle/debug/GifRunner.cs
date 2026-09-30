@@ -22,8 +22,8 @@ namespace Overfit.Battle.Debug;
 ///
 /// <para>
 /// 대본 id 는 ASCII 소문자다(<c>offbeat</c>) — 인자와 파일 이름(<c>docs/gifs/&lt;id&gt;.gif</c>)으로 쓰인다. 대본은 이 안의 C# 표다 — 스크린샷
-/// 대본이 코드인 것과 같다. 조각 1 에서 없어진 동작을 쓰던 대본 셋(<c>rush</c> · <c>grab</c> · <c>jump3</c>)은 걷었다 — 새 대본은 GIF 를 다시 찍을
-/// 때 짠다(설계 2026-09-29 조각1 §4.2). README 의 그 세 그림(<c>docs/gifs/</c>)은 그대로 둔다.
+/// 대본이 코드인 것과 같다. 조각 1 · 2 의 동작 · 캔슬 · 폭탄으로 다시 짰다(#147) — 옛 1타 돌진 · 1타 잡기 · 점프 3연속의 대본은 캔슬과 점프 공격 한 번이
+/// 받는다.
 /// </para>
 /// </summary>
 public partial class GifRunner : Node
@@ -38,15 +38,56 @@ public partial class GifRunner : Node
     private const int _battleStart = 1;
 
     /// <summary>엣지인 액션 (설계 §5.4 · <c>InputFrame</c>) — 한 틱 앞에 누른다(<see cref="Drive"/>). 나머지(이동 · 가드)는 레벨이다.</summary>
-    private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "parry", "attack" };
+    private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "parry", "attack", "bomb" };
 
     /// <summary>
-    /// 대본 (설계 §6.2 의 표 — 조각 1 뒤에는 하나다). 틱은 패턴의 틱이고, 판의 틱으로 적은 것은 <see cref="GifInput.OnBattleClock"/> 이 참이다.
+    /// 대본 (설계 §6.2 의 표 · #147). 틱은 패턴의 틱이고, 판의 틱으로 적은 것은 <see cref="GifInput.OnBattleClock"/> 이 참이다.
     /// 잡을 구간은 [<see cref="GifScript.From"/>, <see cref="GifScript.To"/>) 패턴 틱 — 60fps 로 240장(4초)을 넘지 않는다(도구가 막는다).
     /// 대본마다 같은 입력을 규칙 위에서 틱까지 못박은 테스트가 있다(<c>MoveBattleTests</c>) — 숫자를 바꾸면 거기서 먼저 잰다.
     /// </summary>
     private static readonly GifScript[] _scripts =
     {
+        // 3연격 → 1타 뒤 캔슬 → 돌진 (조각1 §3). 파이터는 480 에 선 채다 — 1타는 960 밖에서 헛치고, 78틱에 끊어 달려와 113틱에 친다.
+        // MoveBattleTests.GIF_rush.
+        new("rush", Plans: new[] { new ScriptPlan(0.8, "3연격", CancelPoint: 0, Next: "돌진") }, Target: "3연격",
+            Inputs: Array.Empty<GifInput>(),
+            From: 1, To: 141),
+
+        // 3연격 → 2타 뒤 캔슬 → 잡기. 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음)에서 ↓ 를 붙들어 두 타를 받고, 144틱에 잡기로 이어 180틱에
+        // 가드째 붙든다. 붙든 1초 뒤까지 잡는다. MoveBattleTests.GIF_grab.
+        new("grab", Plans: new[] { new ScriptPlan(0.8, "3연격", CancelPoint: 1, Next: "잡기") }, Target: "3연격",
+            Inputs: new[]
+            {
+                new GifInput(_battleStart, 86, "move_right", OnBattleClock: true),
+                new GifInput(87, 100_000, "guard", OnBattleClock: true),
+            },
+            From: 80, To: 256),
+
+        // 점프 공격 한 번 — 480 에 선 채 30틱에 뛰어 착지(60틱)를 넘는다. MoveBattleTests 의 점프 공격 테스트("jump").
+        new("jump", Plans: SceneDriver.Moves("점프 공격"), Target: "점프 공격",
+            Inputs: new[] { new GifInput(30, 30, "jump") },
+            From: 1, To: 111),
+
+        // 올려베기 — 보스 쪽으로 걸어가다 35틱(3연격 1타를 넘는 누름)에 뛴다. 같은 51틱에 올려베기가 공중을 친다. MoveBattleTests.GIF_uppercut.
+        new("uppercut", Plans: SceneDriver.Moves("올려베기"), Target: "올려베기",
+            Inputs: new[]
+            {
+                new GifInput(_battleStart, 1_000, "move_right", OnBattleClock: true),
+                new GifInput(35, 35, "jump"),
+            },
+            From: 1, To: 111),
+
+        // 빠른 3연격 — 판이 선 뒤 74틱 걸어 3연격 사거리 밖(보스 앞 442)에 선다. 3연격이 헛친 뒤 167 · 170 틱에 J 두 번(2연격), 보스는 0.4초 쉬고
+        // 달려와 빠른 3연격을 연다 — 2연격에 묶여 1타에 맞는다. MoveBattleTests.GIF_fast. 1타에 누른 대시는 이 대본에 없다(묶여 버려지므로 그림이 같다).
+        new("fast", Plans: new[] { new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true) }, Target: "3연격",
+            Inputs: new[]
+            {
+                new GifInput(_battleStart, 74, "move_right", OnBattleClock: true),
+                new GifInput(167, 167, "attack"),
+                new GifInput(170, 170, "attack"),
+            },
+            From: 150, To: 300),
+
         // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
         // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
         // 1타는 60틱이라 패리의 창(+6)을 지나 커밋(+18) 안에 떨어져 맨몸으로 맞는다. 헛친 한 번(커밋과 패리 뒤 경직 · 0.583초 · #82)이 84틱에 풀리면
@@ -58,6 +99,18 @@ public partial class GifRunner : Node
                 new GifInput(49, 49, "parry"),
                 new GifInput(100, 100, "parry"),
             },
+            From: 1, To: 141),
+
+        // 폭탄이 끊긴다 (조각2 §2). 960 떨어져 3연격 50틱에 던진다 — 보스는 68틱에 알고("!") 첫 캔슬 지점(78)에서 끊어, 멈칫 뒤 달려와 놓기(139) 전에
+        // 친다. 폭탄을 잃는다. BombReactionTests.GIF_bombcut.
+        new("bombcut", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
+            Inputs: new[] { new GifInput(50, 50, "bomb") },
+            From: 30, To: 170),
+
+        // 폭탄이 떨어진다 — 3연격이 서자마자(2틱) 던지면 첫 캔슬 지점(78)이 늦다. 보스는 끊고 달려오지만 폭탄이 먼저 놓이고(91) 달려오는 보스에게
+        // 떨어진다(121). 1틱은 못 누른다 — 엣지는 한 틱 앞에 누르는데 그 틱에는 겨냥한 동작이 아직 안 섰다(Drive). BombReactionTests.GIF_bomb.
+        new("bomb", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
+            Inputs: new[] { new GifInput(2, 2, "bomb") },
             From: 1, To: 141),
     };
 
