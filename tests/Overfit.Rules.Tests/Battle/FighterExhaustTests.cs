@@ -246,6 +246,13 @@ public class FighterExhaustTests
         rested.VelocityY.ShouldBeGreaterThan(0, "스태미나가 남은 대시가 끝나는 틱에 안 뛰었다 — 대조가 무너졌다");
     }
 
+    /// <summary>
+    /// 보스가 쉬기(1초) 뒤 서 있는 파이터 앞 280 까지 달려와 3연격을 여는 계획 — 1타가 닿는다(설계 2026-09-29 조각1 §5.2). 옛 판은 쉬는 동안 보스가
+    /// 걸어와(초당 160 · 5.3초) 같은 자리를 만들었다 — 쉬는 동안 제자리가 된 뒤로는 달리기가 그 몫이다.
+    /// </summary>
+    private static ScriptPlanPicker RunInTriple() =>
+        new(new[] { "3연격" }, TestConfigs.Patterns(), [new ScriptPlan(1.0, "3연격", Run: true)]);
+
     [Fact]
     public void 파이터가_탈진하면_무엇이_바닥냈는지를_로그로_남긴다()
     {
@@ -256,7 +263,7 @@ public class FighterExhaustTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 1000),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 1000),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,
@@ -276,8 +283,8 @@ public class FighterExhaustTests
             log.Lines.ShouldContain($"[fighter][D] exhaust cause=action tick={dashed.Ticks}");
         }
 
-        // 보스가 다가와(960 − 115 = 845px · 초당 160 · 5.3초) 3연격을 연다 — 붙든 가드에 1타가 닿는다.
-        still.Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 6.0);
+        // 보스가 쉬기(1초) 뒤 파이터 앞 280 까지 달려와 3연격을 연다(RunInTriple) — 붙든 가드에 1타가 닿는다.
+        still.Picker = RunInTriple();
         var guarded = new BattleSim(still);
         guarded.Fighter.Spend(guarded.Fighter.Stamina - 5);   // 3연격 1타(8)의 값 14.4 에 모자라다 — 붕괴다
         using (var log = new LogCapture())
@@ -302,10 +309,11 @@ public class FighterExhaustTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 6.0),
+            Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,
+            Picker = RunInTriple(),
             MaxTicks = 60 * 60,
         };
 
@@ -347,7 +355,7 @@ public class FighterExhaustTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3.0),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 3.0),
             PatternIds = new[] { "3연격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,

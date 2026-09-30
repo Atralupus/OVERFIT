@@ -30,6 +30,12 @@ public partial class Battle : Node2D
         ["rush"] = feel => feel.RushAnimSpeed,
     };
 
+    /// <summary>
+    /// 계획의 달리기(설계 2026-09-29 조각1 §5.4) 동안 보스가 도는 그림 — 돌진의 첫 단계와 같은 <c>run</c> 이다(<c>patterns.json</c> 의 돌진). 배속은
+    /// <c>feel.run_anim_speed</c> 다(돌진보다 느린 달리기). 규칙은 그림을 모른다 — 달리는 중인지(<see cref="BattleSim.BossRunning"/>)만 말한다.
+    /// </summary>
+    private const string _runAnim = "run";
+
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
@@ -219,6 +225,12 @@ public partial class Battle : Node2D
     public string? BossStepAnim => _broken || _over ? null : _sim.BossStep?.Anim;
 
     /// <summary>
+    /// 보스가 계획의 달리기로 달리는 중인가 (설계 2026-09-29 조각1 §5.2). 위와 같이 디버그 전용 읽기다 — 달리기 중(<c>battle-13e-run</c>)을 찍으려면
+    /// 달리기에 든 것을 규칙에게 물어야 한다. 동작 밖이라 단계(<see cref="BossStepAnim"/>)가 없다.
+    /// </summary>
+    public bool BossRunning => !_broken && !_over && _sim.BossRunning;
+
+    /// <summary>
     /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82) 중이 아니고 굳어 있지도(탈진 · 붙들림 — <c>Fighter.Locked</c>) 않다.
     /// 위와 같이 디버그 전용 읽기다 — 스크린샷이 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자
     /// 둘째 J 가 1타의 경직에 떨어져 2타가 됐다. 굳음은 탈진만 보던 것을 <c>Locked</c> 로 넓혔다(#96) — 붙들린 파이터도 선 자세(Idle)라, 탈진만
@@ -244,6 +256,12 @@ public partial class Battle : Node2D
     /// 셔터를 눌러야 하고, 도약 시각은 데이터(<c>motion.air</c>)라 프레임을 세면 그 값을 고치는 날 땅이 찍힌다.
     /// </summary>
     public double BossY => _broken || _over ? 0 : _sim.Boss.Y;
+
+    /// <summary>
+    /// 보스 중심과 파이터 중심 사이의 거리(px). 디버그 전용 읽기다 — 스크린샷이 "보스에게 붙었나" 를 시간이 아니라 거리로 잰다(보스는 쉬는 동안
+    /// 제자리라 걸어와 주지 않는다 · 설계 2026-09-29 조각1 §5.1).
+    /// </summary>
+    public double BossGap => _broken ? 0 : Math.Abs(_sim.Boss.X - _sim.Fighter.X);
 
     /// <summary>
     /// 이 틱에 규칙이 파이터에게 보스 판정을 <b>대 봤나</b> (설계 §6.1). 위와 같이 디버그 전용 읽기다 — 판정 보기(<c>HITBOXES=1</c>)의
@@ -612,18 +630,21 @@ public partial class Battle : Node2D
             _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina,
             _sim.Fighter.Stiff));
 
+        // 계획의 달리기는 동작 밖이라 단계가 없다 — 달리는 동안은 run 을 제 배속으로 돈다(설계 2026-09-29 조각1 §5.4).
+        bool running = _sim.BossRunning;
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
             _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
             _sim.Boss.Exhausted,
-            _sim.BossStep?.Anim,
-            _sim.BossStep?.Frame,
+            running ? _runAnim : _sim.BossStep?.Anim,
+            running ? null : _sim.BossStep?.Frame,
             // 돌진의 run 만 빠르다 (#78 · 설계 §4.6) — 단계가 단 움직임의 배속이다(_motionAnimSpeed). 규칙은 이 배속을 모른다.
-            _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
-                ? speed(_feel)
-                : 1.0,
+            running ? _feel.RunAnimSpeed
+                : _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
+                    ? speed(_feel)
+                    : 1.0,
             _sim.BossStep?.Mirror ?? false));
 
         // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림 · 산 창)이 그 틱에 멈춰 남는다. 거르지 않으면

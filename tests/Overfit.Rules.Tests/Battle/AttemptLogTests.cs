@@ -24,7 +24,7 @@ public class AttemptLogTests
         Run: 3,
         Record: new AttemptRecord(12, 2, 16800346292054821908UL, BattleOutcome.Lose, _events),
         PickerId: "uniform",
-        Plans: [new PlanEntry(0.8, "잡기", null, null), new PlanEntry(0.1 + 0.2, "3연격", 1.3, "돌진"), new PlanEntry(1.2, "잡기", null, null)],
+        Plans: [new PlanEntry(0.8, "잡기", null, null), new PlanEntry(0.1 + 0.2, "3연격", 1.3, "돌진", Run: true), new PlanEntry(1.2, "잡기", null, null)],
         Ticks: 2345);
 
     private static void ShouldMatch(AttemptEntry back, AttemptEntry entry)
@@ -68,11 +68,23 @@ public class AttemptLogTests
 
         string line = AttemptLog.Line(entry);
 
-        line.ShouldContain("\"plans\":[{\"rest\":0.8,\"move\":\"잡기\",\"cancel\":null,\"next\":null},"
-            + "{\"rest\":0.30000000000000004,\"move\":\"3연격\",\"cancel\":1.3,\"next\":\"돌진\"}");
+        line.ShouldContain("\"plans\":[{\"rest\":0.8,\"move\":\"잡기\",\"cancel\":null,\"next\":null,\"run\":false},"
+            + "{\"rest\":0.30000000000000004,\"move\":\"3연격\",\"cancel\":1.3,\"next\":\"돌진\",\"run\":true}");
         line.ShouldContain($"\"data_sha256\":\"{sha}\"");
         line.ShouldEndWith("\"inputs\":[[32,3],[33,1],[95,2]]}", Case.Sensitive, "입력은 줄의 끝이다 — 가장 길어 사람이 머리를 먼저 읽는다");
         ShouldMatch(AttemptLog.Parse(line, "시험"), entry);
+    }
+
+    [Fact]
+    public void 달리기가_없는_6_8_의_계획도_읽힌다()
+    {
+        // 6/8 의 게임이 남긴 계획에는 달리기 칸이 없다(7/8 에서 더했다) — 안 달린 계획으로 읽는다. 그때는 보스가 달리지 않았다.
+        string line = AttemptLog.Line(Entry()).Replace(",\"run\":false", "", System.StringComparison.Ordinal)
+            .Replace(",\"run\":true", "", System.StringComparison.Ordinal);
+        line.ShouldNotContain("\"run\":true");
+        line.ShouldNotContain("\"run\":false");
+
+        AttemptLog.Parse(line, "6/8 줄").Plans.Select(p => p.Run).ShouldBe([false, false, false]);
     }
 
     [Fact]

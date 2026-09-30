@@ -49,18 +49,27 @@ public class SwordTests
             .ShouldBe(ShapeContact.TooFar, "등 뒤의 보스를 벴다 — 보는 쪽이 판정에 안 실렸다");
     }
 
-    /// <summary>보스가 1px/틱으로 다가오기만 하는 판 — 패턴은 안 선다(간격 999초).</summary>
-    private static BattleSim Approaching() => new(new BattleSetup
+    /// <summary>
+    /// 보스가 1px/틱으로 다가오기만 하는 판 — 쉬기(0.1초) 뒤 파이터 한가운데까지 달린다(달리기 60px/s · 멈춤 0 · 설계 2026-09-29 조각1 §5.2).
+    /// 패턴은 달리기가 끝나야 서므로(닿거나 상한 3초) 그 안에 칼을 넣는다. 옛 판은 쉬는 동안 걷는 보스(move_speed 60)였다 — 쉬는 동안 제자리가
+    /// 된 뒤로는 달리기가 그 몫이다.
+    /// </summary>
+    private static BattleSim Approaching()
     {
-        Arena = TestConfigs.Arena(),
-        Fighter = TestConfigs.Fighter(),
-        HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 60, rest: 999),
-        PatternIds = new[] { TestConfigs.SweepId },
-        Patterns = new Dictionary<string, PatternDef> { [TestConfigs.SweepId] = TestConfigs.Sweep(100, 0) },
-        Seed = 1,
-        MaxTicks = 60 * 60,
-    });
+        var patterns = new Dictionary<string, PatternDef> { [TestConfigs.SweepId] = TestConfigs.Sweep(100, 0) };
+        return new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighter(),
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, runSpeed: 60, runStop: 0),
+            PatternIds = new[] { TestConfigs.SweepId },
+            Patterns = patterns,
+            Seed = 1,
+            Picker = new ScriptPlanPicker(new[] { TestConfigs.SweepId }, patterns, [new ScriptPlan(0.1, TestConfigs.SweepId, Run: true)]),
+            MaxTicks = 60 * 60,
+        });
+    }
 
     /// <summary>보스와의 거리(중심 사이)가 <paramref name="gap"/> 안이 될 때까지 보스 쪽으로 걷는다.</summary>
     private static void WalkUpTo(BattleSim sim, double gap)
@@ -137,7 +146,7 @@ public class SwordTests
             Arena = TestConfigs.Arena(),
             Fighter = fighter,
             HitShapes = shapes,
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 999),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 999),
             PatternIds = new[] { TestConfigs.SweepId },
             Patterns = new Dictionary<string, PatternDef> { [TestConfigs.SweepId] = TestConfigs.Sweep(100, 0) },
             Seed = 1,

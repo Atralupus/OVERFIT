@@ -23,8 +23,9 @@ public class PlanPickerTests
     private static readonly Dictionary<string, PatternDef> _patterns = TestConfigs.Patterns();
 
     private static PickerInputs Inputs(
-        ulong seed, int cancelPercent = 50, IReadOnlyList<int>? rest = null, IReadOnlyList<ScriptPlan>? script = null) =>
-        new(_roster, _patterns, rest ?? _rest, new PickerBalance { CancelPercent = cancelPercent }, Array.Empty<AttemptRecord>(), seed, script);
+        ulong seed, int cancelPercent = 50, IReadOnlyList<int>? rest = null, IReadOnlyList<ScriptPlan>? script = null, int runPercent = 50) =>
+        new(_roster, _patterns, rest ?? _rest, new PickerBalance { CancelPercent = cancelPercent, RunPercent = runPercent }, Array.Empty<AttemptRecord>(),
+            seed, script);
 
     /// <summary>계획 번호 <paramref name="number"/> 의 부름 — 두 고르기는 번호만 읽는다.</summary>
     private static PlanRequest Request(int number) => new(number, 0, Array.Empty<DodgeEvent>(), 0, 1, 0);
@@ -156,18 +157,43 @@ public class PlanPickerTests
     [Fact]
     public void 대본은_계획을_차례로_돌고_끝나면_처음부터다()
     {
-        // 설계 §4.2 — 대본은 계획의 목록이고 칸마다 다섯을 다 적는다(쉬기 초 · 첫 동작 · 지점 · 잇는 동작). 끝나면 처음부터 다시 돈다 — uniform 과
-        // 같이 상태가 없다(번호로 조회만 한다).
+        // 설계 §4.2 — 대본은 계획의 목록이고 칸마다 다섯을 다 적는다(쉬기 초 · 첫 동작 · 지점 · 잇는 동작 · 달리기). 끝나면 처음부터 다시 돈다 —
+        // uniform 과 같이 상태가 없다(번호로 조회만 한다).
         IPlanPicker picker = PatternPickers.Create(
-            "script", Inputs(51, script: [new ScriptPlan(0.4, "잡기"), new ScriptPlan(1.2, "3연격", 1, "점프 공격")])).ShouldNotBeNull();
+            "script", Inputs(51, script: [new ScriptPlan(0.4, "잡기", Run: true), new ScriptPlan(1.2, "3연격", 1, "점프 공격")])).ShouldNotBeNull();
 
         Enumerable.Range(0, 4).Select(k => picker.Next(Request(k))).ShouldBe(new[]
         {
-            new BossPlan(24, 3, null, null),
+            new BossPlan(24, 3, null, null, Run: true),
             new BossPlan(72, 0, 1, 1),
-            new BossPlan(24, 3, null, null),
+            new BossPlan(24, 3, null, null, Run: true),
             new BossPlan(72, 0, 1, 1),
         });
+    }
+
+    [Fact]
+    public void 달리기는_run_percent_로_고른다()
+    {
+        // 설계 2026-09-29 조각1 §5.2 — 달리나는 제 스트림(plan_run · 15)의 RollInt(…, 100) 을 run_percent 와 견준다. 0 이면 안 달리고 100 이면 늘
+        // 달린다. 제 스트림이라 run_percent 를 바꿔도 다른 결정(첫 동작 · 쉬기 · 끊기)이 안 움직인다.
+        foreach (ulong seed in new ulong[] { 0, 51, ulong.MaxValue })
+        {
+            var never = new UniformPlanPicker(Inputs(seed, runPercent: 0));
+            var half = new UniformPlanPicker(Inputs(seed, runPercent: 50));
+            var always = new UniformPlanPicker(Inputs(seed, runPercent: 100));
+            int runs = 0;
+            for (int k = 0; k < 500; k++)
+            {
+                BossPlan n = never.Next(Request(k));
+                BossPlan h = half.Next(Request(k));
+                (n.Run, always.Next(Request(k)).Run).ShouldBe((false, true), $"{k}번");
+                h.Run.ShouldBe(Det.RollInt(seed, Det.Domain.PlanRun, 100, k1: k) < 50, $"{k}번");
+                (h with { Run = false }).ShouldBe(n, $"{k}번: 달리기를 고른 것이 다른 결정을 밀었다");
+                runs += h.Run ? 1 : 0;
+            }
+
+            runs.ShouldBeInRange(200, 300, "반쯤 달려야 한다");
+        }
     }
 
     [Fact]
@@ -231,10 +257,11 @@ public class PlanPickerTests
     }
 
     [Fact]
-    public void 고르기를_안_주면_시드_위의_uniform_이고_끊지_않는다()
+    public void 고르기를_안_주면_시드_위의_uniform_이고_끊지도_달리지도_않는다()
     {
-        // BattleSetup 의 고르기 칸은 선택이다 — 비우면 (Seed, PatternIds) 위의 uniform 인데 끊지 않는다(cancel_percent 0). 그래서 고르기를 모르는
-        // 테스트의 판들이 캔슬 없이 선다. 쉬기는 보스의 rest_seconds 에서 고른다. 입력 없이 끝까지 돌려 선 동작의 순서를 견준다.
+        // BattleSetup 의 고르기 칸은 선택이다 — 비우면 (Seed, PatternIds) 위의 uniform 인데 끊지도 달리지도 않는다(cancel_percent · run_percent 0).
+        // 그래서 고르기를 모르는 테스트의 판들이 캔슬 · 달리기 없이 선다. 쉬기는 보스의 rest_seconds 에서 고른다. 입력 없이 끝까지 돌려 선 동작의
+        // 순서를 견준다.
         BattleSim Sim(IPlanPicker? picker) => new(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
@@ -249,7 +276,7 @@ public class PlanPickerTests
         });
 
         BattleSim none = Sim(null);
-        BattleSim uniform = Sim(new UniformPlanPicker(Inputs(51, cancelPercent: 0, rest: BattleSim.RestTicks(TestConfigs.Boss()))));
+        BattleSim uniform = Sim(new UniformPlanPicker(Inputs(51, cancelPercent: 0, rest: BattleSim.RestTicks(TestConfigs.Boss()), runPercent: 0)));
         List<string> a = Begins(none, int.MaxValue);
         List<string> b = Begins(uniform, int.MaxValue);
 

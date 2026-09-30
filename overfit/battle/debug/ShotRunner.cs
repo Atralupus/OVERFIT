@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Godot;
+using Overfit.Battle.Rules;
 using Overfit.Core;
 using static Overfit.Battle.Debug.SceneDriver;
 
@@ -58,6 +59,12 @@ public partial class ShotRunner : Node
     private const double _patternTimeout = 30.0;
 
     /// <summary>
+    /// 붙은 자리 — 보스 중심에서 파이터 중심까지(px). 3연격의 세 칼이 다 닿고(3타는 80 ~ 404) 파이터의 칼도 보스 몸에 닿는다. 옛 판은 쉬는 동안
+    /// 보스가 파이터 앞 115 까지 걸어와 이 자리를 만들어 주었다 — 쉬는 동안 제자리가 된 뒤로는(설계 2026-09-29 조각1 §5.1) 파이터가 걸어간다.
+    /// </summary>
+    private const double _near = 150;
+
+    /// <summary>
     /// 대본 없이 찍던 판들의 대본 — 옛 1단계의 두 동작을 번갈아 돈다(설계 2026-09-29 조각1 §2). 이 파일의 장면들(보스 피격 · 선딜 · 결과 · 2연격 ·
     /// 경직 게이지 · 방향 잠금)은 그 명부에 맞춰 짰다: 3연격의 선딜에 칼을 넣고, 3연격은 보스가 선 자리에서 427px 까지만 친다. 명부가 일곱이 되자
     /// 무작위 판에서 3연격은 한 뽑기에 1/7 이라 — 실제로 4/8 의 명부에서 첫 판(시도 1)은 3연격을 한 번도 안 뽑은 채 파이터가 30초에 죽었고(잡기 ·
@@ -94,9 +101,7 @@ public partial class ShotRunner : Node
         await Shoot("battle-1-approach", 1.0);
 
         // 보스 쪽으로 붙는다. 붙어 있어야 판정에 걸리고, 그래야 피격·패리가 찍힌다.
-        Hold("move_right", true);
-        await _drive.Wait(1.1);
-        Hold("move_right", false);
+        await WalkIn();
 
         // ── 대시: 무적 창 한가운데를 잡는다 ────────────────────────────────
         // 무적은 0.14초(≈8프레임)이고 대시는 0.18초다. 4프레임째면 잔상이 서너 장 깔린 채
@@ -198,12 +203,14 @@ public partial class ShotRunner : Node
             await Hitboxes();
         }
 
-        // 동작마다 한 장 (#78 · 설계 2026-09-29 조각1 §2). 넷 다 대본 판이라 패턴 순서가 시도 시드에 안 달린다(대본 고르기 · 설계 §4.4) — 어디에
-        // 두어도 같은 장이 찍힌다. 판정 보기의 판들 뒤에 둔 것은 들인 순서일 뿐이다. 그 판들도 대본이라 이 넷이 앞에 끼어 시도 번호가 밀려도 안 바뀐다.
+        // 동작마다 한 장 (#78 · 설계 2026-09-29 조각1 §2) · 달리기 한 장(§5.4). 다섯 다 대본 판이라 패턴 순서가 시도 시드에 안 달린다(대본 고르기 ·
+        // 설계 §4.4) — 어디에 두어도 같은 장이 찍힌다. 판정 보기의 판들 뒤에 둔 것은 들인 순서일 뿐이다. 그 판들도 대본이라 이 다섯이 앞에 끼어 시도
+        // 번호가 밀려도 안 바뀐다.
         await Rush();
         await Grab();
         await Uppercut();
         await Offbeat();
+        await Run();
 
         Log.Marker("shots", "shots=done");
         GetTree().Quit();
@@ -269,9 +276,7 @@ public partial class ShotRunner : Node
         await NewBattle("3연격");
 
         // 보스 쪽으로 붙는다 — 닿지 않으면 가드가 할 일이 없다.
-        Hold("move_right", true);
-        await _drive.Wait(1.1);
-        Hold("move_right", false);
+        await WalkIn();
 
         // ── 버티는 자세 ───────────────────────────────────────────────────
         // **프레임을 세지 않는다.** 가드가 서는 것은 누른 그 틱이지만 규칙에게 물어보는 규약은
@@ -345,9 +350,7 @@ public partial class ShotRunner : Node
     private async Task Poise()
     {
         await NewBattle(_classic);
-        Hold("move_right", true);
-        await _drive.Wait(1.1);
-        Hold("move_right", false);
+        await WalkIn();
 
         bool half = false;
         for (int round = 0; round < 12 && _battle is { BossExhausted: false }; round++)
@@ -387,7 +390,7 @@ public partial class ShotRunner : Node
     /// 파랗다(보스 게이지의 탈진과 같은 파랑). 가드 붕괴로 든 탈진과 같은 그림이다(<c>battle-10b</c> 는 붕괴의 순간 · 큰 고리).
     ///
     /// <para>
-    /// <b>3연격만 도는 판(대본 · #78)에서</b> 찍는다. 3연격은 보스가 선 자리(≈ 1312)에서 3.25초 동안 427px 까지만
+    /// <b>3연격만 도는 판(대본 · #78)에서</b> 찍는다. 3연격은 보스가 선 자리(1440 · 쉬는 동안 제자리)에서 3.25초 동안 427px 까지만
     /// 쳐 파이터가 선 자리(480)에 안 닿고, 대시 넷(대시 11틱 + 대시 뒤 경직 6틱 + 돌아서는 틱)과 패리 하나(커밋 20틱 + 패리 뒤 경직 15틱 ·
     /// 모두 ≈ 1.9초)와 셔터가 그 안에 든다. 점프 공격이면 도약이 파이터 앞에 내려 맞는 자세가 섞인다.
     /// </para>
@@ -561,7 +564,8 @@ public partial class ShotRunner : Node
 
     /// <summary>
     /// 돌진 중 한 장 (#78 · 설계 §4.6 · §9 · 설계 2026-09-29 조각1 §2.4). 돌진만 도는 판(대본)에서 가만히 선 파이터(480)에게 보스가 달려오는
-    /// 한가운데다 — 앞쪽 거리 832 에서 멈출 자리(760)까지 10틱을 달리므로 <c>run</c> 에 든 뒤 5틱이다. 그림은 <c>run</c> 을 3배속(30fps)으로 돈다.
+    /// 한가운데다 — 앞쪽 거리 960(보스는 쉬는 동안 제자리다)에서 멈출 자리(760)까지 12틱을 달리므로 <c>run</c> 에 든 뒤 5틱이다. 그림은 <c>run</c> 을
+    /// 3배속(30fps)으로 돈다.
     /// </summary>
     private async Task Rush()
     {
@@ -600,6 +604,30 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
+    /// 달리기 중 한 장 (설계 2026-09-29 조각1 §5.4). 쉬기(0.8초) 뒤 달리기를 고른 3연격만 도는 판에서 가만히 선 파이터(480)에게 보스가 달려오는
+    /// 한가운데다 — 판이 선 거리 960 에서 파이터 앞 280 까지 49틱을 달리므로 달리기에 든 뒤 24틱이다. 그림은 <c>run</c> 을
+    /// <c>feel.run_anim_speed</c>(1 · 10fps)로 돈다 — 돌진(3배)보다 느린 달리기다. 몸 색은 쉬는 색(선딜 틴트가 없다)이다 — 달리는 몸에는 판정이 없다.
+    /// </summary>
+    private async Task Run()
+    {
+        _battle = await _drive.NewBattle(new ScriptPlan(0.8, "3연격", Run: true));
+        if (_battle is null)
+        {
+            Log.Warn("shots", "battle_scene_missing script=run");
+            return;
+        }
+
+        await _drive.Until(() => _battle is { BossRunning: true }, _patternTimeout);
+        if (_battle is { BossRunning: false })
+        {
+            Log.Warn("shots", "run_not_seen");
+        }
+
+        await _drive.Frames(24);
+        await Screenshot.CaptureAsync(this, "battle-13e-run");
+    }
+
+    /// <summary>
     /// 엇박의 붙든 f0 한 장 (#78 · 설계 §4.9 · §9). 엇박 3연격만 도는 판에서 패턴의 48틱이다 — 3연격이면 44틱에 칼이 올라(f1) 판정 7틱 앞인데,
     /// 엇박은 칼을 든 f0 에 그대로 서 있다(판정 12틱 앞 · 다음 판정까지 0.20초). 그 틱에 판을 세우고 찍는다. "칼이 안 오른다" 가 보고 누르는
     /// 사람의 단서다 — <c>battle-6-windup</c>(3연격의 f0)과 같은 자세 · 같은 한 색의 선딜 틴트인 것이 이 장의 증명이다(#78 — 무르익음을 걷었다).
@@ -621,8 +649,8 @@ public partial class ShotRunner : Node
     /// ② <b>착지 띠</b> — 바닥 전체 · 높이 0 ~ 60. ③ <b>착지 앞의 패리</b> — 착지 창이 열리기 직전에 K 를 눌러 패리 창 안에서
     /// 착지를 맞는다. 파이터 몸통이 "패리 창" 색이 아니어야 한다: 착지는 패리를 안 받아 실효 방어가 없다(설계 §6.1).
     /// ② · ③ 의 착지 띠는 땅에 선 몸에 창의 첫 틱에 닿고 그 판정은 그 틱에 끝난다 — 그래서 대 본 그 틱에 판을 세우고 찍는다
-    /// (<see cref="CaptureTested"/>). ① 은 빗나간다: 대본의 첫 패턴이라 보스가 다가오는 도중(틱 48 · 832 떨어져)에 서고, 가만히 선 파이터에게
-    /// 셋 다 사거리(427) 밖(<c>MissedTooFar</c>)이라 창 8틱을 다 산다. 그래도 같은 길로 찍는다 — 닿든 안 닿든 대 본 첫 틱이다.
+    /// (<see cref="CaptureTested"/>). ① 은 빗나간다: 대본의 첫 패턴이라 보스가 선 자리(1440 · 쉬는 동안 제자리라 파이터와 960 떨어져)에서 서고,
+    /// 가만히 선 파이터에게 셋 다 사거리(427) 밖(<c>MissedTooFar</c>)이라 창 8틱을 다 산다. 그래도 같은 길로 찍는다 — 닿든 안 닿든 대 본 첫 틱이다.
     /// </para>
     ///
     /// <para>
@@ -693,6 +721,17 @@ public partial class ShotRunner : Node
     /// <summary>보스 판정을 대 본 그 틱에 찍는다 — <see cref="CaptureOn"/> 의 보스 쪽.</summary>
     private Task<bool> CaptureTested(string name, double timeout) =>
         CaptureOn(name, () => _battle is { BossSwingTested: true }, timeout);
+
+    /// <summary>
+    /// 보스 앞 <see cref="_near"/> 까지 걸어 붙는다 — 시간이 아니라 거리로 멈춘다. 옛 장면들은 1.1초를 걸었는데, 그것으로 붙은 것은 쉬는 동안 보스가
+    /// 걸어와 준 덕이었다(설계 2026-09-29 조각1 §5.1 이 걷었다 — 그대로 두니 보스 앞 500 에 서서 가드 · 패리 장면이 판정을 못 만났다).
+    /// </summary>
+    private async Task WalkIn()
+    {
+        Hold("move_right", true);
+        await _drive.Until(() => _battle is { BossGap: <= _near }, _pollTimeout);
+        Hold("move_right", false);
+    }
 
     /// <summary>
     /// 새 판을 세워 <see cref="_battle"/> 에 둔다 — <paramref name="script"/> 를 주면 그 판 하나를 대본으로 세운다(<see cref="SceneDriver.NewBattle"/>).

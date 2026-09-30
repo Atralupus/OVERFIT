@@ -36,6 +36,7 @@ public sealed record PickerInputs(
 /// <item><term>어디서</term><description>그 동작의 지점에서 고르게 — <c>RollInt(시드, PlanPoint, 지점 수, k1)</c>.</description></item>
 /// <item><term>무엇으로</term><description>첫 동작을 뺀 명부에서 고르게 — <c>RollInt(시드, PlanNext, 명부 수 − 1, k1)</c> 이 첫 동작의 칸 이상이면 한 칸 민다.</description></item>
 /// <item><term>쉬는 길이</term><description><c>rest_seconds</c> 에서 고르게 — <c>RollInt(시드, PlanRest, 쉬기 수, k1)</c>.</description></item>
+/// <item><term>달리나</term><description><c>RollInt(시드, PlanRun, 100, k1) &lt; run_percent</c> — 늘 굴린다(§5.2).</description></item>
 /// </list>
 ///
 /// <para>
@@ -52,6 +53,7 @@ public sealed class UniformPlanPicker : IPlanPicker
 
     private readonly int[] _rest;
     private readonly int _cancelPercent;
+    private readonly int _runPercent;
 
     public UniformPlanPicker(PickerInputs inputs)
     {
@@ -68,6 +70,7 @@ public sealed class UniformPlanPicker : IPlanPicker
 
         _rest = [.. inputs.RestTicks];
         _cancelPercent = inputs.Knobs.CancelPercent;
+        _runPercent = inputs.Knobs.RunPercent;
     }
 
     public BossPlan Next(PlanRequest request)
@@ -75,16 +78,17 @@ public sealed class UniformPlanPicker : IPlanPicker
         int k = request.Number;
         int move = Det.RollInt(_seed, Det.Domain.PatternPick, _count, k1: k);
         int rest = _rest[Det.RollInt(_seed, Det.Domain.PlanRest, _rest.Length, k1: k)];
+        bool run = Det.RollInt(_seed, Det.Domain.PlanRun, 100, k1: k) < _runPercent;
 
         // 끊으려면 지점이 있고 이을 다른 동작이 있어야 한다. 주사위는 그때만 굴린다 — 좌표가 번호에 매여 있어 안 굴린 번호가 다음 계획을 안 민다.
         if (_points[move] == 0 || _count < 2 || Det.RollInt(_seed, Det.Domain.PlanCancel, 100, k1: k) >= _cancelPercent)
         {
-            return new BossPlan(rest, move, null, null);
+            return new BossPlan(rest, move, null, null, run);
         }
 
         int point = Det.RollInt(_seed, Det.Domain.PlanPoint, _points[move], k1: k);
         int next = Det.RollInt(_seed, Det.Domain.PlanNext, _count - 1, k1: k);
-        return new BossPlan(rest, move, point, next >= move ? next + 1 : next);
+        return new BossPlan(rest, move, point, next >= move ? next + 1 : next, run);
     }
 }
 
@@ -126,7 +130,7 @@ public sealed class ScriptPlanPicker : IPlanPicker
                 continue;
             }
 
-            _plans[i] = new BossPlan(BattleSim.TicksFor(plan.RestSeconds), move, plan.CancelPoint, next >= 0 ? next : null);
+            _plans[i] = new BossPlan(BattleSim.TicksFor(plan.RestSeconds), move, plan.CancelPoint, next >= 0 ? next : null, plan.Run);
         }
 
         if (problems.Count > 0)

@@ -11,7 +11,24 @@ public sealed class BossConfig
 {
     public required int MaxHealth { get; init; }
 
-    public required double MoveSpeed { get; init; }
+    /// <summary>
+    /// 달리기의 빠르기(px/s · 설계 2026-09-29 조각1 §5.3) — 840(틱당 14)은 파이터 걷기(420)의 두 배다: 물러나는 사람을 초당 420 씩 따라잡는다. 판이
+    /// 설 때의 거리(960)에서 49틱, 아레나 끝에서 끝(1805)에서 109틱이다. 옛 <c>move_speed</c>(쉬는 동안 미끄러지는 160)가 있던 자리다 — 쉬는 동안
+    /// 보스는 제자리다(§5.1).
+    /// </summary>
+    public required double RunSpeed { get; init; }
+
+    /// <summary>
+    /// 달리기가 멈추는 파이터 앞 거리(px · §5.3) — 돌진과 같은 280. 서 있는 파이터에게 3연격의 세 칼과 올려베기가 다 닿는 거리의 안쪽이다
+    /// (<c>BossDataTests</c>). 이미 이 안이면 안 달리고 곧장 첫 동작이다.
+    /// </summary>
+    public required double RunStop { get; init; }
+
+    /// <summary>
+    /// 달리기의 상한(초 · §5.3) — 안전장치다. 가장 먼 달리기(1.82초)보다 길고(<c>BossDataTests</c>), 대시로 계속 도망가면 넘을 수 있다 — 넘으면
+    /// <c>[W] run_timeout</c> 을 남기고 그 자리에서 첫 동작이다.
+    /// </summary>
+    public required double RunMaxSeconds { get; init; }
 
     /// <summary>몸 절반 폭. 캐릭터의 4배라 근접에서는 거의 항상 닿는다.</summary>
     public required double HalfWidth { get; init; }
@@ -61,8 +78,9 @@ public sealed class BossConfig
 }
 
 /// <summary>
-/// 보스 상태. <b>플레이어를 모른다</b> — 다가갈 목표 x 를 <see cref="BattleSim"/> 이 넣어준다.
-/// 그래야 패턴 테스트가 플레이어 없이 돈다.
+/// 보스 상태. <b>플레이어를 모른다</b> — 볼 곳과 설 자리는 <see cref="BattleSim"/> 이 넣어준다(<see cref="Face"/> · <see cref="Move"/>).
+/// 그래야 패턴 테스트가 플레이어 없이 돈다. 쉬는 동안에는 제자리다 — 자리를 옮기는 길은 달리기 · 돌진 · 도약의 움직임 셋이다(설계 2026-09-29
+/// 조각1 §5.1).
 /// </summary>
 public sealed class Boss
 {
@@ -124,8 +142,8 @@ public sealed class Boss
     public IReadOnlyList<double> RestSeconds => _config.RestSeconds;
 
     /// <summary>
-    /// 탈진했나 (#72 · 설계 §4.3). 탈진한 보스는 아무것도 안 한다 — 패턴은 무너질 때 끊겼고(<c>BattleSim</c> 의 탈진 루틴),
-    /// 다가가지도 돌아서지도 않는다. 맞으면 피해만 들어간다.
+    /// 탈진했나 (#72 · 설계 §4.3). 탈진한 보스는 아무것도 안 한다 — 패턴(과 달리기)은 무너질 때 끊겼고(<c>BattleSim</c> 의 탈진 루틴),
+    /// 돌아서지도 않는다. 맞으면 피해만 들어간다.
     /// </summary>
     public bool Exhausted => _exhaustLeft > 0;
 
@@ -206,20 +224,4 @@ public sealed class Boss
         }
     }
 
-    /// <summary>목표 쪽으로 다가간다. 패턴을 도는 동안에는 <see cref="BattleSim"/> 이 안 부른다.</summary>
-    public void Approach(double targetX, double dt)
-    {
-        double step = _config.MoveSpeed * dt;
-        double delta = targetX - X;
-        if (Math.Abs(delta) <= step)
-        {
-            X = targetX;
-        }
-        else
-        {
-            X += Math.Sign(delta) * step;
-        }
-
-        X = Math.Clamp(X, _config.HalfWidth, _arena.Width - _config.HalfWidth);
-    }
 }

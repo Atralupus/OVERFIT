@@ -174,8 +174,8 @@ public class BossMotionTests
     [Fact]
     public void 돌진은_틱당_60px_로_다가가_파이터_앞_280_에_닿을_때까지_시계를_세운다()
     {
-        // 설계 §4.6 — 3600 px/s 는 틱당 정확히 60px 다. 판이 설 때의 간격에서 보스가 첫 패턴 앞의 간격(0.8초)에 128px 걸어 오면 d ≈ 832 —
-        // 멈출 자리까지 552 는 ⌈552 / 60⌉ = 10틱이다(9 × 60 + 12). 닿는 틱까지 시계를 세우고(HoldClock), 닿는 틱에 끝난다. 남은 틱(HoldTicks)은
+        // 설계 §4.6 — 3600 px/s 는 틱당 정확히 60px 다. 보스 1312 · 파이터 480 이면 d = 832 — 멈출 자리까지 552 는 ⌈552 / 60⌉ = 10틱이다
+        // (9 × 60 + 12 · 끝 걸음이 짧은 자리를 일부러 고른 값이다 — 옛 판에서 쉬는 동안 보스가 128px 걸어 온 자리였다). 닿는 틱까지 시계를 세우고(HoldClock), 닿는 틱에 끝난다. 남은 틱(HoldTicks)은
         // 그 걸음 뒤 지금 자리에서 잰 ⌈(d − 280) / 60⌉ 이다 — 다음 판정까지 남은 시간이 그것을 더한다.
         List<MotionStep> steps = RushAll(Rush(), 1312, -1, 480);
 
@@ -330,7 +330,7 @@ public class BossMotionTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 0.2),
             PatternIds = new[] { "점프 공격" },
             Patterns = TestConfigs.Patterns(),
             Seed = 1,

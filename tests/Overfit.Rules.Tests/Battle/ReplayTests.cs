@@ -68,7 +68,7 @@ public class ReplayTests
     {
         // 게임의 대본은 돌며 되풀이된다 — 기록은 그 판에서 고른 계획을 고른 만큼 싣는다. 되살리기는 그 목록을 대본으로 세운다: 같은 판이면 같은
         // 번호에서 같은 계획을 고르므로 기록 한 바퀴로 판 전체가 선다. 캔슬 지점은 초로 적혀 있어 지금 정의의 칸으로 되찾는다(Review Focus 4).
-        ScriptPlan[] script = [new(0.4, "3연격", 0, "돌진"), new(1.2, "잡기"), new(0.8, "엇박 3연격", 1, "올려베기")];
+        ScriptPlan[] script = [new(0.4, "3연격", 0, "돌진", Run: true), new(1.2, "잡기"), new(0.8, "엇박 3연격", 1, "올려베기", Run: true)];
         (AttemptEntry entry, BattleSim sim) = Fight(_seed, script);
         sim.Plans.Count.ShouldBeGreaterThan(script.Length, "대본이 한 바퀴를 안 돌았다");
 

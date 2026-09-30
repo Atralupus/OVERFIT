@@ -15,9 +15,9 @@ namespace Overfit.Rules.Tests.Battle;
 /// 패턴이 선 판의 틱이 B 면 판의 B + p 틱이 패턴의 p 틱이다.
 ///
 /// <para>
-/// 판은 파이터 480 · 보스 1440 에서 서고, 보스는 첫 패턴 앞의 간격(0.8초 = 48틱)에 128px 걸어 와 1312 에서 첫 패턴을 세운다. 보스는
-/// 안 죽는다(체력 999_999) — 판이 패턴 도중에 끝나지 않게. 대본은 끝나면 처음부터 다시 돈다 — 같은 동작을 둘 잇는 판은 첫째 뒤의 쉬는 동안
-/// 보스가 다가온 자리에서 둘째를 본다.
+/// 판은 파이터 480 · 보스 1440 에서 서고, 보스는 쉬는 동안 제자리라(설계 2026-09-29 조각1 §5.1) 첫 패턴도 1440 에서 선다(0.8초 = 48틱 뒤).
+/// 보스는 안 죽는다(체력 999_999) — 판이 패턴 도중에 끝나지 않게. 대본은 끝나면 처음부터 다시 돈다 — 같은 동작을 둘 잇는 판은 첫째가 끝난
+/// 자리에서 둘째를 본다. 보스가 다가와야 서는 판은 계획의 달리기(§5.2)로 세운다.
 /// </para>
 ///
 /// <para>
@@ -43,7 +43,11 @@ public class MoveBattleTests
     /// 보스전의 명부 위에 대본을 얹은 판 — 대본의 칸마다 0.8초 쉬고 끊지 않는다(옛 간격 그대로라 아래 틱들이 그 위에서 잰 값이다). 파이터는
     /// <paramref name="fighter"/> — 없으면 실제 캐릭터다.
     /// </summary>
-    private static BattleSim Sim(FighterConfig? fighter, params string[] script)
+    private static BattleSim Sim(FighterConfig? fighter, params string[] script) =>
+        Sim(fighter, script.Select(id => new ScriptPlan(0.8, id)).ToArray());
+
+    /// <summary>보스전의 명부 위에 계획을 그대로 얹은 판 — 쉬기 · 달리기를 칸마다 적는다.</summary>
+    private static BattleSim Sim(FighterConfig? fighter, params ScriptPlan[] plans)
     {
         IReadOnlyList<string> roster = StageRoster.For(TestConfigs.Stages(), 1);
         Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
@@ -56,7 +60,7 @@ public class MoveBattleTests
             PatternIds = roster,
             Patterns = patterns,
             Seed = 51,
-            Picker = new ScriptPlanPicker(roster, patterns, script.Select(id => new ScriptPlan(0.8, id)).ToArray()),
+            Picker = new ScriptPlanPicker(roster, patterns, plans),
             MaxTicks = TestConfigs.MaxTicks(),
         });
     }
@@ -99,8 +103,8 @@ public class MoveBattleTests
     }
 
     /// <summary>
-    /// 보스 앞 <paramref name="gap"/>(보스 중심에서 파이터 중심까지) 자리로 한 걸음 — 한 걸음 안에 들면 선다. 쉬는 동안 보스가 다가오면 물러서
-    /// 간격을 지킨다(보스가 더 느리다 · 160 대 420). 자리는 한 걸음(7px) 안으로 맞는다. 물러서면 파이터는 보스를 등진다.
+    /// 보스 앞 <paramref name="gap"/>(보스 중심에서 파이터 중심까지) 자리로 한 걸음 — 한 걸음 안에 들면 선다. 자리는 한 걸음(7px) 안으로 맞는다.
+    /// 물러서면 파이터는 보스를 등진다.
     /// </summary>
     private static InputFrame Toward(BattleSim sim, double gap)
     {
@@ -108,8 +112,14 @@ public class MoveBattleTests
         return Math.Abs(off) < _stride ? default : new InputFrame((sbyte)Math.Sign(off), false, false, false, false);
     }
 
-    /// <summary>1타 사거리 안(보스와 356 떨어진 956)으로 걸어 들어가는 입력 — 판이 선 뒤 68틱 동안 오른쪽을 누른다(476px).</summary>
-    private static InputFrame WalkIn(int tick) => tick <= 68 ? _right : default;
+    /// <summary>
+    /// 1타 사거리 안(보스와 358 떨어진 1082)으로 걸어 들어가는 입력 — 판이 선 뒤 86틱 동안 오른쪽을 누른다(602px). 첫 동작(48틱에 선다)의 1타
+    /// 창(51틱)보다 한참 앞에 선다.
+    /// </summary>
+    private static InputFrame WalkIn(int tick) => tick <= 86 ? _right : default;
+
+    /// <summary>첫 동작의 판정이 닿지 않는 자리(보스 앞 440 — 3연격 · 올려베기가 다 닿는 427 의 밖).</summary>
+    private const double _outOfReach = 440;
 
     [Theory]
     [InlineData(150, 16)]
@@ -122,11 +132,11 @@ public class MoveBattleTests
     {
         // 설계 2026-09-29 조각1 §2.1 — 3연격 1타(51틱)를 보스 앞 어디서든 점프로 넘는 누름은 16 ~ 35틱이다(발이 궤적 윗끝 236.5 위에 누른 틱 + 16 ~
         // + 42 · 아래 대조군). 올려베기는 같은 51틱에 [0, 396, 0, 360] 을 친다 — 점프의 정점에서 발이 300 이라 창(51 ~ 58) 내내 사각형 안이다. 그
-        // 누름의 양 끝으로 보스 앞 150 · 250 · 400 어디서 뛰어도 공중에서 맞는다. 첫 올려베기는 멀리서 헛치게 두고(832 · 사거리 밖), 창이 닫힌 뒤
+        // 누름의 양 끝으로 보스 앞 150 · 250 · 400 어디서 뛰어도 공중에서 맞는다. 첫 올려베기는 사거리 밖(보스 앞 440)에서 헛치게 두고, 창이 닫힌 뒤
         // 걸어가 둘째 앞에서 그 자리에 선다.
         BattleSim sim = Sim(null, "올려베기");
-        int first = UntilBegins(sim, "올려베기");
-        UntilTick(sim, first, 58);
+        int first = UntilBegins(sim, "올려베기", _ => Toward(sim, _outOfReach));
+        UntilTick(sim, first, 58, _ => Toward(sim, _outOfReach));
         int second = UntilNextBegins(sim, "올려베기", _ => Toward(sim, gap));
         UntilTick(sim, second, jumpAt - 1, _ => Toward(sim, gap));
         double stood = Math.Abs(sim.Boss.X - sim.Fighter.X);
@@ -154,8 +164,8 @@ public class MoveBattleTests
         // 위 테스트의 대조군 — 올려베기 자리에 3연격이 오면 같은 자리 · 같은 누름이 1타를 넘는다. 둘을 가르는 것은 선딜의 그림뿐이다(attack2 · attack).
         // 15틱 앞이나 36틱 뒤의 누름은 보스 앞 250 안에서 1타에 맞는다 — 궤적이 가장 높은 자리다(보스 앞 300 밖에서는 12 · 13 틱의 누름도 넘는다).
         BattleSim sim = Sim(null, "올려베기", "3연격");
-        int first = UntilBegins(sim, "올려베기");
-        UntilTick(sim, first, 58);
+        int first = UntilBegins(sim, "올려베기", _ => Toward(sim, _outOfReach));
+        UntilTick(sim, first, 58, _ => Toward(sim, _outOfReach));
         int second = UntilNextBegins(sim, "3연격", _ => Toward(sim, gap));
         UntilTick(sim, second, jumpAt - 1, _ => Toward(sim, gap));
         UntilTick(sim, second, 59, p => p == jumpAt ? _jump : default);
@@ -177,8 +187,8 @@ public class MoveBattleTests
         // 설계 2026-09-29 조각1 §2.1 — 점프만 잡는 칼이 아니다: 서 있으면 맞고, 선 사람의 답(대시 무적 · 가드 · 패리)은 다 받는다. 대시는 창의 첫 틱에,
         // 패리는 창 2틱 앞에 누르고 가드는 창 앞부터 붙든다. 보스 앞 250 에 선다.
         BattleSim sim = Sim(null, "올려베기");
-        int first = UntilBegins(sim, "올려베기");
-        UntilTick(sim, first, 58);
+        int first = UntilBegins(sim, "올려베기", _ => Toward(sim, _outOfReach));
+        UntilTick(sim, first, 58, _ => Toward(sim, _outOfReach));
         int second = UntilNextBegins(sim, "올려베기", _ => Toward(sim, 250));
         UntilTick(sim, second, 40, _ => Toward(sim, 250));
         UntilTick(sim, second, 58, p => answer switch
@@ -227,13 +237,14 @@ public class MoveBattleTests
     [InlineData(true, DodgeVerb.None, HitVerdict.Hit)]
     public void 빠른_3연격은_앞_3연격의_마지막_창_뒤_2연격을_시작한_사람을_잡고_1타만_친_사람은_못_잡는다(bool chain, DodgeVerb verb, HitVerdict verdict)
     {
-        // 설계 2026-09-29 조각1 §2.2 — 3연격의 마지막 창(159 ~ 166)이 닫힌 뒤 남은 후딜 28틱 + 쉬는 간격 48틱 = 76틱. 창이 닫힌 다음 틱(167)에 J 를
-        // 누르고 2타를 이은 사람(2연격 · 106틱)은 빠른 3연격이 선 뒤에도 묶여 있어, 1타(24틱)에 누른 대시가 버려지고 맞는다 — 칼질 중이라 욕심으로
-        // 남는다. 1타만 친 사람(40틱)은 이미 풀려 같은 대시로 흘린다. 3연격은 사거리 밖(보스 앞 440)에서 헛치게 두고 — 셋 다 피하려면 427 넘게
-        // 떨어져야 한다 — 쉬는 동안 보스가 다가와(128px) 빠른 3연격이 닿는 자리(보스 앞 300 남짓)에 선다.
-        BattleSim sim = Sim(null, "3연격", "빠른 3연격");
-        int triple = UntilBegins(sim, "3연격", _ => Toward(sim, 440));
-        UntilTick(sim, triple, 166, _ => Toward(sim, 440));
+        // 설계 2026-09-29 조각1 §2.2 · §3.4 — 3연격의 마지막 창(159 ~ 166)이 닫힌 뒤 남은 후딜 28틱 + 짧은 쉬기 24틱 + 달리기 12틱 = 64틱. 창이 닫힌
+        // 다음 틱(167)에 J 를 누르고 2타를 이은 사람(2연격 · 106틱)은 빠른 3연격이 선 뒤에도 묶여 있어, 1타(24틱)에 누른 대시가 버려지고 맞는다 —
+        // 칼질 중이라 욕심으로 남는다. 1타만 친 사람(40틱)은 이미 풀려 같은 대시로 흘린다. 3연격은 사거리 밖(보스 앞 440)에서 헛치게 두고 — 셋 다
+        // 피하려면 427 넘게 떨어져야 한다 — 보스가 쉬기 뒤 파이터 앞 280 까지 달려와(160px · 12틱) 빠른 3연격을 연다. 옛 판은 쉬는 동안 보스가
+        // 걸어와(0.8초에 128px) 같은 자리를 만들었다 — 쉬는 동안 제자리가 된 뒤로는 달리기가 그 몫이다(§5).
+        BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true));
+        int triple = UntilBegins(sim, "3연격", _ => Toward(sim, _outOfReach));
+        UntilTick(sim, triple, 166, _ => Toward(sim, _outOfReach));
         UntilTick(sim, triple, 180, p => p == 167 || (chain && p == 170) ? _attack : default);
         int fast = UntilBegins(sim, "빠른 3연격");
         UntilTick(sim, fast, 31, p => p == 24 ? _dash : default);
@@ -247,21 +258,21 @@ public class MoveBattleTests
     [Fact]
     public void 돌진은_멀리_선_사람에게_달려와_도착_뒤_3타를_꽂는다()
     {
-        // 설계 2026-09-29 조각1 §2.4 · 설계 §4.6 — 멀리 서서 지켜보는 사람(480)에게 보스(1312)가 곧장 달린다: 앞쪽 거리 832 에서 멈출 자리(760)까지
-        // 552 는 ⌈552 / 60⌉ = 10틱이라 10틱에 닿는다(A). 달리는 동안 패턴 시계가 1 에 서 있다가 도착 다음 틱부터 다시 가 3타가 시계 24 에 선다 —
-        // A + 23 = 33틱이다. 서 있던 사람은 맞는다(3타의 땅 사거리 +80 ~ +404 안).
+        // 설계 2026-09-29 조각1 §2.4 · 설계 §4.6 — 멀리 서서 지켜보는 사람(480)에게 보스(1440 · 쉬는 동안 제자리)가 곧장 달린다: 앞쪽 거리 960 에서
+        // 멈출 자리(760)까지 680 은 ⌈680 / 60⌉ = 12틱이라 12틱에 닿는다(A). 달리는 동안 패턴 시계가 1 에 서 있다가 도착 다음 틱부터 다시 가 3타가
+        // 시계 24 에 선다 — A + 23 = 35틱이다. 서 있던 사람은 맞는다(3타의 땅 사거리 +80 ~ +404 안).
         BattleSim sim = Sim(null, "돌진");
         int begun = UntilBegins(sim, "돌진");
-        sim.Boss.X.ShouldBe(1312, 1e-9);
+        sim.Boss.X.ShouldBe(1440, 1e-9);
 
-        UntilTick(sim, begun, 9);
-        sim.Boss.X.ShouldBeGreaterThan(760, "9틱에 벌써 닿았다");
-        UntilTick(sim, begun, 10);
-        sim.Boss.X.ShouldBe(760, 1e-9, "돌진이 10틱에 파이터 앞 280 에 안 멈췄다");
-        UntilTick(sim, begun, 32);
-        sim.Events.ShouldBeEmpty("3타가 33틱보다 먼저 섰다");
-        UntilTick(sim, begun, 33);
-        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[] { (DodgeVerb.None, HitVerdict.Hit) }, "3타가 33틱에 안 섰다");
+        UntilTick(sim, begun, 11);
+        sim.Boss.X.ShouldBeGreaterThan(760, "11틱에 벌써 닿았다");
+        UntilTick(sim, begun, 12);
+        sim.Boss.X.ShouldBe(760, 1e-9, "돌진이 12틱에 파이터 앞 280 에 안 멈췄다");
+        UntilTick(sim, begun, 34);
+        sim.Events.ShouldBeEmpty("3타가 35틱보다 먼저 섰다");
+        UntilTick(sim, begun, 35);
+        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[] { (DodgeVerb.None, HitVerdict.Hit) }, "3타가 35틱에 안 섰다");
         sim.Fighter.Health.ShouldBe(Real().MaxHealth - 14);
     }
 
@@ -270,13 +281,13 @@ public class MoveBattleTests
     {
         // 설계 2026-09-29 조각1 §2.4 「단독으로 나올 때의 예고」 — 파이터가 280 안이면 돌진은 0틱이고(움직이지 않고 그 틱에 끝난다 · 뒤로도 안 간다)
         // 선딜만 남는다: 3타가 24틱(0.40초 — 빠른 3연격의 첫 타와 같다)에 선다. 옛 0.25초면 15틱이었다. 첫 돌진이 가만히 선 사람(480) 앞 280(760)에
-        // 달려와 친 뒤, 쉬는 동안 보스가 128px 더 걸어와(632) 둘째 돌진은 152 앞에서 선다.
+        // 달려와 친 뒤, 보스는 쉬는 동안 그 자리라(설계 2026-09-29 조각1 §5.1) 둘째 돌진은 멈출 거리 그 끝(280 앞)에서 선다.
         BattleSim sim = Sim(null, "돌진");
         UntilBegins(sim, "돌진");
         int second = UntilNextBegins(sim, "돌진");
         double x = sim.Boss.X;
-        x.ShouldBe(632, 1e-6, "둘째 돌진이 첫 돌진이 멈춘 자리(760)에서 128px 걸어 온 자리에 안 섰다");
-        (x - sim.Fighter.X).ShouldBe(152, 1e-6, "둘째 돌진이 280 안에서 안 섰다 — 이 테스트가 0틱 돌진을 안 본다");
+        x.ShouldBe(760, 1e-6, "둘째 돌진이 첫 돌진이 멈춘 자리(760)에서 안 섰다 — 쉬는 동안 움직였다");
+        (x - sim.Fighter.X).ShouldBe(280, 1e-6, "둘째 돌진이 280 안에서 안 섰다 — 이 테스트가 0틱 돌진을 안 본다");
         int seen = sim.Events.Count;
 
         UntilTick(sim, second, 23);

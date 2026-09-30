@@ -6,19 +6,21 @@ namespace Overfit.Battle.Rules;
 /// 보스의 계획 하나 (설계 2026-09-29 조각1 §3.3) — 다음을 고를 때 <b>통째로</b> 고르고, 고른 뒤에는 안 바꾼다(우산 §0 의 정직한 예고).
 ///
 /// <code>
-/// 흐름  쉬기(제자리 · 파이터 쪽으로 돌아서기만) → 첫 동작 → [캔슬 지점에서 끊고 돌아서서] 잇는 동작 → 다음 계획
+/// 흐름  쉬기(제자리 · 파이터 쪽으로 돌아서기만) → [달리기] → 첫 동작 → [캔슬 지점에서 끊고 돌아서서] 잇는 동작 → 다음 계획
 /// </code>
 ///
 /// <para>
 /// <b>쉬기를 계획의 앞에 둔다.</b> 쉬는 길이는 뒤의 동작과 짝이다 — 빠른 3연격이 2연격을 벌하는지는 그 앞의 쉬기가 정한다(§2.2 · §3.4). 둘을
-/// 한 번에 골라야 조각 4 의 규칙이 "짧게 쉬고 빠른 3연격" 을 한 수로 낸다. 달리기(§5)는 7/8 에서 더한다.
+/// 한 번에 골라야 조각 4 의 규칙이 "짧게 쉬고 빠른 3연격" 을 한 수로 낸다. 달리기(§5)도 계획의 한 칸이라 조각 4 의 "멀리 서는 사람" 에게 고르기만
+/// 바꾸면 된다 — 판은 안 연다.
 /// </para>
 /// </summary>
 /// <param name="RestTicks">쉬는 틱 — 1 이상이다(<c>bosses.json</c> 의 <c>rest_seconds</c> 를 틱으로 바꾼 것 중 하나).</param>
 /// <param name="Move">첫 동작 — 명부(<c>stages.json</c> 의 <c>patterns</c>)의 칸.</param>
 /// <param name="CancelPoint">캔슬 지점 — 첫 동작의 <see cref="PatternDef.CancelPoints"/> 의 칸. 끊지 않으면 null.</param>
 /// <param name="Next">잇는 동작 — 명부의 칸이고 첫 동작과 다르다(같은 것을 이으면 1타를 한 번 더 할 뿐이다 · §3.2). 끊지 않으면 null.</param>
-public sealed record BossPlan(int RestTicks, int Move, int? CancelPoint, int? Next);
+/// <param name="Run">쉬기 뒤에 파이터 앞(<see cref="BossConfig.RunStop"/>)까지 달리나 (§5.2) — 이미 그 안이면 안 달린다.</param>
+public sealed record BossPlan(int RestTicks, int Move, int? CancelPoint, int? Next, bool Run = false);
 
 /// <summary>
 /// 계획을 고를 때 판이 넘기는 것 (설계 2026-09-29 조각1 §4.1) — 판 안에서 일어난 일이 고르기에 드는 자리다. 조각 4 의 망이 여기서 읽는다.
@@ -50,7 +52,8 @@ public interface IPlanPicker
 /// <param name="Move">첫 동작의 id.</param>
 /// <param name="CancelPoint">캔슬 지점 — 첫 동작의 <see cref="PatternDef.CancelPoints"/> 의 칸. 끊지 않으면 null.</param>
 /// <param name="Next">잇는 동작의 id — <paramref name="CancelPoint"/> 와 같이 있거나 같이 없다.</param>
-public sealed record ScriptPlan(double RestSeconds, string Move, int? CancelPoint = null, string? Next = null);
+/// <param name="Run">쉬기 뒤에 파이터 앞까지 달리나 (§5.2).</param>
+public sealed record ScriptPlan(double RestSeconds, string Move, int? CancelPoint = null, string? Next = null, bool Run = false);
 
 /// <summary>
 /// 기록에 싣는 계획 하나 (설계 2026-09-29 조각1 §4.3) — <see cref="BossPlan"/> 을 사람이 읽는 모양으로: 칸 대신 id, 틱 대신 초. 명부의 칸 번호는
@@ -60,4 +63,5 @@ public sealed record ScriptPlan(double RestSeconds, string Move, int? CancelPoin
 /// <param name="Move">첫 동작의 id.</param>
 /// <param name="Cancel">캔슬 지점의 시각(초 · <c>patterns.json</c> 의 <c>cancel_points[].t</c> 그대로). 끊지 않으면 null.</param>
 /// <param name="Next">잇는 동작의 id. 끊지 않으면 null.</param>
-public sealed record PlanEntry(double Rest, string Move, double? Cancel, string? Next);
+/// <param name="Run">쉬기 뒤에 달리나 (§5.2). 6/8 의 줄에는 없다 — 그때는 보스가 안 달렸다(false).</param>
+public sealed record PlanEntry(double Rest, string Move, double? Cancel, string? Next, bool Run = false);

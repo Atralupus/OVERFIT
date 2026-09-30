@@ -44,9 +44,9 @@ public sealed class BattleSetup
 
     /// <summary>
     /// 계획 고르기 (#72 · 설계 2026-09-29 조각1 §4.1) — <b>선택</b>이다. 비우면 (<see cref="Seed"/>, <see cref="PatternIds"/>) 위의
-    /// <see cref="UniformPlanPicker"/> 인데 <b>끊지 않는다</b>(<c>cancel_percent</c> 0) — 쉬기는 보스의 <c>rest_seconds</c> 에서 고른다. 고르기를
-    /// 모르는 테스트의 판이 캔슬 없이 선다. 게임 · 데모 · 공장 · 골든은 단계의 <c>picker</c> 로 등록표(<see cref="PatternPickers"/>)에서 세워
-    /// 넣는다(<c>StageRoster.Setup</c> — <c>balance.json</c> 의 수치로).
+    /// <see cref="UniformPlanPicker"/> 인데 <b>끊지도 달리지도 않는다</b>(<c>cancel_percent</c> · <c>run_percent</c> 0) — 쉬기는 보스의
+    /// <c>rest_seconds</c> 에서 고른다. 고르기를 모르는 테스트의 판이 캔슬 · 달리기 없이 선다. 게임 · 데모 · 공장 · 골든은 단계의 <c>picker</c> 로
+    /// 등록표(<see cref="PatternPickers"/>)에서 세워 넣는다(<c>StageRoster.Setup</c> — <c>balance.json</c> 의 수치로).
     /// </summary>
     public IPlanPicker? Picker { get; set; }
 
@@ -127,6 +127,24 @@ public sealed class BattleSim
     private double? _goalX;
 
     /// <summary>
+    /// 계획의 달리기 (설계 2026-09-29 조각1 §5.2) — 쉬기가 끝나고 계획이 달리기를 골랐을 때 서고(<see cref="StartRun"/>), 닿거나 상한을 넘기면 걷고
+    /// 첫 동작을 세운다(<see cref="RunStep"/>). 탈진하면 계획과 같이 걷힌다(<see cref="ClearPattern"/>). 달리지 않으면 null.
+    /// </summary>
+    private IBossMotion? _run;
+
+    /// <summary>달리기가 끝나면 세울 첫 동작의 칸.</summary>
+    private int _runMove;
+
+    /// <summary>달린 틱 — 쉬기가 끝난 틱이 1 이다. 상한(<see cref="_runMaxTicks"/>)과 견준다.</summary>
+    private int _runTicks;
+
+    /// <summary>달리기를 선 자리(x) — 로그의 <c>moved=</c>(간 거리)를 잰다. 이미 멈출 거리 안이면 0 이다.</summary>
+    private double _runFrom;
+
+    /// <summary>달리기의 상한(틱) — <see cref="BossConfig.RunMaxSeconds"/> 를 판을 세울 때 한 번 바꾼다.</summary>
+    private readonly int _runMaxTicks;
+
+    /// <summary>
     /// 공중에서 무너진 보스가 따라 내리는 움직임 (#71 · 설계 §4.2) — 끊긴 도약의 <b>높이만</b> 쓴다. 땅에서 무너졌으면 null 이다.
     /// 패턴의 움직임(<see cref="_motion"/>)과 따로 두는 이유: 패턴은 무너질 때 끊겨 러너 · 움직임 · 시계가 다 걷히는데(<see cref="EndPattern"/>)
     /// 이것만은 땅에 닿을 때까지 탈진 동안 돈다.
@@ -172,6 +190,7 @@ public sealed class BattleSim
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
         _swings = new BossSwings(Fighter, Boss, _credit, new JumpClearance(setup.Fighter));
         _poise = PoiseGauge.For(setup.Boss);
+        _runMaxTicks = TicksFor(setup.Boss.RunMaxSeconds);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
         // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
@@ -179,8 +198,8 @@ public sealed class BattleSim
 
         // 판이 서면 첫 계획의 쉬기부터다 (설계 2026-09-29 조각1 §3.4) — 첫 계획을 지금 고른다.
         IReadOnlyList<int> rest = RestTicks(setup.Boss);
-        IPlanPicker picker = setup.Picker ?? new UniformPlanPicker(
-            new PickerInputs(setup.PatternIds, setup.Patterns, rest, new PickerBalance { CancelPercent = 0 }, Array.Empty<AttemptRecord>(), setup.Seed));
+        IPlanPicker picker = setup.Picker ?? new UniformPlanPicker(new PickerInputs(
+            setup.PatternIds, setup.Patterns, rest, new PickerBalance { CancelPercent = 0, RunPercent = 0 }, Array.Empty<AttemptRecord>(), setup.Seed));
         _flow = new PlanFlow(picker, setup.PatternIds, setup.Patterns, rest, Request);
         _flow.Choose();
     }
@@ -279,6 +298,12 @@ public sealed class BattleSim
 
     /// <summary>이 판에서 실제로 끊은 캔슬들 — (끊은 동작, 이은 동작). 탈진으로 못 쓴 캔슬은 안 든다(설계 2026-09-29 조각1 §3.2).</summary>
     public IReadOnlyList<(string From, string To)> Cancels => _cancels;
+
+    /// <summary>
+    /// 보스가 계획의 달리기로 파이터 앞까지 달리는 중인가 (설계 2026-09-29 조각1 §5.2) — 뷰가 <c>run</c> 을 돈다. 닿는 틱에는 거짓이다(그 틱에 첫
+    /// 동작이 선다). 달리는 몸에는 판정이 없다.
+    /// </summary>
+    public bool BossRunning => _run is not null;
 
     /// <summary>
     /// 지금부터 다음 active 판정까지 남은 시간(초). 패턴이 없거나 더 올 active 가 없으면 null.
@@ -443,17 +468,16 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 보스가 파이터에게서 두고 서는 간격. 보스 반폭 + 파이터 반폭이다.
-    /// <b>벽이 아니다</b> — 파이터는 이 안으로 걸어 들어가고, 지나쳐 나간다(이슈 #27).
-    /// 보스가 이 거리를 목표로 서는 이유는 <b>파이터 중심을 목표로 걸으면 둘이 완전히 겹쳐</b>
-    /// 교전 거리가 늘 0 으로 수렴하기 때문이다 — 그림도 틀리고 <c>distance_bias</c> 도 상수가 된다.
+    /// 두 몸이 막 닿는 중심 사이 거리 — 보스 반폭 + 파이터 반폭. <b>벽이 아니다</b> — 파이터는 이 안으로 걸어 들어가고, 지나쳐 나간다(이슈 #27).
+    /// 움직임이 받는다(<see cref="MotionBounds.Standoff"/>): 도약은 파이터 중심이 아니라 이만큼 떨어진 자리에 내린다 — 중심에 내리면 둘이 완전히
+    /// 겹쳐 그림도 틀리고 <c>distance_bias</c> 도 상수가 된다. 옛 보스는 쉬는 동안 이 자리를 향해 걸었다(설계 2026-09-29 조각1 §5.1 이 걷었다).
     /// <b>수치를 손으로 안 적는다</b> — 캐릭터마다 반폭이 다르고(26~36) data/fighters.json 이 진실이다.
     /// </summary>
     private double Standoff => Boss.HalfWidth + Fighter.HalfWidth;
 
     /// <summary>
-    /// 보스: 탈진했으면 아무것도 안 하고(공중에서 무너졌으면 내리기만 한다 · <see cref="Fall"/>), 쉬는 중이면 다가가고 계획의 쉬기를 세고, 동작 중이면
-    /// 캔슬 지점에서 끊거나 타임라인을 민다.
+    /// 보스: 탈진했으면 아무것도 안 하고(공중에서 무너졌으면 내리기만 한다 · <see cref="Fall"/>), 달리는 중이면 한 걸음 가고, 쉬는 중이면 제자리에서
+    /// 돌아서며 계획의 쉬기를 세고, 동작 중이면 캔슬 지점에서 끊거나 타임라인을 민다.
     /// </summary>
     private void AdvanceBoss()
     {
@@ -461,7 +485,7 @@ public sealed class BattleSim
         Boss.Tick();
         if (Boss.Exhausted)
         {
-            // 탈진한 보스는 다가가지도 돌아서지도 않는다(설계 §4.3) — 공중에서 무너졌으면 높이만 따라 내린다.
+            // 탈진한 보스는 달리지도 돌아서지도 않는다(설계 §4.3) — 공중에서 무너졌으면 높이만 따라 내린다.
             Fall();
             return;
         }
@@ -472,24 +496,30 @@ public sealed class BattleSim
 
         if (_runner is null)
         {
-            // 방향은 **쉬는 동안에만** 바꾼다. 여기 두는 것 자체가 잠금의 절반이고
+            if (_run is not null)
+            {
+                RunStep();
+                return;
+            }
+
+            // 방향은 **동작 사이에만** 바꾼다(쉬기 · 달리기). 여기 두는 것 자체가 잠금의 절반이고
             // (나머지 절반은 Boss.Face 안의 가드다), 그래서 패턴이 서는 순간의 방향이
             // 그 패턴이 끝날 때까지 그대로 간다 — 예고가 거짓말이 되지 않는다. 예외는 움직임 하나다
             // (Boss.Move — 도약은 뛰는 틱에 착지 쪽으로 돌아선다 · 설계 §4.2).
-            // **다가가는 자리와 무관하게 파이터 중심을 본다** — Standoff 는 서는 자리지 보는 곳이 아니다.
-            int was = Boss.Facing;
-            Boss.Face(Fighter.X);
-            if (Boss.Facing != was)
-            {
-                Log.Debug("boss", () => $"turn facing={Boss.Facing} tick={Ticks}");
-            }
-
-            // 파이터의 중심이 아니라 **자기 쪽으로 Standoff 떨어진 자리**를 목표로 한다.
-            // 중심을 노리면 보스가 파이터 위에 정확히 겹쳐 서서 교전 거리가 늘 0 이 된다.
-            Boss.Approach(Fighter.X + ((Boss.X >= Fighter.X ? 1 : -1) * Standoff), Dt);
+            //
+            // **쉬는 동안 보스는 제자리다** (설계 2026-09-29 조각1 §5.1) — 돌아서기만 한다. 전에는 파이터 앞(두 몸의 반폭)을 향해 160px/s 로
+            // 다가갔는데 걷기 그림이 없어 idle 그대로 미끄러졌다. 자리를 옮기는 길은 계획의 달리기 · 돌진 · 도약 셋이다.
+            FaceFighter();
             if (_flow.RestTick() is int move)
             {
-                Begin(move);
+                if (_flow.Runs)
+                {
+                    StartRun(move);
+                }
+                else
+                {
+                    Begin(move);
+                }
             }
 
             return;
@@ -534,8 +564,9 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// 동작을 걷는다 — 계획이 끝날 때(<see cref="EndPattern"/>)와 캔슬(<see cref="Cancel"/>)이 같은 일곱 줄이다 (#71 · #59 의 3/6 넘김 — 따로 적혀
-    /// 있으면 하나만 고치는 날 끊긴 동작이 무언가를 남긴다).
+    /// 동작을 걷는다 — 계획이 끝날 때(<see cref="EndPattern"/> · 탈진)와 캔슬(<see cref="Cancel"/>)이 같은 여덟 줄이다 (#71 · #59 의 3/6 넘김 — 따로
+    /// 적혀 있으면 하나만 고치는 날 끊긴 동작이 무언가를 남긴다). 달리기도 여기서 걷힌다 — 달리는 동안 탈진하면 계획이 끝난다(설계 2026-09-29
+    /// 조각1 §5.2).
     /// </summary>
     private void ClearPattern()
     {
@@ -546,6 +577,7 @@ public sealed class BattleSim
         _holdClock = false;
         _holdTicks = 0;
         _goalX = null;
+        _run = null;
     }
 
     /// <summary>
@@ -649,7 +681,7 @@ public sealed class BattleSim
             return;
         }
 
-        string id = Boss.CurrentPattern ?? "-";
+        string id = Boss.CurrentPattern ?? (_run is not null ? "run" : "-");
         _swings.Cut(Ticks, "exhaust");
 
         // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
@@ -683,6 +715,69 @@ public sealed class BattleSim
     /// 결과 <c>Grabbed</c> 와 수단을 싣는다.
     /// </summary>
     private void LogFighterHeld() => Log.Debug("fighter", () => $"held exhausted={Fighter.Exhausted} tick={Ticks}");
+
+    /// <summary>파이터 쪽으로 돌아선다 — 동작 사이(쉬기 · 달리기)의 틱마다. 돌아선 틱을 남긴다.</summary>
+    private void FaceFighter()
+    {
+        int was = Boss.Facing;
+        Boss.Face(Fighter.X);
+        if (Boss.Facing != was)
+        {
+            Log.Debug("boss", () => $"turn facing={Boss.Facing} tick={Ticks}");
+        }
+    }
+
+    /// <summary>
+    /// 달리기를 세운다 (설계 2026-09-29 조각1 §5.2) — 쉬기가 끝난 틱이다. 돌진과 같은 움직임(등록표의 <c>run</c>)에 <c>bosses.json</c> 의 빠르기 ·
+    /// 멈출 거리를 싣고 <b>이 틱부터</b> 달린다 — 이미 멈출 거리 안이면 이 걸음이 곧 끝이라 같은 틱에 첫 동작이 선다(안 달린다).
+    /// </summary>
+    private void StartRun(int move)
+    {
+        var def = new MotionDef { Id = "run", Speed = _setup.Boss.RunSpeed, Stop = _setup.Boss.RunStop };
+        var bounds = new MotionBounds(Boss.HalfWidth, _setup.Arena.Width - Boss.HalfWidth, Standoff);
+        _run = BossMotions.Create(def, bounds);
+        _runMove = move;
+        _runTicks = 0;
+        _runFrom = Boss.X;
+        if (_run is null)
+        {
+            // 등록표에서 run 이 빠졌다 — 규칙 위반이다(돌진의 motion_missing 과 같은 대우). 달리지 않고 첫 동작을 세운다.
+            Log.Error("boss", $"motion_missing id=run tick={Ticks}");
+            Begin(move);
+            return;
+        }
+
+        Log.Debug("boss", () => $"run_begin d={Math.Abs(Fighter.X - Boss.X):0} tick={Ticks}");
+        RunStep();
+    }
+
+    /// <summary>
+    /// 달리기 한 걸음 (§5.2) — 파이터 쪽으로 돌아서고(동작 사이라 잠금이 없다 — 파이터가 보스를 넘어가면 돌아서서 따라간다) 앞으로만 간다. 닿으면
+    /// 그 틱에 첫 동작을 세운다. 상한(<see cref="BossConfig.RunMaxSeconds"/>)까지 못 닿으면 <c>[W] run_timeout</c> 을 남기고 그 자리에서 세운다 —
+    /// 대시로 계속 도망가면 넘을 수 있다(안전장치다). 멈출 자리가 설 수 있는 범위 밖이면 움직임이 경계에서 끝낸다(<see cref="RushMotion"/>).
+    /// </summary>
+    private void RunStep()
+    {
+        FaceFighter();
+        MotionStep step = _run!.Tick(new MotionContext(Boss.X, Boss.Y, Boss.Facing, Fighter.X, _runTicks++));
+        Boss.Move(step.X, step.Y, 0);
+        if (step.Finished)
+        {
+            // 이미 멈출 거리 안이었으면 ticks=1 · moved=0 이다 — 계획은 달리기를 골랐지만 안 달렸다.
+            Log.Debug("boss", () => $"run_end ticks={_runTicks} moved={Math.Abs(Boss.X - _runFrom):0} x={Boss.X:0} tick={Ticks}");
+        }
+        else if (_runTicks >= _runMaxTicks)
+        {
+            Log.Warn("boss", $"run_timeout ticks={_runTicks} d={Math.Abs(Fighter.X - Boss.X):0} x={Boss.X:0} tick={Ticks}");
+        }
+        else
+        {
+            return;
+        }
+
+        _run = null;
+        Begin(_runMove);
+    }
 
     /// <summary>
     /// 명부의 <paramref name="index"/> 칸 동작을 세운다 — 계획의 첫 동작(쉬기가 끝난 틱)이든 잇는 동작(캔슬한 틱)이든. 칸과 정의는 계획을 고를 때

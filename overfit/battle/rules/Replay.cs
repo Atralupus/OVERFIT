@@ -93,7 +93,7 @@ public static class Replay
                 }
             }
 
-            script[i] = new ScriptPlan(plan.Rest, plan.Move, point, plan.Next);
+            script[i] = new ScriptPlan(plan.Rest, plan.Move, point, plan.Next, plan.Run);
         }
 
         // 명부 밖 · 정의가 없는 동작 · 첫 동작과 같은 잇는 동작 — 대본을 세우는 자리가 보는 것을 그대로 본다. 거기서 거절하면 판을 세우는 자리가

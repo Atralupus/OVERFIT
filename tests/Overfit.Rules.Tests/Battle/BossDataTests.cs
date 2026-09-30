@@ -42,6 +42,62 @@ public class BossDataTests
     }
 
     [Fact]
+    public void 달리기의_멈춤은_3연격_세_판정과_올려베기가_선_파이터에게_닿는_거리다()
+    {
+        // 설계 2026-09-29 조각1 §5.3 — 달리기는 파이터 앞 run_stop 에서 멈추고 첫 동작을 세운다. 그 자리에 선 파이터에게 3연격의 세 칼이 다 닿아야
+        // "달려와서 3연격" 이 헛치지 않는다(파이터 중심의 앞쪽 거리로 1타 −74 ~ 404 · 2타 −338 ~ 426 · 3타 80 ~ 404). 올려베기(−30 ~ 426)도 닿는다.
+        // 보스는 x 960 에서 +1 을 본다 — 판정 모양은 hitboxes.json · 손으로 적은 rects 그대로다.
+        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
+        Dictionary<string, HitShape> shapes = TestConfigs.HitShapes();
+        var at = new Placement(960, 0, 1);
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            boss.RunStop.ShouldBeGreaterThan(0, $"{id}: 달리기가 파이터 몸 안까지 파고든다");
+            foreach ((string who, FighterConfig c) in TestConfigs.Fighters())
+            {
+                HitRect body = new Fighter(c, TestConfigs.Arena(), 960 + boss.RunStop).Body;
+                foreach (string move in new[] { "3연격", "올려베기" })
+                {
+                    HitBox?[] hits = BossHits.Of(patterns[move], shapes);
+                    int strikes = 0;
+                    foreach (HitBox? hit in hits)
+                    {
+                        if (hit is not { } h)
+                        {
+                            continue;
+                        }
+
+                        strikes++;
+                        ShapeHit.Overlaps(h.Shape, at, body).ShouldBeTrue($"{id} · {who}: 앞 {boss.RunStop} 에 선 파이터에게 {move} 의 {strikes}번째 칼이 안 닿는다");
+                    }
+
+                    strikes.ShouldBeGreaterThan(0, $"{move} 에 칼이 없다 — 이 가드가 아무것도 안 본다");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void 달리기_상한은_아레나_끝에서_끝보다_길다()
+    {
+        // 설계 2026-09-29 조각1 §5.3 — run_max_seconds 는 안전장치다. 가장 먼 달리기(보스가 한쪽 벽 · 파이터가 반대쪽 벽 · 그 앞 run_stop 까지)보다
+        // 짧으면 서 있는 파이터에게 달려가다가 [W] run_timeout 이 난다 — 정상 플레이가 경고를 낸다. 실제 수치로 (1920 − 85 − 30 − 280) / 840 = 1.82초다.
+        double arena = TestConfigs.Balance().Battle.ArenaWidth;
+        double thinnest = double.MaxValue;
+        foreach (FighterConfig c in TestConfigs.Fighters().Values)
+        {
+            thinnest = System.Math.Min(thinnest, c.HalfWidth);
+        }
+
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            boss.RunSpeed.ShouldBeGreaterThan(0, $"{id}: 달리기가 안 간다");
+            double longest = (arena - boss.HalfWidth - thinnest - boss.RunStop) / boss.RunSpeed;
+            longest.ShouldBeLessThan(boss.RunMaxSeconds, $"{id}: 가장 먼 달리기 {longest:0.00}초가 상한 {boss.RunMaxSeconds}초를 넘는다");
+        }
+    }
+
+    [Fact]
     public void Balance_가_가리키는_보스가_bosses_json_에_있다()
     {
         // "기본 보스가 누구인가" 는 balance.json 이 정한다. 그 id 가 없는 이름이면

@@ -211,6 +211,15 @@ public class DetTests
     }
 
     [Fact]
+    public void 달리기의_도메인은_15_다()
+    {
+        // 설계 2026-09-29 조각1 §5.2 — 계획의 다섯째 결정(달리나)도 제 스트림이다. 끊나 · 쉬기의 스트림을 나눠 쓰면 run_percent 를 바꾸는 것만으로
+        // 다른 결정의 좌표가 밀린다. 14 뒤에 더할 뿐이다.
+        Det.Domain.PlanRun.ShouldBe(15u);
+        Det.Domain.Name(Det.Domain.PlanRun).ShouldBe("plan_run");
+    }
+
+    [Fact]
     public void 도메인_이름은_모르는_번호를_숫자_그대로_돌려준다()
     {
         Det.Domain.Name(0).ShouldBe("0");

@@ -39,6 +39,7 @@ public class BalanceDataTests
         data.Feel.DeathHoldSeconds.ShouldBeGreaterThan(0, "사망 애니메이션을 볼 시간이 없다");
         data.Feel.BossHitFlashSeconds.ShouldBeGreaterThan(0, "보스의 흰 플래시가 안 보인다 — 때린 것이 닿았는지가 화면에 안 남는다");
         data.Feel.RushAnimSpeed.ShouldBeGreaterThan(0, "돌진의 run 이 멈춘다 — 미끄러지는 한 자세로 읽힌다");
+        data.Feel.RunAnimSpeed.ShouldBeGreaterThan(0, "달리기의 run 이 멈춘다 — 보스가 한 자세로 미끄러진다(설계 2026-09-29 조각1 §5.4)");
         data.Feel.GrabOrbRadius.ShouldBeGreaterThan(0, "흰 구가 안 보인다 — 잡혔는지가 화면에 안 남는다");
         data.Feel.GrabOrbFadeSeconds.ShouldBeGreaterThan(0, "흰 구가 흩어지지 않고 한 프레임에 꺼진다");
     }
@@ -46,11 +47,12 @@ public class BalanceDataTests
     [Fact]
     public void 고르기의_수치는_퍼센트다()
     {
-        // 설계 2026-09-29 조각1 §3.5 — 무작위 고르기는 RollInt(…, 100) 을 이 정수와 견준다. 100 을 넘거나 음수면 늘 끊거나 한 번도 안 끊는
-        // 고르기가 되는데, 그것은 데이터가 틀린 것이다(0 · 100 은 "안 끊는다" · "늘 끊는다" 로 뜻이 있다).
+        // 설계 2026-09-29 조각1 §3.5 · §5.2 — 무작위 고르기는 RollInt(…, 100) 을 이 정수와 견준다. 100 을 넘거나 음수면 늘 끊거나(달리거나) 한 번도
+        // 안 끊는 고르기가 되는데, 그것은 데이터가 틀린 것이다(0 · 100 은 "안 한다" · "늘 한다" 로 뜻이 있다).
         BalanceData data = JsonData<BalanceData>.ParseOne(ReadData("balance.json"), "balance.json");
 
         data.Picker.CancelPercent.ShouldBeInRange(0, 100);
+        data.Picker.RunPercent.ShouldBeInRange(0, 100);
     }
 
     [Fact]

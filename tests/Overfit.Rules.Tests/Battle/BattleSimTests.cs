@@ -71,56 +71,27 @@ public class BattleSimTests
     }
 
     [Fact]
-    public void 보스가_플레이어_쪽으로_다가온다()
+    public void 쉬는_보스는_제자리다()
     {
-        // 파이터는 보스 왼쪽(480 vs 1440)에 선다. 다가온다는 것은 보스 X 가 **줄어든다**는 뜻이다.
-        // 파이터를 세워 두는 이유는 그래야 "누가 다가갔나" 가 안 섞이기 때문이다.
+        // 설계 2026-09-29 조각1 §5.1 — 옛 보스는 쉬는 동안 파이터 쪽으로 다가갔다(160px/s · 걷기 그림이 없어 idle 그대로 미끄러졌다). 이제
+        // 제자리에서 돌아서기만 한다 — 자리를 옮기는 길은 달리기 · 돌진 · 도약 셋이다. 고르기를 안 준 판은 달리지도 않는다(달리기는 RunTests).
         var sim = new BattleSim(Setup());
         double start = sim.Boss.X;
 
-        for (int i = 0; i < 120; i++)
+        for (int i = 0; i < 600 && sim.Boss.CurrentPattern is null; i++)
         {
             sim.Tick(default);
+            sim.Boss.X.ShouldBe(start, $"{sim.Ticks}틱: 쉬는 보스가 움직였다");
         }
 
-        sim.Boss.X.ShouldBeLessThan(start);
+        sim.Boss.CurrentPattern.ShouldNotBeNull("600틱 안에 첫 동작이 안 섰다 — 이 테스트가 쉬기 전체를 안 본다");
     }
 
     /// <summary>
-    /// 보스가 두고 서는 간격. 보스 반폭 + 파이터 반폭이다 — 손으로 적지 않는다.
-    /// <b>더 이상 벽이 아니다</b>(이슈 #27 · 몸 충돌 제거) — 보스가 스스로 지키는 거리일 뿐이라
-    /// 파이터는 이 안으로 걸어 들어갈 수 있다.
+    /// 두 몸이 막 닿는 중심 사이 거리 — 보스 반폭 + 파이터 반폭. 손으로 적지 않는다. <b>벽이 아니다</b>(이슈 #27 · 몸 충돌 제거) — 파이터는 이
+    /// 안으로 걸어 들어갈 수 있다.
     /// </summary>
     private static double Standoff() => TestConfigs.Boss().HalfWidth + TestConfigs.Fighter().HalfWidth;
-
-    /// <summary>패턴이 안 도는 판. 보스가 다가오는 것만 본다 (간격이 커서 첫 패턴 전에 끝난다).</summary>
-    private static BattleSim Chaser() => new(new BattleSetup
-    {
-        Arena = TestConfigs.Arena(),
-        Fighter = TestConfigs.Fighter(),
-        HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 400, rest: 1000),
-        PatternIds = new[] { "3연격" },
-        Patterns = Patterns(),
-        Seed = 1,
-        MaxTicks = 60 * 60,
-    });
-
-    [Fact]
-    public void 보스는_파이터_중심이_아니라_간격을_두고_선다()
-    {
-        // 전에는 파이터의 정확한 중심을 목표로 걸어와서, 보스 반폭(120) 안쪽에 파이터가 섰다 —
-        // 데모 실측 평균 교전거리가 85px 였다. 붙는 사람과 떨어지는 사람이 둘 다 ≈0 으로 수렴하니
-        // distance_bias 축이 상수였다.
-        var sim = Chaser();
-
-        for (int i = 0; i < 300; i++)
-        {
-            sim.Tick(default);
-        }
-
-        sim.Boss.X.ShouldBe(sim.Fighter.X + Standoff(), 0.001, "보스가 간격을 두고 서지 않는다");
-    }
 
     [Fact]
     public void 파이터가_보스_몸을_통과한다()
@@ -129,7 +100,7 @@ public class BattleSimTests
         // 밀어내기가 남아 있으면 보스가 붙는 순간 파이터는 벽 쪽으로 밀리고 빠져나갈 길이 없다.
         // 그 대가로 distance_bias 축을 겹침으로 세우던 방법은 잃는다 — 대신 판정 모양의 빈 곳
         // (3연격 3타의 초승달 안쪽 · 설계 §2)이 "붙어야 안전" 을 만든다.
-        var sim = Chaser();
+        var sim = StillBoss();
         double standoff = Standoff();
         bool inside = false;
 
@@ -151,7 +122,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 1000),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 1000),
         PatternIds = new[] { "3연격" },
         Patterns = Patterns(),
         Seed = 1,
@@ -178,8 +149,7 @@ public class BattleSimTests
     public void 지상에서도_보스를_가로질러_반대편으로_간다()
     {
         // 전에는 공중에서만 통과했다 — 점프가 유일한 탈출구였다. 이제 지상에서도 지나간다.
-        // 보스는 여전히 자기 간격(Standoff)을 지키려 하지만 그건 **자기 걸음**일 뿐이라
-        // 파이터를 밀지 않는다.
+        // 보스는 파이터를 밀지 않는다.
         var sim = StillBoss();
         WalkPastBoss(sim);
 
@@ -194,7 +164,7 @@ public class BattleSimTests
         var sim = StillBoss();
         double standoff = Standoff();
 
-        // 보스 몸 **안까지만** 걸어 들어간 뒤 멈춘다(보스는 moveSpeed 0 이라 안 비킨다).
+        // 보스 몸 **안까지만** 걸어 들어간 뒤 멈춘다(쉬는 보스는 제자리라 안 비킨다).
         for (int i = 0; i < 300; i++)
         {
             bool inside = Math.Abs(sim.Fighter.X - sim.Boss.X) < standoff * 0.5;
@@ -220,7 +190,7 @@ public class BattleSimTests
             // 걷는 틱 수와 쉬기(rest)는 **짝이다** — 걸어 붙는 동안 패턴이 서면 대시가 아니라
             // 걷기가 판정을 받는다. 그래서 132틱(= 2.2초)으로 둘을 맞춰 둔다.
             // 거리는 데이터에서 온다 — 보스 반폭이 바뀌어도 검사는 한 글자도 안 바뀐다.
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 2.2),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 2.2),
             PatternIds = new[] { "단타" },
             Patterns = new Dictionary<string, PatternDef>
             {
@@ -487,7 +457,7 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 10 * BattleSim.Dt),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 10 * BattleSim.Dt),
             PatternIds = new[] { "없는패턴" },
             Patterns = new Dictionary<string, PatternDef>(),
             Seed = 1,
@@ -618,7 +588,7 @@ public class BattleSimTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3 * BattleSim.Dt),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 3 * BattleSim.Dt),
         PatternIds = new[] { "단타" },
         Patterns = new Dictionary<string, PatternDef> { ["단타"] = pattern },
         Seed = 1,
@@ -796,7 +766,7 @@ public class BattleSimTests
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
             // 파이터가 주머니 앞까지 걸어갈 시간을 준다 (960 → 300 이 95틱이다).
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 100 * BattleSim.Dt),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 100 * BattleSim.Dt),
             PatternIds = new[] { "단타" },
             Patterns = new Dictionary<string, PatternDef>
             {
@@ -1184,7 +1154,7 @@ public class BattleSimTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 3 * BattleSim.Dt),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 3 * BattleSim.Dt),
             PatternIds = new[] { "멀티히트" },
             Patterns = new Dictionary<string, PatternDef> { ["멀티히트"] = pattern },
             Seed = 1,

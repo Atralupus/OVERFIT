@@ -350,7 +350,7 @@ public class FighterHeldTests
         Arena = TestConfigs.Arena(),
         Fighter = TestConfigs.Fighter(),
         HitShapes = TestConfigs.HitShapes(),
-        Boss = TestConfigs.Boss(maxHealth: 999_999, moveSpeed: 0, rest: 0.2),
+        Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 0.2),
         PatternIds = new[] { "잡기" },
         Patterns = new Dictionary<string, PatternDef> { ["잡기"] = Grab() },
         Seed = 1,

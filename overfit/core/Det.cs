@@ -138,6 +138,12 @@ public static class Det
         /// <summary>계획의 <b>쉬는 길이</b> — <c>bosses.json</c> 의 <c>rest_seconds</c> 에서 고르게(<c>RollInt(시도 시드, PlanRest, 쉬기 수, k1: 계획 번호)</c>).</summary>
         public const uint PlanRest = 14;
 
+        /// <summary>
+        /// 계획의 <b>달리나</b> (설계 2026-09-29 조각1 §5.2) — <c>RollInt(시도 시드, PlanRun, 100, k1: 계획 번호)</c> 를 <c>balance.json</c> 의
+        /// <c>picker.run_percent</c> 와 견준다. 늘 굴린다 — 다른 결정과 스트림이 달라 무엇을 골랐든 좌표가 안 밀린다.
+        /// </summary>
+        public const uint PlanRun = 15;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {
@@ -155,6 +161,7 @@ public static class Det
             PlanPoint => "plan_point",
             PlanNext => "plan_next",
             PlanRest => "plan_rest",
+            PlanRun => "plan_run",
             _ => domain.ToString(CultureInfo.InvariantCulture),
         };
     }
