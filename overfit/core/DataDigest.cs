@@ -7,13 +7,14 @@ using System.Text;
 namespace Overfit.Core;
 
 /// <summary>
-/// 판을 세우는 데이터의 지문 — <c>overfit/data/</c> 의 전투 데이터 다섯의 sha256 (#108 · 설계 2026-09-28 §5.6). 공장이 매니페스트에 싣는다 —
-/// 어느 게임에서 지은 표본인지. 옛 망은 이것을 배운 게임의 지문(<c>trained_on</c>)으로 들고 부팅이 지금의 값과 대 봤다 — 망과 같이 걷었다
-/// (설계 2026-09-29 조각1 §6).
+/// 판을 세우는 데이터의 지문 — <c>overfit/data/</c> 의 여섯의 sha256 (#108 · 설계 2026-09-28 §5.6 · 2026-09-29 조각1 §4.3). 공장이 매니페스트에
+/// 싣고(어느 게임에서 지은 표본인지), 시도 기록 한 줄이 싣는다(<c>data_sha256</c>) — 되살린 판이 기록과 다를 때 결정론이 깨졌는지(지문이 같다 ·
+/// <c>[E]</c>) 데이터가 바뀌었는지(다르다 · <c>[W]</c>)를 가른다. 규칙 <b>코드</b>의 변화는 리플레이 골든이 잡는다.
 ///
 /// <para>
-/// <c>balance.json</c> 은 안 넣는다 — 뷰 수치(<c>feel</c>)가 섞여 있어 화면 흔들림 하나를 고쳐도 지문이 바뀐다. 규칙 <b>코드</b>의
-/// 변화는 리플레이 골든이 잡는다.
+/// <c>balance.json</c> 이 든다(조각 1 §4.3) — 판을 세우는 수치(<c>max_ticks</c> · <c>picker</c>)가 거기 있다. 전에는 뷰 수치(<c>feel</c>)가 섞여
+/// 있다고 뺐다: 화면 흔들림 하나를 고쳐도 지문이 바뀐다. 그 값은 되살리기에서 <c>[W]</c> 일 뿐이고 판이 같으면 그대로 일치다 — 빼면
+/// <c>cancel_percent</c> 를 바꾼 판이 결정론 위반(<c>[E]</c>)으로 잘못 읽힌다.
 /// </para>
 ///
 /// <para>
@@ -23,8 +24,9 @@ namespace Overfit.Core;
 /// </summary>
 public static class DataDigest
 {
-    /// <summary>지문에 드는 파일 — 이름 순이다. 판을 세우는 데이터 다섯(<c>BattleTables</c>)과 같다.</summary>
-    public static IReadOnlyList<string> Files { get; } = ["bosses.json", "fighters.json", "hitboxes.json", "patterns.json", "stages.json"];
+    /// <summary>지문에 드는 파일 — 이름 순이다. 판을 세우는 데이터 다섯(<c>BattleTables</c>)과 그 수치(<c>balance.json</c>)다.</summary>
+    public static IReadOnlyList<string> Files { get; } =
+        ["balance.json", "bosses.json", "fighters.json", "hitboxes.json", "patterns.json", "stages.json"];
 
     /// <summary>
     /// <see cref="Files"/> 를 그 순서로 읽어 지문을 낸다 — sha256 의 소문자 16진 64자. 읽는 길은 부르는 쪽이 준다: 게임은 <c>res://data/</c>,

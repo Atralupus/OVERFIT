@@ -73,11 +73,20 @@ public partial class Battle : Node2D
     /// </summary>
     private StageSetup _setup = null!;
 
-    /// <summary>결과 화면의 패턴 리포트 줄들 (#122) — 끝날 때 짓고 결과 화면이 띄운다.</summary>
+    /// <summary>결과 화면의 리포트 줄들 (#122 · 설계 2026-09-29 조각1 §4.5) — 끝날 때 짓고 결과 화면이 띄운다.</summary>
     private IReadOnlyList<string> _report = [];
 
     /// <summary>판을 사례로 가른다 — 공장과 같은 정의(<see cref="InstanceTracker"/> · #114). 틱마다 보고, 끝날 때 사례와 라벨을 기록이 싣는다.</summary>
     private InstanceTracker _instances = new();
+
+    /// <summary>
+    /// 판의 입력 (설계 2026-09-29 조각1 §4.3) — <see cref="BattleSim.Tick"/> 에 넘긴 그대로 틱마다 모은다. 끝날 때 기록이 싣고, 되살리기가 봇 대신
+    /// 틱마다 다시 넣어 판 전체를 세운다(<see cref="Replay"/>).
+    /// </summary>
+    private readonly InputTape _tape = new();
+
+    /// <summary>이 판을 세운 데이터의 지문(<see cref="BattleTables.DataSha256"/>) — 기록이 싣고, 되살린 판이 다를 때 까닭을 가른다.</summary>
+    private string _dataSha256 = "";
 
     private bool _over;
     private BattleOutcome _outcome;
@@ -266,6 +275,7 @@ public partial class Battle : Node2D
 
         // 데이터 다섯은 데모와 같은 자리에서 읽는다(BattleTables). 판정 모양도 데이터다 (이슈 #59) — 규칙은 파일을 모른다.
         BattleTables data = BattleTables.Load();
+        _dataSha256 = data.DataSha256;
 
         // 아레나 폭 · 한 판의 상한 · 기본 보스 · 고정 캐릭터는 balance.json 이 정한다. 전에는 그 값들이
         // 게임 · 데모 · 테스트 다섯 곳에 리터럴로 흩어져 있었고 이미 갈려 있었다.
@@ -392,6 +402,8 @@ public partial class Battle : Node2D
 
         _carried = default;
 
+        // 규칙이 받은 그대로 모은다 — 히트스톱 동안 모은 엣지를 실은 **뒤**다(§4.3). 키에서 읽은 값을 모으면 되살린 판에서 넘긴 J 가 사라진다.
+        _tape.Add(input);
         BattleOutcome? outcome = _sim.Tick(input);
         _instances.Observe(_sim.Boss.CurrentPattern, _sim.Events.Count);
         _cues.Observe(input);
@@ -503,14 +515,17 @@ public partial class Battle : Node2D
         history.Record(record);
         Log.Debug("run", $"recorded attempt={_attempt.Number} outcome={outcome} events={_sim.Events.Count}");
         List<PatternInstance> instances = _instances.Finish(_sim.Events);
-        var entry = new AttemptEntry(history.SessionSeed, history.Run, record, _setup.PickerId, [.. _sim.Drawn], _sim.Ticks, instances);
+        var entry = new AttemptEntry(
+            history.SessionSeed, history.Run, record, _setup.PickerId, _sim.PlanEntries, _sim.Ticks, instances, [.. _tape.Runs], _dataSha256);
         if (AttemptFile.Append(entry) is { } path)
         {
-            Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} path={path}");
+            Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} plans={entry.Plans.Count} inputs={_tape.Runs.Count}"
+                + $" path={path}");
         }
 
-        // 패턴 리포트 (#122 · 설계 2026-09-29 조각1 §4.5) — 모든 판의 결과 화면에 선다. 옛 망이 걷혀 확률 줄이 없다.
-        _report = PickReport.Lines(_setup.PickerId, _setup.PatternIds, _sim.Events, _sim.Drawn, instances);
+        // 리포트 (#122 · 설계 2026-09-29 조각1 §4.5) — 모든 판의 결과 화면에 선다. 계획 수 · 캔슬 수가 머리이고 끊은 짝마다 한 줄이다.
+        // 옛 망이 걷혀 확률 줄이 없다.
+        _report = PickReport.Lines(_setup.PickerId, _setup.PatternIds, _sim.Plans.Count, _sim.Cancels, _sim.Events, _sim.Drawn, instances);
         foreach (string line in _report)
         {
             Log.Debug("report", $"line=\"{line}\"");

@@ -20,7 +20,10 @@
 #   tools/build.sh smoke               헤드리스 부팅 + 씬 순회 (로그로 검증)
 #   tools/build.sh demo [시드]         헤드리스로 전투 한 판 — 봇이 끝까지 돌린다 → [battle-demo][M]
 #                                      시드는 시도 시드다(기본 51) — 게임 로그의 [run][I] attempt=… seed=X 를 그대로 넘기면
-#                                      그 시도의 보스 순서가 되살아난다. 64비트 그대로 읽는다
+#                                      그 시도의 보스 계획이 되살아난다(판은 봇이 싸운다). 64비트 그대로 읽는다
+#                                      EXTRA="--history=<시도 기록.jsonl> --attempt=N" → 봇 대신 그 시도의 저장한 입력으로 판 전체를
+#                                      되살려 기록과 견준다 → [battle-demo][I] replay_match (다르면 [E] · 데이터가 바뀌었으면 [W])
+#                                      EXTRA="--record=<파일>" → 봇의 판을 시도 한 줄로 덧붙인다(--attempt=1 로 되살린다)
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
 #                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
 #                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000
@@ -141,9 +144,10 @@ judge_headless() {
 
   [[ -f "$log" ]] || die "$what: 로그 파일이 없습니다 — $log"
 
-  # ① 에러 로그. 앵커(^)가 중요하다 — 인용문 안의 [E] 를 에러로 오인하지 않는다.
+  # ① 에러 로그. 앵커(^)가 중요하다 — 인용문 안의 [E] 를 에러로 오인하지 않는다. 태그에는 하이픈이 든다(battle-demo) — 전에는
+  #   [a-z]+ 라 데모의 [E](replay_mismatch · fighter_missing …)가 전부 초록으로 지나갔다(조각 1 의 6/8 에서 되살리기를 확인하다 밟았다).
   local errs
-  errs="$(grep -E '^\[[a-z]+\]\[E\]' "$log" || true)"
+  errs="$(grep -E '^\[[a-z][a-z0-9-]*\]\[E\]' "$log" || true)"
   [[ -n "$allow" ]] && errs="$(grep -vE "$allow" <<< "$errs" || true)"
   if [[ -n "$errs" ]]; then
     bad "$what: 에러 로그 $(grep -c . <<< "$errs")줄 — [E] 는 규칙 위반이다. 전체 로그: $log"

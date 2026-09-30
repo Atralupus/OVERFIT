@@ -71,4 +71,19 @@ public partial class Balance : Node
 
         return file.GetAsText();
     }
+
+    /// <summary>
+    /// <c>res://</c> 파일을 바이트 그대로 — 데이터의 지문(<see cref="DataDigest"/>)이 읽는다. 글로 읽으면 BOM · 줄 끝이 걸러질 수 있어 지문이 디스크의
+    /// 파일(공장이 읽는 것)과 갈린다. 못 읽으면 <see cref="DataException"/>.
+    /// </summary>
+    public static byte[] ReadBytes(string path)
+    {
+        using FileAccess file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+        if (file is null)
+        {
+            throw new DataException($"{path}: 파일을 열 수 없다 — {FileAccess.GetOpenError()}");
+        }
+
+        return file.GetBuffer((long)file.GetLength());
+    }
 }

@@ -21,12 +21,22 @@ public static class AttemptFile
     /// <summary>세션의 파일 — 세션 시드가 이름이다.</summary>
     public static string PathFor(ulong sessionSeed) => $"{Dir}/{sessionSeed}.jsonl";
 
-    /// <summary>한 줄을 덧붙인다. 쓴 파일의 경로(실패하면 null).</summary>
+    /// <summary>한 줄을 세션의 파일(<see cref="PathFor"/>)에 덧붙인다. 쓴 파일의 경로(실패하면 null).</summary>
     public static string? Append(AttemptEntry entry)
     {
         System.ArgumentNullException.ThrowIfNull(entry);
-        string path = PathFor(entry.SessionSeed);
-        Error made = DirAccess.MakeDirRecursiveAbsolute(ProjectSettings.GlobalizePath(Dir));
+        return AppendTo(PathFor(entry.SessionSeed), entry);
+    }
+
+    /// <summary>
+    /// 한 줄을 <paramref name="path"/> 에 덧붙인다 — <c>user://</c> 든 디스크의 절대 경로든. 데모의 <c>--record</c> 가 봇의 판을 사람이 고른 파일에
+    /// 남긴다(되살리기를 게임 없이 확인하는 길). 쓴 파일의 경로(실패하면 null).
+    /// </summary>
+    public static string? AppendTo(string path, AttemptEntry entry)
+    {
+        System.ArgumentNullException.ThrowIfNull(path);
+        System.ArgumentNullException.ThrowIfNull(entry);
+        Error made = DirAccess.MakeDirRecursiveAbsolute(ProjectSettings.GlobalizePath(path.GetBaseDir()));
         if (made is not (Error.Ok or Error.AlreadyExists))
         {
             Log.Warn("run", $"log_failed path={path} err={made}");
