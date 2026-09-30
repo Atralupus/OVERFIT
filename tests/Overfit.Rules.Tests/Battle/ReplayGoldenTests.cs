@@ -37,8 +37,9 @@ public class ReplayGoldenTests
     /// 경직이 없던 때는 Idle 이라 새 1타였고, 이 대본은 2타를 한 번도 안 이었다.
     /// 가드의 회귀는 <c>FighterActionTests</c> · <c>HitResolverTests</c> · <c>BattleSimTests</c> ·
     /// <c>BotPolicyTests</c> 가 본다. 29틱마다의 K 는 이제 0.333초 커밋의 패리다(설계 §5.3) — 커밋 뒤에 0.25초 패리 뒤 경직이 붙는다(#82).
-    /// 211틱마다 90틱 동안은 L 만 누른다(설계 2026-09-30 조각2 §1) — 폭탄의 던지기 · 끊김 · 떨어짐이 골든 안에 든다. 이 대본은 거의 늘 칼질 중이거나
-    /// 떠 있어서, 다른 버튼과 같이 누르면 규칙의 순서(공격이 폭탄보다 먼저)와 커밋이 L 을 다 버린다 — 처음 넣었을 때 한 번도 안 던졌다.
+    /// 211틱마다 뒤 90틱 동안은 L 만 누른다(설계 2026-09-30 조각2 §1 · §2) — 폭탄의 던지기 · 보스의 반응 · 끊김 · 떨어짐이 골든 안에 든다. 이 대본은
+    /// 거의 늘 칼질 중이거나 떠 있어서, 다른 버튼과 같이 누르면 규칙의 순서(공격이 폭탄보다 먼저)와 커밋이 L 을 다 버린다 — 처음 넣었을 때 한 번도
+    /// 안 던졌다. 창은 처음에 주기의 앞 90틱이었는데, 보스가 끊으려 하자(3/5) 다섯 번 다 끊겨 떨어짐이 골든 밖으로 나갔다 — 뒤 90틱으로 옮겼다.
     /// </para>
     /// </summary>
     private static InputFrame[] Script()
@@ -46,7 +47,7 @@ public class ReplayGoldenTests
         var inputs = new InputFrame[60 * 60];
         for (int i = 0; i < inputs.Length; i++)
         {
-            bool bomb = i % 211 < 90;
+            bool bomb = i % 211 >= 121;
             inputs[i] = new InputFrame(
                 (sbyte)(i % 11 < 5 ? 1 : -1),
                 Jump: !bomb && i % 37 == 0,

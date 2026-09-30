@@ -37,6 +37,12 @@ public partial class Battle : Node2D
     /// </summary>
     private const string _runAnim = "run";
 
+    /// <summary>
+    /// 폭탄에 반응해 끊은 뒤의 멈칫(설계 2026-09-30 조각2 §2.3 · §5) 동안 보스가 서는 그림 — idle 의 첫 장에 <b>세운다</b>. 쉬는 보스는 idle 을 제 속도로
+    /// 돌아(숨 쉰다) 굳어 선 장이 "멈칫" 으로 갈린다. 규칙은 그림을 모른다 — 멈칫 중인지(<see cref="BattleSim.BossHesitating"/>)만 말한다.
+    /// </summary>
+    private const string _hesitateAnim = "idle";
+
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
@@ -52,6 +58,9 @@ public partial class Battle : Node2D
 
     /// <summary>폭탄 (설계 2026-09-30 조각2 §5) — 손 위의 폭탄 · 나는 폭탄 · 불꽃 · 연기. 흰 구와 같이 World 안에 세운다.</summary>
     private BombView _bombView = null!;
+
+    /// <summary>보스의 알아챔 표시 "!" (설계 2026-09-30 조각2 §2.1 · §5) — 규칙이 "안다" 고 말하는 동안 보스 머리 위에 뜬다. 폭탄과 같이 World 안에 세운다.</summary>
+    private AlertMark _alertMark = null!;
     private Node2D _world = null!;
     private Vector2 _worldHome;
 
@@ -246,6 +255,12 @@ public partial class Battle : Node2D
     /// <summary>보스에게 떨어진 폭탄 수 (설계 2026-09-30 조각2 §5). 위와 같이 디버그 전용 읽기다 — 터지는 불꽃 장을 찍는다.</summary>
     public int BombsLanded => _broken ? 0 : _sim.BombsLanded;
 
+    /// <summary>보스가 던지기를 아나 (설계 2026-09-30 조각2 §2.1). 위와 같이 디버그 전용 읽기다 — 알아챔 표시 "!" 장을 찍는다.</summary>
+    public bool BossAlert => !_broken && !_over && _sim.BossAlert;
+
+    /// <summary>보스가 끊고 멈칫하는 중인가 (§2.3). 위와 같이 디버그 전용 읽기다 — 멈칫 장을 찍는다.</summary>
+    public bool BossHesitating => !_broken && !_over && _sim.BossHesitating;
+
     /// <summary>
     /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82) 중이 아니고 굳어 있지도(탈진 · 붙들림 — <c>Fighter.Locked</c>) 않다.
     /// 위와 같이 디버그 전용 읽기다 — 스크린샷이 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자
@@ -367,6 +382,8 @@ public partial class Battle : Node2D
         _world.AddChild(_grabOrb);
         _bombView = new BombView();
         _world.AddChild(_bombView);
+        _alertMark = new AlertMark();
+        _world.AddChild(_alertMark);
 
         // 바닥 충격파는 판정이 바닥 전체를 덮었는지를 아레나 폭으로 잰다(#83) — 판을 세운 바로 그 폭이다.
         _cues = new BattleCues(_sim, _fighterView, _bossView, _landingWave, _bombView, battle.ArenaWidth, ShakeFor, StartHitstop);
@@ -652,16 +669,18 @@ public partial class Battle : Node2D
             _fighterConfig.MaxStamina <= 0 ? 0 : _sim.Fighter.Stamina / _fighterConfig.MaxStamina,
             _sim.Fighter.Stiff));
 
-        // 계획의 달리기는 동작 밖이라 단계가 없다 — 달리는 동안은 run 을 제 배속으로 돈다(설계 2026-09-29 조각1 §5.4).
+        // 계획의 달리기는 동작 밖이라 단계가 없다 — 달리는 동안은 run 을 제 배속으로 돈다(설계 2026-09-29 조각1 §5.4). 폭탄에 반응한 멈칫도 동작
+        // 밖이다 — idle 첫 장에 세운다(설계 2026-09-30 조각2 §5 · _hesitateAnim).
         bool running = _sim.BossRunning;
+        bool hesitating = _sim.BossHesitating;
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
             _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
             _sim.Boss.Exhausted,
-            running ? _runAnim : _sim.BossStep?.Anim,
-            running ? null : _sim.BossStep?.Frame,
+            running ? _runAnim : hesitating ? _hesitateAnim : _sim.BossStep?.Anim,
+            running ? null : hesitating ? 0 : _sim.BossStep?.Frame,
             // 돌진의 run 만 빠르다 (#78 · 설계 §4.6) — 단계가 단 움직임의 배속이다(_motionAnimSpeed). 규칙은 이 배속을 모른다.
             running ? _feel.RunAnimSpeed
                 : _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
@@ -697,6 +716,9 @@ public partial class Battle : Node2D
             _sim.Boss.X,
             _sim.Boss.Y,
             _bossConfig.Height));
+
+        // 알아챔 — 끝난 판은 안 띄운다(손 위의 폭탄과 같은 까닭 · 끝난 판은 틱을 안 밀어 규칙의 값이 그 틱에 멈춰 남는다).
+        _alertMark.Show(live && _sim.BossAlert, _sim.Boss.X, _sim.Boss.Y, _bossConfig.Height);
 
         _hud.Show(new HudFrame(
             _sim.Fighter.Health,

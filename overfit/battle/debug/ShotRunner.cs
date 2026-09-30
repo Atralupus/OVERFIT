@@ -629,23 +629,39 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 폭탄 세 장 (설계 2026-09-30 조각2 §5). 보스가 2.5초 쉬는 판(대본)에서 가만히 선 파이터(480)가 던진다 — 선딜 90틱의 한가운데(손 위의 폭탄 ·
-    /// 칼질 시트의 빌린 장), 놓은 뒤 15틱(나는 30틱의 한가운데 · 포물선의 꼭대기 근처), 떨어진 뒤 3프레임(보스 몸에서 터지는 주황 불꽃). 보스는 960
-    /// 떨어진 채 쉬어 판정이 없다 — 폭탄 그림만 본다.
+    /// 폭탄 여섯 장 (설계 2026-09-30 조각2 §5) — 두 판이다. 보스가 던지기를 보고 끊으려 하므로(§2) 떨어지는 장과 끊기는 장은 다른 판에서 찍는다.
+    ///
+    /// <para>
+    /// ① <b>떨어지는 판</b> — 쉬기 0.8초 뒤 3연격만 도는 판(대본)에서 가만히 선 파이터(480)가 3연격이 서자마자 던진다. 보스는 18틱 뒤 알지만(머리 위
+    /// "!") 3연격의 첫 캔슬 지점(78)까지 못 끊는다 — 거기서 끊고 멈칫한 뒤 돌진하는 사이 파이터가 놓고, 폭탄은 달려온 보스를 따라가 떨어진다(§2.5 ·
+    /// "3연격이 시작되면 던진다" 를 이 조각의 보스는 못 끊는다). 선딜의 한가운데(손 위의 폭탄 · 3연격의 선딜 · "!"), 놓은 뒤 15틱(나는 폭탄 · 달려오는
+    /// 보스), 떨어진 뒤 3프레임(보스 몸의 주황 불꽃)이다. 3연격의 칼은 960 떨어진 파이터에 안 닿는다.
+    /// </para>
+    ///
+    /// <para>
+    /// ② <b>끊기는 판</b> — 보스가 2.5초 쉬는 판에서 곧장 던진다. 쉬는 보스는 아는 그 틱(던진 틱 + 18)에 끊는다. 멈칫 15틱의 한가운데(idle 첫 장에
+    /// 굳어 선 보스 · "!"), 반응의 돌진이 달리는 중(<c>run</c>), 던지기가 끊긴 뒤 2프레임(손에서 흩어지는 회색 연기 · 돌진의 3타)이다.
+    /// </para>
     /// </summary>
     private async Task Bombs()
     {
-        _battle = await _drive.NewBattle(new ScriptPlan(2.5, "3연격"));
+        _battle = await _drive.NewBattle(new ScriptPlan(0.8, "3연격"));
         if (_battle is null)
         {
             Log.Warn("shots", "battle_scene_missing script=bombs");
             return;
         }
 
-        await _drive.Until(() => _battle is { FighterFree: true }, _pollTimeout);
+        await _drive.Until(() => _battle is { BossPattern: "3연격" }, _patternTimeout);
         Tap("bomb");
         await _drive.Until(() => _battle is { FighterThrowing: true }, _pollTimeout);
-        await _drive.Frames(45);
+        await _drive.Until(() => _battle is { BossAlert: true }, _pollTimeout);
+        if (_battle is { BossAlert: false })
+        {
+            Log.Warn("shots", "bomb_alert_not_seen");
+        }
+
+        await _drive.Frames(24);
         await Screenshot.CaptureAsync(this, "battle-14-bomb-windup");
 
         await _drive.Until(() => _battle is { BombsInFlight: > 0 }, _patternTimeout);
@@ -660,6 +676,43 @@ public partial class ShotRunner : Node
 
         await _drive.Frames(3);
         await Screenshot.CaptureAsync(this, "battle-14c-bomb-boom");
+
+        await BombCut();
+    }
+
+    /// <summary>폭탄의 ② 끊기는 판 — <see cref="Bombs"/> 의 둘째 문단.</summary>
+    private async Task BombCut()
+    {
+        _battle = await _drive.NewBattle(new ScriptPlan(2.5, "3연격"));
+        if (_battle is null)
+        {
+            Log.Warn("shots", "battle_scene_missing script=bomb_cut");
+            return;
+        }
+
+        await _drive.Until(() => _battle is { FighterFree: true }, _pollTimeout);
+        Tap("bomb");
+        await _drive.Until(() => _battle is { BossHesitating: true }, _patternTimeout);
+        if (_battle is { BossHesitating: false })
+        {
+            Log.Warn("shots", "bomb_hesitate_not_seen");
+        }
+
+        await _drive.Frames(7);
+        await Screenshot.CaptureAsync(this, "battle-14d-bomb-hesitate");
+
+        await _drive.Until(() => _battle is { BossStepAnim: "run" }, _patternTimeout);
+        await _drive.Frames(4);
+        await Screenshot.CaptureAsync(this, "battle-14e-bomb-rush");
+
+        await _drive.Until(() => _battle is { FighterThrowing: false }, _patternTimeout);
+        if (_battle is { BombsInFlight: > 0 })
+        {
+            Log.Warn("shots", "bomb_cut_not_seen");
+        }
+
+        await _drive.Frames(2);
+        await Screenshot.CaptureAsync(this, "battle-14f-bomb-cut");
     }
 
     /// <summary>

@@ -7,7 +7,8 @@ namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
 /// 폭탄이 판 위에서 (설계 2026-09-30 조각2 §1.2 · §1.3) — 놓은 뒤 0.5초 날아 보스를 따라가 떨어지고, 같은 틱의 순서(파이터 → 보스)가 놓는
-/// 틱에 닿은 판정을 늦게 만든다. 파이터 몸 하나의 규칙은 <c>FighterThrowTests</c> 가 본다.
+/// 틱에 닿은 판정을 늦게 만든다. 파이터 몸 하나의 규칙은 <c>FighterThrowTests</c> 가, 보스가 던지기를 보고 끊으려 하는 것(§2)은
+/// <c>BombReactionTests</c> 가 본다 — 여기 판의 보스는 던지기를 끝내 모른다(<see cref="Unaware"/>).
 /// </summary>
 public class BombTests
 {
@@ -16,6 +17,12 @@ public class BombTests
     private static readonly InputFrame _bomb = new(0, false, false, false, false, Bomb: true);
 
     private static BombDef Bomb => TestConfigs.Fighter().Bomb;
+
+    /// <summary>
+    /// 던지기를 끝내 모르는 반응 — 반응 지연이 한 판보다 길다. 폭탄이 날고 떨어지는 것만 보려면 보스가 끊으면 안 된다. 반응의 동작을 데이터에서 빼는
+    /// 길(<c>bomb_reaction_missing</c>)은 규칙 위반의 <c>[E]</c> 라 여기서 기대지 않는다.
+    /// </summary>
+    private static BombReactionDef Unaware => new() { DelaySeconds = 3600, HesitateSeconds = 0.25, Move = "돌진" };
 
     /// <summary>놓는 틱 — 누른 틱부터 센 선딜의 마지막 틱.</summary>
     private static int ReleaseAfter => BattleSim.TicksFor(Bomb.ThrowSeconds) - 1;
@@ -58,7 +65,7 @@ public class BombTests
             Arena = TestConfigs.Arena(),
             Fighter = fighter ?? TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: bossHealth, rest: 1000, exhaustSeconds: exhaustSeconds),
+            Boss = TestConfigs.Boss(maxHealth: bossHealth, rest: 1000, exhaustSeconds: exhaustSeconds, reaction: Unaware),
             PatternIds = new[] { _waitId },
             Patterns = new Dictionary<string, PatternDef> { [_waitId] = Waiting(1.0) },
             Seed = 1,
@@ -72,7 +79,7 @@ public class BombTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 0.2),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 0.2, reaction: Unaware),
             PatternIds = new[] { _waitId },
             Patterns = new Dictionary<string, PatternDef> { [_waitId] = Waiting(3.0) },
             Seed = 1,
@@ -114,7 +121,7 @@ public class BombTests
             Arena = TestConfigs.Arena(),
             Fighter = TestConfigs.Fighter(),
             HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 1.5),
+            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 1.5, reaction: Unaware),
             PatternIds = new[] { "돌진" },
             Patterns = new Dictionary<string, PatternDef> { ["돌진"] = patterns["돌진"] },
             Seed = 1,

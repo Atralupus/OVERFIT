@@ -24,6 +24,25 @@ public class BossDataTests
     }
 
     [Fact]
+    public void 폭탄_반응의_시간_둘은_틱에_딱_떨어지고_반응의_동작은_데이터에_있다()
+    {
+        // 설계 2026-09-30 조각2 §2.4 — 반응 지연 0.3초(18틱) · 멈칫 0.25초(15틱). 반 틱이면 반올림이 "누른 틱 + 88 안에 닿나" 를 정한다. 반응의 동작은
+        // patterns.json 의 id 다 — 명부에 없어도 되지만 데이터에는 있어야 한다(없으면 판이 끊을 자리마다 [E] 를 남기고 안 끊는다).
+        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            BombReactionDef r = boss.BombReaction;
+            foreach ((string key, double seconds) in new[] { ("delay_seconds", r.DelaySeconds), ("hesitate_seconds", r.HesitateSeconds) })
+            {
+                seconds.ShouldBeGreaterThan(0, $"{id}: bomb_reaction.{key} 가 0 이하다");
+                (seconds * 60).ShouldBe(System.Math.Round(seconds * 60), 1e-9, $"{id}: bomb_reaction.{key} {seconds} 가 정수 틱이 아니다");
+            }
+
+            patterns.ShouldContainKey(r.Move, $"{id}: 반응의 동작 {r.Move} 이 patterns.json 에 없다");
+        }
+    }
+
+    [Fact]
     public void 쉬는_길이는_정수_틱이고_0_보다_크다()
     {
         // 설계 2026-09-29 조각1 §3.4 — 0.4 · 0.8 · 1.2초(24 · 48 · 72틱). 옛 pattern_gap 0.8 을 가운데에 두고 반씩 흔든다. 반 틱이면 반올림이 쉬기를

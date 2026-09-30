@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Overfit.Core;
 
 namespace Overfit.Battle.Rules;
@@ -55,7 +56,7 @@ public sealed class BattleSetup
 }
 
 /// <summary>
-/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 폭탄 · 경직 게이지 · 탈진 · 승패를 한 틱씩 민다.
+/// 전투 한 판 — 보스의 패턴 · 움직임 · 파이터의 칼 · 폭탄과 보스의 반응 · 경직 게이지 · 탈진 · 승패를 한 틱씩 민다.
 ///
 /// <para>
 /// 보스의 판정을 파이터 몸에 대고, 그 결과를 몸에 싣고, 관측을 짓는 것은 여기가 아니라 <see cref="BossSwings"/> 다
@@ -69,6 +70,12 @@ public sealed class BattleSetup
 /// (<c>uniform</c>)뿐이다. 일부러다 — 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
 /// 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 계획을 낸다. 대본(<c>script</c> · #78)은 단계의 고르기가 아니다 — GIF · 스크린샷 ·
 /// 순회가 계획을 고정하는 데만 쓴다.
+/// </para>
+///
+/// <para>
+/// 보스가 폭탄 던지기를 보고 끊으려 하는 것(설계 2026-09-30 조각2 §2)은 <see cref="BombWatch"/> 가 가리고(알았나 · 끊을 자리인가 · 멈칫이 남았나),
+/// 하던 것을 걷고 · 돌아서고 · 반응의 동작을 세우는 것은 여기다 — 동작을 걷고 세우는 길이 판 하나여야 끊긴 동작이 무언가를 남기지 않는다
+/// (<see cref="ClearPattern"/>).
 /// </para>
 /// </summary>
 public sealed class BattleSim
@@ -161,6 +168,12 @@ public sealed class BattleSim
     /// <summary>나는 폭탄들 (설계 2026-09-30 조각2 §1.3) — 파이터가 놓은 틱에 날리고, 날 시간이 다 되면 보스에게 떨어뜨린다.</summary>
     private readonly Bombs _bombs;
 
+    /// <summary>보스가 던지기를 보고 · 알고 · 끊고 · 멈칫하는 것 (설계 2026-09-30 조각2 §2).</summary>
+    private readonly BombWatch _watch;
+
+    /// <summary>반응의 동작이 데이터에 없다는 <c>[E]</c> 를 이미 남겼나 — 쉬는 동안은 매 틱이 끊을 자리라 한 번만 남긴다.</summary>
+    private bool _reactionMissing;
+
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
@@ -176,12 +189,14 @@ public sealed class BattleSim
 
         _setup = setup;
         _swords = Swords(setup);
-        _hits = BossHits.Resolve(setup.PatternIds, setup.Patterns, setup.HitShapes);
+        // 반응의 동작(설계 2026-09-30 조각2 §2.3)은 명부에 없어도 된다 — 그 판정도 여기서 짓는다. 데이터에 없으면 건너뛰고 끊을 때 [E] 다.
+        _hits = BossHits.Resolve([.. setup.PatternIds, setup.Boss.BombReaction.Move], setup.Patterns, setup.HitShapes);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
         Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
         _swings = new BossSwings(Fighter, Boss, _credit, new JumpClearance(setup.Fighter));
         _poise = PoiseGauge.For(setup.Boss);
         _bombs = new Bombs(setup.Fighter.Bomb);
+        _watch = new BombWatch(setup.Boss.BombReaction);
         _run = new PlanRun(setup.Boss);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
@@ -383,6 +398,15 @@ public sealed class BattleSim
     /// <summary>이 판에서 보스에게 떨어진 폭탄 수 — 뷰가 앞 틱과 견줘 터지는 불꽃을 세운다(<c>BattleCues</c>). 규칙은 안 읽는다.</summary>
     public int BombsLanded { get; private set; }
 
+    /// <summary>
+    /// 보스가 던지기를 아나 (설계 2026-09-30 조각2 §2.1) — 던진 틱부터 반응 지연이 지나고 던지기가 도는 동안이다. 뷰가 보스 머리 위에 "!" 를 띄운다 —
+    /// 끊을 자리가 아직 안 와 못 끊고 있어도 "보고 있다" 가 보인다. 규칙은 이 값 대신 <see cref="BombWatch"/> 를 묻는다.
+    /// </summary>
+    public bool BossAlert => _watch.Aware(Ticks, Fighter.Throwing);
+
+    /// <summary>보스가 끊고 멈칫하는 중인가 (§2.3) — 뷰가 idle 첫 장에 세운다. 규칙은 안 읽는다.</summary>
+    public bool BossHesitating => _watch.Hesitating;
+
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
     {
@@ -400,12 +424,15 @@ public sealed class BattleSim
         int bombsWere = Fighter.BombsLeft;
         Fighter.Tick(input, Dt);
 
-        // 던지는 틱이다 — 폭탄은 보스를 향해 가므로 보스 쪽으로 돌려세운다(설계 2026-09-30 조각2 §1.1). 파이터는 보스를 모른다.
+        // 던지는 틱이다 — 폭탄은 보스를 향해 가므로 보스 쪽으로 돌려세운다(설계 2026-09-30 조각2 §1.1). 파이터는 보스를 모른다. 보스는 이 틱에 본다(§2.1).
         if (Fighter.BombsLeft < bombsWere)
         {
             Fighter.Face(Boss.X);
+            _watch.See(Ticks);
             LogThrow();
         }
+
+        Watch();
 
         // 보스 판정이 볼 가드 — 파이터를 민 **뒤**의 값이다. 막다가 든 탈진(딱 0 · 붕괴)은 판정이 이 가드를 봤을 때만 난다. 틱 시작에서
         // 잡으면 이 틱에 ↓ 를 눌러 선 가드가 깨져도 action 으로 적혔다(#71 계획 리뷰가 밟았다).
@@ -503,6 +530,26 @@ public sealed class BattleSim
         // 맞은 틱의 채움이 유예를 세우고, 유예는 다음 틱부터 준다(72틱 동안 그대로다).
         _poise.Tick();
 
+        // 멈칫 — 끊은 틱부터 반응의 동작이 서기 전까지 선 채로 던지는 쪽을 본다(설계 2026-09-30 조각2 §2.3). 쉬기를 안 센다: 계획은 끊을 때 끝났다.
+        // 동작 사이라 잠금이 없다 — 돌진은 보는 쪽으로만 가므로(RushMotion) 서는 틱에 파이터 쪽을 봐야 한다.
+        if (_watch.Hesitating)
+        {
+            FaceFighter();
+            if (_watch.HesitateTick())
+            {
+                BeginReaction();
+            }
+
+            return;
+        }
+
+        // 던지기를 알면 끊을 자리에서 끊는다(§2.2) — 계획한 캔슬보다 먼저 본다: 같은 틱이면 반응이 이긴다.
+        if (ReactNow())
+        {
+            React();
+            return;
+        }
+
         if (_runner is null)
         {
             if (_run.Active)
@@ -587,6 +634,7 @@ public sealed class BattleSim
         _holdTicks = 0;
         _goalX = null;
         _run.Clear();
+        _watch.Stop();
     }
 
     /// <summary>
@@ -604,6 +652,62 @@ public sealed class BattleSim
         string to = Boss.CurrentPattern ?? "-";
         _cancels.Add((from, to));
         Log.Debug("boss", () => $"cancel id={from} at={at} next={to} facing={Boss.Facing} tick={Ticks}");
+    }
+
+    /// <summary>
+    /// 이 틱에 끊나 (설계 2026-09-30 조각2 §2.2) — 끊을 자리인가는 <see cref="BombWatch.CutSpot"/> 가 가린다(쉬기 · 달리기면 아무 틱 · 동작이면 캔슬
+    /// 지점). 캔슬 지점이 없는 동작은 끝나고 쉬기에 든 뒤에 온다. 탈진한 보스는 여기 안 온다(<see cref="AdvanceBoss"/>).
+    ///
+    /// <para>
+    /// 반응의 동작이 데이터에 없으면 규칙 위반이다 — 움직임의 <c>motion_missing</c> 과 같은 대우로, 끊지 않고 <c>[E]</c> 를 남긴다(데이터 테스트가 먼저
+    /// 막는다). 쉬는 동안은 매 틱이 끊을 자리라 한 판에 한 번만 남긴다.
+    /// </para>
+    /// </summary>
+    private bool ReactNow()
+    {
+        if (!_watch.CutSpot(Ticks, Fighter.Throwing, _current, RunnerNext, _holdClock))
+        {
+            return false;
+        }
+
+        if (_hits.ContainsKey(_watch.Move))
+        {
+            return true;
+        }
+
+        if (!_reactionMissing)
+        {
+            _reactionMissing = true;
+            Log.Error("boss", $"bomb_reaction_missing id={_watch.Move} tick={Ticks}");
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 끊는다 (설계 2026-09-30 조각2 §2.3) — 하던 것(동작 · 달리기 · 쉬기)을 걷고, <b>계획을 끝내고</b>(남은 캔슬 · 잇는 동작 · 쉬기를 버린다 — 안 버리면
+    /// 옛 계획의 캔슬 지점이 반응의 동작을 끊는다), 던지는 쪽으로 돌아서고(동작 사이라 잠금이 없다), 멈칫을 센다. 반응의 동작은 멈칫이 끝나는 틱에
+    /// 선다(<see cref="BeginReaction"/>). 계획한 캔슬(<see cref="Cancel"/>)과 같은 장치다 — 다른 것은 어느 지점이든 쓰고 · 계획이 끝나고 · 멈칫이 낀다.
+    /// </summary>
+    private void React()
+    {
+        string from = Boss.CurrentPattern ?? (_run.Active ? "run" : "rest");
+        string at = _runner is null ? "" : $" at={RunnerNext.ToString(CultureInfo.InvariantCulture)}";
+        ClearPattern();
+        _flow.Drop();
+        Boss.Face(Fighter.X);
+        _watch.React();
+        Log.Debug("boss", () => $"bomb_react from={from}{at} tick={Ticks}");
+    }
+
+    /// <summary>
+    /// 멈칫이 끝났다 — 반응의 동작(<c>bomb_reaction.move</c>)을 세운다 (§2.3). 명부 밖이어도 된다 — 판정은 판을 세울 때 지었다. 이 동작이 끝나면 여느 동작처럼
+    /// 다음 계획을 고른다(<see cref="EndPattern"/>).
+    /// </summary>
+    private void BeginReaction()
+    {
+        Begin(_watch.Move);
+        _watch.Begin();
     }
 
     /// <summary>
@@ -729,9 +833,31 @@ public sealed class BattleSim
     private void LogThrow() => Log.Debug("fighter", () => $"bomb_throw left={Fighter.BombsLeft} tick={Ticks}");
 
     /// <summary>
+    /// 보스가 던지기를 지켜본 것을 남긴다 (설계 2026-09-30 조각2 §2.6) — 파이터를 민 뒤 · 보스를 밀기 전이다. 처음 안 틱(<c>bomb_seen</c>)과, 알았지만 끊을
+    /// 자리가 안 와 못 끊고 놓인 틱(<c>bomb_late</c>)이다. 규칙은 여기서 아무것도 안 바꾼다 — 끊는 것은 <see cref="ReactNow"/> 다.
+    /// </summary>
+    private void Watch()
+    {
+        if (_watch.JustAware(Ticks, Fighter.Throwing))
+        {
+            Log.Debug("boss", () => $"bomb_seen throw={_watch.SeenAt} tick={Ticks}");
+        }
+
+        if (Fighter.ThrowReleased && _watch.Knew(Ticks) && !_watch.Reacted)
+        {
+            Log.Debug("boss", () => $"bomb_late next={_watch.NextChance(Boss.Exhausted, _current, RunnerNext)}"
+                + $" release={Ticks} tick={Ticks}");
+        }
+    }
+
+    /// <summary>러너가 이번 틱에 들 틱 — 러너의 틱 + 1. 동작이 없으면 뜻이 없다(1).</summary>
+    private int RunnerNext => (_runner?.Ticks ?? 0) + 1;
+
+    /// <summary>
     /// 폭탄의 틱 (설계 2026-09-30 조각2 §1.2 · §1.3) — 칼 뒤 · 승패 앞이다. 날 시간이 다 된 폭탄이 보스에게 떨어지고(폭탄이 보스를 죽이면 이 틱의 승패가
     /// 이긴다), 이 틱에 놓은 폭탄을 그 <b>뒤에</b> 날린다 — 그래야 놓은 틱 + 나는 틱에 떨어진다. 이 틱에 끊긴 던지기는 무엇이 끊었는지 남긴다: 끊은 판정의
-    /// 관측이 방금 들어왔다(<see cref="BossSwings.Resolve"/>). 경직 게이지는 안 채운다 — 폭탄은 탈진의 도구가 아니다.
+    /// 관측이 방금 들어왔다(<see cref="BossSwings.Resolve"/>). 반응의 동작이 도는 중이면 <c>react=1</c> 이다 — 끊을 자리(캔슬 지점 · 쉬기 · 달리기)에는
+    /// 산 판정이 없고 멈칫에도 없어서, 반응의 동작 중에 끊긴 던지기는 그 동작이 끊은 것이다. 경직 게이지는 안 채운다 — 폭탄은 탈진의 도구가 아니다.
     /// </summary>
     private void Bomb()
     {
@@ -754,7 +880,8 @@ public sealed class BattleSim
 
         if (Fighter.ThrowLost)
         {
-            Log.Debug("fighter", () => $"bomb_lost by={(Events.Count > 0 ? Events[^1].PatternId : "-")} tick={Ticks}");
+            Log.Debug("fighter", () => $"bomb_lost by={(Events.Count > 0 ? Events[^1].PatternId : "-")} react={(_watch.InReaction ? 1 : 0)}"
+                + $" tick={Ticks}");
         }
     }
 
@@ -802,9 +929,14 @@ public sealed class BattleSim
     /// 명부의 <paramref name="index"/> 칸 동작을 세운다 — 계획의 첫 동작(쉬기가 끝난 틱)이든 잇는 동작(캔슬한 틱)이든. 칸과 정의는 계획을 고를 때
     /// 이미 봤다(<see cref="PlanFlow"/> 가 틀린 계획을 버린다).
     /// </summary>
-    private void Begin(int index)
+    private void Begin(int index) => Begin(_setup.PatternIds[index]);
+
+    /// <summary>
+    /// 동작 <paramref name="id"/> 를 세운다 — 명부의 칸(<see cref="Begin(int)"/>)이든 반응의 동작(<see cref="BeginReaction"/>)이든. 판정은 판을 세울 때
+    /// 지었다(<see cref="BossHits"/>).
+    /// </summary>
+    private void Begin(string id)
     {
-        string id = _setup.PatternIds[index];
         PatternDef def = _setup.Patterns[id];
         _current = def;
         _runner = new PatternRunner(def, _hits[id]);

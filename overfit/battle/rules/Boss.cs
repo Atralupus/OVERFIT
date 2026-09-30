@@ -74,7 +74,27 @@ public sealed class BossConfig
     /// <summary>유예가 끝난 뒤 초당 빠지는 양 — 틱마다 같은 몫(× 1/60)이다. "서서히" — 가득 찬 게이지가 10초에 빠진다.</summary>
     public required double PoiseDecayPerSecond { get; init; }
 
+    /// <summary>폭탄 던지기를 보고 끊으려 할 때 (설계 2026-09-30 조각2 §2.4) — 반응 지연 · 멈칫 · 끊은 뒤의 동작.</summary>
+    public required BombReactionDef BombReaction { get; init; }
+
     public required string Sprite { get; init; }
+}
+
+/// <summary>
+/// 보스가 폭탄 던지기를 보고 끊으려 할 때 (설계 2026-09-30 조각2 §2) — <c>bosses.json</c> 의 <c>bomb_reaction</c>. 보스는 던지기를 보면 늘 끊으려 한다:
+/// 이 지연 뒤에 알고, 가장 가까운 끊을 자리에서 끊고, 멈칫한 뒤 이 동작을 세운다. "언제 장전하나" 같은 조건은 없다 — 끊을 수 있나는 캔슬 지점과
+/// 시간이 정한다.
+/// </summary>
+public sealed class BombReactionDef
+{
+    /// <summary>반응 지연(초) — 던지기를 시작한 틱부터 이만큼 뒤에 안다. 사람의 반응 시간이다(우산 §3.3).</summary>
+    public required double DelaySeconds { get; init; }
+
+    /// <summary>멈칫(초) — 끊은 뒤 선 채로 던지는 쪽을 보는 길이. 이 뒤에 <see cref="Move"/> 가 선다.</summary>
+    public required double HesitateSeconds { get; init; }
+
+    /// <summary>끊은 뒤의 동작 — <c>patterns.json</c> 의 id. 명부에 없어도 된다.</summary>
+    public required string Move { get; init; }
 }
 
 /// <summary>
