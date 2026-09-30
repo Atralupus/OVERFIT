@@ -121,6 +121,43 @@ public class AttemptLogTests
     }
 
     [Fact]
+    public void 폭탄이_왕복하고_입력_앞에_선다()
+    {
+        // 던지기마다 { at, during, outcome, react } (설계 2026-09-30 조각2 §4) — 결과는 소문자 이름이고, 보스가 동작 밖이던 던지기의 during 과 보스가
+        // 안 끊은 던지기의 react 는 null 이다. 입력 앞에 선다 — 입력은 줄의 끝이다(가장 길다).
+        BombRecord[] bombs =
+        [
+            new(1, null, BombOutcome.Cut, 19),
+            new(540, "3연격", BombOutcome.Landed, 617),
+            new(994, "올려베기", BombOutcome.Hit, null),
+            new(1015, null, BombOutcome.End, null),
+        ];
+        AttemptEntry entry = Entry() with { Inputs = [[32, 3], [128, 1]], Bombs = bombs };
+
+        string line = AttemptLog.Line(entry);
+
+        line.ShouldContain("\"bombs\":[{\"at\":1,\"during\":null,\"outcome\":\"cut\",\"react\":19},"
+            + "{\"at\":540,\"during\":\"3연격\",\"outcome\":\"landed\",\"react\":617},"
+            + "{\"at\":994,\"during\":\"올려베기\",\"outcome\":\"hit\",\"react\":null},"
+            + "{\"at\":1015,\"during\":null,\"outcome\":\"end\",\"react\":null}],\"inputs\":[[32,3],[128,1]]}");
+        AttemptEntry back = AttemptLog.Parse(line, "시험");
+        ShouldMatch(back, entry);
+        back.Bombs.ShouldNotBeNull().ShouldBe(bombs);
+    }
+
+    [Fact]
+    public void 폭탄_칸이_없는_옛_줄은_null_이고_안_던진_줄은_빈_목록이다()
+    {
+        // 4/5 전의 줄에는 폭탄 칸이 없다 — 빈 목록(안 던졌다)과 가른다: 되살리기가 그 줄의 폭탄은 안 견준다(ReplayTests). 조각 1 까지의 판은 폭탄이
+        // 없었고, 2/5 · 3/5 의 게임은 던졌어도 적지 않았다.
+        string old = AttemptLog.Line(Entry()).Replace(",\"bombs\":null", "", System.StringComparison.Ordinal);
+        old.ShouldNotContain("bombs");
+
+        AttemptLog.Parse(old, "옛 줄").Bombs.ShouldBeNull();
+        AttemptLog.Parse(AttemptLog.Line(Entry() with { Bombs = [] }), "시험").Bombs.ShouldNotBeNull().ShouldBeEmpty();
+    }
+
+    [Fact]
     public void 옛_망의_칸이_든_줄도_읽힌다()
     {
         // 조각 1 이 옛 망을 걷기 전(#112 · #114)의 게임이 남긴 줄에는 갈래 · 망의 결정 · 망의 지문 · 입력 19칸이 있다 — 모르는 키라 버리고 읽는다.

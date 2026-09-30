@@ -7,8 +7,8 @@ using Xunit;
 namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
-/// 결과 화면의 리포트 (#122 · 설계 2026-09-29 조각1 §4.5). 옛 망이 걷혀 확률 줄이 없다 — 머리(계획 수 · 캔슬 수) · 이 판의 회피 · 동작마다 나온
-/// 횟수와 맞은 횟수 · 캔슬마다 한 줄이다.
+/// 결과 화면의 리포트 (#122 · 설계 2026-09-29 조각1 §4.5). 옛 망이 걷혀 확률 줄이 없다 — 머리(계획 수 · 캔슬 수) · 이 판의 회피 · 폭탄(설계
+/// 2026-09-30 조각2 §4) · 동작마다 나온 횟수와 맞은 횟수 · 캔슬마다 한 줄이다.
 /// </summary>
 public class PickReportTests
 {
@@ -29,6 +29,7 @@ public class PickReportTests
             3,
             [],
             Events((DodgeVerb.Dash, 15), (DodgeVerb.Guard, 10), (DodgeVerb.Parry, 5)),
+            [],
             ["3연격", "엇박 3연격", "3연격"],
             [new("3연격", true), new("엇박 3연격", true), new("3연격", false)]);
 
@@ -36,6 +37,7 @@ public class PickReportTests
         [
             "보스가 계획을 무작위로 골랐습니다 — 계획 3개 · 캔슬 0번",
             "이 판의 회피 30건: 대시 15 · 가드 10 · 패리 5",
+            "폭탄을 안 던졌습니다",
             "3연격 — 2번 나옴 · 1번 맞음",
             "점프 공격 — 안 나옴",
             "엇박 3연격 — 1번 나옴 · 1번 맞음",
@@ -51,7 +53,7 @@ public class PickReportTests
         // 계획은 고른 수(끝나지 않은 마지막 계획도 든다) · 캔슬은 실제로 끊은 수다 — 탈진으로 못 쓴 캔슬은 안 센다(설계 §3.2).
         (string From, string To)[] cancels = [("3연격", "돌진"), ("엇박 3연격", "잡기")];
 
-        PickReport.Lines("uniform", _roster, 7, cancels, [], [], [])[0].ShouldBe("보스가 계획을 무작위로 골랐습니다 — 계획 7개 · 캔슬 2번");
+        PickReport.Lines("uniform", _roster, 7, cancels, [], [], [], [])[0].ShouldBe("보스가 계획을 무작위로 골랐습니다 — 계획 7개 · 캔슬 2번");
     }
 
     [Fact]
@@ -66,22 +68,22 @@ public class PickReportTests
             ("3연격", "돌진"),
         ];
 
-        IReadOnlyList<string> lines = PickReport.Lines("uniform", _roster, 9, cancels, [], ["3연격", "돌진"], []);
+        IReadOnlyList<string> lines = PickReport.Lines("uniform", _roster, 9, cancels, [], [], ["3연격", "돌진"], []);
 
-        lines.Skip(2 + _roster.Length).ShouldBe(["3연격 → 돌진 — 2번", "3연격 → 잡기 — 1번", "엇박 3연격 → 올려베기 — 1번"]);
+        lines.Skip(3 + _roster.Length).ShouldBe(["3연격 → 돌진 — 2번", "3연격 → 잡기 — 1번", "엇박 3연격 → 올려베기 — 1번"]);
     }
 
     [Fact]
     public void 대본으로_선_판은_그렇다고_적는다()
     {
         // GIF · 스크린샷 · 순회의 판은 대본(script)으로 선다 — 무작위라고 적으면 리포트가 거짓말을 한다.
-        PickReport.Lines("script", _roster, 2, [], [], ["3연격"], [])[0].ShouldBe("보스가 정해진 대본대로 골랐습니다 — 계획 2개 · 캔슬 0번");
+        PickReport.Lines("script", _roster, 2, [], [], [], ["3연격"], [])[0].ShouldBe("보스가 정해진 대본대로 골랐습니다 — 계획 2개 · 캔슬 0번");
     }
 
     [Fact]
     public void 회피가_없으면_그렇다고_적는다()
     {
-        PickReport.Lines("uniform", _roster, 1, [], [], [], [])[1].ShouldBe("이 판의 회피가 없습니다");
+        PickReport.Lines("uniform", _roster, 1, [], [], [], [], [])[1].ShouldBe("이 판의 회피가 없습니다");
     }
 
     [Fact]
@@ -89,6 +91,32 @@ public class PickReportTests
     {
         List<DodgeEvent> events = Events((DodgeVerb.None, 1), (DodgeVerb.Spacing, 2), (DodgeVerb.Guard, 1), (DodgeVerb.Jump, 2));
 
-        PickReport.Lines("uniform", _roster, 1, [], events, [], [])[1].ShouldBe("이 판의 회피 6건: 점프 2 · 거리 2 · 가드 1 · 무대응 1");
+        PickReport.Lines("uniform", _roster, 1, [], events, [], [], [])[1].ShouldBe("이 판의 회피 6건: 점프 2 · 거리 2 · 가드 1 · 무대응 1");
+    }
+
+    [Fact]
+    public void 폭탄_줄은_던진_수와_결과마다의_수다()
+    {
+        // 설계 2026-09-30 조각2 §4 — 회피 다음 줄이다. 보스가 끊으려 했지만 늦어 떨어진 것(react 가 있는 landed)도 맞힘이다. 판이 먼저 끝난 던지기가
+        // 있으면 그 수를 덧붙인다 — 안 붙이면 셋의 합이 던진 수와 안 맞는다.
+        BombRecord[] bombs =
+        [
+            new(100, null, BombOutcome.Cut, 118),
+            new(300, "3연격", BombOutcome.Landed, 377),
+            new(500, "올려베기", BombOutcome.Landed, null),
+            new(700, "잡기", BombOutcome.Hit, null),
+            new(900, null, BombOutcome.End, null),
+        ];
+
+        PickReport.Lines("uniform", _roster, 1, [], [], bombs, [], [])[2]
+            .ShouldBe("폭탄 5개 — 맞힘 2 · 보스가 끊음 1 · 다른 공격에 잃음 1 · 판이 먼저 끝남 1");
+        PickReport.Lines("uniform", _roster, 1, [], [], bombs[..4], [], [])[2]
+            .ShouldBe("폭탄 4개 — 맞힘 2 · 보스가 끊음 1 · 다른 공격에 잃음 1");
+    }
+
+    [Fact]
+    public void 폭탄을_안_던졌으면_그렇다고_적는다()
+    {
+        PickReport.Lines("uniform", _roster, 1, [], [], [], [], [])[2].ShouldBe("폭탄을 안 던졌습니다");
     }
 }

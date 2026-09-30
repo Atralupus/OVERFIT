@@ -163,10 +163,11 @@ public partial class BattleDemo : Node
             {
                 var entry = new AttemptEntry(
                     seed, 1, new AttemptRecord(1, setup.Stage, seed, outcome.Value, [.. sim.Events]), setup.PickerId, sim.PlanEntries, sim.Ticks,
-                    instances.Finish(sim.Events), [.. tape.Runs], data.DataSha256);
+                    instances.Finish(sim.Events), [.. tape.Runs], data.DataSha256, [.. sim.BombRecords]);
                 if (AttemptFile.AppendTo(recordPath, entry) is { } written)
                 {
-                    Log.Info("battle-demo", $"recorded attempt=1 plans={entry.Plans.Count} inputs={tape.Runs.Count} ticks={sim.Ticks} path={written}");
+                    Log.Info("battle-demo", $"recorded attempt=1 plans={entry.Plans.Count} inputs={tape.Runs.Count} bombs={sim.BombRecords.Count}"
+                        + $" ticks={sim.Ticks} path={written}");
                 }
             }
         }
@@ -193,6 +194,12 @@ public partial class BattleDemo : Node
             + $" parry_rel={axes.ParryReliance:0.00} greed={axes.Greed:0.00} dist={axes.DistanceBias:0}"
             + $" guard_rate={axes.GuardRate:0.00}");
 
+        // 폭탄 (설계 2026-09-30 조각2 §4) — 결과 화면의 폭탄 줄과 같은 셈이다. reacted 는 보스가 끊은 던지기 수다(늦어서 떨어진 것도 든다).
+        IReadOnlyList<BombRecord> bombs = sim.BombRecords;
+        Log.Info("battle-demo", $"bombs thrown={bombs.Count} landed={bombs.Count(b => b.Outcome == BombOutcome.Landed)}"
+            + $" cut={bombs.Count(b => b.Outcome == BombOutcome.Cut)} hit={bombs.Count(b => b.Outcome == BombOutcome.Hit)}"
+            + $" end={bombs.Count(b => b.Outcome == BombOutcome.End)} reacted={bombs.Count(b => b.React is not null)}");
+
         if (replay is not null)
         {
             Replayed(replay, sim, data.DataSha256);
@@ -203,8 +210,9 @@ public partial class BattleDemo : Node
     }
 
     /// <summary>
-    /// 되살린 판이 기록과 같은가 (설계 2026-09-29 조각1 §4.4) — 계획 전부 · 틱 수 · 결과 · 관측. 다르면 데이터의 지문이 까닭을 가른다: 같으면 결정론이
-    /// 깨진 것이라 <c>[E]</c>, 다르면 데이터가 바뀌어 다른 판일 수 있어 <c>[W]</c> 다. 줄에는 기록/지금 값을 나란히 싣는다(<see cref="Replay.Compare"/>).
+    /// 되살린 판이 기록과 같은가 (설계 2026-09-29 조각1 §4.4) — 계획 전부 · 틱 수 · 결과 · 관측 · 폭탄(설계 2026-09-30 조각2 §4). 다르면 데이터의 지문이
+    /// 까닭을 가른다: 같으면 결정론이 깨진 것이라 <c>[E]</c>, 다르면 데이터가 바뀌어 다른 판일 수 있어 <c>[W]</c> 다. 줄에는 기록/지금 값을 나란히
+    /// 싣는다(<see cref="Replay.Compare"/>).
     /// </summary>
     private static void Replayed(AttemptEntry replay, BattleSim sim, string dataSha256)
     {

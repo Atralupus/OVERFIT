@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Overfit.Battle.Rules;
+using Overfit.Core;
 using Shouldly;
 using Xunit;
 
@@ -44,6 +45,55 @@ public class ReplayTests
             Ticks: sim.Ticks,
             Inputs: tape.Runs,
             DataSha256: _sha);
+        return (AttemptLog.Parse(AttemptLog.Line(entry), "시험"), sim);
+    }
+
+    /// <summary>
+    /// 데모의 판(설계 2026-09-30 조각2 §6) — 실제 캐릭터 · 실제 보스 · 명부와 고르기 · 시드 51. 함대 봇은 안 던지므로 폭탄이 든 판은 데모 봇으로 선다
+    /// (<c>BotPolicyTests</c> 의 데모와 같은 차림).
+    /// </summary>
+    private static BattleSetup DemoSetup()
+    {
+        BalanceData balance = TestConfigs.Balance();
+        StageSetup stage = TestConfigs.Stage(51);
+        return new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[balance.Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Bosses()[balance.Battle.Boss],
+            PatternIds = stage.PatternIds,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Picker = stage.Picker,
+            MaxTicks = balance.Battle.MaxTicks,
+        };
+    }
+
+    /// <summary>데모 봇이 <see cref="DemoSetup"/> 의 판을 끝까지 싸운 기록 한 줄 — <see cref="Fight"/> 처럼 쓰고 읽은 것이다. 폭탄이 실린다.</summary>
+    private static (AttemptEntry Entry, BattleSim Sim) DemoFight()
+    {
+        var sim = new BattleSim(DemoSetup());
+        var bot = new BotPolicy(51);
+        var tape = new InputTape();
+        BattleOutcome? outcome = null;
+        while (outcome is null)
+        {
+            InputFrame input = bot.Next(sim);
+            tape.Add(input);
+            outcome = sim.Tick(input);
+        }
+
+        var entry = new AttemptEntry(
+            SessionSeed: 51,
+            Run: 1,
+            Record: new AttemptRecord(1, 1, 51, outcome.Value, [.. sim.Events]),
+            PickerId: "uniform",
+            Plans: sim.PlanEntries,
+            Ticks: sim.Ticks,
+            Inputs: tape.Runs,
+            DataSha256: _sha,
+            Bombs: [.. sim.BombRecords]);
         return (AttemptLog.Parse(AttemptLog.Line(entry), "시험"), sim);
     }
 
@@ -127,6 +177,50 @@ public class ReplayTests
 
         // 데이터가 바뀌어도 판이 같으면 일치다 — 지문은 판이 다를 때 그 까닭을 가를 뿐이다.
         Replay.Verdict(entry, Replay.Run(FleetPlay.Setup(1, _seed), inputs), _otherSha).ShouldBe(ReplayVerdict.Match);
+    }
+
+    [Fact]
+    public void 폭탄이_든_판을_줄로_쓰고_읽어_되살리면_폭탄까지_같다()
+    {
+        // 설계 2026-09-30 조각2 §4 — 되살리기가 폭탄도 견준다. 던진 틱 · 그때의 동작 · 결과 · 보스가 끊은 틱이 입력에서 그대로 다시 선다.
+        (AttemptEntry entry, BattleSim sim) = DemoFight();
+        sim.BombRecords.ShouldNotBeEmpty("데모 봇이 안 던졌다 — 폭탄의 되살리기를 못 본다");
+        sim.BombRecords.ShouldContain(b => b.React != null, "보스가 한 번도 안 끊었다 — 반응의 되살리기를 못 본다");
+        entry.Bombs.ShouldNotBeNull().ShouldBe(sim.BombRecords);
+
+        BattleSim again = Replay.Run(DemoSetup(), entry.Inputs.ShouldNotBeNull());
+
+        again.BombRecords.ShouldBe(sim.BombRecords);
+        Replay.Verdict(entry, again, _sha).ShouldBe(ReplayVerdict.Match);
+    }
+
+    [Fact]
+    public void 폭탄이_다르면_Mismatch_이고_Compare_가_bomb_diff_를_말한다()
+    {
+        // 폭탄 하나의 결과만 달라도 다른 판이다 — 계획 · 관측이 같아도. Compare 는 처음 갈린 칸을 적는다.
+        (AttemptEntry entry, _) = DemoFight();
+        BombRecord[] bombs = [.. entry.Bombs.ShouldNotBeNull()];
+        bombs.Length.ShouldBeGreaterThan(1);
+        bombs[1] = bombs[1] with { Outcome = bombs[1].Outcome == BombOutcome.Landed ? BombOutcome.Cut : BombOutcome.Landed };
+        AttemptEntry changed = entry with { Bombs = bombs };
+
+        BattleSim again = Replay.Run(DemoSetup(), entry.Inputs.ShouldNotBeNull());
+
+        Replay.Verdict(changed, again, _sha).ShouldBe(ReplayVerdict.Mismatch);
+        Replay.Compare(changed, again).ShouldEndWith($" bombs={bombs.Length}/{again.BombRecords.Count} bomb_diff=1");
+    }
+
+    [Fact]
+    public void 폭탄_칸이_없는_옛_줄은_폭탄을_안_견준다()
+    {
+        // 4/5 전의 줄(AttemptLogTests) — 2/5 · 3/5 의 게임은 던졌어도 적지 않았다. 적지 않은 것을 "안 던졌다" 로 견주면 같은 판을 다르다고 한다.
+        (AttemptEntry entry, _) = DemoFight();
+        AttemptEntry old = entry with { Bombs = null };
+
+        BattleSim again = Replay.Run(DemoSetup(), entry.Inputs.ShouldNotBeNull());
+
+        Replay.Verdict(old, again, _sha).ShouldBe(ReplayVerdict.Match);
+        Replay.Compare(old, again).ShouldEndWith($" bombs=-/{again.BombRecords.Count}");
     }
 
     [Fact]

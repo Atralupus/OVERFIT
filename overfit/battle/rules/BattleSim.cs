@@ -174,6 +174,9 @@ public sealed class BattleSim
     /// <summary>반응의 동작이 데이터에 없다는 <c>[E]</c> 를 이미 남겼나 — 쉬는 동안은 매 틱이 끊을 자리라 한 번만 남긴다.</summary>
     private bool _reactionMissing;
 
+    /// <summary>이 판의 던지기들 (설계 2026-09-30 조각2 §4) — 시도 기록이 싣는다(<see cref="BombRecords"/>).</summary>
+    private readonly BombLedger _ledger = new();
+
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
@@ -407,6 +410,12 @@ public sealed class BattleSim
     /// <summary>보스가 끊고 멈칫하는 중인가 (§2.3) — 뷰가 idle 첫 장에 세운다. 규칙은 안 읽는다.</summary>
     public bool BossHesitating => _watch.Hesitating;
 
+    /// <summary>
+    /// 이 판의 던지기들, 던진 순서로 (설계 2026-09-30 조각2 §4) — 던진 틱 · 그때 보스의 동작 · 결과 · 보스가 끊은 틱. 시도 기록이 싣고(<c>bombs</c>)
+    /// 되살리기가 견주고 결과 화면이 센다. 판이 끝날 때 아직 안 정해진 던지기는 <see cref="BombOutcome.End"/> 다.
+    /// </summary>
+    public IReadOnlyList<BombRecord> BombRecords => _ledger.Records;
+
     /// <summary>한 틱 민다. 판이 끝났으면 결과를, 아니면 null 을 돌려준다.</summary>
     public BattleOutcome? Tick(InputFrame input)
     {
@@ -429,6 +438,7 @@ public sealed class BattleSim
         {
             Fighter.Face(Boss.X);
             _watch.See(Ticks);
+            _ledger.Throw(Ticks, Boss.CurrentPattern);
             LogThrow();
         }
 
@@ -697,6 +707,7 @@ public sealed class BattleSim
         _flow.Drop();
         Boss.Face(Fighter.X);
         _watch.React();
+        _ledger.React(Ticks);
         Log.Debug("boss", () => $"bomb_react from={from}{at} tick={Ticks}");
     }
 
@@ -865,6 +876,7 @@ public sealed class BattleSim
         if (landed > 0)
         {
             BombsLanded += landed;
+            _ledger.Landed(landed);
             Boss.TakeDamage(landed * _bombs.Damage);
             if (Log.IsEnabled(LogLevel.Debug))
             {
@@ -875,11 +887,13 @@ public sealed class BattleSim
         if (Fighter.ThrowReleased)
         {
             _bombs.Launch(Fighter.X, Fighter.Y);
+            _ledger.Released();
             Log.Debug("fighter", () => $"bomb_release x={Fighter.X:0} tick={Ticks}");
         }
 
         if (Fighter.ThrowLost)
         {
+            _ledger.Lost(byReaction: _watch.InReaction);
             Log.Debug("fighter", () => $"bomb_lost by={(Events.Count > 0 ? Events[^1].PatternId : "-")} react={(_watch.InReaction ? 1 : 0)}"
                 + $" tick={Ticks}");
         }

@@ -28,9 +28,14 @@ namespace Overfit.Battle.Rules;
 /// </param>
 /// <param name="Inputs">판의 입력 — <see cref="InputTape.Runs"/> 의 <c>[코드, 틱 수]</c> 칸들. 5/8 까지의 줄에는 없다(null).</param>
 /// <param name="DataSha256">판을 세운 데이터의 지문(<see cref="DataDigest"/>) — 되살린 판이 다를 때 데이터가 바뀌었는지를 가른다. 5/8 까지의 줄에는 없다(null).</param>
+/// <param name="Bombs">
+/// 그 판의 던지기들(<see cref="BattleSim.BombRecords"/> · 설계 2026-09-30 조각2 §4). 조각 2 의 4/5 전의 줄에는 없다(null) — 안 던진 판(빈 목록)과 가른다:
+/// 2/5 · 3/5 의 게임은 던졌어도 적지 않아, 되살리기가 그 줄의 폭탄은 안 견준다(<see cref="Replay.Verdict"/>).
+/// </param>
 public sealed record AttemptEntry(
     ulong SessionSeed, int Run, AttemptRecord Record, string PickerId, IReadOnlyList<PlanEntry> Plans, int Ticks,
-    IReadOnlyList<PatternInstance>? Instances = null, IReadOnlyList<int[]>? Inputs = null, string? DataSha256 = null);
+    IReadOnlyList<PatternInstance>? Instances = null, IReadOnlyList<int[]>? Inputs = null, string? DataSha256 = null,
+    IReadOnlyList<BombRecord>? Bombs = null);
 
 /// <summary>
 /// 시도 기록의 한 줄을 짓고 읽는다 (#112 · 설계 2026-09-28 §6.5). <b>순수</b>하다 — 파일에 쓰는 것만 Godot 쪽(<c>AttemptFile</c>)이다. 키는 다른 데이터와
@@ -63,6 +68,7 @@ public static class AttemptLog
             Events = r.Events,
             Instances = entry.Instances,
             DataSha256 = entry.DataSha256,
+            Bombs = entry.Bombs,
             Inputs = entry.Inputs,
         };
         return JsonSerializer.Serialize(line, _options);
@@ -81,7 +87,7 @@ public static class AttemptLog
         }
 
         var record = new AttemptRecord(l.Attempt, l.Stage, l.Seed, l.Outcome, l.Events);
-        return new AttemptEntry(l.SessionSeed, l.Run, record, l.Picker, l.Plans ?? [], l.Ticks, l.Instances, l.Inputs, l.DataSha256);
+        return new AttemptEntry(l.SessionSeed, l.Run, record, l.Picker, l.Plans ?? [], l.Ticks, l.Instances, l.Inputs, l.DataSha256, l.Bombs);
     }
 
     /// <summary>줄의 모양 — 필수 키가 빠지면 <c>JsonData</c> 가 전부 나열한다.</summary>
@@ -111,6 +117,9 @@ public static class AttemptLog
         public IReadOnlyList<PatternInstance>? Instances { get; init; }
 
         public string? DataSha256 { get; init; }
+
+        /// <summary>조각 2 의 4/5 전의 줄에는 없다(null) — 입력 바로 앞이다: 입력 다음으로 길 수 있다(한 판 열 개).</summary>
+        public IReadOnlyList<BombRecord>? Bombs { get; init; }
 
         /// <summary>줄의 끝이다 — 가장 길어(판 하나에 수백 칸) 사람이 머리를 먼저 읽는다.</summary>
         public IReadOnlyList<int[]>? Inputs { get; init; }
