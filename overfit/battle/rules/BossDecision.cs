@@ -96,7 +96,17 @@ public sealed class BossActions
 /// <summary>
 /// 파이터의 한 틱 모습 (설계 2026-10-01 조각2 §2) — 늦은 관측의 고리(<see cref="SightBuffer"/>)가 쌓는다. 망의 입력 칸 표는 조각 4 가 정한다.
 /// </summary>
-public readonly record struct FighterSnapshot(double X, double Y, int Facing, FighterAction Action, bool Throwing, int Health, int BombsLeft);
+/// <param name="X">자리(발 중심).</param>
+/// <param name="Y">발바닥 높이.</param>
+/// <param name="Facing">보는 쪽.</param>
+/// <param name="Action">지금 행동.</param>
+/// <param name="Throwing">폭탄을 던지는 중인가.</param>
+/// <param name="Health">체력.</param>
+/// <param name="BombsLeft">남은 폭탄.</param>
+/// <param name="StaminaRatio">스태미나 / 최대 (설계 2026-10-01 조각4 §2).</param>
+/// <param name="ThrowProgress">던지기의 진행 0 ~ 1 — 던지는 중이 아니면 0. 아이템의 "준비 중" 속성이다.</param>
+public readonly record struct FighterSnapshot(
+    double X, double Y, int Facing, FighterAction Action, bool Throwing, int Health, int BombsLeft, double StaminaRatio = 1, double ThrowProgress = 0);
 
 /// <summary>
 /// 결정이 보는 판 (설계 2026-10-01 조각2 §2) — 보스 자신은 지금의 것이고 파이터는 늦춤(18틱) 앞의 것이다. 이기는 이유가 반응 속도가 아니라 읽기가 되게.
@@ -118,7 +128,10 @@ public sealed record BossSight(int Tick, int Form, double BossX, int BossFacing,
 /// <param name="Sight">이 결정이 보는 판.</param>
 /// <param name="Current">캔슬 지점의 지금 동작 — 그 밖은 null.</param>
 /// <param name="CancelPoint">캔슬 지점의 칸(<c>cancel_points</c>) — 그 밖은 null.</param>
-public sealed record BossDecision(DecisionPoint Point, int Number, int Elapsed, IReadOnlyList<bool> Mask, BossSight Sight, string? Current, int? CancelPoint);
+/// <param name="Observation">관측(<see cref="BossObservation"/>) — 원하는 조종기(<see cref="IBossController.WantsObservation"/>)에게만 짓는다. 그 밖은 null.</param>
+public sealed record BossDecision(
+    DecisionPoint Point, int Number, int Elapsed, IReadOnlyList<bool> Mask, BossSight Sight, string? Current, int? CancelPoint,
+    IReadOnlyList<double>? Observation = null);
 
 /// <summary>
 /// 보스의 조종기 (설계 2026-10-01 조각2 §3 · 우산 §3.4) — 결정 지점에서 칸 하나를 고른다. 판이 마스크를 다시 본다: 가려진 칸은 <c>[E] action_masked</c>.
@@ -127,6 +140,11 @@ public interface IBossController
 {
     /// <summary>폭탄 던지기를 보면 끊으려 하나(<c>bomb_reaction</c>) — 규칙 조종기만 참이다. 끊는 자리가 결정 지점과 달라 판의 장치로 둔다(§3).</summary>
     bool ReactsToBombs { get; }
+
+    /// <summary>
+    /// 관측(<see cref="BossDecision.Observation"/>)을 원하나 (설계 2026-10-01 조각4 §2) — 망 조종기만 참이다. 규칙 · 무작위 조종기의 판은 할당이 안 는다.
+    /// </summary>
+    bool WantsObservation => false;
 
     /// <summary>열린 칸 하나.</summary>
     int Decide(BossDecision decision);

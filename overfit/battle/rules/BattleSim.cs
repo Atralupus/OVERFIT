@@ -119,6 +119,9 @@ public sealed class BattleSim
     /// <summary>물러서기 · 점프 이동의 상태 (설계 2026-10-01 조각3).</summary>
     private readonly BossTravel _travel;
 
+    /// <summary>관측의 칸 표 (설계 2026-10-01 조각4 §2) — 원하는 조종기에게만 짓는다.</summary>
+    private readonly BossObservation _observation;
+
     /// <summary>결정이 보는 파이터의 고리 — 늦춤(18틱) 앞의 모습(§2).</summary>
     private readonly SightBuffer _sight;
 
@@ -246,7 +249,8 @@ public sealed class BattleSim
         _actions = new BossActions(setup.PatternIds);
         _controller = setup.Controller ?? new RuleController(picker, _actions, setup.PatternIds, setup.Patterns, rest);
         _decideTicks = TicksFor(setup.Boss.DecideSeconds);
-        _sight = new SightBuffer(TicksFor(setup.Boss.SightDelaySeconds));
+        _sight = new SightBuffer(TicksFor(setup.Boss.SightDelaySeconds), BossObservation.Recent * BossObservation.RecentGap);
+        _observation = new BossObservation(setup.PatternIds.Count);
         _sight.Push(Snapshot());
         Freed();
     }
@@ -1149,7 +1153,8 @@ public sealed class BattleSim
     {
         bool[] mask = Mask(point, current);
         var decision = new BossDecision(point, Decisions++, _elapsed, mask,
-            new BossSight(Ticks, _forms.Form, Boss.X, Boss.Facing, Boss.Health, _sight.Delayed, Events), current, cancelPoint);
+            new BossSight(Ticks, _forms.Form, Boss.X, Boss.Facing, Boss.Health, _sight.Delayed, Events), current, cancelPoint,
+            _controller.WantsObservation ? Observe(point) : null);
         int action = _controller.Decide(decision);
         bool open = (uint)action < (uint)mask.Length && mask[action];
         if (!open)
@@ -1342,8 +1347,52 @@ public sealed class BattleSim
     };
 
     /// <summary>파이터의 지금 모습 — 늦은 관측의 고리에 쌓는다.</summary>
-    private FighterSnapshot Snapshot() =>
-        new(Fighter.X, Fighter.Y, Fighter.Facing, Fighter.Action, Fighter.Throwing, Fighter.Health, Fighter.BombsLeft);
+    private FighterSnapshot Snapshot() => new(
+        Fighter.X, Fighter.Y, Fighter.Facing, Fighter.Action, Fighter.Throwing, Fighter.Health, Fighter.BombsLeft, Fighter.StaminaRatio, Fighter.ThrowProgress);
+
+    /// <summary>이 결정의 관측 (설계 2026-10-01 조각4 §2) — 보스는 지금, 파이터는 고리의 늦은 모습.</summary>
+    private double[] Observe(DecisionPoint point)
+    {
+        var recent = new FighterSnapshot[BossObservation.Recent];
+        for (int k = 0; k < recent.Length; k++)
+        {
+            recent[k] = _sight.At((k + 1) * BossObservation.RecentGap);
+        }
+
+        int move = -1;
+        double progress = 0;
+        int toCancel = -1;
+        if (_runner is not null && _current is not null && Boss.CurrentPattern is { } id)
+        {
+            for (int i = 0; i < _setup.PatternIds.Count; i++)
+            {
+                move = _setup.PatternIds[i] == id ? i : move;
+            }
+
+            int length = TicksFor(_current.Timeline[^1].T);
+            progress = length <= 0 ? 0 : Math.Min(1, (double)_runner.Ticks / length);
+            if (_current.CancelPoints is { } points)
+            {
+                foreach (CancelPointDef p in points)
+                {
+                    int at = TicksFor(p.T);
+                    if (at > _runner.Ticks && (toCancel < 0 || at - _runner.Ticks < toCancel))
+                    {
+                        toCancel = at - _runner.Ticks;
+                    }
+                }
+            }
+        }
+
+        TravelState travel = _run.Active ? TravelState.Approach
+            : _travel.Kind == TravelKind.Retreat ? TravelState.Retreat
+            : _travel.Leaping ? TravelState.Leap
+            : TravelState.None;
+        return _observation.Encode(new ObservationInput(
+            point, _setup.Arena.Width, Boss.X, Boss.Y, Boss.Facing, Boss.Health, _setup.Boss.MaxHealth, _forms.Form, _forms.Count,
+            _poise.Max <= 0 ? 0 : _poise.Value / _poise.Max, Boss.Exhausted, _forms.Shifting, travel, move, progress, toCancel,
+            _sight.Delayed, recent, _setup.Fighter.MaxHealth, _bombs.InFlight));
+    }
 
     /// <summary>
     /// 보스에게 피해를 준다 — 칼과 폭탄이 지나는 한 자리 (설계 2026-10-01 조각1 §2.1 · §2.3). 전환 중이면 무적이라 안 깎고 <c>[D] shielded</c> 를

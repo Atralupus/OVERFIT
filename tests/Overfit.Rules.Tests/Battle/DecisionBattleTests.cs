@@ -175,4 +175,35 @@ public class DecisionBattleTests
         arrived.Mask[BossActions.Approach].ShouldBeFalse();
         c.Seen.Count(d => d.Point == DecisionPoint.Arrived && d.Sight.Tick == arrived.Sight.Tick).ShouldBe(1, "같은 틱에 Arrived 를 또 물었다");
     }
+
+    /// <summary>관측을 원하는 조종기 — 기다리기만.</summary>
+    private sealed class Watching : IBossController
+    {
+        public List<BossDecision> Seen { get; } = new();
+
+        public bool ReactsToBombs => false;
+
+        public bool WantsObservation => true;
+
+        public int Decide(BossDecision decision)
+        {
+            Seen.Add(decision);
+            return BossActions.Wait;
+        }
+    }
+
+    [Fact]
+    public void 관측은_원하는_조종기에게만_짓는다()
+    {
+        // 설계 2026-10-01 조각4 §2 — 규칙 · 무작위 조종기의 판은 할당이 안 는다.
+        Recording rule = Rule(new ScriptPlan(0.8, "3연격"));
+        TestConfigs.UntilTick(Sim(rule), 24);
+        rule.Seen.ShouldAllBe(d => d.Observation == null);
+
+        var watching = new Watching();
+        TestConfigs.UntilTick(Sim(watching), 24);
+        int size = new BossObservation(Roster.Count).Size;
+        watching.Seen.ShouldAllBe(d => d.Observation != null && d.Observation.Count == size);
+        watching.Seen[^1].Observation![1].ShouldBe(1, "쉬기 결정의 지점 칸이 아니다");
+    }
 }
