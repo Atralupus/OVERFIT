@@ -1,8 +1,8 @@
 """페이즈 고르기 (설계 2026-10-01 조각7 §1). 실행: tools/build.sh pick --name=sp-1
 
-셀프 플레이의 eval.csv 에서 — 형태 1: r00 을 뺀 저장본 중 승률이 가장 낮은 것 · 형태 3: 마지막 저장본 · 형태 2: 1 과 3 의 승률 한가운데에 가장 가까운 것.
+셀프 플레이의 eval.csv 에서 — 3페이즈: 마지막 저장본 · 1 · 2페이즈: 안 배운 r00 에서 3페이즈까지의 승률 자에서 targets 자리(choose).
 **평가에서 일곱 공격을 모두 쓴 저장본만 고른다**(이슈 #167 — 유저: "어떤 페이즈든 공격 자체는 전체 다 써야"): 공격마다 동작 시작의 min_share 이상.
-sp-1 의 1페이즈(r02)는 점프 공격 · 잡기 둘에 몰려 있었다. 고른 가중치를 overfit/data/boss_net/form{1,2,3}.json 으로 복사하고 picks.json 에 출처를 남긴다.
+sp-1 의 1페이즈(r02 · "가장 약한 저장본")는 점프 공격 · 잡기 둘에 몰려 있었고 너무 약했다. 고른 가중치를 overfit/data/boss_net/form{1,2,3}.json 으로 복사하고 picks.json 에 출처를 남긴다.
 """
 
 from __future__ import annotations
@@ -30,17 +30,24 @@ def move_shares(action: np.ndarray, actions: int, roster: int) -> list[float]:
     return [float(c / total) if total else 0.0 for c in counts]
 
 
-def choose(rows: list[dict], shares: dict[str, list[float]], min_share: float) -> list[dict]:
-    """eval.csv 의 줄(저장본 순) → 형태 1 · 2 · 3 의 줄. 일곱 공격 중 하나라도 min_share 밑인 저장본은 빼고 고른다."""
-    eligible = [r for r in rows if min(shares[r["boss"]]) >= min_share]
-    trained = [r for r in eligible if r["boss"] != "boss_r00"]
-    if len(trained) < 3:
-        raise SystemExit(f"공격을 모두 쓰는 저장본이 {len(trained)} 개뿐이다 — 페이즈 셋을 못 고른다")
-    first = min(trained, key=lambda r: (float(r["boss_win"]), r["boss"]))
-    last = trained[-1]
-    mid = (float(first["boss_win"]) + float(last["boss_win"])) / 2
-    second = min((r for r in trained if r not in (first, last)), key=lambda r: (abs(float(r["boss_win"]) - mid), r["boss"]))
-    return [first, second, last]
+def choose(rows: list[dict], shares: dict[str, list[float]], min_share: float, targets: list[float]) -> list[dict]:
+    """eval.csv 의 줄(저장본 순) → 형태 1 · 2 · 3 의 줄.
+
+    3페이즈는 일곱 공격을 모두 쓰는(공격마다 min_share 이상) 마지막 저장본이다. 안 배운 r00 의 승률부터 3페이즈의 승률까지를 자로 삼아, 1 · 2페이즈는
+    그 자의 targets 자리에 승률이 가장 가까운 저장본이다(같으면 이른 것). 이슈 #167 — 유저: "1페이즈도 적당히 학습된 보스여야합니다. 너무 안된 보스말고요".
+    """
+    base = float(rows[0]["boss_win"])
+    eligible = [r for r in rows[1:] if min(shares[r["boss"]]) >= min_share]
+    if len(eligible) < 3:
+        raise SystemExit(f"공격을 모두 쓰는 저장본이 {len(eligible)} 개뿐이다 — 페이즈 셋을 못 고른다")
+    last = eligible[-1]
+    top = float(last["boss_win"])
+    picked: list[dict] = []
+    for t in targets:
+        aim = base + (top - base) * t
+        pool = [r for r in eligible if r is not last and r not in picked]
+        picked.append(min(pool, key=lambda r: (abs(float(r["boss_win"]) - aim), r["boss"])))
+    return picked + [last]
 
 
 def main() -> None:
@@ -49,13 +56,13 @@ def main() -> None:
     args = ap.parse_args()
     src = ROOT / "out" / "selfplay" / args.name
     rows = list(csv.DictReader((src / "eval.csv").open(encoding="utf-8")))
-    min_share = json.loads((ROOT / "ml" / "rl" / "train.json").read_text(encoding="utf-8"))["pick"]["min_move_share"]
+    cfg = json.loads((ROOT / "ml" / "rl" / "train.json").read_text(encoding="utf-8"))["pick"]
     shares = {}
     for r in rows:
         ro = rollout.read(src / "eval" / r["boss"])
         shares[r["boss"]] = move_shares(ro.action, ro.manifest["actions"], len(ro.manifest["roster"]))
         print(f"{r['boss']} boss_win={r['boss_win']} moves=" + " ".join(f"{x:.2f}" for x in shares[r["boss"]]))
-    picks = choose(rows, shares, min_share)
+    picks = choose(rows, shares, cfg["min_move_share"], cfg["targets"])
     DEST.mkdir(parents=True, exist_ok=True)
     record = {"_comment": "형태(페이즈)마다의 보스 망 — tools/build.sh pick 이 셀프 플레이의 eval.csv 에서 골랐다(설계 2026-10-01 조각7 §1). 손으로 고치지 말고 다시 고른다.",
               "selfplay": args.name, "forms": []}
