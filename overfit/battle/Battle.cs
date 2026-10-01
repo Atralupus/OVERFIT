@@ -350,6 +350,7 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
+        _hud.SetFormMarks(boss.Forms.Thresholds, boss.MaxHealth);
 
         // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
         // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup). 대본 칸이 차
@@ -701,7 +702,8 @@ public partial class Battle : Node2D
                 : _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
                     ? speed(_feel)
                     : 1.0,
-            _sim.BossStep?.Mirror ?? false));
+            _sim.BossStep?.Mirror ?? false,
+            _sim.Forms.Shifting ? _sim.Forms.ShiftLeft : 0));
 
         // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림 · 산 창)이 그 틱에 멈춰 남는다. 거르지 않으면
         // 흰 구가 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 잡기에 죽은 판도 같다: 판은 그 잡기가 닿은 틱에 끝나고

@@ -271,4 +271,37 @@ public class BossFormBattleTests
         TestConfigs.UntilTick(sim, land + Shift - 1);
         sim.Events.ShouldBeEmpty("끊긴 도약의 착지가 판정을 남겼다");
     }
+
+    [Fact]
+    public void GIF_form_905_에서_걸어_들어가_친_1타가_900_에_멈추며_전환을_세운다()
+    {
+        // GifRunner 의 form 대본 — 보스전의 명부 위에 3초 쉬고 3연격. 판이 선 뒤 115틱 걸어(805px · 보스 앞 155) 118틱에 J 를 누른다. 1타(10)가
+        // 905 → 900 에 멈추고 그 틱에 전환이 선다 — 보스는 아직 쉬는 중이다(180틱 전).
+        IReadOnlyList<string> roster = StageRoster.For(TestConfigs.Stages(), 1);
+        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = Real(),
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(),
+            BossStartHealth = 905,
+            PatternIds = roster,
+            Patterns = patterns,
+            Seed = 51,
+            Picker = new ScriptPlanPicker(roster, patterns, [new ScriptPlan(3.0, "3연격")]),
+            MaxTicks = TestConfigs.MaxTicks(),
+        });
+        using var log = new LogCapture();
+        for (int t = 1; t <= 140 && !sim.Forms.Shifting; t++)
+        {
+            sim.Tick(t <= 115 ? _right : t == 118 ? _attack : default);
+        }
+
+        sim.Forms.Shifting.ShouldBeTrue("1타가 안 닿았다");
+        sim.Boss.Health.ShouldBe(900);
+        sim.Boss.CurrentPattern.ShouldBeNull("보스가 쉬기 전에 3연격을 열었다");
+        log.Lines.ShouldContain($"[boss][I] form_shift from=1 to=2 hp=900 tick={sim.Ticks}");
+        sim.Ticks.ShouldBe(122, "1타의 창이 닿는 틱 — GifRunner 의 form 대본이 이 틱을 둘러 잡는다");
+    }
 }

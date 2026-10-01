@@ -112,6 +112,16 @@ public partial class GifRunner : Node
         new("bomb", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
             Inputs: new[] { new GifInput(2, 2, "bomb") },
             From: 1, To: 141),
+
+        // 페이즈 전환 (설계 2026-10-01 조각1 §2 · §4) — 보스는 905 에서 서고 3초 쉰다. 파이터가 115틱 걸어(보스 앞 155) 118틱에 J — 1타(10)가 122틱에
+        // 900 에 멈추며 전환이 선다: idle · 흰 플래시 셋 · 무적 1.5초(212틱까지). 판의 시계로 잡는다(Target 없음). BossFormBattleTests.GIF_form.
+        new("form", Plans: new[] { new ScriptPlan(3.0, "3연격") }, Target: null,
+            Inputs: new[]
+            {
+                new GifInput(_battleStart, 115, "move_right", OnBattleClock: true),
+                new GifInput(118, 118, "attack", OnBattleClock: true),
+            },
+            From: 100, To: 236, BossStartHealth: 905),
     };
 
     private readonly SceneDriver _drive;
@@ -158,7 +168,7 @@ public partial class GifRunner : Node
         // 돈다(재 보니 5틱째부터 걸었다). 레벨이라 씬이 바뀌는 동안에도 눌린 채 남는다.
         var held = new Dictionary<string, bool>(StringComparer.Ordinal);
         Drive(script, _battleStart, int.MinValue, held);
-        Overfit.Battle.Battle? battle = await _drive.NewBattle(script.Plans);
+        Overfit.Battle.Battle? battle = await _drive.NewBattle(script.BossStartHealth, script.Plans);
         if (battle is null)
         {
             Log.Error("gif", $"battle_missing id={script.Id}");
@@ -166,7 +176,8 @@ public partial class GifRunner : Node
             return;
         }
 
-        int begun = -1;
+        // 겨냥한 동작이 없으면(Target null) 판의 시계로 잡는다 — 페이즈 전환처럼 동작이 아닌 장면이다. 판이 선 틱이 0 이라 패턴 틱이 곧 판의 틱이다.
+        int begun = script.Target is null ? 0 : -1;
         bool started = false;
         double waited = 0;
         while (true)
@@ -174,7 +185,7 @@ public partial class GifRunner : Node
             await _drive.Frames(1);
 
             // 겨냥한 패턴이 선 판의 틱 — 그 패턴이 처음 보인 신호 자리의 "지금까지 민 틱" 이다(한 물리 프레임에 판은 많아야 한 틱을 민다).
-            if (begun < 0 && battle.BossPattern == script.Target)
+            if (begun < 0 && script.Target is not null && battle.BossPattern == script.Target)
             {
                 begun = battle.SimTicks;
                 Log.Info("gif", $"target_begun pattern={script.Target} tick={begun}");
@@ -256,7 +267,10 @@ public partial class GifRunner : Node
     /// <param name="OnBattleClock">판의 틱으로 적었나 — 패턴 앞의 입력("판이 설 때부터")이다. 거짓이면 겨냥한 패턴의 틱이다.</param>
     private readonly record struct GifInput(int From, int To, string Action, bool OnBattleClock = false);
 
-    /// <summary>대본 하나 — 단계 · 패턴 순서(대본 고르기) · 겨냥한 패턴 · 입력 · 잡을 구간 [From, To)(패턴 틱).</summary>
+    /// <summary>
+    /// 대본 하나 — 계획들(대본 고르기) · 겨냥한 패턴(null 이면 판의 시계) · 입력 · 잡을 구간 [From, To)(패턴 틱) · 보스의 시작 체력(없으면 최대 ·
+    /// 설계 2026-10-01 조각1 §2.5).
+    /// </summary>
     private sealed record GifScript(
-        string Id, ScriptPlan[] Plans, string Target, GifInput[] Inputs, int From, int To);
+        string Id, ScriptPlan[] Plans, string? Target, GifInput[] Inputs, int From, int To, int? BossStartHealth = null);
 }
