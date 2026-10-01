@@ -21,6 +21,8 @@ public class DecisionBattleTests
     {
         public List<BossDecision> Seen { get; } = new();
 
+        public IBossController Inner => inner;
+
         public bool ReactsToBombs => inner.ReactsToBombs;
 
         public int Decide(BossDecision decision)
@@ -174,5 +176,68 @@ public class DecisionBattleTests
         BossDecision arrived = c.Seen.First(d => d.Point == DecisionPoint.Arrived);
         arrived.Mask[BossActions.Approach].ShouldBeFalse();
         c.Seen.Count(d => d.Point == DecisionPoint.Arrived && d.Sight.Tick == arrived.Sight.Tick).ShouldBe(1, "같은 틱에 Arrived 를 또 물었다");
+    }
+
+    /// <summary>관측을 원하는 조종기 — 기다리기만.</summary>
+    private sealed class Watching : IBossController
+    {
+        public List<BossDecision> Seen { get; } = new();
+
+        public bool ReactsToBombs => false;
+
+        public bool WantsObservation => true;
+
+        public int Decide(BossDecision decision)
+        {
+            Seen.Add(decision);
+            return BossActions.Wait;
+        }
+    }
+
+    [Fact]
+    public void 관측은_원하는_조종기에게만_짓는다()
+    {
+        // 설계 2026-10-01 조각4 §2 — 규칙 · 무작위 조종기의 판은 할당이 안 는다.
+        Recording rule = Rule(new ScriptPlan(0.8, "3연격"));
+        TestConfigs.UntilTick(Sim(rule), 24);
+        rule.Seen.ShouldAllBe(d => d.Observation == null);
+
+        var watching = new Watching();
+        TestConfigs.UntilTick(Sim(watching), 24);
+        int size = new BossObservation(Roster.Count).Size;
+        watching.Seen.ShouldAllBe(d => d.Observation != null && d.Observation.Count == size);
+        watching.Seen[^1].Observation![1].ShouldBe(1, "쉬기 결정의 지점 칸이 아니다");
+    }
+
+    /// <summary>규칙 조종기에 관측을 원하게 덧씌운다.</summary>
+    private sealed class RuleWatching(IBossController inner) : IBossController
+    {
+        public List<BossDecision> Seen { get; } = new();
+
+        public bool ReactsToBombs => inner.ReactsToBombs;
+
+        public bool WantsObservation => true;
+
+        public int Decide(BossDecision decision)
+        {
+            Seen.Add(decision);
+            return inner.Decide(decision);
+        }
+    }
+
+    [Fact]
+    public void 캔슬_결정의_관측은_지금_지점_다음의_캔슬_지점까지를_싣는다()
+    {
+        // 최종 리뷰가 밟았다 — 지금 묻는 지점을 "다음" 으로 세면 캔슬 결정에서는 늘 1틱(1/60)이라 "더 기다리면 또 끊을 자리가 오나" 가 안 보였다.
+        // 3연격의 첫 지점(78)에서 다음은 144 — 결정의 틱에 러너는 77 이라(지점의 단계에 들기 전에 묻는다) (144 − 77)/60. 둘째 지점(144)에서는 더 없으니 0.
+        var c = new RuleWatching(Rule(new ScriptPlan(0.4, "3연격")).Inner);
+        BattleSim sim = Sim(c);
+        TestConfigs.UntilTick(sim, 24 + 150);
+        int at = new BossObservation(Roster.Count).Size - (BossObservation.Items * 3) - (BossObservation.Recent * Enum.GetValues<FighterAction>().Length)
+            - (8 + Enum.GetValues<FighterAction>().Length) - 1;
+        BossDecision[] cancels = [.. c.Seen.Where(d => d.Point == DecisionPoint.Cancel)];
+        cancels.Length.ShouldBe(2);
+        cancels[0].Observation![at].ShouldBe((144 - 77) / 60.0, 1e-12);
+        cancels[1].Observation![at].ShouldBe(0);
     }
 }

@@ -24,6 +24,7 @@
 #                                      EXTRA="--history=<시도 기록.jsonl> --attempt=N" → 봇 대신 그 시도의 저장한 입력으로 판 전체를
 #                                      되살려 기록과 견준다 → [battle-demo][I] replay_match (다르면 [E] · 데이터가 바뀌었으면 [W])
 #                                      EXTRA="--record=<파일>" → 봇의 판을 시도 한 줄로 덧붙인다(--attempt=1 로 되살린다)
+#   tools/build.sh rollout [인자…]     학습의 일꾼 — 보스를 망 조종기로 돌려 경험을 쓴다 → out/rollout/<시드>-<판 수>/ (조각 4)
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
 #                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
 #                                      예: tools/build.sh factory --fleet-seed=1 --from=0 --to=2000
@@ -441,6 +442,13 @@ cmd_factory() {
   ok "공장 통과 ($OUT/factory.log)"
 }
 
+# 학습의 일꾼 (설계 2026-10-01 조각4 §6). 같은 공장 콘솔의 --rollout — 보스를 망 조종기로 돌려 결정마다 관측 · 마스크 · 칸 · 확률 · 가치 · 보상을
+# out/rollout/<시드>-<판 수>/ 의 steps.bin · episodes.csv · manifest.json 에 쓴다. 학습기(ml/rl)가 바퀴마다 부른다. 판정은 공장과 같다.
+cmd_rollout() {
+  run_factory "학습의 일꾼" "일꾼" "$OUT/rollout.log" "rollout=done" --rollout "$@"
+  ok "일꾼 통과 ($OUT/rollout.log)"
+}
+
 # 공장 콘솔을 Release 로 빌드해 저장소 뿌리에서 돌린다. 기본 경로(overfit/data · tools/factory/fleet.json ·
 # out/…)가 뿌리에서 선다. 커밋을 매니페스트에 적는다 — 고친 채 돌렸으면 -dirty 가 붙는다.
 run_factory() {
@@ -651,6 +659,7 @@ case "${1:-}" in
   smoke)     shift; cmd_smoke "$@" ;;
   demo)      shift; cmd_demo "$@" ;;
   factory)   shift; cmd_factory "$@" ;;
+  rollout)   shift; cmd_rollout "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
   gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;

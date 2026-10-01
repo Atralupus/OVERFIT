@@ -273,6 +273,12 @@ public sealed class Fighter
     /// <summary>던지기의 선딜 중인가 — 놓기 전이다. 이 동안 맞으면 끊기고 폭탄을 잃는다. 뷰가 손 위의 폭탄을 그린다.</summary>
     public bool Throwing => Action == FighterAction.Throw && !_released;
 
+    /// <summary>던지기의 진행 0 ~ 1 (설계 2026-10-01 조각4 §2) — 던지는 중이 아니면 0. 관측의 "준비 중인 아이템" 속성이다.</summary>
+    public double ThrowProgress => Throwing && _throwTicks > 0 ? (double)_throwTick / _throwTicks : 0;
+
+    /// <summary>스태미나 / 최대 — 관측이 읽는다.</summary>
+    public double StaminaRatio => _config.MaxStamina <= 0 ? 0 : Stamina / _config.MaxStamina;
+
     /// <summary>
     /// 이 틱에 폭탄을 놓았나 — <b>한 틱의 일이다</b>: 다음 <see cref="Tick"/> 이 지운다. 판이 이것을 보고 폭탄을 날린다(<c>Bombs</c>). 판은 파이터를
     /// 먼저 미므로 놓는 틱에 닿은 보스의 판정은 늦다(설계 2026-09-30 조각2 §1.2).

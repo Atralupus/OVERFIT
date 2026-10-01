@@ -48,13 +48,20 @@ public static class Program
     {
         if (CmdArgs.Has(args, "--help") || CmdArgs.Has(args, "-h"))
         {
-            Console.Out.Write(_usage);
+            Console.Out.Write(CmdArgs.Has(args, "--rollout") ? RolloutProgram.Usage : _usage);
             return 0;
         }
 
         // 스레드를 띄우기 전에 한 번 — 레벨과 싱크는 정적이다.
         Log.Level = CmdArgs.Text(args, "--log-level=") is { } text && Log.TryParseLevel(text, out LogLevel level) ? level : LogLevel.Warn;
         Log.Sink = Write;
+
+        // 학습의 일꾼(설계 2026-10-01 조각4 §6) — 같은 콘솔 · 같은 싱크 · 같은 [E] 판정이다.
+        if (CmdArgs.Has(args, "--rollout"))
+        {
+            int code = RolloutProgram.Run(args);
+            return _errors > 0 ? 1 : code;
+        }
 
         ulong fleetSeed = CmdArgs.UInt64(args, "--fleet-seed=") ?? 0;
         int from = Int(args, "--from=") ?? 0;
@@ -198,7 +205,7 @@ public static class Program
     }
 
     /// <summary>싱크 — 잠그고 한 줄씩 쓴다. <c>[E]</c> 를 센다(공장의 실패 조건).</summary>
-    private static void Write(LogLevel level, string line)
+    internal static void Write(LogLevel level, string line)
     {
         lock (_gate)
         {

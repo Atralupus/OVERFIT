@@ -87,6 +87,9 @@
     <Compile Include="../../overfit/battle/rules/RetreatMotion.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossTravel.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/ScriptActions.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossObservation.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PolicyNet.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/NetController.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FormReport.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BombRecord.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossSwings.cs" LinkBase="linked/battle/rules" />
@@ -117,6 +120,8 @@
     <Compile Include="../../tools/factory/SampleCsv.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/FactoryBatch.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/FactoryStats.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/RolloutRun.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/RolloutWriter.cs" LinkBase="linked/factory" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
