@@ -43,6 +43,12 @@ public partial class Battle : Node2D
     /// </summary>
     private const string _hesitateAnim = "idle";
 
+    /// <summary>점프 이동의 웅크림 · 오름 — 팩의 jump(f0 웅크림 · f1 뜸). 점프 공격과 같은 장이다.</summary>
+    private const string _leapAnim = "jump";
+
+    /// <summary>점프 이동의 내림 — 팩의 fall.</summary>
+    private const string _fallAnim = "fall";
+
     private BattleSim _sim = null!;
     private FighterView _fighterView = null!;
     private BossView _bossView = null!;
@@ -367,6 +373,7 @@ public partial class Battle : Node2D
 
         _setup = stage;
         _bossStartHealth = Game.Instance.TakeBossStartHealth();
+        IReadOnlyList<string>? actions = Game.Instance.TakeActions();
         _instances = new InstanceTracker();
         Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
 
@@ -382,6 +389,9 @@ public partial class Battle : Node2D
             Picker = stage.Picker,
             MaxTicks = battle.MaxTicks,
             BossStartHealth = _bossStartHealth,
+
+            // 칸 대본(GIF 의 움직임 · 설계 2026-10-01 조각3 §4)이면 대본 조종기다. 되살리기는 계획 대본으로 서므로 이 판은 되살리지 못한다(디버그 전용).
+            Controller = actions is null ? null : new ScriptActions(new BossActions(stage.PatternIds), actions),
         });
 
         _grabOrb = new GrabOrb();
@@ -689,16 +699,26 @@ public partial class Battle : Node2D
         // 밖이다 — idle 첫 장에 세운다(설계 2026-09-30 조각2 §5 · _hesitateAnim).
         bool running = _sim.BossRunning;
         bool hesitating = _sim.BossHesitating;
+
+        // 물러서기는 run 을 거꾸로 돈다(배속 음수 — 파이터를 본 채 뒤로 달린다) · 점프 이동은 웅크림 jump f0 → 오름 jump f1 → 내림 fall 이다(설계
+        // 2026-10-01 조각3 §3). 둘 다 동작 밖이라 단계가 없다.
+        bool retreating = _sim.BossRetreating;
+        (bool leaping, bool crouching, bool falling) = _sim.BossLeap;
+        (string? anim, int? frame) = running || retreating ? (_runAnim, null)
+            : leaping ? (falling ? _fallAnim : _leapAnim, falling ? 0 : crouching ? 0 : 1)
+            : hesitating ? (_hesitateAnim, 0)
+            : (_sim.BossStep?.Anim, _sim.BossStep?.Frame);
         _bossView.Show(new BossFrame(
             _sim.Boss.X,
             _sim.Boss.Y,
             _sim.Boss.Facing,
             Phase(),
             _sim.Boss.Exhausted,
-            running ? _runAnim : hesitating ? _hesitateAnim : _sim.BossStep?.Anim,
-            running ? null : hesitating ? 0 : _sim.BossStep?.Frame,
+            anim,
+            frame,
             // 돌진의 run 만 빠르다 (#78 · 설계 §4.6) — 단계가 단 움직임의 배속이다(_motionAnimSpeed). 규칙은 이 배속을 모른다.
             running ? _feel.RunAnimSpeed
+                : retreating ? -_feel.RunAnimSpeed
                 : _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
                     ? speed(_feel)
                     : 1.0,

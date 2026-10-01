@@ -17,7 +17,10 @@ public enum DecisionPoint
     /// <summary>다가가는 중 — 결정 간격마다.</summary>
     Approach,
 
-    /// <summary>다가가다 닿았거나 상한(3초)을 넘긴 틱.</summary>
+    /// <summary>물러서는 중 — 결정 간격마다(설계 2026-10-01 조각3 §0).</summary>
+    Retreat,
+
+    /// <summary>다가가다 닿았거나 상한(3초)을 넘긴 틱 · 물러서다 아레나 끝에 닿은 틱. 다가가기 · 물러서기를 가린다(같은 틱에 또 닿아 끝없이 되묻는다).</summary>
     Arrived,
 
     /// <summary>러너가 지금 동작의 캔슬 지점에 드는 틱.</summary>
@@ -25,8 +28,8 @@ public enum DecisionPoint
 }
 
 /// <summary>
-/// 결정의 칸 배치 (설계 2026-10-01 조각2 §1.1) — <c>[기다리기, 다가가기, 계속하기, 동작 0 … 동작 N−1]</c>. 망의 출력 칸이 이 배치를 따른다(조각 4 가
-/// 못박는다). 조각 3 이 물러서기 · 점프 이동을 더하면 바뀐다.
+/// 결정의 칸 배치 (설계 2026-10-01 조각2 §1.1 · 조각3 §0) — <c>[기다리기, 다가가기, 물러서기, 넘어 뛰기, 뒤로 뛰기, 계속하기, 동작 0 … 동작 N−1]</c>.
+/// 망의 출력 칸이 이 배치를 따른다(조각 4 가 못박는다). 칸을 숫자로 적지 말고 이 상수로 적는다 — 배치가 바뀌면 숫자가 다른 칸을 가리킨다.
 /// </summary>
 public sealed class BossActions
 {
@@ -34,9 +37,18 @@ public sealed class BossActions
 
     public const int Approach = 1;
 
-    public const int Continue = 2;
+    public const int Retreat = 2;
 
-    public const int FirstMove = 3;
+    public const int LeapOver = 3;
+
+    public const int LeapBack = 4;
+
+    public const int Continue = 5;
+
+    public const int FirstMove = 6;
+
+    /// <summary>움직임 칸의 이름 — 로그와 대본(<see cref="ScriptActions"/>)이 쓴다.</summary>
+    private static readonly string[] _names = ["wait", "approach", "retreat", "leap_over", "leap_back", "continue"];
 
     private readonly IReadOnlyList<string> _roster;
 
@@ -47,7 +59,7 @@ public sealed class BossActions
         _roster = roster;
     }
 
-    /// <summary>칸 수 — 3 + 명부 길이.</summary>
+    /// <summary>칸 수 — 움직임 다섯 · 계속하기 · 명부 길이.</summary>
     public int Count => FirstMove + _roster.Count;
 
     /// <summary>명부의 <paramref name="rosterIndex"/> 칸 동작의 칸.</summary>
@@ -56,15 +68,29 @@ public sealed class BossActions
     /// <summary>동작 칸이면 명부의 칸, 아니면 null.</summary>
     public int? RosterIndex(int action) => action >= FirstMove && action < Count ? action - FirstMove : null;
 
-    /// <summary>로그의 이름 — <c>wait</c> · <c>approach</c> · <c>continue</c> · 동작 id.</summary>
-    public string Name(int action) => action switch
+    /// <summary>로그의 이름 — <c>wait</c> · <c>approach</c> · <c>retreat</c> · <c>leap_over</c> · <c>leap_back</c> · <c>continue</c> · 동작 id.</summary>
+    public string Name(int action) =>
+        action >= 0 && action < FirstMove ? _names[action] : RosterIndex(action) is int i ? _roster[i] : $"?{action}";
+
+    /// <summary>이름의 칸 — 움직임 이름이나 동작 id. 모르면 null.</summary>
+    public int? Index(string name)
     {
-        Wait => "wait",
-        Approach => "approach",
-        Continue => "continue",
-        _ when RosterIndex(action) is int i => _roster[i],
-        _ => $"?{action}",
-    };
+        int at = Array.IndexOf(_names, name);
+        if (at >= 0)
+        {
+            return at;
+        }
+
+        for (int i = 0; i < _roster.Count; i++)
+        {
+            if (_roster[i] == name)
+            {
+                return Move(i);
+            }
+        }
+
+        return null;
+    }
 }
 
 /// <summary>

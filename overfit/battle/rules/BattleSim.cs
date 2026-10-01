@@ -116,6 +116,9 @@ public sealed class BattleSim
     /// <summary>결정의 칸 배치 — 명부 위.</summary>
     private readonly BossActions _actions;
 
+    /// <summary>물러서기 · 점프 이동의 상태 (설계 2026-10-01 조각3).</summary>
+    private readonly BossTravel _travel;
+
     /// <summary>결정이 보는 파이터의 고리 — 늦춤(18틱) 앞의 모습(§2).</summary>
     private readonly SightBuffer _sight;
 
@@ -230,6 +233,7 @@ public sealed class BattleSim
         _bombs = new Bombs(setup.Fighter.Bomb);
         _watch = new BombWatch(setup.Boss.BombReaction);
         _run = new PlanRun(setup.Boss);
+        _travel = new BossTravel(setup.Boss.Movement);
 
         // 보스는 파이터를 모른 채 태어난다 — 첫 프레임부터 맞으려면 여기서 한 번 맞춰야 한다.
         // 한 틱 뒤로 미루면 전투가 시작되는 그 그림에서 보스가 등을 보인다.
@@ -610,7 +614,8 @@ public sealed class BattleSim
         }
 
         // 던지기를 알면 끊을 자리에서 끊는다(§2.2) — 계획한 캔슬보다 먼저 본다: 같은 틱이면 반응이 이긴다.
-        if (_controller.ReactsToBombs && ReactNow())
+        // 뛰는 동안은 안 끊는다 — 공중에서 반응의 돌진을 세우면 떠서 달린다(설계 2026-10-01 조각3 §0).
+        if (_controller.ReactsToBombs && !_travel.Leaping && ReactNow())
         {
             React();
             return;
@@ -621,6 +626,12 @@ public sealed class BattleSim
             if (_run.Active)
             {
                 RunStep();
+                return;
+            }
+
+            if (_travel.Active)
+            {
+                TravelStep();
                 return;
             }
 
@@ -700,6 +711,7 @@ public sealed class BattleSim
         _holdTicks = 0;
         _goalX = null;
         _run.Clear();
+        _travel.Clear();
         _watch.Stop();
     }
 
@@ -866,7 +878,7 @@ public sealed class BattleSim
 
         // 공중에서 무너졌으면 움직임을 버리지 않고 높이만 따라 내리게 남긴다(설계 §4.2) — 전에는 버려서 보스가 무너진 높이에 떠 있었다.
         // 땅이면 남길 것이 없다: 돌진(#78)처럼 땅을 가는 움직임은 그 자리에서 멈춘다.
-        _fall = Boss.Y > 0 ? _motion : null;
+        _fall = Boss.Y > 0 ? AirMotion() : null;
         ClearPattern();
         _poise.Empty();
         Boss.Exhaust(TicksFor(_setup.Boss.ExhaustSeconds));
@@ -1166,6 +1178,7 @@ public sealed class BattleSim
         if (action == BossActions.Approach)
         {
             // 이어서 다가가기면 같은 달리기가 이어진다 — 상한(3초)은 달리기를 시작한 틱부터 센다(0.11 그대로 · §1.2).
+            _travel.Clear();
             if (!_run.Active)
             {
                 StartRun();
@@ -1174,7 +1187,20 @@ public sealed class BattleSim
             return action;
         }
 
+        if (Travel(action) is TravelKind kind)
+        {
+            // 이어서 물러서기면 같은 물러서기가 이어진다. 점프 중에는 묻지 않으므로 점프가 이어지는 일은 없다.
+            _run.Clear();
+            if (_travel.Kind != kind)
+            {
+                StartTravel(kind);
+            }
+
+            return action;
+        }
+
         _run.Clear();
+        _travel.Clear();
         if (_actions.RosterIndex(action) is int index)
         {
             Begin(index);
@@ -1182,6 +1208,94 @@ public sealed class BattleSim
 
         return action;
     }
+
+    /// <summary>움직임 칸이면 그 움직임.</summary>
+    private static TravelKind? Travel(int action) => action switch
+    {
+        BossActions.Retreat => TravelKind.Retreat,
+        BossActions.LeapOver => TravelKind.LeapOver,
+        BossActions.LeapBack => TravelKind.LeapBack,
+        _ => null,
+    };
+
+    /// <summary>움직임을 세우고 이 틱의 첫 걸음을 간다 — 그 결정의 틱이라 결정 간격은 안 센다.</summary>
+    private void StartTravel(TravelKind kind)
+    {
+        var bounds = new MotionBounds(Boss.HalfWidth, _setup.Arena.Width - Boss.HalfWidth, Standoff);
+        if (_travel.Start(kind, bounds, Ticks))
+        {
+            LogTravel("travel_begin", kind);
+            TravelStep(counted: false);
+        }
+    }
+
+    /// <summary>
+    /// 물러서기 · 점프의 한 걸음 (설계 2026-10-01 조각3 §0). 물러서기는 파이터 쪽으로 돌려세운 채 뒤로 가고, 아레나 끝에 닿으면 그 틱에 묻는다(Arrived) ·
+    /// 결정 간격마다 다시 묻는다. 점프는 내리는 틱이 자유로워짐이다 — 쉬기를 새로 센다. 점프 중에는 돌아서지 않는다(넘어 뛰기는 착지 쪽을 본다).
+    /// </summary>
+    /// <param name="counted">결정 간격을 세나 — 고른 틱의 첫 걸음은 안 센다.</param>
+    private void TravelStep(bool counted = true)
+    {
+        TravelKind kind = _travel.Kind;
+        if (kind == TravelKind.Retreat)
+        {
+            FaceFighter();
+        }
+
+        if (_travel.Step(Boss, Fighter.X))
+        {
+            LogTravel("travel_end", kind);
+            if (kind == TravelKind.Retreat)
+            {
+                Decide(DecisionPoint.Arrived);
+            }
+            else
+            {
+                Freed();
+            }
+        }
+        else if (kind == TravelKind.Retreat && counted && ++_sinceDecision >= _decideTicks)
+        {
+            Decide(DecisionPoint.Retreat);
+        }
+    }
+
+    /// <summary>
+    /// 움직임의 시작 · 끝 줄 — 따로 둔 메서드인 것은 지역 값(<c>kind</c>)을 붙잡는 람다가 클로저를 메서드 입구에서 매 틱 짓기 때문이다(<see cref="Strike"/>
+    /// 의 주석 · 최종 리뷰가 밟았다). 물러서기 · 점프는 매 틱 걷는다.
+    /// </summary>
+    private void LogTravel(string what, TravelKind kind)
+    {
+        if (Log.IsEnabled(LogLevel.Debug))
+        {
+            Log.Debug("boss", $"{what} kind={kind} x={Boss.X:0} tick={Ticks}");
+        }
+    }
+
+    /// <summary>
+    /// 공중의 움직임 — 동작의 도약이든 점프 이동이든. 탈진 · 전환이 넘겨받아 높이만 따라 내린다(<see cref="Fall"/>). 점프 이동의 틱을 이어 센다.
+    /// </summary>
+    private IBossMotion? AirMotion()
+    {
+        if (_motion is not null)
+        {
+            return _motion;
+        }
+
+        if (_travel.Motion is { } travel)
+        {
+            _motionTick = _travel.MotionTick;
+            return travel;
+        }
+
+        return null;
+    }
+
+    /// <summary>뷰가 읽는다 — 물러서는 중인가(run 을 거꾸로).</summary>
+    public bool BossRetreating => _travel.Kind == TravelKind.Retreat;
+
+    /// <summary>뷰가 읽는다 — 점프 이동 중인가 · 웅크리는 중인가(jump f0) · 내려오는 중인가(fall).</summary>
+    public (bool Leaping, bool Crouching, bool Falling) BossLeap => (_travel.Leaping, _travel.Crouching, _travel.Falling);
 
     /// <summary>지점마다 열린 칸 (§1).</summary>
     private bool[] Mask(DecisionPoint point, string? current)
@@ -1199,10 +1313,14 @@ public sealed class BattleSim
         }
         else
         {
-            // 닿은 틱에는 다가가기를 가린다 — 다시 고르면 달리기가 같은 틱에 또 닿아 Arrived 를 또 묻고 끝없이 되불러 프로세스가 죽는다(최종 리뷰가 밟았다 ·
-            // .NET 의 스택 넘침은 못 잡는다). 다음 다가가기는 다음 결정(12틱 뒤)이다.
+            // 닿은 틱에는 다가가기 · 물러서기를 가린다 — 다시 고르면 같은 틱에 또 닿아 Arrived 를 또 묻고 끝없이 되불러 프로세스가 죽는다(조각 2 의 최종
+            // 리뷰가 밟았다 · .NET 의 스택 넘침은 못 잡는다). 다음 다가가기 · 물러서기는 다음 결정(12틱 뒤)이다. 점프는 그 틱에 안 내리므로 연다.
+            bool arrived = point == DecisionPoint.Arrived;
             mask[BossActions.Wait] = true;
-            mask[BossActions.Approach] = point != DecisionPoint.Arrived;
+            mask[BossActions.Approach] = !arrived;
+            mask[BossActions.Retreat] = !arrived;
+            mask[BossActions.LeapOver] = true;
+            mask[BossActions.LeapBack] = true;
         }
 
         for (int i = 0; i < _setup.PatternIds.Count; i++)
@@ -1218,6 +1336,7 @@ public sealed class BattleSim
         DecisionPoint.Freed => "freed",
         DecisionPoint.Rest => "rest",
         DecisionPoint.Approach => "approach",
+        DecisionPoint.Retreat => "retreat",
         DecisionPoint.Arrived => "arrived",
         _ => "cancel",
     };
@@ -1266,7 +1385,7 @@ public sealed class BattleSim
     private void BeginShift()
     {
         _swings.Cut(Ticks, "form");
-        _fall = Boss.Y > 0 ? (_motion ?? _fall) : null;
+        _fall = Boss.Y > 0 ? (AirMotion() ?? _fall) : null;
         ClearPattern();
         _poise.Empty();
         Boss.Exhaust(0);

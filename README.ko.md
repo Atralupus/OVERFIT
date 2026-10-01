@@ -20,8 +20,10 @@ OVERFIT 은 보스전 하나를 싸우는 2D 횡스크롤 소울라이크입니�
 | **빠른 3연격.** 2연격에 묶인 사람을 잡습니다 | **엇박 3연격.** 평소 박자에 맞춘 패리를 잡습니다 |
 | <img src="docs/gifs/bombcut.gif" width="420"> | <img src="docs/gifs/bomb.gif" width="420"> |
 | **폭탄이 끊깁니다.** 보스가 다음 캔슬 지점에서 끊고 놓기 전에 달려옵니다 | **폭탄이 떨어집니다.** 3연격이 서자마자 던지면 첫 캔슬 지점이 늦습니다 |
-| <img src="docs/gifs/form.gif" width="420"> | |
-| **페이즈 전환.** 체력 900 에서 보스가 멈춰 서서 희게 세 번 번쩍이고, 1.5초 동안 피해를 받지 않습니다 | |
+| <img src="docs/gifs/form.gif" width="420"> | <img src="docs/gifs/retreat.gif" width="420"> |
+| **페이즈 전환.** 체력 900 에서 보스가 멈춰 서서 희게 세 번 번쩍이고, 1.5초 동안 피해를 받지 않습니다 | **물러서기.** 보스가 파이터를 본 채 뒤로 달립니다 |
+| <img src="docs/gifs/leap.gif" width="420"> | |
+| **점프 이동.** 파이터를 넘어 뛰고, 이어서 파이터에게서 멀리 뒤로 뜁니다 | |
 
 ## 보스전
 
@@ -50,7 +52,8 @@ OVERFIT 은 보스전 하나를 싸우는 2D 횡스크롤 소울라이크입니�
 ## 계획
 
 보스는 결정 지점에서 판단합니다. 자유로워진 순간(동작이 끝남 · 탈진에 듦 · 페이즈 전환이 끝남), 쉬거나 달려드는 동안 0.2초마다, 달려들다 닿은 순간,
-캔슬 지점마다 한 목록에서 하나를 고릅니다: 기다리기 · 달려들기 · 지금 동작 이어 가기 · 동작 하나 시작하기. 보스가 보는 파이터는 0.3초 전의 모습입니다.
+캔슬 지점마다 한 목록에서 하나를 고릅니다: 기다리기 · 달려들기 · 물러서기(파이터를 본 채 뒤로 달림) · 파이터 넘어 뛰기 · 파이터에게서 600 뒤로 뛰기 ·
+지금 동작 이어 가기 · 동작 하나 시작하기. 점프는 0.25초 웅크렸다가 0.6초 동안 뜨고, 공격은 하지 않습니다. 보스가 보는 파이터는 0.3초 전의 모습입니다.
 지금의 보스는 계획을 통째로 세운 뒤 그 계획을 이 목록의 칸으로 냅니다.
 
 ```
@@ -130,6 +133,7 @@ OVERFIT 은 보스전 하나를 싸우는 2D 횡스크롤 소울라이크입니�
 | 폭탄 수치 | `overfit/data/fighters.json` (`bomb`) |
 | 고르기 수치 | `overfit/data/balance.json` (`picker`) |
 | 결정 지점 · 조종기 | `overfit/battle/rules/BossDecision.cs`, `RuleController.cs`, `RandomController.cs`, `SightBuffer.cs`, `BattleSim.cs` |
+| 물러서기 · 점프 이동 | `overfit/data/bosses.json` (`movement`), `overfit/battle/rules/BossTravel.cs`, `RetreatMotion.cs`, `LeapMotion.cs` |
 | 계획 · 캔슬 | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `RuleController.cs` |
 | 달리기 | `overfit/battle/rules/BattleSim.cs`, `RushMotion.cs` |
 | 폭탄 · 보스의 반응 | `overfit/battle/rules/Fighter.cs`, `Bombs.cs`, `BombWatch.cs`, `BombRecord.cs`, `BattleSim.cs` |

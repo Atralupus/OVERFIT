@@ -89,6 +89,9 @@ public sealed class BossConfig
     /// </summary>
     public required double SightDelaySeconds { get; init; }
 
+    /// <summary>보스의 움직임 — 물러서기 · 점프 이동 (설계 2026-10-01 조각3 §1).</summary>
+    public required MovementDef Movement { get; init; }
+
     /// <summary>세 페이즈 (설계 2026-10-01 조각1 §1) — 문턱과 전환의 길이. 판이 <see cref="BossForms"/> 로 세운다.</summary>
     public required FormsDef Forms { get; init; }
 
@@ -110,6 +113,27 @@ public sealed class BombReactionDef
 
     /// <summary>끊은 뒤의 동작 — <c>patterns.json</c> 의 id. 명부에 없어도 된다.</summary>
     public required string Move { get; init; }
+}
+
+/// <summary>
+/// 보스의 움직임 (설계 2026-10-01 조각3 §1) — <c>bosses.json</c> 의 <c>movement</c>. 결정의 목록에서 조종기가 고른다(규칙 조종기는 안 고른다).
+/// </summary>
+public sealed class MovementDef
+{
+    /// <summary>물러서기의 빠르기(px/s) — 달리기(840)와 같다: 붙는 것과 빠지는 것이 같은 빠르기라야 거리 싸움이 한쪽으로 안 기운다.</summary>
+    public required double RetreatSpeed { get; init; }
+
+    /// <summary>점프의 웅크림(초) — 뛰기 전 jump f0 에 서는 길이. 예고다(0.25초 · 15틱).</summary>
+    public required double LeapCrouchSeconds { get; init; }
+
+    /// <summary>점프의 정점 높이(px) — 점프 공격과 같은 280.</summary>
+    public required double LeapHeight { get; init; }
+
+    /// <summary>점프의 뜬 시간(초) — 점프 공격과 같은 0.6(36틱).</summary>
+    public required double LeapAirSeconds { get; init; }
+
+    /// <summary>뒤로 뛰기의 착지 — 파이터에게서 자기 쪽으로 이만큼(px). 3연격 · 올려베기가 다 안 닿는 427 의 밖이다.</summary>
+    public required double LeapBackDistance { get; init; }
 }
 
 /// <summary>

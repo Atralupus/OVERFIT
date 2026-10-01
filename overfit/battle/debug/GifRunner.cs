@@ -122,6 +122,18 @@ public partial class GifRunner : Node
                 new GifInput(118, 118, "attack", OnBattleClock: true),
             },
             From: 100, To: 236, BossStartHealth: 905),
+
+        // 판의 시계로 잡는 대본은 From 이 10 쯤부터다 — 고리는 판이 몇 틱(재 보니 5틱) 돈 뒤에 돌아 그 앞의 틱은 못 잡는다.
+        // 물러서기 (설계 2026-10-01 조각3) — 파이터가 다가오면 보스가 파이터를 본 채 뒤로 달린다(12틱 · 24틱 · 36틱의 결정). 칸 대본이라 판의 시계로 잡는다.
+        // TravelBattleTests 의 물러서기.
+        new("retreat", Plans: SceneDriver.Moves("3연격"), Target: null,
+            Inputs: new[] { new GifInput(_battleStart, 1_000, "move_right", OnBattleClock: true) },
+            From: 10, To: 100, Actions: new[] { "retreat", "retreat", "retreat" }),
+
+        // 점프 이동 — 12틱에 넘어 뛰어(웅크림 15 · 공중 36) 파이터 너머에 내리고, 다음 쉬기 결정(75틱)에 뒤로 뛰어 600 떨어진다. TravelBattleTests.
+        new("leap", Plans: SceneDriver.Moves("3연격"), Target: null,
+            Inputs: Array.Empty<GifInput>(),
+            From: 10, To: 140, Actions: new[] { "leap_over", "leap_back" }),
     };
 
     private readonly SceneDriver _drive;
@@ -168,7 +180,7 @@ public partial class GifRunner : Node
         // 돈다(재 보니 5틱째부터 걸었다). 레벨이라 씬이 바뀌는 동안에도 눌린 채 남는다.
         var held = new Dictionary<string, bool>(StringComparer.Ordinal);
         Drive(script, _battleStart, int.MinValue, held);
-        Overfit.Battle.Battle? battle = await _drive.NewBattle(script.BossStartHealth, script.Plans);
+        Overfit.Battle.Battle? battle = await _drive.NewBattle(script.BossStartHealth, script.Actions, script.Plans);
         if (battle is null)
         {
             Log.Error("gif", $"battle_missing id={script.Id}");
@@ -272,5 +284,5 @@ public partial class GifRunner : Node
     /// 설계 2026-10-01 조각1 §2.5).
     /// </summary>
     private sealed record GifScript(
-        string Id, ScriptPlan[] Plans, string? Target, GifInput[] Inputs, int From, int To, int? BossStartHealth = null);
+        string Id, ScriptPlan[] Plans, string? Target, GifInput[] Inputs, int From, int To, int? BossStartHealth = null, string[]? Actions = null);
 }

@@ -26,6 +26,8 @@ public sealed class LeapMotion : IBossMotion
     private readonly double _height;
     private readonly int _airTicks;
     private readonly MotionBounds _bounds;
+    private readonly string _land;
+    private readonly double _distance;
 
     private double _fromX;
     private double _toX;
@@ -37,6 +39,8 @@ public sealed class LeapMotion : IBossMotion
         _height = def.Height;
         _airTicks = BattleSim.TicksFor(def.Air);
         _bounds = bounds;
+        _land = def.Land ?? "near";
+        _distance = def.Distance;
     }
 
     public MotionStep Tick(MotionContext context)
@@ -50,9 +54,17 @@ public sealed class LeapMotion : IBossMotion
                 side = -context.Facing;
             }
 
-            _toX = Math.Clamp(context.FighterX + (side * _bounds.Standoff), _bounds.MinX, _bounds.MaxX);
+            // 착지의 쪽 (설계 2026-10-01 조각3 §2) — 앞(점프 공격) · 너머(넘어 뛰기) · 자기 쪽 멀리(뒤로 뛰기). 뒤로 뛰기는 보는 쪽을 안 바꾼다(0):
+            // 파이터를 본 채 뒤로 뛴다.
+            double offset = _land switch
+            {
+                "far" => -side * _bounds.Standoff,
+                "away" => side * _distance,
+                _ => side * _bounds.Standoff,
+            };
+            _toX = Math.Clamp(context.FighterX + offset, _bounds.MinX, _bounds.MaxX);
             int toward = Math.Sign(_toX - _fromX);
-            _facing = toward != 0 ? toward : context.Facing;
+            _facing = _land == "away" ? 0 : toward != 0 ? toward : context.Facing;
         }
 
         // 설 자리(GoalX)는 뛰는 틱에 정한 착지 자리다 — 판정 보기의 "다음 판정"(착지 띠)이 거기 땅에 선다(#78).

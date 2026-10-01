@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Godot;
 using Overfit.Battle.Rules;
@@ -57,17 +58,23 @@ public sealed class SceneDriver
     /// 그 줄마다 경고한다.
     /// </para>
     /// </summary>
-    public Task<Overfit.Battle.Battle?> NewBattle(params ScriptPlan[] script) => NewBattle(null, script);
+    public Task<Overfit.Battle.Battle?> NewBattle(params ScriptPlan[] script) => NewBattle(null, null, script);
+
+    /// <inheritdoc cref="NewBattle(int?, IReadOnlyList{string}?, ScriptPlan[])"/>
+    public Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, params ScriptPlan[] script) => NewBattle(bossStartHealth, null, script);
 
     /// <summary>
     /// 대본 판을 보스의 시작 체력과 같이 세운다 (설계 2026-10-01 조각1 §2.5) — 페이즈 전환을 찍는 GIF 가 쓴다. 시작 체력은 대본이 있을 때만 실린다.
     /// </summary>
-    public async Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, params ScriptPlan[] script)
+    /// <param name="bossStartHealth">보스의 시작 체력 — 없으면 최대.</param>
+    /// <param name="actions">칸 대본 — 있으면 대본 조종기로 선다(설계 2026-10-01 조각3 §4).</param>
+    /// <param name="script">계획 대본.</param>
+    public async Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, IReadOnlyList<string>? actions, params ScriptPlan[] script)
     {
         ArgumentNullException.ThrowIfNull(script);
         if (script.Length > 0)
         {
-            Game.Instance.SetNextScript(script, bossStartHealth);
+            Game.Instance.SetNextScript(script, bossStartHealth, actions);
         }
 
         Game.Instance.GoTo(Game.Scene.Battle);

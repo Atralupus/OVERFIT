@@ -22,8 +22,10 @@ phases, the moves, the cancels, the running, and the player's bombs that the tra
 | **Fast 3-hit combo.** Catches a player still in a 2-hit combo | **Off-beat 3-hit combo.** Catches a parry timed to the normal rhythm |
 | <img src="docs/gifs/bombcut.gif" width="420"> | <img src="docs/gifs/bomb.gif" width="420"> |
 | **Bomb, interrupted.** The boss cancels at the next cancel point and rushes in before the release | **Bomb, landed.** Thrown as the combo starts, the first cancel point comes too late |
-| <img src="docs/gifs/form.gif" width="420"> | |
-| **Phase change.** At 900 HP the boss stands still, flashes white three times, and takes no damage for 1.5 seconds | |
+| <img src="docs/gifs/form.gif" width="420"> | <img src="docs/gifs/retreat.gif" width="420"> |
+| **Phase change.** At 900 HP the boss stands still, flashes white three times, and takes no damage for 1.5 seconds | **Retreat.** The boss runs backwards, still facing the fighter |
+| <img src="docs/gifs/leap.gif" width="420"> | |
+| **Leaps.** Over the fighter, then back away from the fighter | |
 
 ## The fight
 
@@ -54,7 +56,8 @@ Seven moves. Ticks are 1/60 s, counted from the tick the move starts. Each hit s
 
 The boss decides at decision points: when it becomes free (a move ends, an exhaustion starts, a phase change ends), every 0.2 seconds
 while resting or running in, when a run arrives, and at each cancel point. At each point it picks one entry from a single list: wait,
-run in, continue the current move, or start one of the moves. What the boss sees of the fighter is 0.3 seconds old. The current boss
+run in, back off (runs backwards, facing the fighter), leap over the fighter, leap back 600 px from the fighter, continue the current
+move, or start one of the moves. A leap crouches for 0.25 seconds and stays in the air for 0.6 seconds; it does not attack. What the boss sees of the fighter is 0.3 seconds old. The current boss
 turns a whole plan into these entries:
 
 ```
@@ -142,6 +145,7 @@ trained by reinforcement learning. The plan is in the [design](docs/superpowers/
 | Bomb numbers | `overfit/data/fighters.json` (`bomb`) |
 | Picker settings | `overfit/data/balance.json` (`picker`) |
 | Decision points, controllers | `overfit/battle/rules/BossDecision.cs`, `RuleController.cs`, `RandomController.cs`, `SightBuffer.cs`, `BattleSim.cs` |
+| Back off, leaps | `overfit/data/bosses.json` (`movement`), `overfit/battle/rules/BossTravel.cs`, `RetreatMotion.cs`, `LeapMotion.cs` |
 | Plans and cancels | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `RuleController.cs` |
 | Running | `overfit/battle/rules/BattleSim.cs`, `RushMotion.cs` |
 | Bombs, the boss's reaction | `overfit/battle/rules/Fighter.cs`, `Bombs.cs`, `BombWatch.cs`, `BombRecord.cs`, `BattleSim.cs` |
