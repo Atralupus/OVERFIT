@@ -32,10 +32,15 @@ namespace Overfit.Battle.Rules;
 /// 그 판의 던지기들(<see cref="BattleSim.BombRecords"/> · 설계 2026-09-30 조각2 §4). 조각 2 의 4/5 전의 줄에는 없다(null) — 안 던진 판(빈 목록)과 가른다:
 /// 2/5 · 3/5 의 게임은 던졌어도 적지 않아, 되살리기가 그 줄의 폭탄은 안 견준다(<see cref="Replay.Verdict"/>).
 /// </param>
+/// <param name="FormShifts">
+/// 보스의 형태 전환을 시작한 틱들(<see cref="BossForms.Shifts"/> · 설계 2026-10-01 조각1 §3). 0.11 이하의 줄에는 없다(null) — 되살리기가 안 견준다
+/// (체력이 1000 이라 어차피 <see cref="ReplayVerdict.DataChanged"/> 다).
+/// </param>
+/// <param name="BossStartHealth">보스의 시작 체력 — 대본으로 선 판만 싣는다(§2.5). 없으면 최대 체력이고, 되살리기가 그대로 세운다.</param>
 public sealed record AttemptEntry(
     ulong SessionSeed, int Run, AttemptRecord Record, string PickerId, IReadOnlyList<PlanEntry> Plans, int Ticks,
     IReadOnlyList<PatternInstance>? Instances = null, IReadOnlyList<int[]>? Inputs = null, string? DataSha256 = null,
-    IReadOnlyList<BombRecord>? Bombs = null);
+    IReadOnlyList<BombRecord>? Bombs = null, IReadOnlyList<int>? FormShifts = null, int? BossStartHealth = null);
 
 /// <summary>
 /// 시도 기록의 한 줄을 짓고 읽는다 (#112 · 설계 2026-09-28 §6.5). <b>순수</b>하다 — 파일에 쓰는 것만 Godot 쪽(<c>AttemptFile</c>)이다. 키는 다른 데이터와
@@ -68,6 +73,8 @@ public static class AttemptLog
             Events = r.Events,
             Instances = entry.Instances,
             DataSha256 = entry.DataSha256,
+            FormShifts = entry.FormShifts,
+            BossStartHealth = entry.BossStartHealth,
             Bombs = entry.Bombs,
             Inputs = entry.Inputs,
         };
@@ -87,7 +94,7 @@ public static class AttemptLog
         }
 
         var record = new AttemptRecord(l.Attempt, l.Stage, l.Seed, l.Outcome, l.Events);
-        return new AttemptEntry(l.SessionSeed, l.Run, record, l.Picker, l.Plans ?? [], l.Ticks, l.Instances, l.Inputs, l.DataSha256, l.Bombs);
+        return new AttemptEntry(l.SessionSeed, l.Run, record, l.Picker, l.Plans ?? [], l.Ticks, l.Instances, l.Inputs, l.DataSha256, l.Bombs, l.FormShifts, l.BossStartHealth);
     }
 
     /// <summary>줄의 모양 — 필수 키가 빠지면 <c>JsonData</c> 가 전부 나열한다.</summary>
@@ -117,6 +124,12 @@ public static class AttemptLog
         public IReadOnlyList<PatternInstance>? Instances { get; init; }
 
         public string? DataSha256 { get; init; }
+
+        /// <summary>0.11 이하의 줄에는 없다(null) — 폭탄 앞이다: 짧다(많아야 둘).</summary>
+        public IReadOnlyList<int>? FormShifts { get; init; }
+
+        /// <summary>대본으로 선 판만 있다.</summary>
+        public int? BossStartHealth { get; init; }
 
         /// <summary>조각 2 의 4/5 전의 줄에는 없다(null) — 입력 바로 앞이다: 입력 다음으로 길 수 있다(한 판 열 개).</summary>
         public IReadOnlyList<BombRecord>? Bombs { get; init; }

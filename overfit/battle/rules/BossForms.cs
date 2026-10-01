@@ -6,7 +6,7 @@ namespace Overfit.Battle.Rules;
 
 /// <summary>
 /// 보스의 형태 — 세 페이즈 (설계 2026-10-01 조각1 §2). 지금 형태 · 바닥(다음 문턱 · 마지막 형태면 0) · 전환 시계 · 전환을 시작한 틱들을 든다. 피해를
-/// 바닥에서 멈추고 전환을 세우는 것은 판(<see cref="BattleSim"/>)이다 — 여기는 "지금 어디인가" 만 안다. 이름이 phase 가 아닌 것은 <see cref="BossPhase"/>
+/// 바닥에서 멈추고 전환을 세우는 것은 판(<see cref="BattleSim"/>)이다 — 여기는 "지금 어디인가" 만 안다. 이름이 phase 가 아닌 것은 <c>BossPhase</c>
 /// (선딜 · 판정 · 후딜)와 겹치지 않게다. 유저에게는 "페이즈" 다.
 /// </summary>
 public sealed class BossForms

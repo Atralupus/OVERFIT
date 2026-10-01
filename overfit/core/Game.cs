@@ -62,6 +62,9 @@ public partial class Game : Node
     /// </summary>
     private IReadOnlyList<ScriptPlan>? _nextScript;
 
+    /// <summary>다음 대본 전투의 보스 시작 체력 (설계 2026-10-01 조각1 §2.5) — 대본과 같이 채우고 같이 비운다. 없으면 최대 체력.</summary>
+    private int? _nextBossStartHealth;
+
     public override void _Ready()
     {
         // 로그 출력을 Godot 에 꽂는다. 모듈 초기화(LogSink.AutoInstall)가 이미 꽂았으므로 여기선 멱등이다 —
@@ -104,11 +107,22 @@ public partial class Game : Node
     }
 
     /// <summary>다음 전투 하나를 대본으로 세운다 (<see cref="_nextScript"/>). 그 전투가 가져가면 비고, 그 뒤의 전투는 단계의 고르기로 돌아간다.</summary>
-    public void SetNextScript(IReadOnlyList<ScriptPlan> script)
+    /// <param name="script">대본.</param>
+    /// <param name="bossStartHealth">보스의 시작 체력 — GIF · 스크린샷이 전환을 찍으려고(설계 2026-10-01 조각1 §2.5). 없으면 최대 체력.</param>
+    public void SetNextScript(IReadOnlyList<ScriptPlan> script, int? bossStartHealth = null)
     {
         ArgumentNullException.ThrowIfNull(script);
         _nextScript = script;
-        Log.Info("run", $"next_script={ScriptText(script)}");
+        _nextBossStartHealth = bossStartHealth;
+        Log.Info("run", $"next_script={ScriptText(script)}" + (bossStartHealth is { } h ? $" boss_start_health={h}" : ""));
+    }
+
+    /// <summary>대본 전투의 보스 시작 체력을 가져가며 비운다 — <see cref="TakeScript"/> 와 같이 <c>Battle</c> 만 부른다.</summary>
+    public int? TakeBossStartHealth()
+    {
+        int? health = _nextBossStartHealth;
+        _nextBossStartHealth = null;
+        return health;
     }
 
     /// <summary>

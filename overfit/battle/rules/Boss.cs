@@ -101,7 +101,7 @@ public sealed class BombReactionDef
 }
 
 /// <summary>
-/// 보스의 형태 (설계 2026-10-01 조각1 §1) — <c>bosses.json</c> 의 <c>forms</c>. 이름이 phase 가 아닌 것은 <see cref="BossPhase"/>(선딜 · 판정 · 후딜)와
+/// 보스의 형태 (설계 2026-10-01 조각1 §1) — <c>bosses.json</c> 의 <c>forms</c>. 이름이 phase 가 아닌 것은 <c>BossPhase</c>(선딜 · 판정 · 후딜)와
 /// 겹치지 않게다. 유저에게는 "페이즈" 다.
 /// </summary>
 public sealed class FormsDef
