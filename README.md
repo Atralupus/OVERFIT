@@ -52,6 +52,11 @@ Seven moves. Ticks are 1/60 s, counted from the tick the move starts. Each hit s
 
 ## Plans
 
+The boss decides at decision points: when it becomes free (a move ends, an exhaustion starts, a phase change ends), every 0.2 seconds
+while resting or running in, when a run arrives, and at each cancel point. At each point it picks one entry from a single list: wait,
+run in, continue the current move, or start one of the moves. What the boss sees of the fighter is 0.3 seconds old. The current boss
+turns a whole plan into these entries:
+
 ```
 rest (in place, turning to face the player) → [run] → first move → [cancel] → follow-up move → next plan
 ```
@@ -136,7 +141,8 @@ trained by reinforcement learning. The plan is in the [design](docs/superpowers/
 | Phases | `overfit/battle/rules/BossForms.cs`, `FormReport.cs`, `BattleSim.cs` |
 | Bomb numbers | `overfit/data/fighters.json` (`bomb`) |
 | Picker settings | `overfit/data/balance.json` (`picker`) |
-| Plans and cancels | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `PlanFlow.cs`, `BattleSim.cs` |
+| Decision points, controllers | `overfit/battle/rules/BossDecision.cs`, `RuleController.cs`, `RandomController.cs`, `SightBuffer.cs`, `BattleSim.cs` |
+| Plans and cancels | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `RuleController.cs` |
 | Running | `overfit/battle/rules/BattleSim.cs`, `RushMotion.cs` |
 | Bombs, the boss's reaction | `overfit/battle/rules/Fighter.cs`, `Bombs.cs`, `BombWatch.cs`, `BombRecord.cs`, `BattleSim.cs` |
 | Attempt log, replay | `overfit/battle/rules/AttemptLog.cs`, `InputTape.cs`, `Replay.cs`, `overfit/battle/debug/BattleDemo.cs` |

@@ -36,8 +36,8 @@ public sealed record BossPlan(int RestTicks, int Move, int? CancelPoint, int? Ne
 public readonly record struct PlanRequest(int Number, int Tick, IReadOnlyList<DodgeEvent> Events, double BossX, int BossFacing, double FighterX, int Form);
 
 /// <summary>
-/// 다음 계획을 고른다 (설계 2026-09-29 조각1 §4.1). 부르는 자리는 <see cref="BattleSim"/> 하나다 — 판이 설 때 · 계획이 끝날 때(탈진으로
-/// 끊겨도). 명부 밖 · 없는 지점 · 첫 동작과 같은 잇는 동작을 내면 판이 <c>[E] plan_invalid</c> 를 남기고 그 계획을 버린다(<see cref="PlanFlow"/>).
+/// 다음 계획을 고른다 (설계 2026-09-29 조각1 §4.1). 부르는 자리는 규칙 조종기(<see cref="RuleController"/>) 하나다 — 보스가 자유로워진 결정(판이 설 때 ·
+/// 계획이 끝날 때 · 탈진으로 끊겨도). 명부 밖 · 없는 지점 · 첫 동작과 같은 잇는 동작을 내면 그 조종기가 <c>[E] plan_invalid</c> 를 남기고 그 계획을 버린다.
 /// 고르기를 하나 더할 때 등록표(<see cref="PatternPickers"/>)에 한 줄이다 — <see cref="BattleSim"/> 은 안 연다.
 /// </summary>
 public interface IPlanPicker
@@ -49,7 +49,10 @@ public interface IPlanPicker
 /// 대본의 한 칸 (설계 2026-09-29 조각1 §4.2) — 계획의 다섯을 다 적는다. GIF · 스크린샷 · 씬 순회가 판을 고정하는 데 쓴다: GIF 의 틱이 쉬기에
 /// 달려 있어 쉬는 길이까지 적어야 같은 장면이 선다. 동작은 id 로 적는다(명부의 칸 번호는 명부가 바뀌면 다른 동작을 가리킨다).
 /// </summary>
-/// <param name="RestSeconds">쉬는 길이(초) — 0 보다 크다.</param>
+/// <param name="RestSeconds">
+/// 쉬는 길이(초) — 0 보다 크다. 결정 간격(0.2초 · 설계 2026-10-01 조각2 §1)의 배수로 적는다: 규칙 조종기는 쉬기를 결정마다 재므로 배수가 아니면 다음
+/// 결정까지 늘어난다(2.5초는 2.6초가 된다).
+/// </param>
 /// <param name="Move">첫 동작의 id.</param>
 /// <param name="CancelPoint">캔슬 지점 — 첫 동작의 <see cref="PatternDef.CancelPoints"/> 의 칸. 끊지 않으면 null.</param>
 /// <param name="Next">잇는 동작의 id — <paramref name="CancelPoint"/> 와 같이 있거나 같이 없다.</param>

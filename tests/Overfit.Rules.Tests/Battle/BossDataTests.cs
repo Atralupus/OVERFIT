@@ -263,4 +263,23 @@ public class BossDataTests
         real.Forms.Thresholds.ShouldBe(new[] { 900, 400 });
         BattleSim.TicksFor(real.Forms.ShiftSeconds).ShouldBe(90);
     }
+
+    [Fact]
+    public void 쉬는_길이는_결정_간격의_배수이고_늦춤은_정수_틱이다()
+    {
+        // 설계 2026-10-01 조각2 §1 — 규칙 조종기가 0.11 의 쉬기를 결정 간격(12틱)마다의 기다리기로 낸다. 배수가 아니면 동작이 한 칸 늦게 선다.
+        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
+        {
+            int decide = BattleSim.TicksFor(boss.DecideSeconds);
+            foreach (int rest in BattleSim.RestTicks(boss))
+            {
+                (rest % decide).ShouldBe(0, $"{id}: 쉬기 {rest}틱이 결정 간격 {decide}틱의 배수가 아니다");
+            }
+
+            (boss.SightDelaySeconds * 60).ShouldBe(System.Math.Round(boss.SightDelaySeconds * 60), 1e-9, $"{id}: sight_delay_seconds 가 정수 틱이 아니다");
+        }
+
+        BattleSim.TicksFor(TestConfigs.Boss().DecideSeconds).ShouldBe(12);
+        BattleSim.TicksFor(TestConfigs.Boss().SightDelaySeconds).ShouldBe(18);
+    }
 }

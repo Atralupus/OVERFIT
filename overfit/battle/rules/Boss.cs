@@ -77,6 +77,18 @@ public sealed class BossConfig
     /// <summary>폭탄 던지기를 보고 끊으려 할 때 (설계 2026-09-30 조각2 §2.4) — 반응 지연 · 멈칫 · 끊은 뒤의 동작.</summary>
     public required BombReactionDef BombReaction { get; init; }
 
+    /// <summary>
+    /// 결정 간격(초) — 쉬는 동안 · 다가가는 중 조종기에게 묻는 사이 (설계 2026-10-01 조각2 §1). 0.2초(12틱)는 쉬는 길이(24 · 48 · 72틱)의 공약수라 규칙
+    /// 조종기가 0.11 의 쉬기를 그대로 낸다(<c>BossDataTests</c>). 망 보스에게는 한 동작 뒤 가장 짧은 틈이다.
+    /// </summary>
+    public required double DecideSeconds { get; init; }
+
+    /// <summary>
+    /// 결정이 보는 파이터의 늦춤(초) (설계 2026-10-01 조각2 §2 · 우산 §4.3) — 사람의 반응 시간이다(폭탄 반응의 지연과 같은 0.3). 이기는 이유가 반응
+    /// 속도가 아니라 읽기가 되게 한다.
+    /// </summary>
+    public required double SightDelaySeconds { get; init; }
+
     /// <summary>세 페이즈 (설계 2026-10-01 조각1 §1) — 문턱과 전환의 길이. 판이 <see cref="BossForms"/> 로 세운다.</summary>
     public required FormsDef Forms { get; init; }
 

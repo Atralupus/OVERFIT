@@ -109,8 +109,8 @@ public sealed class BombWatch
         : NextSpot(move, next, points: !InReaction).ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// 동작 <paramref name="def"/> 의 러너가 <paramref name="tick"/> 틱에 들려는 것이 캔슬 지점인가 — 판은 그 틱의 단계에 들지 않고 끊는다. 계획의 캔슬과
-    /// 같은 틱이다(<see cref="PlanFlow.CancelAt"/>). 보스가 아는 동안 틱마다 불리므로 인덱스로 돈다 — 목록 인터페이스 위의 foreach 는 부를 때마다
+    /// 동작 <paramref name="def"/> 의 러너가 <paramref name="tick"/> 틱에 들려는 것이 캔슬 지점인가 — 판은 그 틱의 단계에 들지 않고 끊는다. 조종기의 캔슬
+    /// 결정과 같은 틱이다(<c>BattleSim.CancelPointAt</c>). 보스가 아는 동안 틱마다 불리므로 인덱스로 돈다 — 목록 인터페이스 위의 foreach 는 부를 때마다
     /// 열거자를 힙에 만든다(<c>BattleSim.Strike</c> 의 매 틱 할당과 같은 까닭).
     /// </summary>
     private static bool IsCutPoint(PatternDef def, int tick)

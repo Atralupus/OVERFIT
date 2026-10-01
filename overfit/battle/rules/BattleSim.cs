@@ -51,6 +51,12 @@ public sealed class BattleSetup
     /// </summary>
     public IPlanPicker? Picker { get; set; }
 
+    /// <summary>
+    /// 보스의 조종기 (설계 2026-10-01 조각2 §3.3) — <b>선택</b>이다. 비우면 <see cref="Picker"/> 위의 규칙 조종기(<see cref="RuleController"/> · 0.11 의
+    /// 보스)다. 게임 · 데모 · 공장은 지금처럼 고르기만 넘긴다. 무작위 조종기는 테스트와 학습 환경이 넘긴다.
+    /// </summary>
+    public IBossController? Controller { get; set; }
+
     /// <summary>이 틱을 넘기면 시간 초과로 패배. <b>한 판이 반드시 끝나게 하는 안전장치다.</b></summary>
     public required int MaxTicks { get; set; }
 
@@ -68,8 +74,9 @@ public sealed class BattleSetup
 /// </para>
 ///
 /// <para>
-/// 보스가 다음을 고르는 것은 <see cref="IPlanPicker"/> 한 자리다 (#72 · 설계 2026-09-29 조각1 §4.1) — <b>계획</b>(쉬기 · 첫 동작 · 캔슬 지점 ·
-/// 잇는 동작)을 통째로 고르고, 흐름(쉬기 → 첫 동작 → 끊고 잇기 → 다음 계획)은 <see cref="PlanFlow"/> 가 센다. 게임의 단계는 지금 <b>무작위</b>
+/// 보스의 판단은 <see cref="IBossController"/> 한 자리다 (설계 2026-10-01 조각2) — 판은 결정 지점(자유로워짐 · 쉬기와 다가가기의 12틱마다 · 닿은 틱 ·
+/// 캔슬 지점)마다 마스크와 늦은 관측을 넘기고 고른 칸을 실행한다. 지금의 보스는 규칙 조종기(<see cref="RuleController"/>)이고, <b>계획</b>(쉬기 · 첫
+/// 동작 · 캔슬 지점 · 잇는 동작)을 <see cref="IPlanPicker"/> 가 통째로 고르면 그 조종기가 결정의 칸으로 옮긴다(#72 · 설계 2026-09-29 조각1 §4.1). 게임의 단계는 지금 <b>무작위</b>
 /// (<c>uniform</c>)뿐이다. 일부러다 — 나중에 망이 구현 하나를 더할 때 무작위가 대조군이 된다. 망이 정말 일하는지 증명할 방법이 그것 말고 없다.
 /// 무작위지만 <see cref="Det"/> 로 뽑으므로 같은 시드는 같은 계획을 낸다. 대본(<c>script</c> · #78)은 단계의 고르기가 아니다 — GIF · 스크린샷 ·
 /// 순회가 계획을 고정하는 데만 쓴다.
@@ -103,8 +110,23 @@ public sealed class BattleSim
     private PatternRunner? _runner;
     private PatternDef? _current;
 
-    /// <summary>계획의 흐름 — 쉬기 · 첫 동작 · 캔슬 · 잇는 동작 (설계 2026-09-29 조각1 §3.3). 쉬는 틱도 틱으로 센다(설계 §3.6 ⑤).</summary>
-    private readonly PlanFlow _flow;
+    /// <summary>보스의 조종기 (설계 2026-10-01 조각2 §3) — 결정 지점마다 칸 하나를 고른다.</summary>
+    private readonly IBossController _controller;
+
+    /// <summary>결정의 칸 배치 — 명부 위.</summary>
+    private readonly BossActions _actions;
+
+    /// <summary>결정이 보는 파이터의 고리 — 늦춤(18틱) 앞의 모습(§2).</summary>
+    private readonly SightBuffer _sight;
+
+    /// <summary>결정 간격(틱) — 12.</summary>
+    private readonly int _decideTicks;
+
+    /// <summary>자유로워진 뒤 센 쉬는 틱 — 결정의 <see cref="BossDecision.Elapsed"/>.</summary>
+    private int _elapsed;
+
+    /// <summary>앞 결정 뒤 센 틱 — 결정 간격에 닿으면 묻는다.</summary>
+    private int _sinceDecision;
 
     /// <summary>선 동작 id 들, 선 순서 — <see cref="Drawn"/>. 잇는 동작도 든다.</summary>
     private readonly List<string> _drawn = new();
@@ -217,8 +239,12 @@ public sealed class BattleSim
         IReadOnlyList<int> rest = RestTicks(setup.Boss);
         IPlanPicker picker = setup.Picker ?? new UniformPlanPicker(new PickerInputs(
             setup.PatternIds, setup.Patterns, rest, new PickerBalance { CancelPercent = 0, RunPercent = 0 }, Array.Empty<AttemptRecord>(), setup.Seed));
-        _flow = new PlanFlow(picker, setup.PatternIds, setup.Patterns, rest, Request);
-        _flow.Choose();
+        _actions = new BossActions(setup.PatternIds);
+        _controller = setup.Controller ?? new RuleController(picker, _actions, setup.PatternIds, setup.Patterns, rest);
+        _decideTicks = TicksFor(setup.Boss.DecideSeconds);
+        _sight = new SightBuffer(TicksFor(setup.Boss.SightDelaySeconds));
+        _sight.Push(Snapshot());
+        Freed();
     }
 
     /// <summary>
@@ -237,8 +263,6 @@ public sealed class BattleSim
         return ticks;
     }
 
-    /// <summary>계획 번호 → 고르기에 넘길 것 — 이 판의 틱 · 관측 · 자리 (설계 2026-09-29 조각1 §4.1).</summary>
-    private PlanRequest Request(int number) => new(number, Ticks, Events, Boss.X, Boss.Facing, Fighter.X, _forms.Form);
 
     /// <summary>
     /// 칼질 단계마다 칼의 모양을 찾는다. <b>판을 세울 때</b> 한 번이다 — 칼이 처음 서는 틱에 찾다 틀리면 판이 한참
@@ -311,10 +335,16 @@ public sealed class BattleSim
     public IReadOnlyList<string> Drawn => _drawn;
 
     /// <summary>이 판에서 고른 계획들, 고른 순서로 (설계 2026-09-29 조각1 §3.3) — 버린 계획은 빠진다. 끝나지 않은 마지막 계획도 든다.</summary>
-    public IReadOnlyList<BossPlan> Plans => _flow.Plans;
+    public IReadOnlyList<BossPlan> Plans => _controller is RuleController rule ? rule.Plans : [];
 
     /// <summary><see cref="Plans"/> 를 기록의 모양으로(id · 초 — 설계 2026-09-29 조각1 §4.3). 시도 기록이 싣고 되살리기가 견준다.</summary>
-    public IReadOnlyList<PlanEntry> PlanEntries => _flow.Entries;
+    public IReadOnlyList<PlanEntry> PlanEntries => _controller is RuleController rule ? rule.Entries : [];
+
+    /// <summary>이 판의 조종기 (설계 2026-10-01 조각2 §3).</summary>
+    public IBossController Controller => _controller;
+
+    /// <summary>이 판에서 조종기에게 물은 결정 수 — 결정 번호의 다음 값이다.</summary>
+    public int Decisions { get; private set; }
 
     /// <summary>이 판에서 실제로 끊은 캔슬들 — (끊은 동작, 이은 동작). 탈진으로 못 쓴 캔슬은 안 든다(설계 2026-09-29 조각1 §3.2).</summary>
     public IReadOnlyList<(string From, string To)> Cancels => _cancels;
@@ -442,6 +472,7 @@ public sealed class BattleSim
         bool wasHeld = Fighter.Held;
         int bombsWere = Fighter.BombsLeft;
         Fighter.Tick(input, Dt);
+        _sight.Push(Snapshot());
 
         // 던지는 틱이다 — 폭탄은 보스를 향해 가므로 보스 쪽으로 돌려세운다(설계 2026-09-30 조각2 §1.1). 파이터는 보스를 모른다. 보스는 이 틱에 본다(§2.1).
         if (Fighter.BombsLeft < bombsWere)
@@ -549,7 +580,7 @@ public sealed class BattleSim
             if (_forms.Tick())
             {
                 Log.Info("boss", $"form={_forms.Form} tick={Ticks}");
-                _flow.Choose();
+                Freed();
             }
 
             return;
@@ -579,7 +610,7 @@ public sealed class BattleSim
         }
 
         // 던지기를 알면 끊을 자리에서 끊는다(§2.2) — 계획한 캔슬보다 먼저 본다: 같은 틱이면 반응이 이긴다.
-        if (ReactNow())
+        if (_controller.ReactsToBombs && ReactNow())
         {
             React();
             return;
@@ -601,27 +632,27 @@ public sealed class BattleSim
             // **쉬는 동안 보스는 제자리다** (설계 2026-09-29 조각1 §5.1) — 돌아서기만 한다. 전에는 파이터 앞(두 몸의 반폭)을 향해 160px/s 로
             // 다가갔는데 걷기 그림이 없어 idle 그대로 미끄러졌다. 자리를 옮기는 길은 계획의 달리기 · 돌진 · 도약 셋이다.
             FaceFighter();
-            if (_flow.RestTick() is int move)
+            _elapsed++;
+            if (++_sinceDecision >= _decideTicks)
             {
-                if (_flow.Runs)
-                {
-                    StartRun(move);
-                }
-                else
-                {
-                    Begin(move);
-                }
+                Decide(DecisionPoint.Rest);
             }
 
             return;
         }
 
-        // 캔슬 지점의 틱이면 러너를 안 민다 — 그 단계에 들지 않고 끊는다(설계 2026-09-29 조각1 §3.2). 시계를 세운 틱에는 러너가 안 가므로 끊지
-        // 않는다(지점은 움직임 밖이라 오지 않는 자리다 · PatternDataTests).
-        if (!_holdClock && _flow.CancelAt is int at && _runner.Ticks + 1 == at)
+        // 캔슬 지점의 틱이면 묻는다 — 끊으면 러너를 안 민다: 그 단계에 들지 않고 끊는다(설계 2026-09-29 조각1 §3.2). 시계를 세운 틱에는 러너가 안
+        // 가므로 안 묻는다(지점은 움직임 밖이라 오지 않는 자리다 · PatternDataTests). 반응의 동작은 안 묻는다(0.11 은 반응이 계획을 버려 끊을 캔슬이
+        // 없었다 · 설계 2026-10-01 조각2 §3).
+        if (!_holdClock && !_watch.InReaction && CancelPointAt(_runner.Ticks + 1) is int point)
         {
-            Cancel(at);
-            return;
+            int at = _runner.Ticks + 1;
+            int action = Decide(DecisionPoint.Cancel, Boss.CurrentPattern, point);
+            if (_actions.RosterIndex(action) is int next)
+            {
+                Cancel(at, next);
+                return;
+            }
         }
 
         foreach (HitBox box in _runner.Tick(_holdClock))
@@ -651,7 +682,7 @@ public sealed class BattleSim
     private void EndPattern()
     {
         ClearPattern();
-        _flow.Choose();
+        Freed();
     }
 
     /// <summary>
@@ -678,12 +709,13 @@ public sealed class BattleSim
     /// 든다. 지점은 판정 창과 움직임 밖이라(<c>PatternDataTests</c>) 걷을 것은 러너 하나다.
     /// </summary>
     /// <param name="at">끊은 러너 틱 — 로그의 <c>at=</c>.</param>
-    private void Cancel(int at)
+    /// <param name="next">잇는 동작 — 명부의 칸(조종기가 고른 칸).</param>
+    private void Cancel(int at, int next)
     {
         string from = Boss.CurrentPattern ?? "-";
         ClearPattern();
         Boss.Face(Fighter.X);
-        Begin(_flow.Cancel());
+        Begin(next);
         string to = Boss.CurrentPattern ?? "-";
         _cancels.Add((from, to));
         Log.Debug("boss", () => $"cancel id={from} at={at} next={to} facing={Boss.Facing} tick={Ticks}");
@@ -729,7 +761,6 @@ public sealed class BattleSim
         string from = Boss.CurrentPattern ?? (_run.Active ? "run" : "rest");
         string at = _runner is null ? "" : $" at={RunnerNext.ToString(CultureInfo.InvariantCulture)}";
         ClearPattern();
-        _flow.Drop();
         Boss.Face(Fighter.X);
         _watch.React();
         _ledger.React(Ticks);
@@ -845,7 +876,7 @@ public sealed class BattleSim
             Log.Debug("boss", () => $"exhaust_fall y={Boss.Y:0} x={Boss.X:0} tick={Ticks}");
         }
 
-        _flow.Choose();
+        Freed();
     }
 
     /// <summary>
@@ -939,34 +970,39 @@ public sealed class BattleSim
     /// 달리기를 세운다 (설계 2026-09-29 조각1 §5.2) — 쉬기가 끝난 틱이다. 돌진과 같은 움직임(등록표의 <c>run</c>)에 <c>bosses.json</c> 의 빠르기 ·
     /// 멈출 거리를 싣고 <b>이 틱부터</b> 달린다 — 이미 멈출 거리 안이면 이 걸음이 곧 끝이라 같은 틱에 첫 동작이 선다(안 달린다).
     /// </summary>
-    private void StartRun(int move)
+    private void StartRun()
     {
         var bounds = new MotionBounds(Boss.HalfWidth, _setup.Arena.Width - Boss.HalfWidth, Standoff);
-        if (!_run.Start(move, Boss, Fighter.X, bounds, Ticks))
+        if (!_run.Start(Boss, Fighter.X, bounds, Ticks))
         {
-            Begin(move);
+            Decide(DecisionPoint.Arrived);
             return;
         }
 
-        RunStep();
+        RunStep(counted: false);
     }
 
     /// <summary>
     /// 달리기 한 걸음 (§5.2) — 파이터 쪽으로 돌아서고(동작 사이라 잠금이 없다 — 파이터가 보스를 넘어가면 돌아서서 따라간다) 앞으로만 간다(<see cref="PlanRun.Step"/>).
     /// 닿거나 상한을 넘기면 그 틱에 첫 동작을 세운다.
     /// </summary>
-    private void RunStep()
+    /// <param name="counted">결정 간격을 세나 — 다가가기를 고른 틱의 첫 걸음은 그 결정의 틱이라 안 센다(다음 결정은 12틱 뒤).</param>
+    private void RunStep(bool counted = true)
     {
         FaceFighter();
-        if (_run.Step(Boss, Fighter.X, Ticks) is int move)
+        if (_run.Step(Boss, Fighter.X, Ticks))
         {
-            Begin(move);
+            Decide(DecisionPoint.Arrived);
+        }
+        else if (counted && ++_sinceDecision >= _decideTicks)
+        {
+            Decide(DecisionPoint.Approach);
         }
     }
 
     /// <summary>
     /// 명부의 <paramref name="index"/> 칸 동작을 세운다 — 계획의 첫 동작(쉬기가 끝난 틱)이든 잇는 동작(캔슬한 틱)이든. 칸과 정의는 계획을 고를 때
-    /// 이미 봤다(<see cref="PlanFlow"/> 가 틀린 계획을 버린다).
+    /// 이미 봤다(<see cref="RuleController"/> 가 틀린 계획을 버린다 · 판이 가려진 칸을 막는다).
     /// </summary>
     private void Begin(int index) => Begin(_setup.PatternIds[index]);
 
@@ -1064,6 +1100,133 @@ public sealed class BattleSim
     }
 
     /// <summary>
+    /// 보스가 자유로워졌다 (설계 2026-10-01 조각2 §1) — 동작이 끝난 틱 · 탈진에 든 틱 · 전환이 끝난 틱 · 판이 설 때. 0.11 이 계획을 고르던 자리 그대로라
+    /// 규칙 조종기가 여기서 새 계획을 고른다. 쉬는 틱을 새로 센다(탈진 · 전환 동안은 안 센다 — <see cref="AdvanceBoss"/>).
+    /// </summary>
+    private void Freed()
+    {
+        _elapsed = 0;
+        Decide(DecisionPoint.Freed);
+    }
+
+    /// <summary>러너의 이 틱이 지금 동작의 캔슬 지점이면 그 칸.</summary>
+    private int? CancelPointAt(int runnerTick)
+    {
+        if (_current?.CancelPoints is not { } points)
+        {
+            return null;
+        }
+
+        for (int k = 0; k < points.Count; k++)
+        {
+            if (TicksFor(points[k].T) == runnerTick)
+            {
+                return k;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 조종기에게 묻고 고른 칸을 실행한다 (설계 2026-10-01 조각2 §1 · §3). 가려진 칸은 <c>[E] action_masked</c> 를 남기고 기다리기(캔슬 지점은 계속하기)로
+    /// 간다 — 조종기의 규칙 위반이지만 판은 끝까지 간다. 캔슬 지점의 동작 칸은 부르는 쪽(<see cref="AdvanceBoss"/>)이 끊어 세운다.
+    /// </summary>
+    /// <returns>실행한 칸.</returns>
+    private int Decide(DecisionPoint point, string? current = null, int? cancelPoint = null)
+    {
+        bool[] mask = Mask(point, current);
+        var decision = new BossDecision(point, Decisions++, _elapsed, mask,
+            new BossSight(Ticks, _forms.Form, Boss.X, Boss.Facing, Boss.Health, _sight.Delayed, Events), current, cancelPoint);
+        int action = _controller.Decide(decision);
+        bool open = (uint)action < (uint)mask.Length && mask[action];
+        if (!open)
+        {
+            Log.Error("boss", $"action_masked act={_actions.Name(action)} at={Point(point)} tick={Ticks}");
+            action = point == DecisionPoint.Cancel ? BossActions.Continue : BossActions.Wait;
+        }
+
+        if (Log.IsEnabled(LogLevel.Debug))
+        {
+            int openCount = 0;
+            foreach (bool m in mask)
+            {
+                openCount += m ? 1 : 0;
+            }
+
+            Log.Debug("boss", $"decide at={Point(point)} act={_actions.Name(action)} open={openCount} tick={Ticks}");
+        }
+
+        _sinceDecision = 0;
+        if (point == DecisionPoint.Cancel)
+        {
+            return action;
+        }
+
+        if (action == BossActions.Approach)
+        {
+            // 이어서 다가가기면 같은 달리기가 이어진다 — 상한(3초)은 달리기를 시작한 틱부터 센다(0.11 그대로 · §1.2).
+            if (!_run.Active)
+            {
+                StartRun();
+            }
+
+            return action;
+        }
+
+        _run.Clear();
+        if (_actions.RosterIndex(action) is int index)
+        {
+            Begin(index);
+        }
+
+        return action;
+    }
+
+    /// <summary>지점마다 열린 칸 (§1).</summary>
+    private bool[] Mask(DecisionPoint point, string? current)
+    {
+        var mask = new bool[_actions.Count];
+        if (point == DecisionPoint.Freed)
+        {
+            mask[BossActions.Wait] = true;
+            return mask;
+        }
+
+        if (point == DecisionPoint.Cancel)
+        {
+            mask[BossActions.Continue] = true;
+        }
+        else
+        {
+            // 닿은 틱에는 다가가기를 가린다 — 다시 고르면 달리기가 같은 틱에 또 닿아 Arrived 를 또 묻고 끝없이 되불러 프로세스가 죽는다(최종 리뷰가 밟았다 ·
+            // .NET 의 스택 넘침은 못 잡는다). 다음 다가가기는 다음 결정(12틱 뒤)이다.
+            mask[BossActions.Wait] = true;
+            mask[BossActions.Approach] = point != DecisionPoint.Arrived;
+        }
+
+        for (int i = 0; i < _setup.PatternIds.Count; i++)
+        {
+            mask[BossActions.Move(i)] = _setup.PatternIds[i] != current;
+        }
+
+        return mask;
+    }
+
+    private static string Point(DecisionPoint point) => point switch
+    {
+        DecisionPoint.Freed => "freed",
+        DecisionPoint.Rest => "rest",
+        DecisionPoint.Approach => "approach",
+        DecisionPoint.Arrived => "arrived",
+        _ => "cancel",
+    };
+
+    /// <summary>파이터의 지금 모습 — 늦은 관측의 고리에 쌓는다.</summary>
+    private FighterSnapshot Snapshot() =>
+        new(Fighter.X, Fighter.Y, Fighter.Facing, Fighter.Action, Fighter.Throwing, Fighter.Health, Fighter.BombsLeft);
+
+    /// <summary>
     /// 보스에게 피해를 준다 — 칼과 폭탄이 지나는 한 자리 (설계 2026-10-01 조각1 §2.1 · §2.3). 전환 중이면 무적이라 안 깎고 <c>[D] shielded</c> 를
     /// 남긴다. 아니면 바닥(다음 문턱)까지만 깎는다 — 페이즈마다 깎을 체력이 정확히 300 · 500 · 400 이다(930 에서 폭탄 60 을 맞아도 900).
     /// </summary>
@@ -1109,7 +1272,6 @@ public sealed class BattleSim
         Boss.Exhaust(0);
         _forms.Begin(Ticks);
         Log.Info("boss", $"form_shift from={_forms.Form} to={_forms.Form + 1} hp={Boss.Health} tick={Ticks}");
-        _flow.Drop();
     }
 
     /// <summary>이번 칼질이 이미 보스에 닿았나. 창이 닫히면(<c>AttackActive</c> 가 꺼지면) 풀린다.</summary>
