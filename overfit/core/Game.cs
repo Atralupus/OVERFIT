@@ -65,6 +65,9 @@ public partial class Game : Node
     /// <summary>다음 대본 전투의 보스 시작 체력 (설계 2026-10-01 조각1 §2.5) — 대본과 같이 채우고 같이 비운다. 없으면 최대 체력.</summary>
     private int? _nextBossStartHealth;
 
+    /// <summary>다음 대본 전투의 칸 대본 (설계 2026-10-01 조각3 §4) — 있으면 그 전투는 대본 조종기(<c>ScriptActions</c>)로 선다. 대본과 같이 비운다.</summary>
+    private IReadOnlyList<string>? _nextActions;
+
     public override void _Ready()
     {
         // 로그 출력을 Godot 에 꽂는다. 모듈 초기화(LogSink.AutoInstall)가 이미 꽂았으므로 여기선 멱등이다 —
@@ -109,11 +112,13 @@ public partial class Game : Node
     /// <summary>다음 전투 하나를 대본으로 세운다 (<see cref="_nextScript"/>). 그 전투가 가져가면 비고, 그 뒤의 전투는 단계의 고르기로 돌아간다.</summary>
     /// <param name="script">대본.</param>
     /// <param name="bossStartHealth">보스의 시작 체력 — GIF · 스크린샷이 전환을 찍으려고(설계 2026-10-01 조각1 §2.5). 없으면 최대 체력.</param>
-    public void SetNextScript(IReadOnlyList<ScriptPlan> script, int? bossStartHealth = null)
+    /// <param name="actions">칸 대본 — 움직임을 찍는 GIF 가 쓴다(설계 2026-10-01 조각3 §4). 없으면 계획 대본의 규칙 조종기다.</param>
+    public void SetNextScript(IReadOnlyList<ScriptPlan> script, int? bossStartHealth = null, IReadOnlyList<string>? actions = null)
     {
         ArgumentNullException.ThrowIfNull(script);
         _nextScript = script;
         _nextBossStartHealth = bossStartHealth;
+        _nextActions = actions;
         Log.Info("run", $"next_script={ScriptText(script)}" + (bossStartHealth is { } h ? $" boss_start_health={h}" : ""));
     }
 
@@ -123,6 +128,14 @@ public partial class Game : Node
         int? health = _nextBossStartHealth;
         _nextBossStartHealth = null;
         return health;
+    }
+
+    /// <summary>칸 대본을 가져가며 비운다 — <see cref="TakeScript"/> 와 같이 <c>Battle</c> 만 부른다.</summary>
+    public IReadOnlyList<string>? TakeActions()
+    {
+        IReadOnlyList<string>? actions = _nextActions;
+        _nextActions = null;
+        return actions;
     }
 
     /// <summary>

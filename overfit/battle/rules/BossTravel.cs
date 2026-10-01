@@ -21,6 +21,7 @@ public sealed class BossTravel
 {
     private readonly MovementDef _def;
     private readonly int _crouchTicks;
+    private readonly int _airTicks;
     private int _crouchLeft;
 
     public BossTravel(MovementDef def)
@@ -28,6 +29,7 @@ public sealed class BossTravel
         ArgumentNullException.ThrowIfNull(def);
         _def = def;
         _crouchTicks = BattleSim.TicksFor(def.LeapCrouchSeconds);
+        _airTicks = BattleSim.TicksFor(def.LeapAirSeconds);
     }
 
     public TravelKind Kind { get; private set; }
@@ -39,6 +41,9 @@ public sealed class BossTravel
 
     /// <summary>웅크리는 중인가 — 뷰가 jump f0 에 세운다.</summary>
     public bool Crouching => Leaping && _crouchLeft > 0;
+
+    /// <summary>내려오는 중인가 — 뜬 시간의 뒤 절반. 뷰가 fall 을 그린다.</summary>
+    public bool Falling => Leaping && _crouchLeft <= 0 && MotionTick * 2 > _airTicks;
 
     /// <summary>도는 움직임 — 공중에서 탈진 · 전환이 끼면 판이 이것을 넘겨받아 높이만 따라 내린다.</summary>
     public IBossMotion? Motion { get; private set; }

@@ -1282,8 +1282,8 @@ public sealed class BattleSim
     /// <summary>뷰가 읽는다 — 물러서는 중인가(run 을 거꾸로).</summary>
     public bool BossRetreating => _travel.Kind == TravelKind.Retreat;
 
-    /// <summary>뷰가 읽는다 — 점프 이동 중인가 · 웅크리는 중인가(jump f0).</summary>
-    public (bool Leaping, bool Crouching) BossLeap => (_travel.Leaping, _travel.Crouching);
+    /// <summary>뷰가 읽는다 — 점프 이동 중인가 · 웅크리는 중인가(jump f0) · 내려오는 중인가(fall).</summary>
+    public (bool Leaping, bool Crouching, bool Falling) BossLeap => (_travel.Leaping, _travel.Crouching, _travel.Falling);
 
     /// <summary>지점마다 열린 칸 (§1).</summary>
     private bool[] Mask(DecisionPoint point, string? current)
