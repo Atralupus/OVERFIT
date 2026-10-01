@@ -25,6 +25,29 @@ public enum RolloutController
     Random,
 }
 
+/// <summary>배우는 쪽 (설계 2026-10-01 조각6 §2).</summary>
+public enum RolloutSide
+{
+    Boss,
+    Fighter,
+}
+
+/// <summary>파이터의 종류 — 봇 함대 · 파이터 망.</summary>
+public enum FighterKind
+{
+    Fleet,
+    Net,
+}
+
+/// <summary>보스 쪽 — 조종기와 (망이면) 가중치. 가중치가 없는 망은 열린 칸에 같은 확률이다.</summary>
+public sealed record BossSpec(RolloutController Kind, PolicyNet? Net);
+
+/// <summary>파이터 쪽.</summary>
+public sealed record FighterSpec(FighterKind Kind, PolicyNet? Net);
+
+/// <summary>판 하나의 짝 — 배우는 쪽 · 보스 · 파이터.</summary>
+public sealed record Matchup(RolloutSide Learner, BossSpec Boss, FighterSpec Fighter);
+
 /// <summary>경험의 줄 하나 — 망 조종기의 결정에 보상과 끝을 붙인 것.</summary>
 /// <remarks><c>Span</c> 은 이 결정에서 다음 적은 결정(또는 판의 끝 다음 틱)까지의 틱이다 — 학습기가 시간으로 할인한다(γ^(틱/12)).</remarks>
 public sealed record RolloutStep(
@@ -62,17 +85,31 @@ public static class RolloutRun
     /// </summary>
     public static bool BossWon(BattleOutcome outcome, bool fighterAlive) => outcome == BattleOutcome.Lose && !fighterAlive;
 
+    /// <summary>조각 4 · 5 의 판 — 배우는 쪽이 보스이고 상대가 봇 함대다.</summary>
     public static Episode Play(
-        FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episode, RolloutController kind = RolloutController.Net)
+        FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episode, RolloutController kind = RolloutController.Net) =>
+        Play(tables, new Matchup(RolloutSide.Boss, new BossSpec(kind, net), new FighterSpec(FighterKind.Fleet, null)), reward, reward, seed, episode);
+
+    /// <summary>판 e 의 상대 칸 — 상대 <paramref name="count"/> 중 하나를 시드와 판으로 고른다(설계 2026-10-01 조각6 §2).</summary>
+    public static int Opponent(ulong seed, int episode, int count) => count <= 1 ? 0 : Det.RollInt(seed, Det.Domain.Rollout, count, k1: episode, k2: 2);
+
+    /// <summary>
+    /// 판 하나 (설계 2026-10-01 조각6 §2) — 배우는 쪽(보스 · 파이터)의 결정만 적는다. 보스의 보상은 <paramref name="reward"/>, 파이터의 보상은
+    /// <paramref name="fighterReward"/>(시간 벌 없음 · 이기면 파이터가 이긴 것 — 같은 틱에 둘 다 쓰러지면 게임대로 파이터의 승리다).
+    /// </summary>
+    public static Episode Play(FactoryTables tables, Matchup matchup, RewardDef reward, RewardDef fighterReward, ulong seed, int episode)
     {
         ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(matchup);
         ArgumentNullException.ThrowIfNull(reward);
+        ArgumentNullException.ThrowIfNull(fighterReward);
         BotTraits traits = BotTraits.Sample(seed, episode, tables.Fleet);
         ulong battleSeed = Det.Hash64(seed, Det.Domain.Rollout, k1: episode, k2: 0);
         ulong pickSeed = Det.Hash64(seed, Det.Domain.Rollout, k1: episode, k2: 1);
+        ulong fighterSeed = Det.Hash64(seed, Det.Domain.Rollout, k1: episode, k2: 3);
         IReadOnlyList<string> roster = StageRoster.For(tables.Stages, _stage);
-        var netController = kind == RolloutController.Net ? new NetController(net, pickSeed) : null;
-        IBossController controller = kind switch
+        var netController = matchup.Boss.Kind == RolloutController.Net ? new NetController(matchup.Boss.Net, pickSeed) : null;
+        IBossController controller = matchup.Boss.Kind switch
         {
             RolloutController.Rule => new RuleController(
                 new UniformPlanPicker(new PickerInputs(roster, tables.Patterns, tables.RestTicks, tables.Knobs, Array.Empty<AttemptRecord>(), battleSeed)),
@@ -92,7 +129,10 @@ public static class RolloutRun
             Controller = controller,
             MaxTicks = tables.MaxTicks,
         });
-        var bot = new FleetBot(traits, battleSeed, tables.Beats, tables.Fighter);
+        FleetBot? bot = matchup.Fighter.Kind == FighterKind.Fleet ? new FleetBot(traits, battleSeed, tables.Beats, tables.Fighter) : null;
+        FighterNetDriver? driver = matchup.Fighter.Kind == FighterKind.Net
+            ? new FighterNetDriver(matchup.Fighter.Net, fighterSeed, roster, tables.Arena.Width)
+            : null;
 
         // 틱마다의 체력 — [t] 는 t 틱이 끝난 뒤, [0] 은 판이 선 때.
         var bossHp = new List<int> { sim.Boss.Health };
@@ -100,19 +140,29 @@ public static class RolloutRun
         BattleOutcome? outcome = null;
         while (outcome is null)
         {
-            outcome = sim.Tick(bot.Next(sim));
+            outcome = sim.Tick(driver?.Next(sim) ?? bot!.Next(sim));
             bossHp.Add(sim.Boss.Health);
             fighterHp.Add(sim.Fighter.Health);
         }
 
         bool bossWon = BossWon(outcome.Value, sim.Fighter.Alive);
-        IReadOnlyList<NetStep> raw = netController?.Steps ?? (IReadOnlyList<NetStep>)Array.Empty<NetStep>();
+        RolloutStep[] steps = matchup.Learner == RolloutSide.Boss
+            ? BossSteps(netController?.Steps ?? Array.Empty<NetStep>(), tables, reward, bossHp, fighterHp, sim.Ticks, bossWon)
+            : FighterSteps(driver?.Steps ?? Array.Empty<NetStep>(), tables, fighterReward, bossHp, fighterHp, sim.Ticks, outcome == BattleOutcome.Win);
+        string habit = bot is null ? "net" : traits.Habit.ToString();
+        return new Episode(episode, habit, outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps);
+    }
+
+    /// <summary>보스의 결정에 보상 — 결정은 판의 틱 안에서 묻고 칼 · 폭탄은 그 뒤에 닿으므로 결정의 틱에 닿은 피해는 그 결정의 것이다.</summary>
+    private static RolloutStep[] BossSteps(
+        IReadOnlyList<NetStep> raw, FactoryTables tables, RewardDef reward, List<int> bossHp, List<int> fighterHp, int ticks, bool bossWon)
+    {
         var steps = new RolloutStep[raw.Count];
         for (int i = 0; i < raw.Count; i++)
         {
             int from = i == 0 ? 0 : raw[i].Tick - 1;
-            int to = i + 1 < raw.Count ? raw[i + 1].Tick - 1 : sim.Ticks;
-            int span = (i + 1 < raw.Count ? raw[i + 1].Tick : sim.Ticks + 1) - raw[i].Tick;
+            int to = i + 1 < raw.Count ? raw[i + 1].Tick - 1 : ticks;
+            int span = (i + 1 < raw.Count ? raw[i + 1].Tick : ticks + 1) - raw[i].Tick;
             double r = (reward.WDealt * (fighterHp[from] - fighterHp[to]) / tables.Fighter.MaxHealth)
                 - (reward.WTaken * (bossHp[from] - bossHp[to]) / tables.Boss.MaxHealth)
                 - (reward.WTime * span / 60.0);
@@ -126,6 +176,34 @@ public static class RolloutRun
             steps[i] = new RolloutStep(s.Tick, s.Observation, s.Mask, s.Action, s.LogProb, s.Value, r, done, span);
         }
 
-        return new Episode(episode, traits.Habit.ToString(), outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps);
+        return steps;
+    }
+
+    /// <summary>
+    /// 파이터의 결정에 보상 — 파이터는 틱을 밀기 <b>전에</b> 고르므로(<see cref="FighterNetDriver.Next"/>) 결정 t 의 몫은 t 틱이 끝난 뒤부터 다음 결정의 틱이
+    /// 끝날 때까지다.
+    /// </summary>
+    private static RolloutStep[] FighterSteps(
+        IReadOnlyList<NetStep> raw, FactoryTables tables, RewardDef reward, List<int> bossHp, List<int> fighterHp, int ticks, bool fighterWon)
+    {
+        var steps = new RolloutStep[raw.Count];
+        for (int i = 0; i < raw.Count; i++)
+        {
+            int from = raw[i].Tick;
+            int to = i + 1 < raw.Count ? raw[i + 1].Tick : ticks;
+            double r = (reward.WDealt * (bossHp[from] - bossHp[to]) / tables.Boss.MaxHealth)
+                - (reward.WTaken * (fighterHp[from] - fighterHp[to]) / tables.Fighter.MaxHealth)
+                - (reward.WTime * (to - from) / 60.0);
+            bool done = i == raw.Count - 1;
+            if (done)
+            {
+                r += fighterWon ? reward.WWin : -reward.WWin;
+            }
+
+            NetStep s = raw[i];
+            steps[i] = new RolloutStep(s.Tick, s.Observation, s.Mask, s.Action, s.LogProb, s.Value, r, done, to - from);
+        }
+
+        return steps;
     }
 }

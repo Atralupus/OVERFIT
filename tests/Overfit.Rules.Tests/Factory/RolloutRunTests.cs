@@ -113,4 +113,29 @@ public class RolloutRunTests
         // 같은 틱에 결정이 둘일 수 있다(물러서다 벽에 닿으면 그 틱에 다시 묻는다) — 앞의 것은 길이 0 이고 할인도 없다.
         e.Steps.ShouldAllBe(s => s.Span >= 0);
     }
+
+    private static readonly RewardDef _fighterReward = new() { WDealt = 1, WTaken = 1, WTime = 0, WWin = 1 };
+
+    [Fact]
+    public void 배우는_쪽이_파이터면_파이터의_결정만_6틱마다_적고_보상은_파이터_쪽이다()
+    {
+        // 설계 2026-10-01 조각6 §1.3 · §2 — 상대는 안 배운 보스 망(none). 보스 망의 결정은 안 적는다.
+        var matchup = new Matchup(RolloutSide.Fighter, new BossSpec(RolloutController.Net, null), new FighterSpec(FighterKind.Net, null));
+        Episode e = RolloutRun.Play(Tables, matchup, _reward, _fighterReward, seed: 4, episode: 1);
+        e.Steps.Select(s => s.Tick).ShouldBe(Enumerable.Range(0, e.Steps.Count).Select(k => k * 6));
+        e.Steps.ShouldAllBe(s => s.Observation.Count == new FighterObservation(Tables.Roster.Count).Size && s.Mask.Count == FighterActions.Count);
+        bool fighterWon = e.Outcome == BattleOutcome.Win;
+        double expected = (_fighterReward.WDealt * e.BossLost / Tables.Boss.MaxHealth) - (_fighterReward.WTaken * e.FighterLost / Tables.Fighter.MaxHealth)
+            + (fighterWon ? 1 : -1);
+        e.Steps.Sum(s => s.Reward).ShouldBe(expected, 1e-9);
+        e.Steps.Sum(s => s.Span).ShouldBe(e.Ticks);
+    }
+
+    [Fact]
+    public void 상대는_시드와_판으로_고르고_고른_칸을_싣는다()
+    {
+        int a = RolloutRun.Opponent(seed: 5, episode: 3, count: 4);
+        a.ShouldBe(RolloutRun.Opponent(5, 3, 4));
+        Enumerable.Range(0, 64).Select(ep => RolloutRun.Opponent(5, ep, 4)).Distinct().Count().ShouldBe(4, "상대 넷을 다 안 고른다");
+    }
 }

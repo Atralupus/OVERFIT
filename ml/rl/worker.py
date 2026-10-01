@@ -17,10 +17,12 @@ def build() -> None:
 
 
 def run(seed: int, episodes: int, out_dir: str | Path, weights: str | Path | None = None, controller: str = "net",
-        threads: int | None = None) -> rollout.Rollout:
-    """일꾼 한 번 — [E] 가 있거나 표지가 없으면 멈춘다(공장과 같은 판정)."""
+        threads: int | None = None, learner: str = "boss", opponents: list[str] | None = None) -> rollout.Rollout:
+    """일꾼 한 번 — [E] 가 있거나 표지가 없으면 멈춘다(공장과 같은 판정). learner · opponents 는 셀프 플레이(조각 6)."""
     args = ["dotnet", str(DLL), "--rollout", f"--seed={seed}", f"--episodes={episodes}", f"--out={out_dir}",
-            f"--weights={weights if weights else 'none'}", f"--controller={controller}"]
+            f"--weights={weights if weights else 'none'}", f"--controller={controller}", f"--learner={learner}"]
+    if opponents:
+        args.append("--opponents=" + ",".join(str(o) for o in opponents))
     if threads:
         args.append(f"--threads={threads}")
     p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)

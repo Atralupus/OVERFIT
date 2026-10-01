@@ -30,9 +30,20 @@ def test_checkpoints_dense_early_then_sparse() -> None:
     assert saved == list(range(1, 21)) + [30, 40, 50, 60], saved
 
 
+def test_pool_takes_latest_and_spread_older() -> None:
+    # 셀프 플레이의 상대 묶음(설계 2026-10-01 조각6 §3) — 최신 셋 + 그 앞에서 고르게 둘.
+    from ml.rl import selfplay
+    snaps = [Path(f"s{i:02d}") for i in range(10)]
+    got = [p.name for p in selfplay.pool(snaps, latest=3, spread=2)]
+    assert got == ["s00", "s06", "s07", "s08", "s09"], got
+    assert [p.name for p in selfplay.pool(snaps[:2], latest=3, spread=2)] == ["s00", "s01"]
+    assert selfplay.pool([], latest=3, spread=2) == []
+
+
 def main() -> None:
     test_refuses_folder_with_old_checkpoints()
     test_checkpoints_dense_early_then_sparse()
+    test_pool_takes_latest_and_spread_older()
     print("ok")
 
 
