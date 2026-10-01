@@ -69,6 +69,21 @@ public sealed class BossObservation
     /// <param name="rosterCount">명부 길이 N — 동작 원핫의 칸 수.</param>
     public BossObservation(int rosterCount) => _roster = rosterCount;
 
+    /// <summary>결정 지점 원핫의 칸 수 — 관측의 맨 앞이다.</summary>
+    public static int PointCount => _points;
+
+    /// <summary>형태 원핫(1 · 2 · 3)의 첫 칸.</summary>
+    public static int FormOffset => _points + 4;
+
+    /// <summary>파이터 행동 원핫의 칸 수.</summary>
+    public static int FighterActionCount => _actions;
+
+    /// <summary>지금 동작 원핫(없음 + 명부)의 첫 칸.</summary>
+    public static int MoveOffset => _points + 10 + _travels;
+
+    /// <summary>파이터 칸의 첫 칸 — 자리(dx/W) · 높이 · 보는 쪽 · 마주 보나 · 체력 · 기력 · 폭탄 · 던지기 진행 · 행동 원핫 순이다.</summary>
+    public int FighterOffset => MoveOffset + _roster + 3;
+
     /// <summary>칸 수 D.</summary>
     public int Size => _points + 10 + _travels + (_roster + 3) + (8 + _actions) + (Recent * _actions) + (Items * 3);
 
