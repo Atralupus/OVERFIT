@@ -18,6 +18,9 @@ public class DataDigestTests
     private static Dictionary<string, byte[]> Sample() => new(StringComparer.Ordinal)
     {
         ["balance.json"] = Encoding.UTF8.GetBytes("{\"battle\":{\"max_ticks\":36000}}"),
+        ["boss_net/form1.json"] = Encoding.UTF8.GetBytes("{\"n\":1}"),
+        ["boss_net/form2.json"] = Encoding.UTF8.GetBytes("{\"n\":2}"),
+        ["boss_net/form3.json"] = Encoding.UTF8.GetBytes("{\"n\":3}"),
         ["bosses.json"] = Encoding.UTF8.GetBytes("{\"a\":1}"),
         ["fighters.json"] = Encoding.UTF8.GetBytes("{\"b\":2}"),
         ["hitboxes.json"] = Encoding.UTF8.GetBytes("{}"),
@@ -26,7 +29,7 @@ public class DataDigestTests
     };
 
     [Fact]
-    public void 판을_세우는_데이터_여섯을_이름_순으로_읽는다()
+    public void 판을_세우는_데이터_아홉을_이름_순으로_읽는다()
     {
         // balance.json 이 든다(설계 2026-09-29 조각1 §4.3) — 판을 세우는 수치(max_ticks · picker)가 거기 있다. 뷰 수치(feel)도 섞여 있어 화면
         // 흔들림 하나에 지문이 바뀌지만, 되살리기에서 그 값은 [W](데이터가 바뀌었다)일 뿐이고 판이 같으면 그대로 일치다.
@@ -39,7 +42,12 @@ public class DataDigestTests
             return files[name];
         });
 
-        read.ShouldBe(new[] { "balance.json", "bosses.json", "fighters.json", "hitboxes.json", "patterns.json", "stages.json" });
+        // 형태마다의 보스 망(설계 2026-10-01 조각7 §5)이 든다 — 망이 바뀐 뒤의 옛 시도는 데이터가 바뀐 것이다.
+        read.ShouldBe(new[]
+        {
+            "balance.json", "boss_net/form1.json", "boss_net/form2.json", "boss_net/form3.json", "bosses.json", "fighters.json", "hitboxes.json",
+            "patterns.json", "stages.json",
+        });
         DataDigest.Files.ShouldBe(read);
     }
 
@@ -50,7 +58,8 @@ public class DataDigestTests
         // 정의의 실수가 양쪽에 같이 들어 초록이 된다. balance.json 이 들기 전(다섯)의 값은 96548b94… 였다.
         Dictionary<string, byte[]> files = Sample();
 
-        DataDigest.Of(name => files[name]).ShouldBe("103b7ef603b1616e98495aece15c452fb465ee4462d7ee5b6650a8c74c4b3ac5");
+        // 망 셋이 들기 전(여섯)의 값은 103b7ef6… 였다.
+        DataDigest.Of(name => files[name]).ShouldBe("35124fd9f65b86e3099bf8c0376f0e5ee442a1e3c70294259be1e531ee5092eb");
     }
 
     [Fact]

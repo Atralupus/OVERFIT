@@ -24,9 +24,13 @@ namespace Overfit.Core;
 /// </summary>
 public static class DataDigest
 {
-    /// <summary>지문에 드는 파일 — 이름 순이다. 판을 세우는 데이터 다섯(<c>BattleTables</c>)과 그 수치(<c>balance.json</c>)다.</summary>
+    /// <summary>
+    /// 지문에 드는 파일 — 이름 순이다. 판을 세우는 데이터 다섯(<c>BattleTables</c>) · 그 수치(<c>balance.json</c>) · 형태마다의 보스 망 셋(설계 2026-10-01 조각7 §5 —
+    /// 망이 바뀐 뒤의 옛 시도는 데이터가 바뀐 것이다).
+    /// </summary>
     public static IReadOnlyList<string> Files { get; } =
-        ["balance.json", "bosses.json", "fighters.json", "hitboxes.json", "patterns.json", "stages.json"];
+        ["balance.json", "boss_net/form1.json", "boss_net/form2.json", "boss_net/form3.json", "bosses.json", "fighters.json", "hitboxes.json",
+            "patterns.json", "stages.json"];
 
     /// <summary>
     /// <see cref="Files"/> 를 그 순서로 읽어 지문을 낸다 — sha256 의 소문자 16진 64자. 읽는 길은 부르는 쪽이 준다: 게임은 <c>res://data/</c>,

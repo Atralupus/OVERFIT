@@ -25,18 +25,72 @@ public sealed record BattleTables(
     Dictionary<string, PatternDef> Patterns,
     Dictionary<string, StageDef> Stages,
     Dictionary<string, HitShape> Shapes,
+    Dictionary<string, string> Nets,
     string DataSha256)
 {
     private const string _hitboxes = "res://data/hitboxes.json";
 
-    /// <summary>다섯을 읽고 지문을 낸다. 깨진 파일은 <see cref="DataException"/> 이 어느 파일의 어느 키인지까지 말한다.</summary>
-    public static BattleTables Load() => new(
-        Table<FighterConfig>("res://data/fighters.json"),
-        Table<BossConfig>("res://data/bosses.json"),
-        Table<PatternDef>("res://data/patterns.json"),
-        Table<StageDef>("res://data/stages.json"),
-        HitShapeTable.Parse(Balance.ReadText(_hitboxes), _hitboxes),
-        DataDigest.Of(name => Balance.ReadBytes($"res://data/{name}")));
+    /// <summary>
+    /// 다섯과 보스들의 망(<see cref="FormsDef.Nets"/> 의 경로 → JSON)을 읽고 지문을 낸다. 깨진 파일은 <see cref="DataException"/> 이 어느 파일의 어느 키인지까지
+    /// 말한다. 망은 글로만 들고 판마다 그 판의 명부로 읽는다(<see cref="TryController"/>) — 명부가 망의 명부와 대 봐야 하는 것은 판을 세울 때다.
+    /// </summary>
+    public static BattleTables Load()
+    {
+        Dictionary<string, BossConfig> bosses = Table<BossConfig>("res://data/bosses.json");
+        var nets = new Dictionary<string, string>();
+        foreach (BossConfig boss in bosses.Values)
+        {
+            foreach (string net in boss.Forms.Nets ?? [])
+            {
+                nets.TryAdd(net, Balance.ReadText($"res://data/{net}"));
+            }
+        }
+
+        return new(
+            Table<FighterConfig>("res://data/fighters.json"),
+            bosses,
+            Table<PatternDef>("res://data/patterns.json"),
+            Table<StageDef>("res://data/stages.json"),
+            HitShapeTable.Parse(Balance.ReadText(_hitboxes), _hitboxes),
+            nets,
+            DataDigest.Of(name => Balance.ReadBytes($"res://data/{name}")));
+    }
+
+    /// <summary>
+    /// 단계의 조종기를 세운다 (설계 2026-10-01 조각7 §2) — <c>rule</c> 이면 null(판이 <see cref="StageSetup.Picker"/> 로 규칙 조종기를 세운다) · <c>net</c> 이면
+    /// 형태마다의 망. <b>게임과 데모가 이 한 자리에서 세운다</b> — 되살리기가 같은 시드로 같은 조종기에 서야 같은 판이다(§5). 망이 없거나 판과 안 맞으면
+    /// <c>[E]</c> 를 남기고 거짓이다 — 던지면 <c>_Ready</c> 를 빠져나가 반쯤 선 노드를 남긴다(<see cref="StageRoster.Setup"/> 과 같은 까닭).
+    /// </summary>
+    public bool TryController(StageSetup setup, BossConfig boss, ulong seed, out IBossController? controller)
+    {
+        System.ArgumentNullException.ThrowIfNull(setup);
+        System.ArgumentNullException.ThrowIfNull(boss);
+        controller = null;
+        if (setup.ControllerId != StageRoster.NetController)
+        {
+            return true;
+        }
+
+        IReadOnlyList<string> paths = boss.Forms.Nets ?? [];
+        if (paths.Count != boss.Forms.Thresholds.Count + 1)
+        {
+            Log.Error("battle", $"net_forms_mismatch nets={paths.Count} forms={boss.Forms.Thresholds.Count + 1}");
+            return false;
+        }
+
+        try
+        {
+            controller = BossNets.Create([.. System.Linq.Enumerable.Select(paths, p => Nets[p])], paths, setup.PatternIds, seed);
+        }
+        catch (DataException e)
+        {
+            Log.Error("battle", $"net_rejected reason={e.Message}");
+            return false;
+        }
+
+        Log.Info("battle", () => $"controller=net forms={string.Join(',', paths)}");
+        return true;
+    }
 
     private static Dictionary<string, T> Table<T>(string path) =>
         JsonData<T>.ParseTable(Balance.ReadText(path), path);

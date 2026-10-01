@@ -419,10 +419,11 @@ cmd_smoke() {
   # Hash64(51, attempt, k1: 번호) 다 — RunHistoryTests 가 첫 값을 박아 뒀다. 시도 2 의 줄이 "전투가 설 때마다 시드가 바뀐다" 를 본다.
   expect_log "$log" info '^\[run\]\[I\] session_seed=51$' "세션 시드 51 이 안 넘어갔습니다 — 스모크가 실행마다 다른 판을 돕니다."
   # 대본 칸 (#96 · 설계 §4.4). 순회가 첫 전투에만 대본을 넣는다(Game._tourScript) — 첫 줄의 picker=script 가 칸이 전투에 닿은 것이고,
-  # 둘째 줄의 picker=uniform 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript). 칸이 남으면 둘째 전투도 script 로 선다.
+  # 둘째 줄의 picker=net 이 Battle 이 칸을 **가져가며 비운** 것이다(Game.TakeScript) — 대본 없는 보스전은 망 조종기다(설계 2026-10-01 조각7 §2).
+  # 칸이 남으면 둘째 전투도 script 로 선다.
   expect_log "$log" info '^\[run\]\[I\] attempt=1 stage=1 seed=16800346292054821908 picker=script history=0$' "첫 전투가 시도 1 의 시드와 순회의 대본으로 안 섰습니다."
   # 둘째 전투 — 보스전이 하나라 같은 단계(1)이고 새 시도 · 새 시드다(설계 2026-09-29 조각1 §1). 첫 전투는 끝까지 안 가 기록이 없다(history=0).
-  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=1 seed=9131751153949564229 picker=uniform history=0$' "둘째 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
+  expect_log "$log" info '^\[run\]\[I\] attempt=2 stage=1 seed=9131751153949564229 picker=net history=0$' "둘째 전투가 새 시도를 안 열었거나 첫 전투의 대본이 남았습니다(TakeScript 가 칸을 안 비웠다)."
   # 크레딧 화면은 data/credits.json 을 읽어 스스로를 짓는다. 화면이 떴는지만 보면 목록이 통째로
   # 비어도 초록이므로, 몇 줄을 세웠는지까지 본다 — 라이선스 표시가 사라지는 것은 조용한 실패다.
   expect_log "$log" info '^\[scene\]\[I\] credits ready$' "크레딧 씬의 스크립트가 안 붙었습니다."

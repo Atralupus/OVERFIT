@@ -26,7 +26,7 @@
     "exhaust_seconds": 1.5,
     "poise_max": 100, "poise_decay_delay": 1.2, "poise_decay_per_second": 10,
     "bomb_reaction": { "delay_seconds": 0.3, "hesitate_seconds": 0.25, "move": "돌진" },
-    "forms": { "thresholds": [900, 400], "shift_seconds": 1.5 },
+    "forms": { "thresholds": [900, 400], "shift_seconds": 1.5, "nets": ["boss_net/form1.json", "boss_net/form2.json", "boss_net/form3.json"] },
     "decide_seconds": 0.2,
     "sight_delay_seconds": 0.3,
     "movement": { "retreat_speed": 840, "leap_crouch_seconds": 0.25, "leap_height": 280, "leap_air_seconds": 0.6, "leap_back_distance": 600 }

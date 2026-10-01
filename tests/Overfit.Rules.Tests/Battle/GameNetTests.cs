@@ -129,4 +129,48 @@ public class GameNetTests
         log.Lines.ShouldNotContain(l => l.Contains("][E]", StringComparison.Ordinal));
         Run().ShouldBe(a);
     }
+
+    [Fact]
+    public void 보스전은_망_조종기로_서고_대본_판은_규칙이다()
+    {
+        // 설계 2026-10-01 조각7 §2 — stages.json 의 controller. 대본(GIF · 스크린샷)으로 선 판은 계획 대본의 규칙 조종기다.
+        StageSetup setup = StageRoster.Setup(TestConfigs.Stages(), 1, 7, [], TestConfigs.Patterns(), BattleSim.RestTicks(TestConfigs.Boss()),
+            TestConfigs.Balance().Picker).ShouldNotBeNull();
+        (setup.ControllerId, setup.PickerId).ShouldBe(("net", "net"));
+        StageSetup scripted = StageRoster.Setup(TestConfigs.Stages(), 1, 7, [], TestConfigs.Patterns(), BattleSim.RestTicks(TestConfigs.Boss()),
+            TestConfigs.Balance().Picker, [new ScriptPlan(0.8, "3연격")]).ShouldNotBeNull();
+        (scripted.ControllerId, scripted.PickerId).ShouldBe(("rule", "script"));
+    }
+
+    [Fact]
+    public void 보스의_망_목록으로_형태_조종기를_세운다()
+    {
+        BossConfig boss = TestConfigs.Boss();
+        boss.Forms.Nets.ShouldNotBeNull().Count.ShouldBe(boss.Forms.Thresholds.Count + 1, "형태마다 망 하나가 아니다");
+        IBossController c = BossNets.Create(
+            boss.Forms.Nets!.Select(f => File.ReadAllText(Path.Combine("data", f))).ToArray(), boss.Forms.Nets!, Roster, seed: 3);
+        c.ShouldBeOfType<FormNetController>();
+    }
+
+    [Fact]
+    public void 망_보스는_폭탄을_알아챔_표시를_안_띄운다()
+    {
+        // 설계 2026-10-01 조각7 §6 — 반응 장치를 안 켜는 조종기면 "!" 가 끊는 보스를 약속하는 거짓말이 된다.
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(maxHealth: 999_999),
+            PatternIds = Roster,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Controller = new RandomController(1),
+            MaxTicks = TestConfigs.MaxTicks(),
+        });
+        sim.Tick(new InputFrame(0, false, false, false, false, Bomb: true));
+        TestConfigs.UntilTick(sim, 40);
+        sim.Fighter.Throwing.ShouldBeTrue();
+        sim.BossAlert.ShouldBeFalse();
+    }
 }
