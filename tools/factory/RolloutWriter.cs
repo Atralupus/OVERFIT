@@ -23,7 +23,9 @@ public static class RolloutWriter
 {
     public const string EpisodesHeader = "episode,habit,outcome,boss_won,ticks,boss_lost,fighter_lost,steps,reward";
 
-    public static RolloutSummary Run(FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episodes, int threads, string outDir, int chunk = 256)
+    public static RolloutSummary Run(
+        FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episodes, int threads, string outDir, int chunk = 256,
+        RolloutController kind = RolloutController.Net)
     {
         ArgumentNullException.ThrowIfNull(tables);
         Directory.CreateDirectory(outDir);
@@ -39,7 +41,7 @@ public static class RolloutWriter
         using (var csv = new StreamWriter(episodesPath, false, new UTF8Encoding(false)))
         {
             csv.Write(EpisodesHeader + "\n");
-            FactoryBatch.Run(0, episodes, threads, e => RolloutRun.Play(tables, net, reward, seed, e), results =>
+            FactoryBatch.Run(0, episodes, threads, e => RolloutRun.Play(tables, net, reward, seed, e, kind), results =>
             {
                 foreach (Episode e in results)
                 {

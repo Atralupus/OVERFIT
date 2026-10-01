@@ -89,4 +89,17 @@ public class RolloutRunTests
         // 그 판을 보스의 승리로 쳐 가장 큰 보상의 부호가 뒤집힌다. 시간 초과(짐 · 파이터가 살아 있다)는 보스의 짐이다.
         RolloutRun.BossWon(outcome, fighterAlive).ShouldBe(bossWon);
     }
+
+    [Theory]
+    [InlineData(RolloutController.Rule)]
+    [InlineData(RolloutController.Random)]
+    public void 규칙_무작위_조종기의_판은_결정을_안_적고_E_없이_끝까지_간다(RolloutController kind)
+    {
+        // 설계 2026-10-01 조각5 §3 — 비교의 대조군. 판의 체력 · 틱 · 승패만 쓴다(episodes.csv).
+        using var log = new LogCapture();
+        Episode e = RolloutRun.Play(Tables, null, _reward, seed: 11, episode: 0, kind);
+        e.Steps.ShouldBeEmpty();
+        e.Ticks.ShouldBeGreaterThan(0);
+        log.Lines.ShouldNotContain(l => l.Contains("][E]", StringComparison.Ordinal));
+    }
 }
