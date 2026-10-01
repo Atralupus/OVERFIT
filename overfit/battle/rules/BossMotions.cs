@@ -71,6 +71,7 @@ public static class BossMotions
             ["leap"] = (def, bounds) => new LeapMotion(def, bounds),
             ["rush"] = (def, bounds) => new RushMotion(def, bounds),
             ["run"] = (def, bounds) => new RushMotion(def, bounds),
+            ["retreat"] = (def, bounds) => new RetreatMotion(def, bounds),
         };
 
     /// <summary>등록된 id 들 — 데이터 테스트가 <c>patterns.json</c> 의 <c>motion.id</c> 를 여기와 대 본다.</summary>

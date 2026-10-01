@@ -159,6 +159,15 @@ public sealed class MotionDef
 
     /// <summary><c>rush</c>: 파이터 앞 몇 px 에서 멈추나 — 앞쪽 거리 d 가 이 안이면 돌진이 끝난다(설계 §4.6).</summary>
     public double Stop { get; init; }
+
+    /// <summary>
+    /// <c>leap</c>: 착지의 쪽 (설계 2026-10-01 조각3 §2) — <c>near</c>(없으면 · 파이터 앞 몸 간격 · 점프 공격) · <c>far</c>(파이터 너머 몸 간격 · 넘어
+    /// 뛰기) · <c>away</c>(파이터에게서 <see cref="Distance"/> 만큼 자기 쪽 · 뒤로 뛰기 · 보는 쪽을 안 바꾼다).
+    /// </summary>
+    public string? Land { get; init; }
+
+    /// <summary><c>leap</c> 의 <c>away</c>: 파이터에게서 착지 자리까지의 거리(px).</summary>
+    public double Distance { get; init; }
 }
 
 /// <summary>

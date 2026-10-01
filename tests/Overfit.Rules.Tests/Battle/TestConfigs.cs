@@ -389,6 +389,7 @@ public static class TestConfigs
             // 결정 간격을 한 틱으로 둔다(설계 2026-10-01 조각2 §1 · 실제 데이터의 쉬기는 늘 배수다 — BossDataTests).
             DecideSeconds = rest is null ? data.DecideSeconds : BattleSim.Dt,
             SightDelaySeconds = data.SightDelaySeconds,
+            Movement = data.Movement,
 
             // 작은 체력(문턱 이하)을 쓰는 테스트는 한 형태로 둔다 — 문턱이 최대 체력 위면 판이 세울 때 거절한다(BossForms).
             Forms = maxHealth is { } m && data.Forms.Thresholds.Count > 0 && m <= data.Forms.Thresholds[0]
