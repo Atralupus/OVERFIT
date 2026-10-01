@@ -327,6 +327,12 @@ public sealed class BattleSim
     /// <summary>보스의 형태 — 세 페이즈 (설계 2026-10-01 조각1 §2). 뷰 · 시도 기록 · 결과 화면이 읽는다.</summary>
     public BossForms Forms => _forms;
 
+    /// <summary>보스 최대 체력 — 파이터 망의 관측이 읽는다(설계 2026-10-01 조각6).</summary>
+    public int BossMaxHealth => _setup.Boss.MaxHealth;
+
+    /// <summary>파이터 최대 체력.</summary>
+    public int FighterMaxHealth => _setup.Fighter.MaxHealth;
+
     /// <summary>지금까지 진행한 틱 수.</summary>
     public int Ticks { get; private set; }
 

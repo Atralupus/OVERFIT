@@ -66,47 +66,14 @@ public sealed class NetController : IBossController
         IReadOnlyList<double> obs = decision.Observation ?? throw new InvalidOperationException("망 조종기에 관측이 안 왔다 — WantsObservation");
         (double[]? logits, double value) = _net is null ? (null, 0.0) : _net.Forward(obs);
 
-        double max = double.NegativeInfinity;
-        for (int i = 0; i < mask.Count; i++)
-        {
-            if (mask[i])
-            {
-                max = Math.Max(max, logits?[i] ?? 0);
-            }
-        }
-
-        var p = new double[mask.Count];
-        double sum = 0;
-        for (int i = 0; i < mask.Count; i++)
-        {
-            p[i] = mask[i] ? Math.Exp((logits?[i] ?? 0) - max) : 0;
-            sum += p[i];
-        }
-
-        double u = Det.Roll01(_seed, Det.Domain.BossControl, k1: decision.Number) * sum;
-        int action = only;
-        for (int i = 0; i < mask.Count; i++)
-        {
-            if (!mask[i])
-            {
-                continue;
-            }
-
-            action = i;
-            u -= p[i];
-            if (u < 0)
-            {
-                break;
-            }
-        }
-
+        (int action, double logProb) = MaskedSampler.Sample(logits, mask, Det.Roll01(_seed, Det.Domain.BossControl, k1: decision.Number));
         var maskCopy = new bool[mask.Count];
         for (int i = 0; i < maskCopy.Length; i++)
         {
             maskCopy[i] = mask[i];
         }
 
-        _steps.Add(new NetStep(decision.Sight.Tick, obs, maskCopy, action, Math.Log(p[action] / sum), value));
+        _steps.Add(new NetStep(decision.Sight.Tick, obs, maskCopy, action, logProb, value));
         return action;
     }
 }
