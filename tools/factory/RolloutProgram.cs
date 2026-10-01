@@ -18,7 +18,8 @@ internal static class RolloutProgram
         tools/build.sh rollout [인자…]  — 학습의 일꾼: 보스를 망 조종기로 돌려 경험을 쓴다 (설계 2026-10-01 조각4)
 
           --weights=FILE|none  정책망 가중치 JSON (기본 none — 열린 칸에 같은 확률)
-          --controller=K       net(기본) · rule · random — rule · random 은 비교의 대조군이라 결정을 안 적는다(episodes.csv 만)
+          --controller=K       net(기본) · rule · random · qtable · forms — rule · random · forms 는 결정을 안 적는다(episodes.csv 만).
+                               qtable 은 --weights=<표 JSON>(탐색 없이), forms 는 --weights=<형태 1>,<형태 2>,… (게임의 보스)
           --learner=SIDE       boss(기본) · fighter — 배우는 쪽. 그쪽의 결정만 적는다 (설계 2026-10-01 조각6)
           --opponents=LIST     상대들(쉼표) — 판마다 하나를 고른다. 보스가 배우면 fleet · 파이터 망 JSON, 파이터가 배우면 rule · random · none · 보스 망 JSON
           --episodes=N         판 수 (기본 64)
@@ -72,15 +73,42 @@ internal static class RolloutProgram
             TrainConfig train = JsonData<TrainConfig>.ParseOne(File.ReadAllText(trainPath), trainPath);
             reward = train.Reward;
             fighterReward = train.FighterReward;
+            QTable? table = null;
+            PolicyNet[]? forms = null;
             if (weights != "none")
             {
-                net = fighterLearns ? FighterNet(tables, weights) : BossNet(tables, weights);
-                weightsSha = Program.Hex(SHA256.HashData(File.ReadAllBytes(weights)));
+                string[] files = weights.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                if (!fighterLearns && kind == RolloutController.QTable)
+                {
+                    table = QTable.Parse(File.ReadAllText(weights), weights, new BossActions(tables.Roster).Count);
+                }
+                else if (!fighterLearns && kind == RolloutController.Forms)
+                {
+                    forms = Array.ConvertAll(files, f => BossNet(tables, f));
+                }
+                else
+                {
+                    net = fighterLearns ? FighterNet(tables, weights) : BossNet(tables, weights);
+                }
+
+                using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                foreach (string f in files)
+                {
+                    sha.AppendData(File.ReadAllBytes(f));
+                }
+
+                weightsSha = Program.Hex(sha.GetHashAndReset());
+            }
+
+            if (!fighterLearns && ((kind == RolloutController.QTable && table is null) || (kind == RolloutController.Forms && forms is null)))
+            {
+                Console.Error.WriteLine($"controller={controllerText} 에는 --weights 가 있어야 한다");
+                return 2;
             }
 
             matchups = Array.ConvertAll(opponents, o => fighterLearns
                 ? new Matchup(RolloutSide.Fighter, Boss(tables, o), new FighterSpec(FighterKind.Net, net))
-                : new Matchup(RolloutSide.Boss, new BossSpec(kind, net), o == "fleet" ? new FighterSpec(FighterKind.Fleet, null)
+                : new Matchup(RolloutSide.Boss, new BossSpec(kind, net, table, 0, forms), o == "fleet" ? new FighterSpec(FighterKind.Fleet, null)
                     : new FighterSpec(FighterKind.Net, o == "none" ? null : FighterNet(tables, o))));
         }
         catch (Exception e) when (e is DataException or IOException or UnauthorizedAccessException)
@@ -158,10 +186,10 @@ internal static class RolloutProgram
         json.WriteEndObject();
     }
 
-    private static PolicyNet BossNet(FactoryTables tables, string path) => PolicyNet.Parse(
+    internal static PolicyNet BossNet(FactoryTables tables, string path) => PolicyNet.Parse(
         File.ReadAllText(path), path, new BossObservation(tables.Roster.Count).Size, new BossActions(tables.Roster).Count, tables.Roster);
 
-    private static PolicyNet FighterNet(FactoryTables tables, string path) => PolicyNet.Parse(
+    internal static PolicyNet FighterNet(FactoryTables tables, string path) => PolicyNet.Parse(
         File.ReadAllText(path), path, new FighterObservation(tables.Roster.Count).Size, FighterActions.Count, tables.Roster);
 
     /// <summary>파이터가 배울 때의 보스 상대 — rule · random · none(안 배운 망) · 보스 망 JSON.</summary>

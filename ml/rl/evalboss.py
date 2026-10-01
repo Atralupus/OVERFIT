@@ -11,9 +11,7 @@ import csv
 import json
 from pathlib import Path
 
-import numpy as np
-
-from ml.rl import episodes, worker
+from ml.rl import episodes, gate, worker
 
 ROOT = worker.ROOT
 
@@ -27,9 +25,7 @@ def main() -> None:
     cfg, sp = config["ppo"], config["selfplay"]
     out = ROOT / "out" / "selfplay" / args.name
     bosses = sorted(out.glob("boss_r*.json"))
-    fighters = sorted(out.glob("fighter_r*.json"))
-    picks = sorted({fighters[i] for i in np.linspace(len(fighters) // 4, len(fighters) - 1, num=4).round().astype(int)})
-    opponents = ["fleet"] + [str(p) for p in picks]
+    opponents = gate.test_pool(list(out.glob("fighter_r*.json")))
     print("opponents=" + ",".join(Path(o).name for o in opponents))
     worker.build()
     with (out / "eval.csv").open("w", newline="", encoding="utf-8") as f:

@@ -23,6 +23,12 @@ public enum RolloutController
     Net,
     Rule,
     Random,
+
+    /// <summary>Q 표 보스 — 비교 관문의 대조군(설계 2026-10-01 조각8 §1).</summary>
+    QTable,
+
+    /// <summary>게임의 보스 — 형태마다의 망(<see cref="FormNetController"/> · 조각8 §2).</summary>
+    Forms,
 }
 
 /// <summary>배우는 쪽 (설계 2026-10-01 조각6 §2).</summary>
@@ -40,7 +46,12 @@ public enum FighterKind
 }
 
 /// <summary>보스 쪽 — 조종기와 (망이면) 가중치. 가중치가 없는 망은 열린 칸에 같은 확률이다.</summary>
-public sealed record BossSpec(RolloutController Kind, PolicyNet? Net);
+/// <param name="Kind">조종기.</param>
+/// <param name="Net">망 — <see cref="RolloutController.Net"/>.</param>
+/// <param name="Table">Q 표 — <see cref="RolloutController.QTable"/>.</param>
+/// <param name="Epsilon">Q 표의 탐색 확률 — 학습 중만 0 보다 크다.</param>
+/// <param name="Forms">형태마다의 망 — <see cref="RolloutController.Forms"/>.</param>
+public sealed record BossSpec(RolloutController Kind, PolicyNet? Net, QTable? Table = null, double Epsilon = 0, IReadOnlyList<PolicyNet>? Forms = null);
 
 /// <summary>파이터 쪽.</summary>
 public sealed record FighterSpec(FighterKind Kind, PolicyNet? Net);
@@ -57,6 +68,38 @@ public sealed class TrainConfig
     /// 파이터 망의 보상 (설계 2026-10-01 조각6 §1.3) — 필수다. 없을 때 보스의 것으로 대신하던 때는 파이터가 시간 벌(스펙이 없앤)을 조용히 받았다(최종 리뷰).
     /// </summary>
     public required RewardDef FighterReward { get; init; }
+
+    /// <summary>PPO 의 수치 중 Q 표가 같이 쓰는 할인(설계 2026-10-01 조각8 §1.3). 나머지 키는 학습기(파이썬)만 읽는다.</summary>
+    public PpoShared? Ppo { get; init; }
+
+    /// <summary>Q 표의 학습 (설계 2026-10-01 조각8 §1) — <c>--qtrain</c> 만 읽는다.</summary>
+    public QTrainDef? Qtable { get; init; }
+}
+
+/// <summary><c>train.json</c> 의 <c>ppo</c> 중 Q 표가 같이 쓰는 칸.</summary>
+public sealed class PpoShared
+{
+    public required double Gamma { get; init; }
+}
+
+/// <summary><c>train.json</c> 의 <c>qtable</c> (설계 2026-10-01 조각8 §1).</summary>
+public sealed class QTrainDef
+{
+    public required ulong Seed { get; init; }
+
+    public required int Iterations { get; init; }
+
+    public required int Episodes { get; init; }
+
+    public required double Alpha { get; init; }
+
+    public required double EpsilonStart { get; init; }
+
+    public required double EpsilonEnd { get; init; }
+
+    public required IReadOnlyList<double> DistanceEdges { get; init; }
+
+    public required double Air { get; init; }
 }
 
 /// <summary>경험의 줄 하나 — 망 조종기의 결정에 보상과 끝을 붙인 것.</summary>
@@ -126,6 +169,10 @@ public static class RolloutRun
                 new UniformPlanPicker(new PickerInputs(roster, tables.Patterns, tables.RestTicks, tables.Knobs, Array.Empty<AttemptRecord>(), battleSeed)),
                 new BossActions(roster), roster, tables.Patterns, tables.RestTicks),
             RolloutController.Random => new RandomController(pickSeed),
+            RolloutController.QTable => new QTableController(
+                matchup.Boss.Table ?? throw new ArgumentException("Q 표가 없다", nameof(matchup)), new BossObservation(roster.Count), pickSeed, matchup.Boss.Epsilon),
+            RolloutController.Forms => new FormNetController(
+                matchup.Boss.Forms ?? throw new ArgumentException("형태의 망이 없다", nameof(matchup)), new BossActions(roster), pickSeed),
             _ => netController!,
         };
         var sim = new BattleSim(new BattleSetup
@@ -158,7 +205,7 @@ public static class RolloutRun
 
         bool bossWon = BossWon(outcome.Value, sim.Fighter.Alive);
         RolloutStep[] steps = matchup.Learner == RolloutSide.Boss
-            ? BossSteps(netController?.Steps ?? Array.Empty<NetStep>(), tables, reward, bossHp, fighterHp, sim.Ticks, bossWon)
+            ? BossSteps(netController?.Steps ?? (controller as QTableController)?.Steps ?? Array.Empty<NetStep>(), tables, reward, bossHp, fighterHp, sim.Ticks, bossWon)
             : FighterSteps(driver?.Steps ?? Array.Empty<NetStep>(), tables, fighterReward, bossHp, fighterHp, sim.Ticks, outcome == BattleOutcome.Win);
         string habit = bot is null ? "net" : traits.Habit.ToString();
         return new Episode(episode, habit, outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps);

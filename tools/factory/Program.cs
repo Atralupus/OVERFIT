@@ -48,7 +48,7 @@ public static class Program
     {
         if (CmdArgs.Has(args, "--help") || CmdArgs.Has(args, "-h"))
         {
-            Console.Out.Write(CmdArgs.Has(args, "--rollout") ? RolloutProgram.Usage : _usage);
+            Console.Out.Write(CmdArgs.Has(args, "--rollout") ? RolloutProgram.Usage : CmdArgs.Has(args, "--qtrain") ? QTrainProgram.Usage : _usage);
             return 0;
         }
 
@@ -60,6 +60,13 @@ public static class Program
         if (CmdArgs.Has(args, "--rollout"))
         {
             int code = RolloutProgram.Run(args);
+            return _errors > 0 ? 1 : code;
+        }
+
+        // Q 표 보스의 학습(설계 2026-10-01 조각8 §1) — 같은 콘솔 · 같은 싱크.
+        if (CmdArgs.Has(args, "--qtrain"))
+        {
+            int code = QTrainProgram.Run(args);
             return _errors > 0 ? 1 : code;
         }
 
