@@ -19,17 +19,15 @@ public class FighterExhaustTests
 {
     private const double _dt = BattleSim.Dt;
 
-    private static readonly InputFrame _dash = new(0, false, true, false, false);
-    private static readonly InputFrame _parry = new(0, false, false, true, false);
-    private static readonly InputFrame _attack = new(0, false, false, false, true);
-    private static readonly InputFrame _guard = new(0, false, false, false, false, GuardHeld: true);
+    private static readonly InputFrame _dash = new(0, false, true, false);
+    private static readonly InputFrame _attack = new(0, false, false, true);
+    private static readonly InputFrame _guard = new(0, false, false, false, GuardHeld: true);
 
     private static Fighter Spawn() => new(TestConfigs.Fighter(), TestConfigs.Arena(), 960);
 
     private static InputFrame Press(FighterAction action) => action switch
     {
         FighterAction.Dash => _dash,
-        FighterAction.Parry => _parry,
         _ => _attack,
     };
 
@@ -66,7 +64,6 @@ public class FighterExhaustTests
 
     [Theory]
     [InlineData(FighterAction.Dash)]
-    [InlineData(FighterAction.Parry)]
     [InlineData(FighterAction.Attack)]
     public void 마지막_한_번은_값보다_모자라도_끝까지_하고_끝나는_틱에_탈진한다(FighterAction action)
     {
@@ -101,8 +98,8 @@ public class FighterExhaustTests
     [Fact]
     public void 스태미나가_0_이면_아무_행동도_못_시작한다()
     {
-        // 0 에서는 마지막 한 번도 없다 — 값이 있는 행동(대시 · 패리 · 칼질)은 스태미나가 0 보다 많아야 선다.
-        foreach (FighterAction action in new[] { FighterAction.Dash, FighterAction.Parry, FighterAction.Attack })
+        // 0 에서는 마지막 한 번도 없다 — 값이 있는 행동(대시 · 칼질)은 스태미나가 0 보다 많아야 선다.
+        foreach (FighterAction action in new[] { FighterAction.Dash, FighterAction.Attack })
         {
             Fighter f = Spawn();
             f.Spend(f.Stamina);
@@ -141,21 +138,6 @@ public class FighterExhaustTests
     }
 
     [Fact]
-    public void 받아친_패리의_되받아치기도_마지막_한_번은_나간다()
-    {
-        // 되받아치기(받아친 패리의 커밋 안의 J)는 Idle 에서 누른 J 와 같은 규칙이다 — 마지막 한 번도 같다.
-        Fighter f = Spawn();
-        f.Tick(_parry, _dt);
-        f.ParryPrecise();
-        f.Spend(f.Stamina - 5);
-
-        f.Tick(_attack, _dt);
-
-        f.Action.ShouldBe(FighterAction.Attack, "5 남은 스태미나로 되받아치기가 안 나갔다");
-        f.Stamina.ShouldBe(0);
-    }
-
-    [Fact]
     public void 가드로_막다가_딱_0_이_되면_칩을_받고_곧장_탈진한다()
     {
         // 설계 §5.2 · §5.5 — 값이 남은 스태미나와 딱 같으면 막은 것이다(칩을 받는다). 그리고 다 썼으니 **곧장** 탈진한다 —
@@ -190,10 +172,9 @@ public class FighterExhaustTests
         var tries = new (string Name, InputFrame Press, Func<Fighter, double, bool> Took)[]
         {
             ("대시", _dash, (f, _) => f.Action == FighterAction.Dash),
-            ("패리", _parry, (f, _) => f.Action == FighterAction.Parry),
             ("칼질", _attack, (f, _) => f.Action == FighterAction.Attack),
-            ("점프", new(0, Jump: true, false, false, false), (f, _) => f.Y > 0),
-            ("걷기", new(1, false, false, false, false), (f, x) => f.X > x),
+            ("점프", new(0, Jump: true, false, false), (f, _) => f.Y > 0),
+            ("걷기", new(1, false, false, false), (f, x) => f.X > x),
             ("가드", _guard, (f, _) => f.Guarding),
         };
         foreach ((string name, InputFrame press, Func<Fighter, double, bool> took) in tries)
@@ -227,7 +208,7 @@ public class FighterExhaustTests
         // 파이터는 **탈진한 채 공중으로 솟는다**(최종 리뷰 F-I1 이 실측했다). 전에는 리플레이 골든 해시만 이것을 잡았다 — 골든이 다른 까닭으로
         // 옮겨지면 같이 묻힌다. #78 이 이 자리(굳음을 탈진과 붙들림으로 가르기 · Locked = Exhausted || Held · 설계 §4.7)를 다시 썼을 때 골든은
         // 안 움직였고, 이 몫은 이 테스트가 지켰다.
-        var hold = new InputFrame(1, Jump: true, false, false, false);
+        var hold = new InputFrame(1, Jump: true, false, false);
 
         // 대조 — 같은 대시를 입력 없이 끝낸 자리. 대시는 바라보는 쪽으로만 가고(이동 입력을 안 받는다) 길이가 같아 두 대시의 끝이 같다.
         double dashOnly = DashThrough(stamina: 5, default).X;
@@ -364,7 +345,7 @@ public class FighterExhaustTests
         double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
         for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > standoff; i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, false));
+            sim.Tick(new InputFrame(1, false, false, false));
         }
 
         (sim.Boss.X - sim.Fighter.X).ShouldBeLessThanOrEqualTo(standoff, "파이터가 보스 앞까지 못 걸어갔다");
@@ -410,7 +391,7 @@ public class FighterExhaustTests
         // 점프를 막지 중력을 막지 않는다 — 떠 있는 채 굳으면 떨어지지도 못하는 파이터가 된다. 가로로도 안 흐르고(이동이 막혔다),
         // 눌러도 다시 안 뛴다. 뛰던 기세는 남아 정점까지 조금 더 오를 수 있다 — 중력이 틱마다 그것을 깎는다.
         Fighter f = Spawn();
-        f.Tick(new InputFrame(0, Jump: true, false, false, false), _dt);
+        f.Tick(new InputFrame(0, Jump: true, false, false), _dt);
         for (int i = 0; i < 8; i++)
         {
             f.Tick(default, _dt);
@@ -425,7 +406,7 @@ public class FighterExhaustTests
         double vy = f.VelocityY;
         for (int i = 0; i < 120 && !f.Grounded; i++)
         {
-            f.Tick(new InputFrame(1, Jump: true, false, false, false), _dt);
+            f.Tick(new InputFrame(1, Jump: true, false, false), _dt);
             f.X.ShouldBe(x, "공중에서 탈진한 파이터가 가로로 움직였다");
             if (!f.Grounded)
             {

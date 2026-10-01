@@ -15,9 +15,9 @@ public class InputFrameTests
     public void 앞서_누른_엣지는_다음에_실린다()
     {
         // 엣지 넷은 둘 중 하나라도 눌렀으면 눌린 것이다 — 멈춘 프레임 여럿에 걸쳐 누른 것도 다 모인다.
-        var held = new InputFrame(0, false, Dash: true, false, false);
-        held = InputFrame.Carry(held, new InputFrame(0, false, false, false, Attack: true));
-        held = InputFrame.Carry(held, new InputFrame(0, false, false, false, false, Bomb: true));
+        var held = new InputFrame(0, false, Dash: true, false);
+        held = InputFrame.Carry(held, new InputFrame(0, false, false, Attack: true));
+        held = InputFrame.Carry(held, new InputFrame(0, false, false, false, Bomb: true));
 
         InputFrame carried = InputFrame.Carry(held, default);
 
@@ -26,15 +26,14 @@ public class InputFrameTests
         // 폭탄도 엣지다 (설계 2026-09-30 조각2 §4) — 히트스톱 동안 누른 L 이 사라지면 "눌렀는데 안 던진" 폭탄이 된다.
         carried.Bomb.ShouldBeTrue();
         carried.Jump.ShouldBeFalse();
-        carried.Parry.ShouldBeFalse();
     }
 
     [Fact]
     public void 레벨은_앞의_값을_안_들고_온다()
     {
         // 이동과 가드는 누르고 있는 동안이 전부다(설계 §5.2 · §5.4) — 멈춘 동안 누르다 뗀 가드를 들고 오면 뗀 손이 가드를 든다.
-        var held = new InputFrame(1, false, false, false, false, GuardHeld: true);
-        var now = new InputFrame(-1, false, false, false, false, GuardHeld: false);
+        var held = new InputFrame(1, false, false, false, GuardHeld: true);
+        var now = new InputFrame(-1, false, false, false, GuardHeld: false);
 
         InputFrame carried = InputFrame.Carry(held, now);
 
@@ -49,59 +48,14 @@ public class InputFrameTests
         var frames = new List<InputFrame>
         {
             default,
-            new(1, Jump: true, false, false, false),
-            new(-1, false, Dash: true, Parry: true, Attack: true, GuardHeld: true),
-            new(0, false, false, false, false, Bomb: true),
+            new(1, Jump: true, false, false),
+            new(-1, false, Dash: true, Attack: true, GuardHeld: true),
+            new(0, false, false, false, Bomb: true),
         };
 
         foreach (InputFrame now in frames)
         {
             InputFrame.Carry(default, now).ShouldBe(now);
         }
-    }
-
-    [Fact]
-    public void 히트스톱에_누른_J_는_끝난_첫_틱에_되받아치기가_된다()
-    {
-        // 받아치면 보스가 무너지고 그 틱에 히트스톱이 걸린다(설계 §4.3). 받아친 것을 보고 곧장 누른 J 는 그 7프레임에 떨어지기 쉽다 —
-        // 넘기면 끝난 첫 틱에 되받아치기 1타가 선다(전에는 버려져 "눌렀는데 안 나간" 칼이었다). 씬이 하는 일을 여기서 그대로 한다:
-        // 멈춘 프레임에는 틱을 안 밀고 입력만 모은다.
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = TestConfigs.Fighter(),
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(maxHealth: 999_999, rest: 0.2),
-            PatternIds = new[] { "3연격" },
-            Patterns = TestConfigs.Patterns(),
-            Seed = 1,
-            MaxTicks = 60 * 60,
-        });
-        double standoff = sim.Boss.HalfWidth + sim.Fighter.HalfWidth;
-        for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > standoff; i++)
-        {
-            sim.Tick(new InputFrame(1, false, false, false, false));
-        }
-
-        (sim.Boss.X - sim.Fighter.X).ShouldBeLessThanOrEqualTo(standoff, "파이터가 보스 앞까지 못 걸어갔다");
-
-        for (int i = 0; i < 600 && !sim.Boss.Exhausted; i++)
-        {
-            bool press = sim.NextActiveIn is <= 4 * BattleSim.Dt && sim.Fighter.Action == FighterAction.Idle;
-            sim.Tick(new InputFrame(0, false, false, Parry: press, false));
-        }
-
-        sim.Boss.Exhausted.ShouldBeTrue("받아치지 못했다 — 이 테스트가 히트스톱 자리를 못 본다");
-        sim.Fighter.Action.ShouldBe(FighterAction.Parry);
-
-        InputFrame held = default;
-        for (int frame = 0; frame < 7; frame++)
-        {
-            held = InputFrame.Carry(held, new InputFrame(0, false, false, false, Attack: frame == 2));
-        }
-
-        sim.Tick(InputFrame.Carry(held, default));
-
-        sim.Fighter.Action.ShouldBe(FighterAction.Attack, "히트스톱에 누른 J 가 끝난 첫 틱에 되받아치기가 안 됐다");
     }
 }

@@ -104,7 +104,7 @@ public class HitDebugTests
         // 칼은 판정 창 동안 산다 (이슈 #59 · 2번 PR) — 옛 칼은 창의 첫 틱에만 대 봐서 한 프레임만 번쩍였다.
         // 보스는 960px 밖이라 안 닿는다: 안 닿은 칼은 창 내내 대 보고, 표시는 그 틱마다 보인다.
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 5000, activeSeconds: 0.5);
-        sim.Tick(new InputFrame(0, false, false, false, true));
+        sim.Tick(new InputFrame(0, false, false, true));
 
         int shown = 0, active = 0;
         for (int i = 0; i < 30; i++)

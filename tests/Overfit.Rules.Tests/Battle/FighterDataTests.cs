@@ -41,32 +41,6 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 패리_창은_커밋_안의_앞쪽이다()
-    {
-        // 패리는 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 창이 커밋보다 길면 커밋이 끝난 뒤에도
-        // 받아치는 유령 창이 되고, 커밋이 창과 같으면 "누를 때마다 60% 는 무방비" 라는 연타의 벌이 사라진다 —
-        // 스펙이 연타 징벌(parry_spam_window)을 지운 근거가 그 벌이다.
-        foreach ((string id, FighterConfig c) in Load())
-        {
-            c.ParryPreciseWindow.ShouldBeGreaterThan(0, $"{id}: 패리 창이 없다");
-            c.ParryPreciseWindow.ShouldBeLessThan(c.ParryDuration, $"{id}: 패리 창이 커밋보다 길다 — 난사에 벌이 없다");
-            c.ParryCost.ShouldBeGreaterThan(0, $"{id}: 패리가 공짜다 — 난사에 값이 없다");
-        }
-    }
-
-    [Fact]
-    public void 패리_커밋이_그림_네_장과_같은_길이다()
-    {
-        // 패리는 attack2 의 f0~f3(칼을 사선으로 세운 자세)을 12fps 로 돈다 (설계 §5.3). 커밋이 그림보다 짧으면 칼을
-        // 세우다 말고 idle 로 돌아가고, 길면 마지막 장에 멈춰 선다 — 이슈 #38 과 같은 종류의 어긋남이다.
-        foreach ((string id, FighterConfig c) in Load())
-        {
-            c.ParryDuration.ShouldBe(c.ParryAnimFrames / c.ParryAnimFps, _halfTick,
-                $"{id}: 패리 커밋 {c.ParryDuration:0.0000}초가 {c.ParryAnim} {c.ParryAnimFrames}장({c.ParryAnimFrames / c.ParryAnimFps:0.0000}초)과 다르다");
-        }
-    }
-
-    [Fact]
     public void 가드_자세는_파이터_팩에_있는_이름과_장이다()
     {
         // 가드는 guard_anim 의 guard_frame 장에 멈춰 선다 (#96 · 설계 §6). 이름이 팩에 없으면 뷰가 [W] 한 줄 남기고 옛 그림(idle)으로
@@ -82,17 +56,17 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 가드_자세는_패리가_칼을_세우는_장_하나다()
+    public void 가드_자세는_2타가_칼을_세우는_장_하나다()
     {
-        // 설계 §6 — 팩에 막는 모션이 없어 가드는 패리가 칼을 세우는 장 하나(attack2 f1)를 빌려 멈춰 선다. 네 장(f0~f3)은 칼과 몸이
-        // 같은 자세라 가드와 패리는 실루엣이 같고, 둘을 가르는 것은 뷰의 가드 색과 링이다(#96 에서 시트를 쟀다). 패리의 장 밖(f4 · f5)은
-        // 칼이 나가는 흰 궤적이라, 가드가 거기 서면 휘두르지 않은 칼이 버티는 내내 얼어붙는다 — 패리 뒤 경직이 f5 가 아니라 f3 을 붙드는
-        // 것과 같은 까닭이다(#82).
+        // 설계 §6 — 팩에 막는 모션이 없어 가드는 2타 시트(attack2)의 칼을 세우는 장 하나(f1)를 빌려 멈춰 선다. 칼이 나가는 장(blade_frame)
+        // 부터는 흰 궤적이라, 가드가 거기 서면 휘두르지 않은 칼이 버티는 내내 얼어붙는다(#82 · #96). 전에는 패리가 같은 장들(f0~f3)을 돌아
+        // 그 장과 맞대어 봤다 — 패리는 #168 에서 걷었다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.GuardAnim.ShouldBe(c.ParryAnim, $"{id}: 가드와 패리가 다른 시트다 — 설계 §6 은 가드가 패리의 칼 세운 장을 빌린다");
-            c.GuardFrame.ShouldBeInRange(0, c.ParryAnimFrames - 1,
-                $"{id}: 가드의 장 {c.GuardFrame} 이 패리가 칼을 세우는 장(0 ~ {c.ParryAnimFrames - 1}) 밖이다");
+            ComboStepDef second = c.Combo[^1];
+            c.GuardAnim.ShouldBe(second.Anim, $"{id}: 가드와 2타가 다른 시트다 — 설계 §6 은 가드가 칼 세운 장을 빌린다");
+            c.GuardFrame.ShouldBeInRange(0, second.BladeFrame - 1,
+                $"{id}: 가드의 장 {c.GuardFrame} 이 칼을 세우는 장(0 ~ {second.BladeFrame - 1}) 밖이다");
         }
     }
 
@@ -106,7 +80,7 @@ public class FighterDataTests
     {
         var fighter = new Fighter(config, TestConfigs.Arena(), TestConfigs.Arena().Width / 2);
         double start = fighter.X;
-        fighter.Tick(new InputFrame(0, false, Dash: true, false, false), BattleSim.Dt);
+        fighter.Tick(new InputFrame(0, false, Dash: true, false), BattleSim.Dt);
         while (fighter.Action == FighterAction.Dash)
         {
             fighter.Tick(default, BattleSim.Dt);
@@ -199,15 +173,14 @@ public class FighterDataTests
     // ── 행동 뒤 경직 (#82 · 설계 §5.1 · §5.6) ──────────────────────────────────
 
     [Fact]
-    public void 경직은_넷_다_있고_2연격을_다_휘두른_뒤가_1타_뒤보다_길다()
+    public void 경직은_셋_다_있고_2연격을_다_휘두른_뒤가_1타_뒤보다_길다()
     {
-        // 유저(2026-09-26): "대시 후 경직 살짝, 1타공격 후 경직, 2타는 2타까지 공격후에는 좀더 오래 경직이 있게" · "패리도 후경직이 좀
-        // 커야합니다". **틱으로** 견준다 — 규칙이 세는 것이 틱이라(BattleSim.TicksFor) 초로는 달라도 같은 틱이면 유저가 말한 "더 오래" 가
+        // 유저(2026-09-26): "대시 후 경직 살짝, 1타공격 후 경직, 2타는 2타까지 공격후에는 좀더 오래 경직이 있게". 패리 뒤 경직은 패리와 같이
+        // 걷었다(#168). **틱으로** 견준다 — 규칙이 세는 것이 틱이라(BattleSim.TicksFor) 초로는 달라도 같은 틱이면 유저가 말한 "더 오래" 가
         // 화면에 없다.
         foreach ((string id, FighterConfig c) in Load())
         {
             c.DashRecover.ShouldBeGreaterThan(0, $"{id}: 대시 뒤 경직이 없다");
-            c.ParryStiff.ShouldBeGreaterThan(0, $"{id}: 패리 뒤 경직이 없다");
             c.Combo[0].Stiff.ShouldBeGreaterThan(0, $"{id}: 1타 뒤 경직이 없다");
             BattleSim.TicksFor(c.Combo[1].Stiff).ShouldBeGreaterThan(BattleSim.TicksFor(c.Combo[0].Stiff),
                 $"{id}: 2타 뒤 경직({c.Combo[1].Stiff})이 1타 뒤({c.Combo[0].Stiff})보다 길지 않다");
@@ -346,7 +319,7 @@ public class FighterDataTests
         foreach ((string id, FighterConfig c) in Load())
         {
             var fighter = new Fighter(c, TestConfigs.Arena(), TestConfigs.Arena().Width / 2);
-            fighter.Tick(new InputFrame(0, false, false, false, Attack: true), BattleSim.Dt);
+            fighter.Tick(new InputFrame(0, false, false, Attack: true), BattleSim.Dt);
             int ticks = 1;
             while (!fighter.AttackActive && ticks < 60)
             {
@@ -360,16 +333,14 @@ public class FighterDataTests
     }
 
     [Fact]
-    public void 가드는_흘리되_받아치는_것보다는_나쁘다()
+    public void 가드는_흘리되_피하는_것보다는_나쁘다()
     {
-        // 가드의 값은 **스태미나**로 낸다 (이슈 #47). 흘리는 피해가 0 이면 받아칠 이유가 없어지고
-        // (패리의 상은 피해 0 이다), 1 이면 막는 것에 뜻이 없다 — 그 사이여야 창을 노릴 값이 생긴다.
-        //
-        // ⚠ 전에는 이 관계를 <c>parry_internal_ratio</c> 와 견줬다. 그 중간 단계가 없어지면서
-        // (이슈 #53) 비교 대상이 **패리 그 자체**로 바뀌었다: 받아치면 0, 막으면 이만큼이다.
+        // 가드의 값은 **스태미나**로 낸다 (이슈 #47). 흘리는 피해가 0 이면 피할 이유가 없어지고
+        // (대시 무적 · 점프의 상은 피해 0 이다), 1 이면 막는 것에 뜻이 없다 — 그 사이여야 창을 노릴 값이 생긴다.
+        // 전에는 비교 대상이 패리(받아치면 0)였다 — 패리는 #168 에서 걷었다.
         foreach ((string id, FighterConfig c) in Load())
         {
-            c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 받아칠 이유가 없다");
+            c.GuardChipRatio.ShouldBeGreaterThan(0, $"{id}: 가드가 공짜다 — 피할 이유가 없다");
             c.GuardChipRatio.ShouldBeLessThan(1, $"{id}: 가드가 전액을 흘린다 — 막는 것에 뜻이 없다");
             c.GuardStaminaPerDamage.ShouldBeGreaterThan(0, $"{id}: 가드 비용이 0 이다");
             c.ExhaustSeconds.ShouldBeGreaterThan(0, $"{id}: 탈진해도 안 굳는다 — 붕괴에도 스태미나를 다 쓴 것에도 값이 없다");

@@ -236,19 +236,6 @@ public class PatternDataTests
     }
 
     [Fact]
-    public void 패리_가능_여부와_패리_창이_같은_말을_한다()
-    {
-        // 이 둘은 이제 **같은 사실의 두 표현**이다. HitResolver 가 유효 창을 파이터와 패턴 중
-        // 좁은 쪽으로 잡으므로, parryable=true 인데 창이 0 이면 그 패턴은 사실 패리 불가인데
-        // DodgeEvent.ParryAvailable 은 "가능했다" 고 싣는다 — 의존도 축의 분모가 거짓이 된다.
-        foreach ((string id, PatternDef def) in Load())
-        {
-            def.Tags.Parryable.ShouldBe(def.Tags.ParryWindow > 0,
-                $"{id}: parryable={def.Tags.Parryable} 인데 parry_window={def.Tags.ParryWindow} 다");
-        }
-    }
-
-    [Fact]
     public void 열려_있다고_한_창은_적어도_한_틱은_열려_있다()
     {
         // 창이 0 이라는 것은 "그 수단으로는 못 피한다" 는 뜻이고, 0 이 아니라는 것은
@@ -262,12 +249,6 @@ public class PatternDataTests
             {
                 def.Tags.DashWindow.ShouldBeGreaterThanOrEqualTo(BattleSim.Dt,
                     $"{id}: dash_window={def.Tags.DashWindow} 가 한 틱보다 짧다 — 0 이 아닌데 실제로는 대시 불가다");
-            }
-
-            if (def.Tags.Parryable)
-            {
-                def.Tags.ParryWindow.ShouldBeGreaterThanOrEqualTo(BattleSim.Dt,
-                    $"{id}: parry_window={def.Tags.ParryWindow} 가 한 틱보다 짧다 — 패리 가능이라 실렸는데 못 받는다");
             }
         }
     }

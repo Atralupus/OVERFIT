@@ -29,8 +29,8 @@ namespace Overfit.Battle.Rules;
 public sealed class BotPolicy
 {
     /// <summary>
-    /// 대시·패리를 걸 창(초). 무적창(0.14) · 패리창(0.133)보다 좁게 잡아 판정이 서는 순간까지
-    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 커밋 안에서 맞는다 (설계 §5.3).
+    /// 대시를 걸 창(초). 무적창(0.14)보다 좁게 잡아 판정이 서는 순간까지
+    /// 창이 열려 있게 한다 — 일찍 걸면 창을 놓쳐 맞는다.
     /// </summary>
     private const double _lateReact = 0.10;
 
@@ -120,7 +120,7 @@ public sealed class BotPolicy
         {
             bool press = _chainThis && sim.Fighter.ComboStep == 0 && !sim.Fighter.ComboQueued
                 && sim.Fighter.Affords(FighterAction.Attack);
-            return new InputFrame(0, false, false, false, Attack: press);
+            return new InputFrame(0, false, false, Attack: press);
         }
 
         // 던지기로 한 동작이면 손이 비는 첫 틱에 던진다 (설계 2026-09-30 조각2 §6) — 서 있거나 가드 중이고 땅이고 폭탄이 남았을 때다. 동작이 끝날
@@ -131,23 +131,23 @@ public sealed class BotPolicy
             && sim.Fighter.BombsLeft > 0)
         {
             _bombThis = false;
-            return new InputFrame(0, false, false, false, false, Bomb: true);
+            return new InputFrame(0, false, false, false, Bomb: true);
         }
 
-        // 패턴이 돌고 있으면 셋 중 하나로 반응한다. 무엇을 고를지는 좌표 조회로 정한다 —
+        // 패턴이 돌고 있으면 둘(대시 · 점프) 중 하나로 반응한다 — 셋째였던 패리는 #168 에서 걷었다. 무엇을 고를지는 좌표 조회로 정한다 —
         // 호출 순서에 값이 끌려다니지 않아 같은 시드가 같은 판을 만든다.
         //
         // ⚠ CurrentPattern 만 보고 매 틱 다시 고르지 않는다 — 그러면 윈드업 내내 아무 때나
-        // 걸어서 판정이 서기도 전에 무적창·패리창이 닫혀 버린다. NextActiveIn(남은 시간)을 봐서
-        // 대시·패리는 판정 직전에 걸고, 점프는 미리 떠야 높이가 나니 곧장 쓴다.
+        // 걸어서 판정이 서기도 전에 무적창이 닫혀 버린다. NextActiveIn(남은 시간)을 봐서
+        // 대시는 판정 직전에 걸고, 점프는 미리 떠야 높이가 나니 곧장 쓴다.
         //
-        // 행동 중(Dash·Parry·Attack)에는 새로 고르지 않는다 — 그건 Fighter.Begin 이 어차피
-        // 무시하므로 막을 필요는 없지만, 접지 여부는 **걸지 않는다**: 공중에서도 대시·패리를
+        // 행동 중(Dash·Attack)에는 새로 고르지 않는다 — 그건 Fighter.Begin 이 어차피
+        // 무시하므로 막을 필요는 없지만, 접지 여부는 **걸지 않는다**: 공중에서도 대시를
         // 다시 걸 수 있어야 점프가 늦게 뜬 판정을 막판에 대시로 덮을 수 있다.
         // **"패턴이 돈다" 는 것만으로 회피할 이유가 되지 않는다.** 올 판정이 있어야 피할 것이 있다.
         // 둘을 빼낸다.
-        // ① 탈진한 보스 (#72 · 설계 §4.3) — 패턴이 끊겨 아무것도 안 온다. 받아낸 뒤가 내 차례라는 것이
-        //    패리의 상이고(나인 솔즈), 그 상을 쓰는 곳은 회피가 아니라 공격이다(설계 §5.4 — 지금의 "굳은 보스" 규칙 그대로).
+        // ① 탈진한 보스 (#72 · 설계 §4.3) — 패턴이 끊겨 아무것도 안 온다. 무너뜨린 뒤가 내 차례라는 것이
+        //    게이지의 상이고, 그 상을 쓰는 곳은 회피가 아니라 공격이다(설계 §5.4 — 지금의 "굳은 보스" 규칙 그대로).
         // ② 후딜 — 남은 판정도 산 창도 없으면(NextActiveIn == null · SwingLive 거짓) 패턴은 돌지만 빈 시간이다.
         //    사람은 마지막 판정이 지나간 그 순간부터 칼을 넣는다 — 봇이 패턴이 끝나기를 기다리면
         //    그 빈 시간을 문 앞에서 버린다.
@@ -164,7 +164,7 @@ public sealed class BotPolicy
             // 판정 직전을 노릴 필요가 없고, 그래서 봇의 반응 창(_lateReact)과 무관하게 패턴 내내 든다.
             if (_guardThis)
             {
-                return new InputFrame(0, false, false, false, false, GuardHeld: true);
+                return new InputFrame(0, false, false, false, GuardHeld: true);
             }
 
             if (sim.Fighter.Action != FighterAction.Idle)
@@ -173,32 +173,28 @@ public sealed class BotPolicy
             }
 
             _decisions++;
-            int pick = Det.RollInt(_seed, Det.Domain.BotChoice, 3, k1: _decisions);
+            int pick = Det.RollInt(_seed, Det.Domain.BotChoice, 2, k1: _decisions);
             if (pick != 1 && remaining > _lateReact)
             {
-                // 아직 이르다 — 대시·패리를 지금 걸면 판정 전에 창이 닫힌다. 다음 틱에 다시 본다.
+                // 아직 이르다 — 대시를 지금 걸면 판정 전에 창이 닫힌다. 다음 틱에 다시 본다.
                 return default;
             }
 
-            return pick switch
-            {
-                0 => sim.Fighter.Affords(FighterAction.Dash) ? new InputFrame(0, false, Dash: true, false, false) : default,
-                1 => new InputFrame(0, Jump: true, false, false, false),
-                // 패리는 누르는 것 한 번이다 — 0.333초 커밋 동안 앞 0.133초가 창이라 붙들 것이 없다 (설계 §5.3).
-                _ => sim.Fighter.Affords(FighterAction.Parry) ? new InputFrame(0, false, false, Parry: true, false) : default,
-            };
+            return pick == 0
+                ? sim.Fighter.Affords(FighterAction.Dash) ? new InputFrame(0, false, Dash: true, false) : default
+                : new InputFrame(0, Jump: true, false, false);
         }
 
         // 쉬는 동안에는 붙어서 때린다.
         if (gap > sim.FighterReach)
         {
-            return new InputFrame(move, false, false, false, false);
+            return new InputFrame(move, false, false, false);
         }
 
         // 2타를 이을지는 **1타를 누를 때** 좌표 조회로 정한다 (_chainOdds). 값이 모자라면 좌표만 쓰고 안 누른다(머리 주석).
         _swings++;
         _chainThis = Det.RollInt(_seed, Det.Domain.BotCombo, _chainOdds, k1: _swings) == 0;
-        return sim.Fighter.Affords(FighterAction.Attack) ? new InputFrame(0, false, false, false, Attack: true) : default;
+        return sim.Fighter.Affords(FighterAction.Attack) ? new InputFrame(0, false, false, Attack: true) : default;
     }
 
     /// <summary>

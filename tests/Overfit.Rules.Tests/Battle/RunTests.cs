@@ -16,8 +16,8 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class RunTests
 {
-    private static readonly InputFrame _right = new(1, false, false, false, false);
-    private static readonly InputFrame _attack = new(0, false, false, false, true);
+    private static readonly InputFrame _right = new(1, false, false, false);
+    private static readonly InputFrame _attack = new(0, false, false, true);
 
     private static readonly string[] _roster = ["3연격", "돌진"];
 

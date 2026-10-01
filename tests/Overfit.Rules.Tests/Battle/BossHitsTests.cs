@@ -26,8 +26,6 @@ public class BossHitsTests
                 DashDirection = "either",
                 Jumpable = true,
                 AntiAir = false,
-                Parryable = false,
-                ParryWindow = 0,
                 PunishGreed = false,
                 Reach = "far",
                 MultiHit = 2,
@@ -86,9 +84,10 @@ public class BossHitsTests
     [Fact]
     public void 판정의_답은_단계의_키에서_오고_없으면_받는다()
     {
-        // 설계 §8.1 — 판정의 답 dash · guard · parry 는 없으면 태그대로(받는다)이고, 적으면 그 판정만 좁힌다. 판을 세울 때 판정에 싣는다 —
-        // 규칙(HitResolver)과 관측(BossSwings.BuildEvent)이 같은 값을 읽게. 판정마다 답을 **하나씩만** 닫는다 — 셋을 한꺼번에 닫으면
-        // 어느 키가 어느 칸으로 가는지를 못 가른다(parry 키가 Dashable 로 가는 배선이 셋 다 닫힌 판정에서는 똑같이 거짓이다).
+        // 설계 §8.1 — 판정의 답 dash · guard 는 없으면 태그대로(받는다)이고, 적으면 그 판정만 좁힌다. 판을 세울 때 판정에 싣는다 —
+        // 규칙(HitResolver)과 관측(BossSwings.BuildEvent)이 같은 값을 읽게. 판정마다 답을 **하나씩만** 닫는다 — 둘을 한꺼번에 닫으면
+        // 어느 키가 어느 칸으로 가는지를 못 가른다(guard 키가 Dashable 로 가는 배선이 둘 다 닫힌 판정에서는 똑같이 거짓이다). 셋째 답(parry)은
+        // 패리와 같이 걷었다(#168).
         HitBox?[] hits = BossHits.Of(new PatternDef
         {
             Tags = TestConfigs.Sweep(100, 0).Tags,
@@ -97,38 +96,34 @@ public class BossHitsTests
                 new() { T = 0.5, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125 },
                 new() { T = 1.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Dash = false },
                 new() { T = 1.5, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Guard = false },
-                new() { T = 2.0, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Parry = false },
                 new() { T = 2.5, Kind = "end" },
             },
         }, TestConfigs.HitShapes());
 
-        hits.Take(4).Select(h => (h!.Value.Dashable, h.Value.Guardable, h.Value.Parryable)).ShouldBe(new[]
+        hits.Take(3).Select(h => (h!.Value.Dashable, h.Value.Guardable)).ShouldBe(new[]
         {
-            (true, true, true),
-            (false, true, true),
-            (true, false, true),
-            (true, true, false),
+            (true, true),
+            (false, true),
+            (true, false),
         }, "단계의 키가 판정의 제 칸에 안 실렸다 — 답이 없으면 받고, 적은 키는 그 수단 하나만 닫는다");
     }
 
     [Fact]
-    public void 관측의_대시_가드_패리_가능은_판정의_답이다()
+    public void 관측의_대시_가드_가능은_판정의_답이다()
     {
-        // 설계 §7.3 — 대시 · 가드 · 패리의 "고를 수 있었나" 는 판정 단위다. 태그에서 가져오면 한 패턴 안에서 1타는 다 되고 잡기는 점프만
-        // 되는 자리(옛 1타 잡기 · #78)에서 거짓을 싣는다 — 대시 의존도의 분모가 "대시로는 못 피하는 판정" 으로 부푼다. 태그로는 셋 다 되는 패턴에서
-        // 둘째 · 셋째 · 넷째 판정이 대시 · 가드 · 패리를 **하나씩** 막는다 — 셋을 한꺼번에 막으면 어느 답이 어느 칸으로 가는지를 못 가른다
-        // (패리 가능이 Dashable 을 읽는 배선이 그대로 통과했다). 가만히 선 파이터가 넷 다 맞는다.
+        // 설계 §7.3 — 대시 · 가드의 "고를 수 있었나" 는 판정 단위다. 태그에서 가져오면 한 패턴 안에서 1타는 다 되고 잡기는 점프만
+        // 되는 자리(옛 1타 잡기 · #78)에서 거짓을 싣는다 — 대시 의존도의 분모가 "대시로는 못 피하는 판정" 으로 부푼다. 태그로는 둘 다 되는 패턴에서
+        // 둘째 · 셋째 판정이 대시 · 가드를 **하나씩** 막는다 — 둘을 한꺼번에 막으면 어느 답이 어느 칸으로 가는지를 못 가른다
+        // (패리 가능이 Dashable 을 읽는 배선이 그대로 통과했던 적이 있다 — 패리는 #168 에서 걷었다). 가만히 선 파이터가 셋 다 맞는다.
         PatternTags tags = new()
         {
             DashWindow = 0.2,
             DashDirection = "either",
             Jumpable = true,
             AntiAir = false,
-            Parryable = true,
-            ParryWindow = 0.18,
             PunishGreed = false,
             Reach = "far",
-            MultiHit = 4,
+            MultiHit = 3,
             Tracking = false,
         };
         var pattern = new PatternDef
@@ -139,25 +134,23 @@ public class BossHitsTests
                 new() { T = 0.5, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125 },
                 new() { T = 1.0, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Dash = false },
                 new() { T = 1.5, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Guard = false },
-                new() { T = 2.0, Kind = "active", Band = new double[] { 0, 2000, 0, 60 }, Damage = 5, ActiveSeconds = 0.125, Parry = false },
                 new() { T = 2.5, Kind = "end" },
             },
         };
-        BattleSim sim = TestConfigs.PatternSim("넷", pattern);
+        BattleSim sim = TestConfigs.PatternSim("셋", pattern);
 
-        for (int i = 0; i < 300 && sim.Events.Count < 4; i++)
+        for (int i = 0; i < 300 && sim.Events.Count < 3; i++)
         {
             sim.Tick(default);
         }
 
-        sim.Events.Count.ShouldBe(4, "네 판정의 관측이 안 섰다");
-        sim.Events.Select(e => e.Verdict).ShouldAllBe(v => v == HitVerdict.Hit, "가만히 선 파이터가 네 판정을 다 맞지 않았다");
-        sim.Events.Select(e => (e.DashAvailable, e.GuardAvailable, e.ParryAvailable)).ShouldBe(new[]
+        sim.Events.Count.ShouldBe(3, "세 판정의 관측이 안 섰다");
+        sim.Events.Select(e => e.Verdict).ShouldAllBe(v => v == HitVerdict.Hit, "가만히 선 파이터가 세 판정을 다 맞지 않았다");
+        sim.Events.Select(e => (e.DashAvailable, e.GuardAvailable)).ShouldBe(new[]
         {
-            (true, true, true),
-            (false, true, true),
-            (true, false, true),
-            (true, true, false),
+            (true, true),
+            (false, true),
+            (true, false),
         }, "관측이 판정의 제 답이 아니라 태그나 다른 수단의 답을 실었다");
     }
 
@@ -188,7 +181,7 @@ public class BossHitsTests
         BattleSim sim = TestConfigs.PatternSim("하나", pattern);
 
         // 가드는 판이 설 때부터 붙든다. 대시는 창이 열리기 한 틱 앞에 누른다 — 창의 첫 틱이 무적 창 한가운데다.
-        var hold = new InputFrame(0, false, false, false, false, GuardHeld: action == FighterAction.Guard);
+        var hold = new InputFrame(0, false, false, false, GuardHeld: action == FighterAction.Guard);
         for (int i = 0; i < 600 && sim.NextActiveIn is null or > 2 * BattleSim.Dt; i++)
         {
             sim.Tick(hold);
@@ -196,7 +189,7 @@ public class BossHitsTests
 
         sim.NextActiveIn.ShouldNotBeNull("600틱 안에 패턴이 안 섰다");
         sim.NextActiveIn.Value.ShouldBeLessThanOrEqualTo(2 * BattleSim.Dt, "600틱 안에 판정이 두 틱 앞으로 안 왔다");
-        sim.Tick(action == FighterAction.Dash ? new InputFrame(0, false, Dash: true, false, false) : hold);
+        sim.Tick(action == FighterAction.Dash ? new InputFrame(0, false, Dash: true, false) : hold);
         for (int i = 0; i < 10 && sim.Events.Count == 0; i++)
         {
             sim.Tick(hold);

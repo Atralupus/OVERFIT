@@ -13,7 +13,7 @@ namespace Overfit.Battle;
 /// 그 결과를 뷰에 넘길 뿐이다. 그래서 같은 전투가 창 없이도 똑같이 돈다.
 ///
 /// <para>
-/// 뷰가 알아야 하는 <b>사건</b>(맞았다 · 패리가 받았다 · 판정이 섰다)은 시뮬레이션이
+/// 뷰가 알아야 하는 <b>사건</b>(맞았다 · 가드가 받았다 · 판정이 섰다)은 시뮬레이션이
 /// 이벤트로 밀어주지 않는다. 대신 <see cref="BattleCues"/> 가 <b>틱 전후를 견줘</b> 알아낸다 — 체력이 줄었나,
 /// 회피 관측이 늘었나. 규칙 층에 뷰용 콜백을 달면 그 콜백이 곧 규칙의 일부가 되고,
 /// 헤드리스 봇이 그걸 들고 다니게 된다.
@@ -143,7 +143,7 @@ public partial class Battle : Node2D
 
     /// <summary>
     /// 히트스톱 동안 누른 엣지 (#71 · 설계 §1 「대화로 정한 것」). 세운 프레임에는 시뮬레이션이 안 돌아 입력을 받을 틱이 없다 —
-    /// 모아 두었다가 히트스톱이 끝난 첫 틱의 입력에 싣는다(<see cref="InputFrame.Carry"/>). 받아친 것을 보고 곧장 누른 J(되받아치기)가
+    /// 모아 두었다가 히트스톱이 끝난 첫 틱의 입력에 싣는다(<see cref="InputFrame.Carry"/>). 보스가 무너진 것을 보고 곧장 누른 J 가
     /// 그 7프레임에 떨어지는 일이 흔하다 — 전에는 버려져 "눌렀는데 안 나간" 칼이 됐다.
     /// </summary>
     private InputFrame _carried;
@@ -203,26 +203,13 @@ public partial class Battle : Node2D
     public bool FighterGuarding => !_broken && !_over && _sim.Fighter.Guarding;
 
     /// <summary>
-    /// 지금 패리 행동 중인가 — 커밋(0.333초)과 그 뒤 패리 뒤 경직(0.25초 · #82)을 합친 0.583초다. 디버그 전용 읽기다 —
-    /// 패리는 이제 누르는 것 한 번이라(설계 §5.3) 스크린샷이 그 사이를 노리려면 규칙에게 물어야 한다(<c>battle-4-parry</c> 는
-    /// 참이 된 뒤 10프레임 — 커밋의 한가운데다).
-    /// </summary>
-    public bool FighterParrying => !_broken && !_over && _sim.Fighter.Action == FighterAction.Parry;
-
-    /// <summary>
     /// 지금까지 가드가 깨진 횟수. 위와 같이 디버그 전용 읽기다 — 붕괴는 <b>사건</b>이라 상태로는
     /// 못 본다. 늘어난 그 순간이 셔터를 누를 때다.
     /// </summary>
     public int FighterGuardBreaks => _broken ? 0 : _cues.GuardBreaks;
 
     /// <summary>
-    /// 지금까지 <b>받아친</b> 횟수 (이슈 #53). 위와 같이 디버그 전용 읽기다 — 받아친 것도 사건이라
-    /// 상태로는 못 노린다. 연출이 일부러 약해진 뒤로는 더 그렇다: 고리 하나가 0.17초 떴다 사라진다.
-    /// </summary>
-    public int FighterParries => _broken ? 0 : _cues.Parries;
-
-    /// <summary>
-    /// 보스가 <b>탈진했나</b> (#72 · 설계 §4.3). 위와 같이 디버그 전용 읽기다 — 받아친 상이 화면에서 "무너졌다" 로
+    /// 보스가 <b>탈진했나</b> (#72 · 설계 §4.3). 위와 같이 디버그 전용 읽기다 — 무너뜨린 상이 화면에서 "무너졌다" 로
     /// 읽히는지를 증명하려면 그 1.5초 안에서 셔터를 눌러야 한다. 프레임을 세지 않는 이유는 늘 같다: 탈진 길이는
     /// 데이터라 세어 두면 그 값을 고치는 날 이 장이 조용히 다른 순간을 찍는다.
     /// </summary>
@@ -277,7 +264,7 @@ public partial class Battle : Node2D
     public bool BossHesitating => !_broken && !_over && _sim.BossHesitating;
 
     /// <summary>
-    /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 패리(행동 뒤 경직까지 · #82) 중이 아니고 굳어 있지도(탈진 · 붙들림 — <c>Fighter.Locked</c>) 않다.
+    /// 파이터가 새 행동을 받나 — 칼질 · 대시 · 던지기(행동 뒤 경직까지 · #82) 중이 아니고 굳어 있지도(탈진 · 붙들림 — <c>Fighter.Locked</c>) 않다.
     /// 위와 같이 디버그 전용 읽기다 — 스크린샷이 칼질을 다시 누를 때를 규칙에게 묻는다. 벽시계 간격(0.4초)으로 누르던 때, 칼질 뒤 경직이 들자
     /// 둘째 J 가 1타의 경직에 떨어져 2타가 됐다. 굳음은 탈진만 보던 것을 <c>Locked</c> 로 넓혔다(#96) — 붙들린 파이터도 선 자세(Idle)라, 탈진만
     /// 보면 흰 구에 잡힌 동안을 "받는다" 고 했다. 누른 것은 버려지고 스크린샷 대본은 그 누름이 먹기를 헛되이 기다린다.
@@ -422,8 +409,6 @@ public partial class Battle : Node2D
         _fighterView.Load(
             _fighterConfig.Sprite,
             Swings(_fighterConfig),
-            new SwingSheet(_fighterConfig.ParryAnim, _fighterConfig.ParryAnimFps, 0, 0),
-            _fighterConfig.ParryAnimFrames,
             new StillFrame(_fighterConfig.GuardAnim, _fighterConfig.GuardFrame),
             new StillFrame(bomb.Anim, bomb.WindupFrame),
             new StillFrame(bomb.Anim, bomb.ReleaseFrame));
@@ -480,9 +465,9 @@ public partial class Battle : Node2D
 
         // 넘긴 **엣지**가 있을 때만 적는다. _carried 에는 레벨(이동 · 가드)도 모이는데 넘기는 것은 엣지뿐이다 — 통째로 default 와 견주면
         // 방향이나 ↓ 를 붙든 채 멈춤을 지난 것만으로 아무것도 안 넘긴 hitstop_carry 가 찍힌다.
-        if (_carried.Jump || _carried.Dash || _carried.Parry || _carried.Attack)
+        if (_carried.Jump || _carried.Dash || _carried.Attack)
         {
-            Log.Debug("battle", $"hitstop_carry jump={_carried.Jump} dash={_carried.Dash} parry={_carried.Parry} attack={_carried.Attack} tick={_sim.Ticks + 1}");
+            Log.Debug("battle", $"hitstop_carry jump={_carried.Jump} dash={_carried.Dash} attack={_carried.Attack} tick={_sim.Ticks + 1}");
         }
 
         _carried = default;
@@ -539,16 +524,15 @@ public partial class Battle : Node2D
             move = -1;
         }
 
-        // 넷은 엣지다 — "이번 물리 틱에 눌렸나"(IsActionJustPressed) 를 본다. 물리 콜백 안에서
+        // 셋은 엣지다 — "이번 물리 틱에 눌렸나"(IsActionJustPressed) 를 본다. 물리 콜백 안에서
         // 부르므로 엣지 기준이 물리 틱이고, 틱마다 정확히 한 번만 참이다.
         // IsKeyPressed(레벨)로 읽으면 누르고 있는 동안 매 틱 발동해 InputFrame 의 계약(엣지)이 깨진다.
         //
-        // 가드만 레벨이다(↓ 를 누르고 있는 동안 · 설계 §5.2). 패리는 누르는 것 한 번이다(0.333초 커밋 · 설계 §5.3). 폭탄도 엣지다(L · 조각2 §1.1).
+        // 가드만 레벨이다(↓ 를 누르고 있는 동안 · 설계 §5.2). 폭탄도 엣지다(L · 조각2 §1.1).
         return new InputFrame(
             move,
             Input.IsActionJustPressed("jump"),
             Input.IsActionJustPressed("dash"),
-            Input.IsActionJustPressed("parry"),
             Input.IsActionJustPressed("attack"),
             GuardHeld: Input.IsActionPressed("guard"),
             Bomb: Input.IsActionJustPressed("bomb"));
@@ -817,7 +801,6 @@ public partial class Battle : Node2D
         {
             FighterAction.Dash => FighterPose.Dash,
             FighterAction.Attack => FighterPose.Attack,
-            FighterAction.Parry => FighterPose.Parry,
             FighterAction.Guard => FighterPose.Guard,
             FighterAction.Throw => _sim.Fighter.Throwing ? FighterPose.ThrowWindup : FighterPose.ThrowRelease,
             _ => _cues.Walking ? FighterPose.Run : FighterPose.Idle,

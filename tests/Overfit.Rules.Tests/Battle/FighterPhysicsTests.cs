@@ -33,7 +33,7 @@ public class FighterPhysicsTests
     public void 오른쪽_입력은_오른쪽으로_옮긴다()
     {
         Fighter f = Spawn();
-        Run(f, new InputFrame(1, false, false, false, false), 60);
+        Run(f, new InputFrame(1, false, false, false), 60);
 
         // 420 px/s 로 1초. 틱 누적이라 정확히 420 은 아니다
         f.X.ShouldBe(960 + 420, 1.0);
@@ -44,7 +44,7 @@ public class FighterPhysicsTests
     public void 아레나_밖으로_못_나간다()
     {
         Fighter f = Spawn(x: 100);
-        Run(f, new InputFrame(-1, false, false, false, false), 120);
+        Run(f, new InputFrame(-1, false, false, false), 120);
 
         // 왼쪽 벽은 x=0 이고 몸 절반(30)이 걸린다
         f.X.ShouldBe(30);
@@ -54,7 +54,7 @@ public class FighterPhysicsTests
     public void 점프하면_올라갔다_내려와_착지한다()
     {
         Fighter f = Spawn();
-        f.Tick(new InputFrame(0, true, false, false, false), _dt);
+        f.Tick(new InputFrame(0, true, false, false), _dt);
 
         f.Grounded.ShouldBeFalse();
         double peak = 0;
@@ -77,7 +77,7 @@ public class FighterPhysicsTests
     public void 공중에서는_다시_점프_못_한다()
     {
         Fighter f = Spawn();
-        var jump = new InputFrame(0, true, false, false, false);
+        var jump = new InputFrame(0, true, false, false);
         f.Tick(jump, _dt);
         double afterFirst = f.VelocityY;
 
@@ -93,7 +93,7 @@ public class FighterPhysicsTests
         var inputs = new InputFrame[240];
         for (int i = 0; i < inputs.Length; i++)
         {
-            inputs[i] = new InputFrame((sbyte)(i % 7 < 3 ? 1 : -1), i % 31 == 0, false, false, false);
+            inputs[i] = new InputFrame((sbyte)(i % 7 < 3 ? 1 : -1), i % 31 == 0, false, false);
         }
 
         Fighter a = Spawn();

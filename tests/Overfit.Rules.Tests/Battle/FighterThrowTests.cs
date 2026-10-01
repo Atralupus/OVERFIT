@@ -12,10 +12,10 @@ public class FighterThrowTests
 {
     private const double _dt = 1.0 / 60.0;
 
-    private static readonly InputFrame _bomb = new(0, false, false, false, false, Bomb: true);
+    private static readonly InputFrame _bomb = new(0, false, false, false, Bomb: true);
 
     /// <summary>↓ 를 누르고 있는 틱.</summary>
-    private static readonly InputFrame _guard = new(0, false, false, false, false, GuardHeld: true);
+    private static readonly InputFrame _guard = new(0, false, false, false, GuardHeld: true);
 
     private static Fighter Spawn(double x = 960) => new(TestConfigs.Fighter(), TestConfigs.Arena(), x);
 
@@ -92,7 +92,7 @@ public class FighterThrowTests
     public void 공중에서는_안_던진다()
     {
         Fighter f = Spawn();
-        f.Tick(new InputFrame(0, Jump: true, false, false, false), _dt);
+        f.Tick(new InputFrame(0, Jump: true, false, false), _dt);
         f.Tick(default, _dt);
         f.Grounded.ShouldBeFalse();
 
@@ -121,11 +121,10 @@ public class FighterThrowTests
         // 커밋이다 (설계 2026-09-30 조각2 §1.1) — 스스로 거둘 수 없어야 끊기는 싸움이 선다. 선딜과 놓은 뒤 경직 둘 다 본다.
         InputFrame[] tries =
         [
-            new(1, false, false, false, false),
-            new(0, Jump: true, false, false, false),
-            new(0, false, Dash: true, false, false),
-            new(0, false, false, Parry: true, false),
-            new(0, false, false, false, Attack: true),
+            new(1, false, false, false),
+            new(0, Jump: true, false, false),
+            new(0, false, Dash: true, false),
+            new(0, false, false, Attack: true),
             _guard,
             _bomb,
         ];
@@ -252,7 +251,7 @@ public class FighterThrowTests
     {
         // 던지기만 예외다 (설계 2026-09-30 조각2 §1.2) — 칼질은 끝까지 커밋이다(설계 §5.1).
         Fighter f = Spawn();
-        f.Tick(new InputFrame(0, false, false, false, Attack: true), _dt);
+        f.Tick(new InputFrame(0, false, false, Attack: true), _dt);
 
         f.TakeDamage(8);
 
@@ -263,10 +262,10 @@ public class FighterThrowTests
     [Fact]
     public void 한_틱에_여럿을_누르면_폭탄은_마지막이다()
     {
-        // 규칙의 순서 대시 → 패리 → 공격 → 폭탄 (설계 2026-09-30 조각2 §1.1).
+        // 규칙의 순서 대시 → 공격 → 폭탄 (설계 2026-09-30 조각2 §1.1).
         Fighter f = Spawn();
 
-        f.Tick(new InputFrame(0, false, false, false, Attack: true, Bomb: true), _dt);
+        f.Tick(new InputFrame(0, false, false, Attack: true, Bomb: true), _dt);
 
         f.Action.ShouldBe(FighterAction.Attack);
         f.BombsLeft.ShouldBe(Bomb.Count);

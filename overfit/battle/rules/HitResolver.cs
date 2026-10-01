@@ -35,18 +35,11 @@ public enum HitVerdict
     Dodged,
 
     /// <summary>
-    /// 닿았지만 <b>패리</b>가 받아쳤다 — 누름에서 <c>parry_precise_window</c> 안에 판정이 섰다.
-    /// 피해 0 이고, <b>어느 타든</b> 보스가 탈진한다 (#72 · 설계 §4.3) — 하던 패턴이 그 자리에서 끊긴다.
-    /// 전에는 가드 불가인 마무리를 받아쳤을 때만 굳었다(이슈 #53).
-    /// </summary>
-    Parried,
-
-    /// <summary>
     /// 닿았고 <b>가드</b>가 받아냈다 (이슈 #47 · #53). 피해는 <c>guard_chip_ratio</c> 만 흘러 들어오고
     /// 값은 <b>스태미나</b>로 낸다 — 그 값이 피해에 비례하므로 무거운 한 방이 가드를 깬다.
     ///
     /// <para>
-    /// ↓ 를 누르고 있던 판정이 여기로 온다 (설계 §5.2). 창을 놓친 패리는 여기가 아니라 <see cref="Hit"/> 다 (설계 §5.3).
+    /// ↓ 를 누르고 있던 판정이 여기로 온다 (설계 §5.2).
     /// </para>
     /// </summary>
     Guarded,
@@ -60,7 +53,8 @@ public enum HitVerdict
     /// <summary>
     /// <b>잡혔다</b> (#78 · 설계 §4.7) — 붙드는 판정(<see cref="HitBox.GrabHoldSeconds"/> &gt; 0)이 맨몸에 닿았다. 피해를 받고 붙들린다
     /// (<c>Fighter.Held</c>). 맞음(<see cref="Hit"/>)과 가르는 이유: 뷰가 흰 구를 붙이고, 로그와 계측이 "잡혔다" 를 "맞았다" 와 따로
-    /// 센다. 계측에서는 맞음과 같이 실패다 — 아무 축도 성공으로 안 센다(설계 §7.3). 열거의 맨 뒤에 둔다 — 옛 값들의 정수가 그대로다.
+    /// 센다. 계측에서는 맞음과 같이 실패다 — 아무 축도 성공으로 안 센다(설계 §7.3). 열거의 맨 뒤에 둔다. 정수를 디스크에 적는 곳은 없다 —
+    /// 받아침(<c>Parried</c>)을 걷으며(#168) 뒤의 값이 한 칸씩 당겨졌다.
     /// </summary>
     Grabbed,
 }
@@ -77,21 +71,18 @@ public enum Defense
     /// <summary>대시 무적 — 파이터의 무적과 판정의 대시 창 중 좁은 쪽 안이다.</summary>
     Invulnerable,
 
-    /// <summary>패리 창 — 판정이 패리를 받고, 파이터와 판정의 창 중 좁은 쪽 안이다.</summary>
-    Parrying,
-
     /// <summary>가드 — ↓ 를 누르고 땅에 서 있다.</summary>
     Guarding,
 }
 
 /// <summary>
-/// 판정 하나를 파이터에게 대본다. <b>상태를 안 바꾼다</b> — 판단만 하고 체력을 깎는 것(과 패리 · 가드 · 붕괴 · 잡힘의 부작용)은
+/// 판정 하나를 파이터에게 대본다. <b>상태를 안 바꾼다</b> — 판단만 하고 체력을 깎는 것(과 가드 · 붕괴 · 잡힘의 부작용)은
 /// <c>BossSwings.ApplyVerdict</c> 다. 그래야 같은 판정을 여러 번 물어봐도 답이 같고 테스트가 쉽다.
 ///
 /// <para>
 /// 판정 결과가 <b>무엇으로 피했는지까지</b> 말해야 한다. 안 맞은 이유가 거리인지 높이인지를
 /// 여기서 버리면 관측을 짓는 쪽(<c>BossSwings.BuildEvent</c>)은 "그 순간 무슨 행동 중이었나" 로 추측할 수밖에 없고,
-/// 그 추측은 실제로 틀렸다 — 점프로 넘긴 지면쓸기가 같이 눌러둔 패리의 공으로 기록됐다.
+/// 그 추측은 실제로 틀렸다 — 점프로 넘긴 지면쓸기가 같이 눌러둔 패리(#168 에서 걷었다)의 공으로 기록됐다.
 /// 이유는 여기서 이미 계산돼 있으니 버리지 않고 실어 보낸다.
 /// </para>
 /// </summary>
@@ -121,9 +112,6 @@ public static class HitResolver
             case Defense.Invulnerable:
                 return HitVerdict.Dodged;
 
-            case Defense.Parrying:
-                return HitVerdict.Parried;
-
             case Defense.Guarding:
                 // 가드가 깨지는 길은 **스태미나 하나**다 (설계 §5.2) — 옛 guard_break 판정(빨간 마무리)은 걷었다(#72).
                 return fighter.Stamina < fighter.GuardStaminaCost(box.Damage)
@@ -142,7 +130,7 @@ public static class HitResolver
     /// <paramref name="tags"/> 가 null(대 본 판정이 없다)이면 파이터 쪽 상태 그대로다.
     ///
     /// <para>
-    /// <paramref name="box"/> 는 그 판정의 답이다 (#78 · 설계 §7.3) — 대시 · 가드 · 패리를 받나. 태그를 <b>좁히기만</b> 한다: 답이 거짓인
+    /// <paramref name="box"/> 는 그 판정의 답이다 (#78 · 설계 §7.3) — 대시 · 가드를 받나. 태그를 <b>좁히기만</b> 한다: 답이 거짓인
     /// 수단은 창 안이어도 없는 것과 같다. null 이면 답을 모르는 자리라 태그와 파이터의 창만 본다.
     /// </para>
     /// </summary>
@@ -150,36 +138,24 @@ public static class HitResolver
     {
         ArgumentNullException.ThrowIfNull(fighter);
         bool dashable = box?.Dashable ?? true;
-        bool parryable = box?.Parryable ?? true;
         bool guardable = box?.Guardable ?? true;
 
         // 유효 창은 **패턴과 캐릭터 중 좁은 쪽**이다.
         //
-        // 전에는 캐릭터 쪽만 봤다. 대공찌르기가 parry_window 0.10 을(그때 캐릭터의 0.12 보다 좁게)
+        // 전에는 캐릭터 쪽만 봤다. 패턴이 더 좁은 창(그때의 parry_window 0.10)을
         // 선언해도 아무 일도 안 일어났는데 — 그 숫자는 망의 입력이 된다. 거짓말하는 숫자는
-        // 없는 숫자보다 나쁘다. "빠른 공격은 패리하기 더 어렵다" 는 진짜 설계 레버라
-        // 태그를 지우는 대신 물게 했다.
+        // 없는 숫자보다 나쁘다. 그래서 태그를 지우는 대신 물게 했다.
         if (dashable && fighter.Action == FighterAction.Dash
             && Within(fighter.ActionElapsed, fighter.DashIFrames, tags?.DashWindow ?? double.PositiveInfinity))
         {
             return Defense.Invulnerable;
         }
 
-        // 패리가 가드보다 **먼저**다 — 둘은 다른 행동이라(설계 §5.3) 같은 틱에 둘 다 참일 수 없지만,
-        // 무적 → 패리 → 가드 순을 고정해 둔다: 나중에 겹치는 수단이 생겨도 판정이 안 흔들린다.
+        // 무적 다음이 가드다 — 둘은 다른 행동이라 같은 틱에 둘 다 참일 수 없지만 순을 고정해 둔다: 나중에 겹치는 수단이
+        // 생겨도 판정이 안 흔들린다.
         //
-        // 이슈 #47 은 반대 순서였다 — 그때는 가드가 패리 뒤에 섰다.
-        if (parryable && (tags?.Parryable ?? true)
-            && Within(fighter.SinceParryPress, fighter.PreciseParryWindow, tags?.ParryWindow ?? double.PositiveInfinity))
-        {
-            return Defense.Parrying;
-        }
-
-        // ↓ 를 누르고 있으면 막는다 (설계 §5.2). 창을 놓친 패리는 여기 안 온다 — 패리와 가드는 다른 행동이라
-        // 패리 커밋 중에는 가드가 아니고, 그 판정은 맨몸에 떨어진다(설계 §5.3).
-        //
-        // parryable 태그는 여기서 **안 본다.** 패리를 못 받는 판정도 가드로는 막는다(점프 공격의 착지 · 설계 §4.2). 가드를 안 받는
-        // 판정(잡기 · #78)은 가드 중이어도 맨몸이다 — 붕괴가 아니다(설계 §5.2).
+        // ↓ 를 누르고 있으면 막는다 (설계 §5.2). 가드를 안 받는 판정(잡기 · #78 · 점프 공격의 착지)은 가드 중이어도 맨몸이다 —
+        // 붕괴가 아니다(설계 §5.2).
         return guardable && fighter.Guarding ? Defense.Guarding : Defense.None;
     }
 

@@ -149,49 +149,6 @@ public class BossDataTests
     }
 
     [Fact]
-    public void 탈진_하나만으로_되받아치기_2연격이_들어간다()
-    {
-        // 받아치면 어느 타든 보스가 탈진한다 (#72 · 설계 §4.3). 그 상은 **2연격 한 번**이다 — 받아쳤다 → 제일 센 걸 꽂는다.
-        //
-        // ⚠ **패턴 간격을 더해서 재지 않는다** (이슈 #53). 간격은 탈진이 **풀린 뒤**의 시간이라 한 동작으로 안 이어지고,
-        // patterns.json 의 간격을 고치는 날 이 상이 말없이 사라진다. 탈진 하나만으로 들어가야 한다.
-        Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
-        fighters.ShouldNotBeEmpty("캐릭터가 하나도 없다 — 이 가드가 아무것도 안 본다");
-
-        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
-        {
-            foreach ((string who, FighterConfig c) in fighters)
-            {
-                // 칼이 닿기까지 = 한 틱 + 1타 전체 + 2타의 선딜 + 판정의 끝 (TestConfigs.CounterLead) — 2타가 창의 **끝 틱**에
-                // 닿는 가장 나쁜 경우다(설계 §4.3). J 는 패리 커밋이 끝나기를 안 기다린다(되받아치기 · 판정 13).
-                double lead = TestConfigs.CounterLead(c);
-                boss.ExhaustSeconds.ShouldBeGreaterThanOrEqualTo(lead,
-                    $"{id}: 탈진 {boss.ExhaustSeconds} 초에 {who} 의 되받아치기 2연격({lead:0.000}초)가 안 들어간다");
-            }
-        }
-    }
-
-    [Fact]
-    public void 탈진에_받아친_것을_알아차릴_여유가_남는다()
-    {
-        // 딱 맞으면 **사람이 못 쓴다.** 받아친 것을 보고 손을 공격 키로 옮기는 시간이 있어야
-        // "받아쳤다 → 제일 센 걸 꽂는다" 가 한 동작이 된다. 0.15초는 사람 반응의 아래쪽이다 —
-        // 이 여유가 0 이 되면 탈진 길이가 산수로만 맞고 손으로는 안 맞는다. 지금 값: 1.5 − 1.1001 = 0.3999.
-        Dictionary<string, FighterConfig> fighters = TestConfigs.Fighters();
-
-        foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
-        {
-            foreach ((string who, FighterConfig c) in fighters)
-            {
-                // 여유는 **받아친 다음 틱부터** 센다 — 커밋 안이어도 알아차린 순간 J 가 나간다(위 테스트의 주석).
-                double lead = TestConfigs.CounterLead(c);
-                (boss.ExhaustSeconds - lead).ShouldBeGreaterThanOrEqualTo(0.15,
-                    $"{id}: {who} 의 되받아치기 2연격({lead:0.000}초)가 탈진에 겨우 들어간다 — 반응할 틈이 없다");
-            }
-        }
-    }
-
-    [Fact]
     public void 연격_한_번으로는_안_무너지고_연달아_두_번이면_두_번째_2타에_무너진다()
     {
         // 설계 §4.5 — 게이지 100 · 1타 10 · 2타 45: 한 번은 55 라 안 무너지고, 연달아 두 번이면 10 → 55 → 65 → 110 에서 두 번째
@@ -232,9 +189,8 @@ public class BossDataTests
         // 1타가 창의 끝 틱에 닿기까지(선딜 + 판정) 0.1666 = 1.0166초 — 1.5 에 0.4834 가 남는다. 경직은 규칙처럼 틱으로 센다.
         //
         // **전에는 반격 2연격이 여유 없이 들어갔다**(1.4334초 — 0.0666 이 남았다). 2타 뒤 경직 0.5 가 들며 그 2연격(1.9334초)은 이제 안
-        // 들어간다 — 게이지 쪽 반격은 1타 하나다. 패리 쪽 반격(위 둘 — 되받아치기 2연격)은 그대로라, 받아친 쪽이 때려서 연 쪽보다 확실히
-        // 크다(설계 §11 「게이지가 패리 중심 고리를 약하게 할 수 있다」를 누그러뜨린다). 여유는 패리 쪽과 같은 0.15 다 — 이제 1타 하나라
-        // 보고 누를 틈이 있다.
+        // 들어간다 — 게이지 쪽 반격은 1타 하나다. 여유는 0.15 다 — 1타 하나라 보고 누를 틈이 있다. 탈진 길이(1.5초)를 지키던 것은 받아친 뒤의
+        // 되받아치기 2연격(1.1001초)이었다 — 패리를 걷으며(#168) 그 둘(탈진 하나만으로 · 알아차릴 여유)을 같이 걷었고 이 테스트가 남는다.
         foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
         {
             foreach ((string who, FighterConfig c) in TestConfigs.Fighters())

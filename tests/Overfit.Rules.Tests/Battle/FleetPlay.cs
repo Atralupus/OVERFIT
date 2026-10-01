@@ -20,11 +20,11 @@ internal static class FleetPlay
     private static readonly Lazy<BeatTable> _beats = new(() => new BeatTable(_patterns.Value, TestConfigs.Fleet().RhythmReferences));
 
     /// <summary>
-    /// 관문의 기준 성향 — 혼합형 · 수단 넷 고르게 · 반응 0.25 · 흔들림 0.05 · 편향 −0.02 · 리듬 없음 · 대시 방향 반반 · 붙어서 친다 ·
+    /// 관문의 기준 성향 — 혼합형 · 수단 셋 고르게 · 반응 0.25 · 흔들림 0.05 · 편향 −0.02 · 리듬 없음 · 대시 방향 반반 · 붙어서 친다 ·
     /// 욕심 조금 · 2연격 반반. 한 성향만 바꿔 짝지은 축이 움직이는지 본다.
     /// </summary>
     public static readonly BotTraits Mid = new(
-        BotHabit.Mixed, 0.25, 0.25, 0.25, 0.25, ReactionSeconds: 0.25, JitterSeconds: 0.05, BiasSeconds: -0.02, Rhythm: 0,
+        BotHabit.Mixed, 1.0 / 3, 1.0 / 3, 1.0 / 3, ReactionSeconds: 0.25, JitterSeconds: 0.05, BiasSeconds: -0.02, Rhythm: 0,
         DashInward: 0.5, RestGap: 0, Greed: 0.1, Chain: 0.5, JumpLead: 0.5);
 
     public static FighterConfig Fighter => _fighter.Value;

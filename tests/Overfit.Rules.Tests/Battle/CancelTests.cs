@@ -20,21 +20,21 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class CancelTests
 {
-    private static readonly InputFrame _dash = new(0, false, true, false, false);
-    private static readonly InputFrame _parry = new(0, false, false, true, false);
-    private static readonly InputFrame _right = new(1, false, false, false, false);
+    private static readonly InputFrame _dash = new(0, false, true, false);
+    private static readonly InputFrame _attack = new(0, false, false, Attack: true);
+    private static readonly InputFrame _right = new(1, false, false, false);
 
     private static FighterConfig Real() => TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter];
 
     /// <summary>명부 <paramref name="roster"/>(없으면 3연격 · 돌진) 위에 대본 <paramref name="script"/> 를 얹은 판.</summary>
-    private static BattleSim Sim(ScriptPlan[] script, string[]? roster = null)
+    private static BattleSim Sim(ScriptPlan[] script, string[]? roster = null, FighterConfig? fighter = null)
     {
         string[] ids = roster ?? ["3연격", "돌진"];
         Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
         return new BattleSim(new BattleSetup
         {
             Arena = TestConfigs.Arena(),
-            Fighter = Real(),
+            Fighter = fighter ?? Real(),
             HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(maxHealth: 999_999),
             PatternIds = ids,
@@ -76,6 +76,12 @@ public class CancelTests
     /// 창(51틱)보다 한참 앞에 선다.
     /// </summary>
     private static InputFrame WalkIn(int tick) => tick <= 86 ? _right : default;
+
+    /// <summary>
+    /// 칼이 닿는 자리(보스와 266 떨어진 1174)까지 걸어 들어가는 입력 — 판이 선 뒤 99틱 동안 오른쪽을 누른다(693px). 1타의 궤적(앞 230)이 보스
+    /// 몸(반폭 85)에 닿는다. 걸어 들어가는 동안 3연격(48틱에 선다)이 선다.
+    /// </summary>
+    private static InputFrame Closer(int tick) => tick <= 99 ? _right : default;
 
     [Theory]
     [InlineData(0, 78)]
@@ -160,16 +166,27 @@ public class CancelTests
     [Fact]
     public void 캔슬_전에_탈진하면_잇는_동작은_안_선다()
     {
-        // Review Focus 1 · 설계 §3.2 — 탈진하면 계획이 끝난다: 남은 캔슬 · 잇는 동작은 버린다. 1타 창(51틱)의 2틱 앞에 누른 K 가 받아쳐 보스가
-        // 탈진한다(90틱). 탈진에 드는 틱에 다음 계획을 고르고, 탈진이 풀린 뒤 그 쉬기(48틱)가 지나야 다음 첫 동작(3연격)이 선다 — 돌진은 한 번도
-        // 안 서고 캔슬도 없다. 탈진이 풀리는 틱(받아친 틱 + 90)이 쉬기의 첫 틱이라 받아친 틱에서 90 + 48 − 1 = 137틱 뒤다(옛 간격과 같은 셈).
-        BattleSim sim = Sim(_tripleToRush);
-        int begun = UntilBegins(sim, "3연격", WalkIn);
+        // Review Focus 1 · 설계 §3.2 — 탈진하면 계획이 끝난다: 남은 캔슬 · 잇는 동작은 버린다. 1타의 경직도를 게이지 끝까지 키운 캐릭터가
+        // 칼이 닿는 자리까지 걸어 들어가(판의 99틱 · 3연격의 51틱) 캔슬 지점(78틱) 앞인 55틱에 1타 한 번으로 보스를 무너뜨린다(90틱). 보스의
+        // 1타(51틱)는 맞는다 — 맞아도 칼질은 안 끊긴다. 전에는 1타 창 앞에 누른 K 가 받아쳐
+        // 무너뜨렸다 — 패리는 #168 에서 걷었다. 탈진에 드는 틱에 다음 계획을 고르고, 탈진이 풀린 뒤 그 쉬기(48틱)가 지나야 다음 첫 동작(3연격)이
+        // 선다 — 돌진은 한 번도 안 서고 캔슬도 없다. 탈진이 풀리는 틱(무너진 틱 + 90)이 쉬기의 첫 틱이라 무너진 틱에서 90 + 48 − 1 = 137틱 뒤다.
+        FighterConfig breaker = Real();
+        breaker.Combo[0] = TestConfigs.Step(breaker.Combo[0], poise: 1000);
+        BattleSim sim = Sim(_tripleToRush, fighter: breaker);
+        int begun = UntilBegins(sim, "3연격", Closer);
         using var log = new LogCapture();
-        UntilTick(sim, begun, 60, p => p == 49 ? _parry : WalkIn(begun + p));
-        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Parried, "1타를 못 받아쳤다 — 이 테스트가 탈진을 안 본다");
-        sim.Boss.Exhausted.ShouldBeTrue();
-        int exhausted = log.Lines.Count(l => l.StartsWith("[boss][D] exhaust cause=parry ", StringComparison.Ordinal));
+        int broke = 0;
+        for (int i = 0; i < 70 && broke == 0; i++)
+        {
+            int p = sim.Ticks + 1 - begun;
+            sim.Tick(p == 55 ? _attack : Closer(sim.Ticks + 1));
+            broke = sim.Boss.Exhausted ? sim.Ticks : 0;
+        }
+
+        broke.ShouldBeGreaterThan(0, "1타가 게이지를 못 채웠다 — 이 테스트가 탈진을 안 본다");
+        (broke - begun).ShouldBeLessThan(78, "캔슬 지점 뒤에 무너졌다 — 이 테스트가 캔슬 전의 탈진을 안 본다");
+        int exhausted = log.Lines.Count(l => l.StartsWith("[boss][D] exhaust cause=poise ", StringComparison.Ordinal));
         exhausted.ShouldBe(1);
 
         int next = UntilBegins(sim, "3연격");
@@ -178,7 +195,7 @@ public class CancelTests
         sim.Cancels.ShouldBeEmpty("탈진한 계획의 캔슬이 쓰였다");
         sim.Plans.Count.ShouldBe(2, "탈진에 드는 틱에 다음 계획을 안 골랐다");
         log.Lines.ShouldNotContain(l => l.StartsWith("[boss][D] cancel ", StringComparison.Ordinal));
-        (next - (begun + 51)).ShouldBe(90 + 48 - 1, "탈진(90틱)이 풀린 틱부터 다음 계획의 쉬기(48틱)를 세지 않았다");
+        (next - broke).ShouldBe(90 + 48 - 1, "탈진(90틱)이 풀린 틱부터 다음 계획의 쉬기(48틱)를 세지 않았다");
     }
 
     [Fact]

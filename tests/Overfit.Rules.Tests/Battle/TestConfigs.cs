@@ -16,7 +16,7 @@ namespace Overfit.Rules.Tests.Battle;
 /// <para>
 /// 파이터만 리터럴이다. 이것은 특정 캐릭터가 아니라 <b>기준값</b>이라, fighters.json 의 캐릭터를
 /// 그대로 쓰면 그 캐릭터의 밸런스를 고칠 때마다 무관한 테스트가 같이 빨개진다. 캐릭터가 하나가 된
-/// 뒤에도(이슈 #38) 마찬가지다 — 공격 타이밍 하나를 그림에 맞추려고 패리 틱 수를 세는 테스트가
+/// 뒤에도(이슈 #38) 마찬가지다 — 공격 타이밍 하나를 그림에 맞추려고 대시 틱 수를 세는 테스트가
 /// 같이 움직이면, 그 테스트들은 더 이상 자기가 말하는 것을 말하지 않는다.
 /// 보스·아레나·상한은 반대다 — 실제 전투가 쓰는 바로 그 값이어야 게임·데모·골든이 같은 판을 말한다.
 /// </para>
@@ -24,12 +24,11 @@ namespace Overfit.Rules.Tests.Battle;
 public static class TestConfigs
 {
     /// <summary>
-    /// 기준 파이터. 경직 넷(<paramref name="firstStiff"/> · <paramref name="secondStiff"/> · <paramref name="dashRecover"/> ·
-    /// <paramref name="parryStiff"/>)은 <b>경직의 길이를 규칙이 데이터에서 읽는지 보는 테스트</b>만 준다(#82 · FighterStiffTests) — 보스의
+    /// 기준 파이터. 경직 셋(<paramref name="firstStiff"/> · <paramref name="secondStiff"/> · <paramref name="dashRecover"/>)은 <b>경직의 길이를 규칙이 데이터에서 읽는지 보는 테스트</b>만 준다(#82 · FighterStiffTests) — 보스의
     /// <c>exhaustSeconds</c> 와 같은 자리다. 0 을 주면 경직이 없는 파이터다: 경직이 없던 때와 견줘 "정확히 그만큼 늦다" 를 재는 대조군이다.
     /// </summary>
     public static FighterConfig Fighter(
-        double? firstStiff = null, double? secondStiff = null, double? dashRecover = null, double? parryStiff = null)
+        double? firstStiff = null, double? secondStiff = null, double? dashRecover = null)
     {
         return new FighterConfig
         {
@@ -47,15 +46,6 @@ public static class TestConfigs
             // 실제와 달라도 "한 번만 친 사람이 선다 · 2연격 뒤가 가장 길다 · 대시 뒤는 살짝" 의 모양이 이 값에서 나온다. 0.10 · 0.40 · 0.50 은
             // 6 · 24 · 30틱으로 딱 떨어져 테스트가 세는 틱이 반올림에 안 걸린다.
             DashRecover = dashRecover ?? 0.10,
-            // 패리는 **실제 값 그대로**다 (설계 §5.3) — 가드 셋과 같이 캐릭터 성능이 아니라 조작의 정의다.
-            ParryPreciseWindow = 0.133,
-            ParryDuration = 0.3333,
-            // 패리 뒤 경직도 실제 값 그대로다 (#82) — 0.25 = 15틱으로 딱 떨어진다. 헛친 패리 한 번이 커밋 20틱 + 경직 15틱이다.
-            ParryStiff = parryStiff ?? 0.25,
-            ParryCost = 15,
-            ParryAnim = "attack2",
-            ParryAnimFps = 12,
-            ParryAnimFrames = 4,
             // 기준 파이터에는 그림이 없지만 칼질 한 칸의 관계는 진짜여야 한다 — 50fps · 14장이면 재생 0.28초로
             // 셋의 합과 같고, 0번에서 시작해 4번 장(0.08초)이 선딜의 끝이다. 거짓 값을 넣으면 이 픽스처가
             // "그림에서 거꾸로 정한다" 는 규칙의 반례가 된다.
@@ -80,16 +70,16 @@ public static class TestConfigs
                 },
             },
             AttackCost = 12,
-            // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 패리 창과 같은 자리라 캐릭터 성능이 아니라
+            // 가드 셋은 **실제 값 그대로**다 (이슈 #47). 캐릭터 성능이 아니라
             // **조작의 정의**이고, 여기서 다른 값을 쓰면 테스트가 말하는 "가드" 가 게임의 가드가 아니게 된다.
             GuardChipRatio = 0.25,
             GuardStaminaPerDamage = 1.8,
             ExhaustSeconds = 1.1,
-            // 가드의 그림은 규칙이 안 읽는다 — 패리의 그림 셋과 같이 실제 값을 둔다.
+            // 가드의 그림은 규칙이 안 읽는다 — 실제 값을 둔다.
             GuardAnim = "attack2",
             GuardFrame = 1,
             StaminaRegen = 40,
-            // 폭탄은 **실제 값 그대로**다 (설계 2026-09-30 조각2 §1.4) — 가드 · 패리와 같이 캐릭터 성능이 아니라 조작의 정의다. 보스가 끊어야 하는
+            // 폭탄은 **실제 값 그대로**다 (설계 2026-09-30 조각2 §1.4) — 가드와 같이 캐릭터 성능이 아니라 조작의 정의다. 보스가 끊어야 하는
             // 틱(누른 틱 + 88)이 선딜 90틱에서 나오므로, 여기서 다르면 테스트가 말하는 "끊긴다" 가 게임의 것이 아니게 된다. 90 · 15 · 30틱.
             Bomb = new BombDef
             {
@@ -163,37 +153,13 @@ public static class TestConfigs
         return shapes;
     }
 
-    /// <summary>
-    /// 2연격의 마지막 칼이 닿기까지(초) — 앞 칼질 전부 + 마지막 칼질의 선딜 + 판정. 2타는 1타가 끝나는 틱에
-    /// 이어진다(설계 §5.1). 받아친 뒤의 탈진이 이것을 담아야 "받아쳤다 → 2연격" 이 한 동작이 된다.
-    /// </summary>
-    public static double ComboLead(FighterConfig c)
-    {
-        double lead = 0;
-        for (int i = 0; i < c.Combo.Count - 1; i++)
-        {
-            lead += c.Combo[i].Windup + c.Combo[i].Active + c.Combo[i].Recover;
-        }
-
-        return lead + c.Combo[^1].Windup + c.Combo[^1].Active;
-    }
-
-    /// <summary>
-    /// 받아친 틱부터 되받아치기 2연격의 마지막 칼이 닿기까지(초). 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타다
-    /// (<c>Fighter.Begin</c> 의 되받아치기 · 판정 13) — 커밋이 끝나기를 안 기다린다. 가장 이른 J 는 받아친
-    /// <b>다음 틱</b>이라 <see cref="BattleSim.Dt"/> 하나를 더한다: <c>BattleSim</c> 은 판정(과 탈진)을 파이터의 틱
-    /// 뒤에 내므로 받아친 그 틱의 J 는 이미 지나갔다. <see cref="ComboLead"/> 만 쓰면 받아친 그 틱에 누른 J 를 세는
-    /// 셈이고, 그 J 는 규칙이 못 받는다. 사람의 반응은 여기 안 넣는다 — 그 여유는 BossDataTests 가 따로 잰다.
-    /// </summary>
-    public static double CounterLead(FighterConfig c) => BattleSim.Dt + ComboLead(c);
-
     /// <summary>시험 패턴 <see cref="Sweep"/> 의 id.</summary>
     public const string SweepId = "쓸기";
 
     /// <summary>
     /// 판정 하나짜리 시험 패턴 — 0.5초에 <paramref name="maxDistance"/> 까지 · 높이 0~5000 을 친다
     /// (이슈 #59 · 판정 창). 대시 창을 넓게(1초) 두는 것은 무적의 길이를 <b>파이터 쪽</b>(0.14초)이
-    /// 정하게 하기 위해서다. 패리는 안 된다 — 창을 재는 테스트가 패리 갈래로 새지 않게.
+    /// 정하게 하기 위해서다.
     /// </summary>
     public static PatternDef Sweep(double maxDistance, double activeSeconds, double endAt = 2.0) => new()
     {
@@ -203,8 +169,6 @@ public static class TestConfigs
             DashDirection = "either",
             Jumpable = false,
             AntiAir = false,
-            Parryable = false,
-            ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,

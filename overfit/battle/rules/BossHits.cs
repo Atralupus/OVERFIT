@@ -78,10 +78,10 @@ public static class BossHits
                 continue;
             }
 
-            // 대시 · 가드 · 패리의 답은 단계가 적는다 (#78 · 설계 §7.3) — 없으면 받는다(태그대로). 적으면 이 판정만 좁힌다. 붙드는 시간도
+            // 대시 · 가드의 답은 단계가 적는다 (#78 · 설계 §7.3) — 없으면 받는다(태그대로). 적으면 이 판정만 좁힌다. 붙드는 시간도
             // 판정의 것이다(설계 §4.7) — 잡힘을 가르는 것은 이 깃발이다.
             hits[i] = new HitBox(shape, step.Damage, step.ActiveSeconds,
-                Dashable: step.Dash ?? true, Guardable: step.Guard ?? true, Parryable: step.Parry ?? true,
+                Dashable: step.Dash ?? true, Guardable: step.Guard ?? true,
                 GrabHoldSeconds: step.GrabHoldSeconds);
         }
 

@@ -29,7 +29,6 @@ public partial class HitboxDebug : Node2D
     private static readonly Color _bossBody = new(0.4f, 0.55f, 1.0f, 0.2f);
     private static readonly Color _fighterBody = new(0.3f, 1.0f, 0.4f, 0.25f);
     private static readonly Color _invulnerable = new(0.7f, 0.7f, 0.7f, 0.25f);
-    private static readonly Color _parrying = new(1.0f, 0.95f, 0.2f, 0.35f);
     private static readonly Color _guarding = new(0.65f, 0.4f, 1.0f, 0.3f);
 
     private readonly List<CollisionShape2D> _pool = new();
@@ -52,9 +51,9 @@ public partial class HitboxDebug : Node2D
     }
 
     /// <summary>
-    /// 파이터 몸통의 색 — 규칙이 내놓은 <b>실효</b> 상태를 칠한다 (#72 · 설계 §6.1): 대시 무적(회색) · 패리 창(노랑) ·
-    /// 가드(보라), 셋 다 아니면 초록이다. 이 틱에 대 본 보스 판정이 있으면 그 판정의 태그와 견준 값이다
-    /// (<see cref="HitResolver.Effective"/>) — 패리를 못 받는 착지 띠 앞에서 누른 패리는 노랑이 아니라 초록이다.
+    /// 파이터 몸통의 색 — 규칙이 내놓은 <b>실효</b> 상태를 칠한다 (#72 · 설계 §6.1): 대시 무적(회색) ·
+    /// 가드(보라), 둘 다 아니면 초록이다. 이 틱에 대 본 보스 판정이 있으면 그 판정의 태그와 견준 값이다
+    /// (<see cref="HitResolver.Effective"/>) — 가드를 못 받는 착지 띠 앞에서 든 가드는 보라가 아니라 초록이다.
     ///
     /// <para>
     /// 전에는 파이터 쪽 상태만 칠해서 <c>dash_window</c> 가 0 인 판정 앞에서도 몸통이 회색인데 규칙은 맞음을 냈다 —
@@ -64,7 +63,6 @@ public partial class HitboxDebug : Node2D
     public static Color FighterColor(Defense defense) => defense switch
     {
         Defense.Invulnerable => _invulnerable,
-        Defense.Parrying => _parrying,
         Defense.Guarding => _guarding,
         _ => _fighterBody,
     };

@@ -21,12 +21,6 @@ public sealed class RewardDef
     /// 페이즈든 공격 자체는 전체 다 써야" — 엔트로피만으로는 sp-1 의 보스가 3연격 · 엇박 3연격을 버렸다(빠른 3연격에 밀린다).
     /// </summary>
     public double WVariety { get; init; }
-
-    /// <summary>
-    /// 받아친 몫 (이슈 #167) — 파이터가 보스의 판정을 받아친 틱이 든 결정에 더한다. 없으면 0(보스 · 옛 설정). 유저: "파이터가 근데 패리를 성공한적이 없네요" —
-    /// 받아치면 보스가 탈진하지만 보상은 그 뒤 칼이 닿아야 생겨, 0.133초 창을 맞춘 것이 배울 신호로 너무 멀었다.
-    /// </summary>
-    public double WParry { get; init; }
 }
 
 /// <summary>일꾼의 보스 조종기 (설계 2026-10-01 조각5 §3) — 망은 경험을 적고, 규칙 · 무작위는 비교의 대조군이라 판의 결과만 낸다.</summary>
@@ -128,9 +122,8 @@ public sealed record RolloutStep(
 /// <param name="BossLost">보스가 잃은 체력.</param>
 /// <param name="FighterLost">파이터가 잃은 체력.</param>
 /// <param name="Steps">적은 결정들.</param>
-/// <param name="Parries">파이터가 받아친 수.</param>
 public sealed record Episode(
-    int Index, string Habit, BattleOutcome Outcome, bool BossWon, int Ticks, int BossLost, int FighterLost, IReadOnlyList<RolloutStep> Steps, int Parries = 0);
+    int Index, string Habit, BattleOutcome Outcome, bool BossWon, int Ticks, int BossLost, int FighterLost, IReadOnlyList<RolloutStep> Steps);
 
 /// <summary>
 /// 학습의 일꾼이 판 하나를 돈다 (설계 2026-10-01 조각4 §5 · §6). 보스는 망 조종기(<see cref="NetController"/>), 상대는 봇 함대의 봇 하나 — 판 번호로 성향과
@@ -209,28 +202,19 @@ public static class RolloutRun
         var bossHp = new List<int> { sim.Boss.Health };
         var fighterHp = new List<int> { sim.Fighter.Health };
         BattleOutcome? outcome = null;
-        var parried = new List<int>();
         while (outcome is null)
         {
-            int seen = sim.Events.Count;
             outcome = sim.Tick(driver?.Next(sim) ?? bot!.Next(sim));
             bossHp.Add(sim.Boss.Health);
             fighterHp.Add(sim.Fighter.Health);
-            for (int i = seen; i < sim.Events.Count; i++)
-            {
-                if (sim.Events[i].Verdict == HitVerdict.Parried)
-                {
-                    parried.Add(sim.Ticks);
-                }
-            }
         }
 
         bool bossWon = BossWon(outcome.Value, sim.Fighter.Alive);
         RolloutStep[] steps = matchup.Learner == RolloutSide.Boss
             ? BossSteps(netController?.Steps ?? (controller as QTableController)?.Steps ?? Array.Empty<NetStep>(), tables, reward, bossHp, fighterHp, sim.Ticks, bossWon)
-            : FighterSteps(driver?.Steps ?? Array.Empty<NetStep>(), tables, fighterReward, bossHp, fighterHp, sim.Ticks, outcome == BattleOutcome.Win, parried);
+            : FighterSteps(driver?.Steps ?? Array.Empty<NetStep>(), tables, fighterReward, bossHp, fighterHp, sim.Ticks, outcome == BattleOutcome.Win);
         string habit = bot is null ? "net" : traits.Habit.ToString();
-        return new Episode(episode, habit, outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps, parried.Count);
+        return new Episode(episode, habit, outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps);
     }
 
     /// <summary>보스의 결정에 보상 — 결정은 판의 틱 안에서 묻고 칼 · 폭탄은 그 뒤에 닿으므로 결정의 틱에 닿은 피해는 그 결정의 것이다.</summary>
@@ -274,8 +258,7 @@ public static class RolloutRun
     /// 끝날 때까지다.
     /// </summary>
     private static RolloutStep[] FighterSteps(
-        IReadOnlyList<NetStep> raw, FactoryTables tables, RewardDef reward, List<int> bossHp, List<int> fighterHp, int ticks, bool fighterWon,
-        IReadOnlyList<int> parried)
+        IReadOnlyList<NetStep> raw, FactoryTables tables, RewardDef reward, List<int> bossHp, List<int> fighterHp, int ticks, bool fighterWon)
     {
         var steps = new RolloutStep[raw.Count];
         for (int i = 0; i < raw.Count; i++)
@@ -286,16 +269,6 @@ public static class RolloutRun
                 - (reward.WTaken * (fighterHp[from] - fighterHp[to]) / tables.Fighter.MaxHealth)
                 - (reward.WTime * (to - from) / 60.0);
             bool done = i == raw.Count - 1;
-
-            // 받아친 틱 p 는 판의 p 틱이 끝난 뒤의 기록이다 — 결정 i 의 몫 (from, to] 에 들면 그 결정의 것이다(첫 결정은 판의 처음부터).
-            foreach (int p in parried)
-            {
-                if ((p > from || i == 0) && (p <= to || done))
-                {
-                    r += reward.WParry;
-                }
-            }
-
             if (done)
             {
                 r += fighterWon ? reward.WWin : -reward.WWin;

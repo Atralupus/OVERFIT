@@ -9,10 +9,16 @@ namespace Overfit.Battle.Rules;
 /// (<see cref="Replay"/>)가 <see cref="Play"/> 로 틱마다 그대로 다시 넣는다.
 ///
 /// <para>
-/// <b>코드는 계약이다</b> — 이동 +1 을 <c>&lt;&lt; 5</c> · 점프 1 · 대시 2 · 패리 4 · 공격 8 · 가드 16 을 더한 0 ~ 95 에, 폭탄(설계 2026-09-30
+/// <b>코드는 계약이다</b> — 이동 +1 을 <c>&lt;&lt; 5</c> · 점프 1 · 대시 2 · (비운 4 — 아래) · 공격 8 · 가드 16 을 더한 0 ~ 95 에, 폭탄(설계 2026-09-30
 /// 조각2 §4)이면 96 을 더한 0 ~ 191. 디스크에 남는 형식이라 한 번 쓴 줄은 이 값으로 읽힌다: 비트 하나를 옮기면 옛 줄이 다른 판으로 되살아난다
 /// (<c>Det</c> 의 상수와 같은 대우). 입력 칸을 하나 더하면 지금 가짓수 위에 새 자리를 얹는다 — 있는 자리는 안 옮긴다. 폭탄이 그렇게 들어왔다:
 /// 조각 1 이 쓴 줄(0 ~ 95)은 폭탄을 안 누른 같은 입력으로 읽힌다.
+/// </para>
+///
+/// <para>
+/// <b>4 는 비어 있다</b> — 패리의 자리였고 패리를 걷으며(#168) 쓰지 않는다. 자리를 당기지 않는 것은 위의 계약 그대로다: 옛 줄의 다른
+/// 비트가 같은 뜻으로 읽혀야 한다. 옛 줄의 4 는 읽을 때 버린다 — 그 판은 패리가 있던 규칙의 판이라 어차피 같은 판으로 안 되살아나고,
+/// 데이터가 바뀐 판은 시도 기록이 따로 가린다(<c>data</c> 지문).
 /// </para>
 ///
 /// <para>
@@ -22,12 +28,11 @@ namespace Overfit.Battle.Rules;
 /// </summary>
 public sealed class InputTape
 {
-    /// <summary>코드의 가짓수 — 이동 셋 × 버튼 다섯의 켜고 끔 × 폭탄의 켜고 끔.</summary>
+    /// <summary>코드의 가짓수 — 이동 셋 × 버튼 다섯 자리(빈 4 를 포함)의 켜고 끔 × 폭탄의 켜고 끔.</summary>
     public const int Codes = 192;
 
     private const int _jump = 1;
     private const int _dash = 2;
-    private const int _parry = 4;
     private const int _attack = 8;
     private const int _guard = 16;
     private const int _moveShift = 5;
@@ -55,7 +60,6 @@ public sealed class InputTape
         int code = ((input.Move + 1) << _moveShift)
             | (input.Jump ? _jump : 0)
             | (input.Dash ? _dash : 0)
-            | (input.Parry ? _parry : 0)
             | (input.Attack ? _attack : 0)
             | (input.GuardHeld ? _guard : 0);
         return input.Bomb ? code + _bomb : code;
@@ -76,7 +80,6 @@ public sealed class InputTape
             (sbyte)((rest >> _moveShift) - 1),
             (rest & _jump) != 0,
             (rest & _dash) != 0,
-            (rest & _parry) != 0,
             (rest & _attack) != 0,
             (rest & _guard) != 0,
             bomb);

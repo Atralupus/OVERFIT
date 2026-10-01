@@ -38,7 +38,7 @@ public partial class GifRunner : Node
     private const int _battleStart = 1;
 
     /// <summary>엣지인 액션 (설계 §5.4 · <c>InputFrame</c>) — 한 틱 앞에 누른다(<see cref="Drive"/>). 나머지(이동 · 가드)는 레벨이다.</summary>
-    private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "parry", "attack", "bomb" };
+    private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "attack", "bomb" };
 
     /// <summary>망 보스 GIF 의 파이터 — 걸어 들어가 2연격을 세 번 친다(판의 시계).</summary>
     private static readonly GifInput[] _netInputs =
@@ -102,16 +102,15 @@ public partial class GifRunner : Node
             },
             From: 168, To: 318),
 
-        // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
-        // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
-        // 1타는 60틱이라 패리의 창(+6)을 지나 커밋(+18) 안에 떨어져 맨몸으로 맞는다. 헛친 한 번(커밋과 패리 뒤 경직 · 0.583초 · #82)이 84틱에 풀리면
-        // 맞은 틱(60)에서 3연격의 간격(42틱)을 재어 2틱 앞(100)에 또 누른다 — 늦은 2타(111)에 또 맞는다. 둘째 + 30 까지 잡는다.
+        // 박자로 누른다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
+        // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱)에 안쪽 대시를 누른다 — 3연격이면 무적(51 ~ 58틱)으로 흘릴 대시다.
+        // 엇박의 1타는 60틱이라 무적이 닫힌 뒤 대시 안에 떨어져 맨몸으로 맞는다. 전에는 박자로 누른 패리(K)가 창 밖 커밋 안에서 맞았다 — 패리는
+        // #168 에서 걷었다. MoveBattleTests.엇박_3연격은_3연격의_박자에_누른_대시를_무적이_닫힌_뒤에_맞힌다.
         new("offbeat", Plans: SceneDriver.Moves("엇박 3연격"), Target: "엇박 3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 86, "move_right", OnBattleClock: true),
-                new GifInput(49, 49, "parry"),
-                new GifInput(100, 100, "parry"),
+                new GifInput(51, 51, "dash"),
             },
             From: 1, To: 141),
 
@@ -260,10 +259,10 @@ public partial class GifRunner : Node
     /// 입력은 <paramref name="battleTick"/>, 패턴의 틱으로 적은 입력은 <paramref name="patternTick"/>(패턴 앞이면 <c>int.MinValue</c>)로 잰다.
     ///
     /// <para>
-    /// <b>엣지(대시 · 패리 · 공격 · 점프)는 한 틱 앞의 신호 자리에서 누르고 다음 신호 자리에서 뗀다.</b> 엔진은 누름을 그다음 물리 프레임의
+    /// <b>엣지(대시 · 공격 · 점프 · 폭탄)는 한 틱 앞의 신호 자리에서 누르고 다음 신호 자리에서 뗀다.</b> 엔진은 누름을 그다음 물리 프레임의
     /// "막 눌렀다"(<c>IsActionJustPressed</c>)로 센다 — 재 보니 99틱의 신호 자리에서 누른 대시가 100틱에 섰고, 1타 창이 열리는 틱(99)에 서야 할
     /// 대시가 1타에 맞았다. 레벨(이동 · 가드 — <c>IsActionPressed</c>)은 누른 그 틱에 읽힌다. 스크린샷 대본은 몇 프레임 뒤를 찍어 이 한 틱이
-    /// 안 보이지만 이 대본은 틱을 박자로 쓴다. 한 판의 입력 규약(엣지 넷 · 레벨 둘)은 설계 §5.4 다.
+    /// 안 보이지만 이 대본은 틱을 박자로 쓴다. 한 판의 입력 규약(엣지 넷 · 레벨 둘 — 패리 엣지는 #168 에서 걷었고 폭탄이 넷째다)은 설계 §5.4 다.
     /// </para>
     /// </summary>
     private static void Drive(GifScript script, int battleTick, int patternTick, Dictionary<string, bool> held)
@@ -294,7 +293,7 @@ public partial class GifRunner : Node
 
     /// <summary>입력 하나 — [<paramref name="From"/>, <paramref name="To"/>] 틱(끝 포함) 동안 <paramref name="Action"/> 을 누르고 있는다.</summary>
     /// <param name="From">첫 틱.</param>
-    /// <param name="To">끝 틱(포함). 엣지(대시 · 패리)는 From 과 같게 적는다 — 한 틱 누른다.</param>
+    /// <param name="To">끝 틱(포함). 엣지(대시 · 점프)는 From 과 같게 적는다 — 한 틱 누른다.</param>
     /// <param name="Action">InputMap 의 액션 — 사람이 누르는 것과 같은 길이다.</param>
     /// <param name="OnBattleClock">판의 틱으로 적었나 — 패턴 앞의 입력("판이 설 때부터")이다. 거짓이면 겨냥한 패턴의 틱이다.</param>
     private readonly record struct GifInput(int From, int To, string Action, bool OnBattleClock = false);

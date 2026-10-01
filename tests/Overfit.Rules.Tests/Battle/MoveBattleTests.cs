@@ -21,18 +21,17 @@ namespace Overfit.Rules.Tests.Battle;
 /// </para>
 ///
 /// <para>
-/// 옛 1타 돌진 · 1타 잡기 · 점프 3연속에만 있던 테스트(1타 뒤 경직에 3타 · 1타를 받아치면 돌진도 잡기도 없다 · 점프 ×3 에 가드 붕괴 등)는
+/// 옛 1타 돌진 · 1타 잡기 · 점프 3연속에만 있던 테스트(1타 뒤 경직에 3타 · 1타를 받아치면(패리 · #168 에서 걷었다) 돌진도 잡기도 없다 · 점프 ×3 에 가드 붕괴 등)는
 /// 동작과 같이 걷었다 — 그 조합(3연격 1타 뒤에 무엇이 오나)은 캔슬이 받는다(조각1 §3).
 /// </para>
 /// </summary>
 public class MoveBattleTests
 {
-    private static readonly InputFrame _right = new(1, false, false, false, false);
-    private static readonly InputFrame _dash = new(0, false, true, false, false);
-    private static readonly InputFrame _parry = new(0, false, false, true, false);
-    private static readonly InputFrame _jump = new(0, true, false, false, false);
-    private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
-    private static readonly InputFrame _guard = new(0, false, false, false, false, GuardHeld: true);
+    private static readonly InputFrame _right = new(1, false, false, false);
+    private static readonly InputFrame _dash = new(0, false, true, false);
+    private static readonly InputFrame _jump = new(0, true, false, false);
+    private static readonly InputFrame _attack = new(0, false, false, Attack: true);
+    private static readonly InputFrame _guard = new(0, false, false, false, GuardHeld: true);
 
     /// <summary>파이터의 한 틱 걸음(px) — 실제 캐릭터와 기준 파이터가 같다(move_speed 420 · 틱당 7).</summary>
     private static readonly double _stride = Real().MoveSpeed * BattleSim.Dt;
@@ -109,7 +108,7 @@ public class MoveBattleTests
     private static InputFrame Toward(BattleSim sim, double gap)
     {
         double off = sim.Boss.X + (sim.Boss.Facing * gap) - sim.Fighter.X;
-        return Math.Abs(off) < _stride ? default : new InputFrame((sbyte)Math.Sign(off), false, false, false, false);
+        return Math.Abs(off) < _stride ? default : new InputFrame((sbyte)Math.Sign(off), false, false, false);
     }
 
     /// <summary>
@@ -181,11 +180,10 @@ public class MoveBattleTests
     [InlineData("none", DodgeVerb.None, HitVerdict.Hit)]
     [InlineData("dash", DodgeVerb.Dash, HitVerdict.Dodged)]
     [InlineData("guard", DodgeVerb.Guard, HitVerdict.Guarded)]
-    [InlineData("parry", DodgeVerb.Parry, HitVerdict.Parried)]
-    public void 올려베기는_선_사람을_치고_대시_가드_패리로는_받는다(string answer, DodgeVerb verb, HitVerdict verdict)
+    public void 올려베기는_선_사람을_치고_대시_가드로는_받는다(string answer, DodgeVerb verb, HitVerdict verdict)
     {
-        // 설계 2026-09-29 조각1 §2.1 — 점프만 잡는 칼이 아니다: 서 있으면 맞고, 선 사람의 답(대시 무적 · 가드 · 패리)은 다 받는다. 대시는 창의 첫 틱에,
-        // 패리는 창 2틱 앞에 누르고 가드는 창 앞부터 붙든다. 보스 앞 250 에 선다.
+        // 설계 2026-09-29 조각1 §2.1 — 점프만 잡는 칼이 아니다: 서 있으면 맞고, 선 사람의 답(대시 무적 · 가드)은 다 받는다. 대시는 창의 첫 틱에
+        // 누르고 가드는 창 앞부터 붙든다. 보스 앞 250 에 선다.
         BattleSim sim = Sim(null, "올려베기");
         int first = UntilBegins(sim, "올려베기", _ => Toward(sim, _outOfReach));
         UntilTick(sim, first, 58, _ => Toward(sim, _outOfReach));
@@ -195,7 +193,6 @@ public class MoveBattleTests
         {
             "dash" when p == 51 => _dash,
             "guard" => _guard,
-            "parry" when p == 49 => _parry,
             _ => default,
         });
 
@@ -207,12 +204,11 @@ public class MoveBattleTests
     [InlineData("none", DodgeVerb.None, HitVerdict.Hit)]
     [InlineData("dash", DodgeVerb.Dash, HitVerdict.Hit)]
     [InlineData("guard", DodgeVerb.Guard, HitVerdict.Hit)]
-    [InlineData("parry", DodgeVerb.Parry, HitVerdict.Hit)]
     [InlineData("jump", DodgeVerb.Jump, HitVerdict.MissedByHeight)]
-    public void 점프_공격의_착지는_대시_무적도_가드도_패리도_맨몸이고_뛴_사람만_넘는다(string answer, DodgeVerb verb, HitVerdict verdict)
+    public void 점프_공격의_착지는_대시_무적도_가드도_맨몸이고_뛴_사람만_넘는다(string answer, DodgeVerb verb, HitVerdict verdict)
     {
-        // 설계 2026-09-29 조각1 §2.3 — 유저: "점프공격은 대시로도 안피해지고 점프로만 회피 가능해야합니다." 착지(60틱)의 답 셋이 거짓이라 창의 첫 틱에
-        // 누른 대시의 무적도 · 창 앞부터 붙든 가드도 · 창 2틱 앞에 누른 패리도 맨몸에 24 를 맞는다. 띠가 아레나 전체라 거리로도 못 피한다. 30틱에 뛴
+        // 설계 2026-09-29 조각1 §2.3 — 유저: "점프공격은 대시로도 안피해지고 점프로만 회피 가능해야합니다." 착지(60틱)의 답 둘이 거짓이라 창의 첫 틱에
+        // 누른 대시의 무적도 · 창 앞부터 붙든 가드도 맨몸에 24 를 맞는다. 띠가 아레나 전체라 거리로도 못 피한다. 30틱에 뛴
         // 사람만 넘는다(발이 누른 틱 + 3 ~ + 55 동안 60 위 — 창 60 ~ 67 을 덮는다). 파이터는 480 에 서 있고 보스는 그 앞 115(595)에 내린다.
         BattleSim sim = Sim(null, "점프 공격");
         int begun = UntilBegins(sim, "점프 공격");
@@ -220,14 +216,13 @@ public class MoveBattleTests
         {
             "dash" when p == 60 => _dash,
             "guard" => _guard,
-            "parry" when p == 58 => _parry,
             "jump" when p == 30 => _jump,
             _ => default,
         });
 
         DodgeEvent landing = sim.Events.ShouldHaveSingleItem("착지의 관측이 하나가 아니다");
         (landing.Verb, landing.Verdict).ShouldBe((verb, verdict));
-        (landing.DashAvailable, landing.GuardAvailable, landing.ParryAvailable, landing.JumpAvailable).ShouldBe((false, false, false, true),
+        (landing.DashAvailable, landing.GuardAvailable, landing.JumpAvailable).ShouldBe((false, false, true),
             "관측이 착지의 답과 다른 말을 한다");
         sim.Fighter.Health.ShouldBe(Real().MaxHealth - (verdict == HitVerdict.Hit ? 24 : 0));
     }
@@ -483,50 +478,22 @@ public class MoveBattleTests
     }
 
     [Fact]
-    public void 엇박_3연격은_3연격의_박자에_누른_패리를_창_밖_커밋_안에서_맞힌다()
+    public void 엇박_3연격은_3연격의_박자에_누른_대시를_무적이_닫힌_뒤에_맞힌다()
     {
-        // 설계 §4.9 · §6.2 — 패리를 많이 하는 사람. 3연격의 1타(51틱)에 맞춰 2틱 앞(49틱)에 누른 K 는 3연격이면 받아친다. 엇박의 1타는 60틱
-        // (누름 + 11)이라 창(+ 6)을 지나 커밋(+ 18) 안에 떨어진다 — 맨몸이다. 관측의 수단은 패리 · 결과는 맞음이다.
-        foreach ((string pattern, HitVerdict expected) in new[] { ("3연격", HitVerdict.Parried), ("엇박 3연격", HitVerdict.Hit) })
+        // 설계 §4.9 · §6.2 — 박자로 누르는 사람. 3연격의 1타(51틱)에 맞춰 그 틱에 누른 안쪽 대시는 3연격이면 무적(0.14초 · 51 ~ 58틱)으로
+        // 흘린다. 엇박의 1타는 60틱(누름 + 9)이라 무적이 닫힌 뒤 대시(11틱) 안에 떨어진다 — 맨몸이다. 관측의 수단은 대시 · 결과는 맞음이다.
+        // GIF offbeat 의 사람이다(GifRunner). 전에는 박자로 누른 패리가 창 밖 커밋 안에서 맞았다 — 패리는 #168 에서 걷었다.
+        foreach ((string pattern, HitVerdict expected) in new[] { ("3연격", HitVerdict.Dodged), ("엇박 3연격", HitVerdict.Hit) })
         {
             BattleSim sim = Sim(null, pattern);
             int begun = UntilBegins(sim, pattern, WalkIn);
-            UntilTick(sim, begun, 60, p => p == 49 ? _parry : WalkIn(begun + p));
+            UntilTick(sim, begun, 60, p => p == 51 ? _dash : WalkIn(begun + p));
 
             sim.Events.Count.ShouldBe(1, $"{pattern}: 1타의 관측이 안 섰다");
-            (sim.Events[0].Verb, sim.Events[0].Verdict).ShouldBe((DodgeVerb.Parry, expected), $"{pattern}: 박자로 누른 패리");
+            (sim.Events[0].Verb, sim.Events[0].Verdict).ShouldBe((DodgeVerb.Dash, expected), $"{pattern}: 박자로 누른 대시");
         }
     }
 
-    [Fact]
-    public void 엇박_3연격에_박자로_누른_사람은_맞은_뒤_3연격의_간격으로_잰_2타에서도_또_맞는다()
-    {
-        // 설계 §4.9 · §5.3 · #82 — 셋 다 늦추므로 맞은 뒤 다음 타를 3연격의 간격(1 → 2타 42틱)으로 재어도 또 늦다. 49틱의 K 는 커밋(20틱)과 패리 뒤
-        // 경직(15틱)에 묶여 83틱까지 선다 — 헛친 한 번이 0.583초다. 풀린 뒤 1타에 맞은 틱(60)에서 42틱 뒤의 2타를 겨냥해 2틱 앞(100틱)에 누른 K 는
-        // 엇박의 2타(111틱 · 누름 + 11)를 창(+ 6) 밖 커밋 안에서 맞는다. 두 관측 모두 수단 패리 · 결과 맞음이다. GIF offbeat 의 사람이다(GifRunner).
-        BattleSim sim = Sim(null, "엇박 3연격");
-        int begun = UntilBegins(sim, "엇박 3연격", WalkIn);
-        UntilTick(sim, begun, 111, p => p is 49 or 100 ? _parry : WalkIn(begun + p));
-
-        sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
-        {
-            (DodgeVerb.Parry, HitVerdict.Hit),
-            (DodgeVerb.Parry, HitVerdict.Hit),
-        }, "박자로 누른 사람이 1타 · 2타 중 하나를 받아쳤다");
-    }
-
-    [Fact]
-    public void 엇박_3연격도_칼이_안_오르는_것을_보고_누르면_받아친다()
-    {
-        // 설계 §4.9 — 3연격이면 칼이 오르는 44틱에 엇박은 f0 에 그대로 서 있다. 판정(60틱) 16틱 앞에 보이는 다름이라 반응 0.2초(12틱) 뒤
-        // 56틱에 누르면 창(54 ~ 60)에 든다. 받아치면 어느 타든 연격이 끊기고 보스가 탈진한다(설계 §4.3).
-        BattleSim sim = Sim(null, "엇박 3연격");
-        int begun = UntilBegins(sim, "엇박 3연격", WalkIn);
-        UntilTick(sim, begun, 60, p => p == 56 ? _parry : WalkIn(begun + p));
-
-        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
-        sim.Boss.Exhausted.ShouldBeTrue("받아쳤는데 보스가 안 무너졌다");
-    }
     // ── GIF 대본의 사람 (#147) ── GifRunner 의 대본과 같은 입력을 규칙 위에서 틱까지 못박는다. 대본의 숫자를 바꾸면 여기서 먼저 잰다.
 
     [Fact]

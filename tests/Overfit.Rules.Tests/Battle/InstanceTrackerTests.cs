@@ -12,7 +12,7 @@ namespace Overfit.Rules.Tests.Battle;
 public class InstanceTrackerTests
 {
     private static DodgeEvent Event(string pattern, HitVerdict verdict) =>
-        new(pattern, DodgeVerb.None, verdict, 0, 0, false, 100, false, true, true, true, true);
+        new(pattern, DodgeVerb.None, verdict, 0, 0, false, 100, false, true, true, true);
 
     /// <summary>틱마다의 관측을 흉내 낸다 — 관측이 나면 목록에 붙이고, 틱이 끝난 자리의 (패턴, 관측 수)를 넘긴다.</summary>
     private sealed class Script
@@ -67,12 +67,11 @@ public class InstanceTrackerTests
 
     [Theory]
     [InlineData(HitVerdict.Dodged)]
-    [InlineData(HitVerdict.Parried)]
     [InlineData(HitVerdict.Guarded)]
     [InlineData(HitVerdict.MissedTooFar)]
     [InlineData(HitVerdict.MissedByGap)]
     [InlineData(HitVerdict.MissedByHeight)]
-    public void 피함_받아침_막음_빗나감은_안_맞았다(HitVerdict verdict)
+    public void 피함_막음_빗나감은_안_맞았다(HitVerdict verdict)
     {
         // 막아 낸 가드(칩 피해)는 막은 것이다 — 가드로 버티던 사람이 무너진 것(GuardBroken)만 맞은 것이다.
         List<PatternInstance> instances = new Script()
@@ -110,9 +109,9 @@ public class InstanceTrackerTests
     [Fact]
     public void 보스가_탈진해_끊긴_사례는_끝난_것이다()
     {
-        // 받아쳐 무너뜨리면 패턴이 그 자리에서 끊기고 null 로 돌아간다 — 파이터가 이긴 교환이라 0 으로 남는다(판이 끝나 모르는 것과 다르다).
+        // 게이지로 무너뜨리면 패턴이 그 자리에서 끊기고 null 로 돌아간다 — 파이터가 이긴 교환이라 0 으로 남는다(판이 끝나 모르는 것과 다르다).
         List<PatternInstance> instances = new Script()
-            .Tick("엇박 3연격", Event("엇박 3연격", HitVerdict.Parried))
+            .Tick("엇박 3연격", Event("엇박 3연격", HitVerdict.Dodged))
             .Tick(null)
             .Tick(null)
             .Finish();

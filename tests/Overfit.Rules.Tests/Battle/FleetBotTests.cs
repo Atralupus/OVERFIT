@@ -12,13 +12,16 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class FleetBotTests
 {
-    /// <summary>패리만 하고 흔들림 · 편향이 없는 봇 — 누르는 틱을 틱까지 잰다.</summary>
-    private static BotTraits Parrier(double reaction, double rhythm = 0) => FleetPlay.Mid with
+    /// <summary>
+    /// 안쪽 대시만 하고 흔들림 · 편향이 없는 봇 — 누르는 틱을 틱까지 잰다. 대시는 한 틱 누름이 곧 행동이고 안쪽이면 돌아서는 틱도 없다(판은 파이터가
+    /// 보스를 본 채 선다). 전에는 패리만 하는 봇이었다 — 패리는 #168 에서 걷었다.
+    /// </summary>
+    private static BotTraits Prober(double reaction, double rhythm = 0) => FleetPlay.Mid with
     {
-        Dash = 0,
+        Dash = 1,
         Jump = 0,
-        Parry = 1,
         Guard = 0,
+        DashInward = 1,
         ReactionSeconds = reaction,
         JitterSeconds = 0,
         BiasSeconds = 0,
@@ -27,13 +30,13 @@ public class FleetBotTests
     };
 
     /// <summary>
-    /// 판에 첫 패턴이 선 틱(봇이 그것을 처음 보는 <c>Next</c> 의 <c>Ticks</c>)과 첫 패리 누름의 틱. <paramref name="lockAt"/> 이 있으면 패턴이 선 뒤
-    /// 그만큼 지난 틱에 파이터를 <paramref name="lockTicks"/> 동안 붙든다. 누름은 <b>파이터가 실제로 패리에 든 틱</b>으로 센다.
+    /// 판에 첫 패턴이 선 틱(봇이 그것을 처음 보는 <c>Next</c> 의 <c>Ticks</c>)과 첫 대시 누름의 틱. <paramref name="lockAt"/> 이 있으면 패턴이 선 뒤
+    /// 그만큼 지난 틱에 파이터를 <paramref name="lockTicks"/> 동안 붙든다. 누름은 <b>파이터가 실제로 대시에 든 틱</b>으로 센다.
     /// </summary>
-    private static (int PatternStart, int? FirstParry, int WindowIn) Watch(
+    private static (int PatternStart, int? FirstDash, int WindowIn) Watch(
         BattleSim sim, FleetBot bot, int ticks, int? lockAt = null, int lockTicks = 0)
     {
-        int? start = null, firstParry = null;
+        int? start = null, firstDash = null;
         int windowIn = -1;
         for (int i = 0; i < ticks; i++)
         {
@@ -50,13 +53,13 @@ public class FleetBotTests
 
             int now = sim.Ticks;
             sim.Tick(bot.Next(sim));
-            if (firstParry is null && start is not null && sim.Fighter.Action == FighterAction.Parry)
+            if (firstDash is null && start is not null && sim.Fighter.Action == FighterAction.Dash)
             {
-                firstParry = now;
+                firstDash = now;
             }
         }
 
-        return (start ?? -1, firstParry, windowIn);
+        return (start ?? -1, firstDash, windowIn);
     }
 
     [Fact]
@@ -64,11 +67,11 @@ public class FleetBotTests
     {
         // 판정이 30틱 뒤인데 반응이 0.6초(36틱)면 판정이 선 뒤에야 누른다 — 빠른 공격에 늦는 사람. 휘두름이 몸에 안 닿게(사거리 1) 둬서 창이
         // 끝까지 산다 — 닿으면 그 틱에 판정이 끝나 누를 판정이 없어진다.
-        (int start, int? late, _) = Watch(TestConfigs.SweepSim(1, 0.5), new FleetBot(Parrier(0.6), 1, FleetPlay.Beats, TestConfigs.Fighter()), 90);
+        (int start, int? late, _) = Watch(TestConfigs.SweepSim(1, 0.5), new FleetBot(Prober(0.6), 1, FleetPlay.Beats, TestConfigs.Fighter()), 90);
         (late - start).ShouldBe(36, "반응 지연 전에 눌렀거나 늦게 눌렀다");
 
         // 반응이 넉넉하면 판정이 서는 틱에 누름이 먹게 그 앞 틱에 누른다 — Next 가 낸 입력은 다음 Tick 에 먹는다(아래 테스트).
-        (int start2, int? onTime, int window) = Watch(TestConfigs.SweepSim(1, 0.5), new FleetBot(Parrier(0.2), 1, FleetPlay.Beats, TestConfigs.Fighter()), 90);
+        (int start2, int? onTime, int window) = Watch(TestConfigs.SweepSim(1, 0.5), new FleetBot(Prober(0.2), 1, FleetPlay.Beats, TestConfigs.Fighter()), 90);
         (onTime - start2).ShouldBe(window - 1, "반응이 넉넉한데 판정이 서는 틱에 누름이 안 먹었다");
     }
 
@@ -77,12 +80,11 @@ public class FleetBotTests
     {
         // 누르는 시각 = 판정 시각 + 편향 + 잡음(설계 §3.1) — 편향 0 · 잡음 0 이면 판정이 서는 틱에 행동이 서 있어야 한다. Next(N) 의 입력은 Tick 이
         // N + 1 로 올리며 먹으므로, 판정이 서는 틱에 누르면 한 틱 늦다: 바닥 전체를 치는 휘두름은 서는 틱에 닿아 대시가 무적을 못 댄다. 그 한 틱이
-        // 모든 봇을 늦은 쪽으로 밀었고 엇박(1타가 3연격보다 9틱 늦다 · 패리 창 8틱)의 경계에 걸려 리듬형의 절반이 안 속았다(재 봄 · #108).
+        // 모든 봇을 늦은 쪽으로 밀었고 엇박(1타가 3연격보다 9틱 늦다 · 그때의 패리 창 8틱)의 경계에 걸려 리듬형의 절반이 안 속았다(재 봄 · #108).
         BotTraits dasher = FleetPlay.Mid with
         {
             Dash = 1,
             Jump = 0,
-            Parry = 0,
             Guard = 0,
             ReactionSeconds = 0.1,
             JitterSeconds = 0,
@@ -104,35 +106,35 @@ public class FleetBotTests
     [Fact]
     public void 리듬형은_기준의_박자에_누른다()
     {
-        // 엇박 3연격의 첫 판정은 1.00초(60틱)이고 3연격의 박자는 0.85초(51틱)다. 리듬형은 51틱에 누르고 — 패리 창 0.133초 밖이라 커밋 안에서
-        // 맞는다 — 눈으로 누르는 봇은 60틱에 누른다.
+        // 엇박 3연격의 첫 판정은 1.00초(60틱)이고 3연격의 박자는 0.85초(51틱)다. 리듬형은 51틱에 누르고 — 무적 0.14초가 판정 앞에서
+        // 닫힌다 — 눈으로 누르는 봇은 60틱에 누른다.
         ScriptPlan[] script = [new(0.8, "엇박 3연격")];
-        (int start, int? rhythm, _) = Watch(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.15, rhythm: 1), 3), 400);
+        (int start, int? rhythm, _) = Watch(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Prober(0.15, rhythm: 1), 3), 400);
         (rhythm - start).ShouldNotBeNull().ShouldBe(50, "3연격의 1타(51틱)에 먹게 그 앞 틱에 누른다");
 
-        (int start2, int? sight, int window) = Watch(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.15), 3), 400);
+        (int start2, int? sight, int window) = Watch(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Prober(0.15), 3), 400);
         (sight - start2).ShouldNotBeNull().ShouldBe(window - 1);
         window.ShouldBeInRange(59, 61, "엇박의 첫 판정이 1.00초가 아니다 — 시험이 가정한 타임라인이 바뀌었다");
     }
 
-    /// <summary>패턴이 선 틱부터 센, 파이터가 패리에 든 틱들 — 누름마다 한 번.</summary>
-    private static List<int> ParryStarts(BattleSim sim, FleetBot bot, int ticks)
+    /// <summary>패턴이 선 틱부터 센, 파이터가 대시에 든 틱들 — 누름마다 한 번.</summary>
+    private static List<int> DashStarts(BattleSim sim, FleetBot bot, int ticks)
     {
         var starts = new List<int>();
         int? start = null;
-        bool parrying = false;
+        bool dashing = false;
         for (int i = 0; i < ticks; i++)
         {
             start ??= sim.Boss.CurrentPattern is not null ? sim.Ticks : null;
             int now = sim.Ticks;
             sim.Tick(bot.Next(sim));
-            bool nowParrying = sim.Fighter.Action == FighterAction.Parry;
-            if (start is { } s && nowParrying && !parrying)
+            bool nowDashing = sim.Fighter.Action == FighterAction.Dash;
+            if (start is { } s && nowDashing && !dashing)
             {
                 starts.Add(now - s);
             }
 
-            parrying = nowParrying;
+            dashing = nowDashing;
         }
 
         return starts;
@@ -142,18 +144,22 @@ public class FleetBotTests
     public void 리듬형은_다음_타의_선딜을_기다리지_않는다()
     {
         // 3연격의 2타는 1.55초(93틱)에 서고 그 선딜은 1.30초(78틱)에 보인다. 반응이 0.35초(21틱)인 사람이 눈으로 누르면 99틱 — 늦는다. 박자로
-        // 누르는 사람은 패턴을 알아챈 뒤로는 선딜을 안 기다린다: 93틱이다. 리듬이 "판정을 눈으로 안 보고 박자로 누르는 몫" 인 이상(설계 §3.3) 박자의
-        // 누름을 타마다의 반응에 묶으면 느린 리듬형은 엇박의 늦은 타를 우연히 받아친다 — 엇박이 노리는 사람이 원본에 안 선다(재 봄 · #108).
-        // 사람이 멀리 있어 칼이 안 닿는 판이라 1타의 패리가 헛쳐 패턴이 끊기지 않는다.
+        // 누르는 사람은 패턴을 알아챈 뒤로는 선딜을 안 기다린다: 93틱이다. 둘 다 1타의 안쪽 대시로 2타의 사거리 안에 들어서므로, 늦은 쪽은 2타가
+        // 서는 틱에 맞아 창이 닫히고 누를 판정이 없어진다 — 그래서 늦은 쪽은 누름이 아니라 그 2타의 관측(안 피함 · 맞음)으로 본다. 리듬이 "판정을 눈으로 안 보고 박자로 누르는 몫" 인 이상(설계 §3.3) 박자의
+        // 누름을 타마다의 반응에 묶으면 느린 리듬형은 엇박의 늦은 타를 우연히 받아친다(그때는 패리 — #168 에서 걷었다) — 엇박이 노리는 사람이
+        // 원본에 안 선다(재 봄 · #108).
         ScriptPlan[] script = [new(0.8, "3연격")];
-        List<int> rhythm = ParryStarts(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.35, rhythm: 1), 3), 200);
-        List<int> sight = ParryStarts(FleetPlay.Sim(2, 3, script), FleetPlay.Bot(Parrier(0.35), 3), 200);
+        BattleSim rhythmSim = FleetPlay.Sim(2, 3, script);
+        List<int> rhythm = DashStarts(rhythmSim, FleetPlay.Bot(Prober(0.35, rhythm: 1), 3), 200);
+        BattleSim sightSim = FleetPlay.Sim(2, 3, script);
+        List<int> sight = DashStarts(sightSim, FleetPlay.Bot(Prober(0.35), 3), 200);
 
         rhythm.Count.ShouldBeGreaterThanOrEqualTo(2, "리듬형이 두 타를 다 안 눌렀다");
         rhythm[0].ShouldBe(50);
         rhythm[1].ShouldBe(92, "리듬형의 2타가 박자(93틱에 먹게 92틱)가 아니다");
-        sight.Count.ShouldBeGreaterThanOrEqualTo(2, "눈으로 누르는 봇이 두 타를 다 안 눌렀다");
-        sight[1].ShouldBeInRange(98, 100, "눈으로 누르는 봇의 2타는 선딜(78) + 반응(21)이다");
+        rhythmSim.Events[1].Verdict.ShouldBe(HitVerdict.Dodged, "박자로 누른 대시가 2타를 못 흘렸다");
+        sight.ShouldBe(new List<int> { 50 }, "눈으로 누르는 봇이 2타의 선딜(78) + 반응(21) 전에 눌렀다");
+        (sightSim.Events[1].Verb, sightSim.Events[1].Verdict).ShouldBe((DodgeVerb.None, HitVerdict.Hit), "눈으로 누르는 봇이 2타에 안 늦었다");
     }
 
     [Fact]
@@ -161,10 +167,10 @@ public class FleetBotTests
     {
         // 누를 틱(판정이 서는 30틱)에 붙들려 있으면 누름이 안 먹는다 — "눌렀다" 로 적으면 그 판정의 회피를 통째로 건너뛴다. 풀린 틱(패턴 + 40)에
         // 창이 살아 있으니(0.5초) 그때 누른다.
-        (int start, int? parry, _) = Watch(
-            TestConfigs.SweepSim(1, 0.5), new FleetBot(Parrier(0.15), 1, FleetPlay.Beats, TestConfigs.Fighter()), 90, lockAt: 20, lockTicks: 20);
+        (int start, int? dash, _) = Watch(
+            TestConfigs.SweepSim(1, 0.5), new FleetBot(Prober(0.15), 1, FleetPlay.Beats, TestConfigs.Fighter()), 90, lockAt: 20, lockTicks: 20);
 
-        (parry - start).ShouldNotBeNull().ShouldBeInRange(40, 42);
+        (dash - start).ShouldNotBeNull().ShouldBeInRange(40, 42);
     }
 
     [Fact]
@@ -180,7 +186,7 @@ public class FleetBotTests
     public void 바깥_대시는_돌아선_뒤_나간다()
     {
         // 대시는 바라보는 쪽으로만 간다(Fighter.Move). 바깥을 고른 봇은 한 틱 돌아서고 다음 틱에 누른다 — 그래야 방향 축이 음수로 선다.
-        BotTraits outward = FleetPlay.Mid with { Dash = 1, Jump = 0, Parry = 0, Guard = 0, DashInward = 0, Greed = 0 };
+        BotTraits outward = FleetPlay.Mid with { Dash = 1, Jump = 0, Guard = 0, DashInward = 0, Greed = 0 };
         PlayerAxes axes = PlayerAxes.From(FleetPlay.Play(outward, 5).Sim.Events);
 
         axes.DashSamples.ShouldBeGreaterThan(0);
@@ -215,11 +221,6 @@ public class FleetBotTests
                 if (input.Dash)
                 {
                     sim.Fighter.Affords(FighterAction.Dash).ShouldBeTrue($"봇 {bot} · {sim.Ticks}틱: 모자란 대시");
-                }
-
-                if (input.Parry)
-                {
-                    sim.Fighter.Affords(FighterAction.Parry).ShouldBeTrue($"봇 {bot} · {sim.Ticks}틱: 모자란 패리");
                 }
 
                 if (input.Attack)

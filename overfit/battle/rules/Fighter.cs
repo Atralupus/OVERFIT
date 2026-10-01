@@ -15,21 +15,14 @@ public enum FighterAction
 
     /// <summary>
     /// 칼질 중이다 — 2연격의 몇 번째 칼인지는 <see cref="Fighter.ComboStep"/> 이 말한다 (설계 §5.1).
-    /// <b>끝까지 커밋한다</b>: 도는 동안 가드 · 패리 · 대시 · 이동이 안 된다. 맞아도 안 끊긴다. 이어지는 칼이 없으면 <b>칼질 뒤 경직</b>
+    /// <b>끝까지 커밋한다</b>: 도는 동안 가드 · 대시 · 이동이 안 된다. 맞아도 안 끊긴다. 이어지는 칼이 없으면 <b>칼질 뒤 경직</b>
     /// (<c>combo[].stiff</c> · #82)까지가 칼질이다 — 1타의 경직 중에 누른 J 만은 곧장 2타가 된다.
     /// </summary>
     Attack,
 
     /// <summary>
-    /// 패리 — 누르면 0.333초 커밋이고 앞 0.133초만 받아친다 (설계 §5.3). 커밋 동안 가드 · 패리 · 대시 · 이동이 안 된다 —
-    /// <b>받아쳤으면</b> 그 뒤의 J 만은 곧장 1타가 된다(되받아치기). 창 밖에서 맞으면 <b>그냥 맞는다</b> — 가드가 아니다.
-    /// 받아쳤든 헛쳤든 커밋 뒤의 <b>패리 뒤 경직</b>(<c>parry_stiff</c> · #82)까지가 패리다 — 되받아치기의 J 는 경직 안에서도 선다.
-    /// </summary>
-    Parry,
-
-    /// <summary>
     /// ↓ (또는 S) 를 누르고 있는 동안의 <b>가드</b> (설계 §5.2). 시간이 끝내지 않고 손가락이 끝낸다 — 놓는 틱에
-    /// 풀린다. 땅에서만 서고, 커밋이 아니라 자세라 그 위에서 바로 공격 · 패리 · 대시로 넘어간다.
+    /// 풀린다. 땅에서만 서고, 커밋이 아니라 자세라 그 위에서 바로 공격 · 대시로 넘어간다.
     /// </summary>
     Guard,
 
@@ -76,18 +69,15 @@ public sealed class Fighter
     /// <summary>대시 뒤 경직의 길이(틱) — <c>dash_recover</c> 를 세울 때 한 번 바꾼다 (#82).</summary>
     private readonly int _dashRecoverTicks;
 
-    /// <summary>패리 뒤 경직의 길이(틱) — <c>parry_stiff</c> 를 세울 때 한 번 바꾼다 (#82). 받아쳤든 헛쳤든 같다.</summary>
-    private readonly int _parryStiffTicks;
-
     /// <summary>
-    /// 남은 행동 뒤 경직 틱 (#82). 0 이 아니면 지금 행동(칼질 · 대시 · 패리)은 제 시간을 다 돌았고 경직만 남았다. <b>행동은 그대로다</b> —
-    /// <see cref="Action"/> 이 Attack · Dash · Parry 인 채라 커밋이 막던 것(행동 · 이동 · 점프 · 가드)이 그대로 막히고, 커밋이 풀어 주던 것
-    /// (1타의 경직 중 J → 2타 · 받아친 패리의 J → 되받아치기)도 그대로 풀리고, 스태미나도 안 찬다(Idle 이 아니다). 경직의 마지막 틱에 행동이
+    /// 남은 행동 뒤 경직 틱 (#82). 0 이 아니면 지금 행동(칼질 · 대시 · 던지기)은 제 시간을 다 돌았고 경직만 남았다. <b>행동은 그대로다</b> —
+    /// <see cref="Action"/> 이 Attack · Dash 인 채라 커밋이 막던 것(행동 · 이동 · 점프 · 가드)이 그대로 막히고, 커밋이 풀어 주던 것
+    /// (1타의 경직 중 J → 2타)도 그대로 풀리고, 스태미나도 안 찬다(Idle 이 아니다). 경직의 마지막 틱에 행동이
     /// 끝난다(<see cref="End"/>).
     /// </summary>
     private int _stiffLeft;
 
-    /// <summary>공중에서 대시를 이미 썼나. 착지하거나 패리를 성공하면 풀린다.</summary>
+    /// <summary>공중에서 대시를 이미 썼나. 착지하면 풀린다.</summary>
     private bool _airDashUsed;
 
     /// <summary>
@@ -101,13 +91,6 @@ public sealed class Fighter
     /// 커밋이고, 이어지는 것은 1타가 끝나는 그 틱이다.
     /// </summary>
     private bool _comboQueued;
-
-    /// <summary>
-    /// 지금 도는 패리가 받아쳤나 (<see cref="ParryPrecise"/>). 참이면 그 커밋 안의 J 가 곧장 1타다(<see cref="Begin"/> —
-    /// 되받아치기). <b>새 행동이 시작될 때 지운다</b> — 안 지우면 한 번 받아친 뒤로는 헛친 패리도 J 를 받는다.
-    /// 패리가 아닐 때의 값은 아무도 안 읽는다.
-    /// </summary>
-    private bool _parryLanded;
 
     /// <summary>던지기의 선딜(틱) — <c>bomb.throw_seconds</c> 를 세울 때 한 번 바꾼다. 이 틱 수의 마지막 틱 끝에 놓는다.</summary>
     private readonly int _throwTicks;
@@ -139,7 +122,6 @@ public sealed class Fighter
         }
 
         _dashRecoverTicks = StiffTicks(config.DashRecover);
-        _parryStiffTicks = StiffTicks(config.ParryStiff);
         BombsLeft = config.Bomb.Count;
         _throwTicks = BattleSim.TicksFor(config.Bomb.ThrowSeconds);
         _throwRecoverTicks = StiffTicks(config.Bomb.RecoverSeconds);
@@ -190,29 +172,11 @@ public sealed class Fighter
     /// </summary>
     public bool Invulnerable => Action == FighterAction.Dash && ActionElapsed < DashIFrames;
 
-    /// <summary>
-    /// 패리가 받아치는 창 안인가. <b>캐릭터 쪽의 창</b>이다 — 패리 불가 패턴이나 더 좁은 <c>parry_window</c> 를
-    /// 가진 패턴 앞에서는 이것이 참이어도 못 받아친다(<see cref="HitResolver"/> 가 좁은 쪽을 쓴다).
-    /// </summary>
-    public bool Parrying => SinceParryPress < PreciseParryWindow;
-
-    /// <summary>
-    /// 가드인가 (설계 §5.2). ↓ 를 누르고 있는 동안 참이고, 놓는 틱에 거짓이다. 패리와 <b>다른 행동</b>이라 둘이
-    /// 같은 틱에 참일 수 없다.
-    /// </summary>
+    /// <summary>가드인가 (설계 §5.2). ↓ 를 누르고 있는 동안 참이고, 놓는 틱에 거짓이다.</summary>
     public bool Guarding => Action == FighterAction.Guard;
 
     /// <summary>이 캐릭터의 대시 무적 폭(초). <see cref="HitResolver"/> 가 패턴의 창과 견준다.</summary>
     public double DashIFrames => _config.DashIFrames;
-
-    /// <summary>패리의 창(초) — 데이터 그대로다. 연타 징벌이 깎던 때가 있었고 스펙이 그 징벌을 지웠다 (설계 §5.3).</summary>
-    public double PreciseParryWindow => _config.ParryPreciseWindow;
-
-    /// <summary>
-    /// 지금 패리의 누름에서 흐른 시간(초). 패리 중이 아니면 무한대 — 패리는 커밋이라 창은 행동의 시계 그대로다.
-    /// <see cref="HitResolver"/> 가 패턴의 창과 견준다.
-    /// </summary>
-    public double SinceParryPress => Action == FighterAction.Parry ? ActionElapsed : double.PositiveInfinity;
 
     /// <summary>
     /// 탈진했나 (#71 · 설계 §5.5) — 스태미나를 다 썼거나(행동의 값 · 가드로 막다가) 가드가 깨졌다. 붕괴도 탈진이다.
@@ -235,17 +199,14 @@ public sealed class Fighter
     public bool Locked => Exhausted || Held;
 
     /// <summary>
-    /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>) · 대시(<c>dash_recover</c>) · 패리(<c>parry_stiff</c>)가 제 시간을 다 돌고
+    /// 행동 뒤 경직 중인가 (#82) — 칼질(<c>combo[].stiff</c>) · 대시(<c>dash_recover</c>)가 제 시간을 다 돌고
     /// 경직만 남았다. 행동은 그대로라(<see cref="Action"/>) 막는 것은 이것을 안 본다. 뷰가 경직의 그림을 고르는 데 쓴다 — 칼질은 시트를
-    /// 끝까지 흘린 뒤 선 자세(<c>idle</c> 첫 장)에 멈추고, 대시는 마지막 자세 · 패리는 마지막 장을 붙든다.
+    /// 끝까지 흘린 뒤 선 자세(<c>idle</c> 첫 장)에 멈추고, 대시는 마지막 자세를 붙든다.
     /// </summary>
     public bool Stiff => _stiffLeft > 0;
 
-    /// <summary>공중 대시를 이미 썼나. 착지 · 패리로 풀린다 (나인 솔즈의 보상 구조).</summary>
+    /// <summary>공중 대시를 이미 썼나. 착지로 풀린다.</summary>
     public bool AirDashSpent => _airDashUsed;
-
-    /// <summary>패리로 모은 기. 지금은 쓰는 곳이 없다 — 쓰임(스펙 7)이 생기면 그 비용이 데이터로 온다.</summary>
-    public int Qi { get; private set; }
 
     /// <summary>공격 판정이 서 있는가. 선딜을 지나고 후딜 전 — 시간은 지금 칼질 칸의 것이다.</summary>
     public bool AttackActive => Action == FighterAction.Attack
@@ -381,7 +342,7 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// <b>잡혔다</b> (#78 · 설계 §4.7) — 피해를 받고 <paramref name="ticks"/> 동안 붙들린다. 하던 행동(칼질 · 대시 · 패리 · 가드 — 행동 뒤
+    /// <b>잡혔다</b> (#78 · 설계 §4.7) — 피해를 받고 <paramref name="ticks"/> 동안 붙들린다. 하던 행동(칼질 · 대시 · 가드 — 행동 뒤
     /// 경직(#82)까지)이 그 자리에서 끝나고, 붙들린 동안 행동 · 이동 · 점프 · 가드가 다 막힌다(<see cref="Locked"/>). 공중이면 그대로 떨어진다
     /// (중력은 안 막는다). 스태미나는 Idle 이라 찬다. 풀리면 그대로 선다 — 남은 경직도 없다: 경직은 그 행동의 끝자락이라 행동과 같이 끝났다.
     ///
@@ -397,7 +358,7 @@ public sealed class Fighter
     public void Grab(int damage, int ticks)
     {
         TakeDamage(damage);
-        bool spent = Action is FighterAction.Dash or FighterAction.Attack or FighterAction.Parry && Stamina <= 0;
+        bool spent = Action is FighterAction.Dash or FighterAction.Attack && Stamina <= 0;
         Stop();
 
         // 긴 쪽을 남긴다 — 붙드는 시간은 판정의 값이라(grab_hold_seconds) 남은 붙들림보다 짧을 수 있다.
@@ -406,26 +367,6 @@ public sealed class Fighter
         {
             Exhaust();
         }
-    }
-
-    /// <summary>
-    /// 패리가 받아쳤다. 피해가 없고, 기가 오르고, <b>공중 대시가 즉시 돌아온다</b> — "잘 받아내면 다시 움직일 수
-    /// 있다" 는 보상 구조가 패리를 쓰게 만든다(나인 솔즈). 보스를 무너뜨리는 것은 여기가 아니다 — 이것을 부르는
-    /// <c>BossSwings.ApplyVerdict</c> 가 받아쳤다는 답을 <see cref="BossSwings.Resolve"/> 로 돌려주고, 그 답으로 탈진 루틴
-    /// (<c>BattleSim.Exhaust</c> · 하나다)을 부르는 것은 <see cref="BattleSim"/> 이다(#72 · 설계 §4.3).
-    ///
-    /// <para>
-    /// <b>커밋은 안 푼다</b> — 가드 · 패리 · 대시 · 이동은 커밋과 패리 뒤 경직(#82)이 끝날 때까지 그대로 막힌다. 풀리는 것은 J 하나다:
-    /// 이 뒤의 틱에 누른 J 는 곧장 1타가 된다(<see cref="Begin"/> — 되받아치기). 이것은 <see cref="BattleSim"/> 의 틱에서
-    /// 파이터의 틱 <b>뒤</b>에 도는 보스 판정(<see cref="BossSwings.Resolve"/>)에서 불리므로, 받아친 그 틱의 J 는 이미 지나갔고
-    /// 되받아치기는 다음 틱부터다.
-    /// </para>
-    /// </summary>
-    public void ParryPrecise()
-    {
-        Qi++;
-        _airDashUsed = false;
-        _parryLanded = true;
     }
 
     public void Tick(InputFrame input, double dt)
@@ -440,7 +381,7 @@ public sealed class Fighter
         bool lockedAtStart = Locked;
 
         // Begin 을 Advance 보다 먼저 불러 행동이 시작된 틱도 경과 시간에 들어가게 한다 —
-        // 안 그러면 시작 틱이 공짜가 되어 무적 창 · 패리 창 · 선딜 경계가 테스트 값보다 한 틱 늦게 닫힌다.
+        // 안 그러면 시작 틱이 공짜가 되어 무적 창 · 선딜 경계가 테스트 값보다 한 틱 늦게 닫힌다.
         Begin(input);
         Advance(dt);
         bool locked = lockedAtStart || Locked;
@@ -558,14 +499,12 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// 행동이 제 시간을 다 돈 뒤의 경직(틱) — 칼질은 그 칸의 것, 대시는 대시의 것, 패리는 패리의 것(#82). 패리는 받아쳤든 헛쳤든 붙는다:
-    /// 받아친 사람은 경직 안에서도 J 로 되받아치므로(<see cref="Begin"/>) 서는 것은 헛친 사람뿐이다.
+    /// 행동이 제 시간을 다 돈 뒤의 경직(틱) — 칼질은 그 칸의 것, 대시는 대시의 것(#82).
     /// </summary>
     private int StiffOf(FighterAction action) => action switch
     {
         FighterAction.Attack => _stiffTicks[_step],
         FighterAction.Dash => _dashRecoverTicks,
-        FighterAction.Parry => _parryStiffTicks,
         _ => 0,
     };
 
@@ -582,7 +521,7 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// 하던 행동을 그 자리에서 끝낸다 — 탈진과 잡힘이 같이 쓴다 (#78). 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다:
+    /// 하던 행동을 그 자리에서 끝낸다 — 탈진과 잡힘이 같이 쓴다 (#78). 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼을 여기서 지운다:
     /// 새 행동을 세울 때(<see cref="Start"/>) 지우던 것인데, 둘은 행동을 세우지 않고 끝내는 자리다.
     /// </summary>
     private void Stop()
@@ -599,7 +538,6 @@ public sealed class Fighter
         _stiffLeft = 0;
         _step = 0;
         _comboQueued = false;
-        _parryLanded = false;
     }
 
     /// <summary>
@@ -633,7 +571,6 @@ public sealed class Fighter
     {
         FighterAction.Dash => _config.DashDuration,
         FighterAction.Attack => Step.Windup + Step.Active + Step.Recover,
-        FighterAction.Parry => _config.ParryDuration,
         _ => 0,
     };
 
@@ -641,15 +578,13 @@ public sealed class Fighter
     {
         FighterAction.Dash => _config.DashCost,
         // 가드를 드는 값은 없다 (이 계획 · _note_guard) — 값은 막아낸 피해에 비례해 나간다(GuardChip).
-        FighterAction.Parry => _config.ParryCost,
         FighterAction.Attack => _config.AttackCost,
         _ => 0,
     };
 
     /// <summary>
-    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 패리 · 던지기 — 행동 뒤 경직까지) 중이거나 굳었으면 입력을 버린다 — 공격 셋만 예외다:
-    /// 칼질 중의 공격은 다음 칼로 기억하고, 1타의 경직 중의 공격은 곧장 2타를 세우고(#82), <b>받아친</b> 패리의 커밋 · 경직 중의 공격은
-    /// 곧장 1타를 세운다(되받아치기). 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
+    /// 새 행동을 고른다. 커밋된 행동(대시 · 칼질 · 던지기 — 행동 뒤 경직까지) 중이거나 굳었으면 입력을 버린다 — 공격 둘만 예외다:
+    /// 칼질 중의 공격은 다음 칼로 기억하고, 1타의 경직 중의 공격은 곧장 2타를 세운다(#82). 가드는 커밋이 아니라 <b>자세</b>라, 그 위에서 바로 다른 행동을 고른다(설계 §5.2).
     /// </summary>
     private void Begin(InputFrame input)
     {
@@ -672,33 +607,12 @@ public sealed class Fighter
             return;
         }
 
-        // 받아친 패리의 커밋 안에서는 J 하나만 받는다 — 되받아치기 (판정 13 · 설계 §4.3). 커밋이 막는 목록(설계 §1 ·
-        // §5.1: 가드 · 패리 · 대시 · 이동)에 공격은 없고, §4.3 의 타임라인(받아치고 ~0.2초 반응 → 1타)은 이 J 를 커밋
-        // 안에 떨어뜨린다: 받아치는 것이 창(0.133) 안이라 남은 커밋이 0.2초 넘게 있다. 2번 PR 의 계획은 이 J 까지 버렸다 —
-        // 누른 J 가 아무 표시 없이 사라졌고, 데모(시드 51)의 봇은 마무리를 받아친 다음 틱부터 누른 J 를 커밋이 끝날 때까지
-        // 14틱 내내 버렸다(최종 리뷰 I1). 받는 J 는 Idle 에서 누른 J 와 같다(Start · CanStart). 못 받아친 패리는 J 까지
-        // 버린다 — 헛친 난사의 값은 커밋 전체다.
-        //
-        // **패리 뒤 경직(#82)도 여기다** — 경직은 패리 행동의 끝자락이라 Action 이 Parry 인 채 이 갈래를 탄다. 그래서 받아친 사람의 J 는 경직
-        // 안에서도 곧장 1타고(반격 산수 약 1.1초가 그대로다), 헛친 사람은 커밋 20틱 + 경직 15틱 내내 J 까지 버린다. 경직에서 J 를 따로 막거나
-        // 풀지 않는 것이 규칙이다: 받아쳤는지만이 가른다.
-        if (Action == FighterAction.Parry)
-        {
-            if (_parryLanded && input.Attack && CanStart(FighterAction.Attack))
-            {
-                Start(FighterAction.Attack);
-            }
-
-            return;
-        }
-
         if (Action is not (FighterAction.Idle or FighterAction.Guard) || Locked)
         {
             return;
         }
 
         FighterAction pressed = input.Dash ? FighterAction.Dash
-            : input.Parry ? FighterAction.Parry
             : input.Attack ? FighterAction.Attack
             : input.Bomb ? FighterAction.Throw
             : FighterAction.Idle;
@@ -718,8 +632,7 @@ public sealed class Fighter
     }
 
     /// <summary>
-    /// 행동을 세운다 — 값을 내고 시계를 0 에서 돌린다. 새 행동을 세우는 곳은 여기 하나다: 되받아치기도 이것을 타서
-    /// Idle 에서 누른 J 와 한 글자도 안 다르다. 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼 · 받아친 표시를 여기서 지운다.
+    /// 행동을 세운다 — 값을 내고 시계를 0 에서 돌린다. 새 행동을 세우는 곳은 여기 하나다. 지난 행동의 칼질 칸 · 경직 · 눌러 둔 칼을 여기서 지운다.
     /// </summary>
     private void Start(FighterAction action)
     {
@@ -729,7 +642,6 @@ public sealed class Fighter
         _stiffLeft = 0;
         _step = 0;
         _comboQueued = false;
-        _parryLanded = false;
 
         if (action == FighterAction.Dash && !Grounded)
         {
@@ -755,7 +667,7 @@ public sealed class Fighter
     /// </para>
     ///
     /// <para>
-    /// 공중 대시는 착지하거나 패리를 성공할 때까지 한 번뿐이다 (나인 솔즈) — 몸 충돌이 없어져 공중이 안전지대가 됐으므로,
+    /// 공중 대시는 착지할 때까지 한 번뿐이다 — 몸 충돌이 없어져 공중이 안전지대가 됐으므로,
     /// 무제한 공중 대시는 "공중에 떠서 계속 무적" 이라는 답 하나로 모든 패턴을 지운다.
     /// </para>
     ///

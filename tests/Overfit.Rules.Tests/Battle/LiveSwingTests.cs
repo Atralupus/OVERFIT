@@ -28,7 +28,7 @@ public class LiveSwingTests
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 5000, activeSeconds: 0.5);
         TestConfigs.UntilNear(sim);
 
-        sim.Tick(new InputFrame(0, false, true, false, false));   // 판정이 서기 한두 틱 전에 대시가 선다
+        sim.Tick(new InputFrame(0, false, true, false));   // 판정이 서기 한두 틱 전에 대시가 선다
         for (int i = 0; i < 40 && sim.Events.Count == 0; i++)
         {
             sim.Tick(default);
@@ -44,7 +44,7 @@ public class LiveSwingTests
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 5000, activeSeconds: 0);
         TestConfigs.UntilNear(sim);
 
-        sim.Tick(new InputFrame(0, false, true, false, false));
+        sim.Tick(new InputFrame(0, false, true, false));
         for (int i = 0; i < 5 && sim.Events.Count == 0; i++)
         {
             sim.Tick(default);
@@ -114,9 +114,9 @@ public class LiveSwingTests
         // 무적이 처음 먹은 틱의 크레딧을 지어 둬야 맞다.
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 1120, activeSeconds: 0.5);
 
-        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스를 등진다 (Facing = -1)
+        sim.Tick(new InputFrame(-1, false, false, false));   // 보스를 등진다 (Facing = -1)
         TestConfigs.UntilNear(sim);
-        sim.Tick(new InputFrame(0, false, true, false, false));     // 대시 — 등진 채라 보스 반대(밖)로 튄다
+        sim.Tick(new InputFrame(0, false, true, false));     // 대시 — 등진 채라 보스 반대(밖)로 튄다
 
         for (int i = 0; i < 40 && sim.Events.Count == 0; i++)
         {
@@ -141,12 +141,12 @@ public class LiveSwingTests
         using var log = new LogCapture(LogLevel.Info);
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 1120, activeSeconds: 0.5);
 
-        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스를 등진다 (Facing = -1)
+        sim.Tick(new InputFrame(-1, false, false, false));   // 보스를 등진다 (Facing = -1)
         TestConfigs.UntilNear(sim);
-        sim.Tick(new InputFrame(0, false, true, false, false));     // 대시 — 등진 채라 보스 반대(밖)로 튄다
+        sim.Tick(new InputFrame(0, false, true, false));     // 대시 — 등진 채라 보스 반대(밖)로 튄다
         for (int i = 0; i < 40 && sim.Events.Count == 0; i++)
         {
-            sim.Tick(new InputFrame(0, Jump: i == 15, false, false, false));   // 대시(11틱)가 끝난 뒤 한 번 뛴다
+            sim.Tick(new InputFrame(0, Jump: i == 15, false, false));   // 대시(11틱)가 끝난 뒤 한 번 뛴다
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -171,14 +171,14 @@ public class LiveSwingTests
         // 사람이 Spacing 으로 적혔다 — #46 이 고친 편향이 창이 길어지며 돌아온 것이다. 사거리 1000 · 파이터는 보스에서 967 이라
         // 대시 전 몸(안끝 937)은 띠 안이고, 보스를 등지고 뛴 대시가 창이 열리기 전에 띠 밖으로 데려간다.
         BattleSim sim = TestConfigs.SweepSim(maxDistance: 1000, activeSeconds: 0.5);
-        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스를 등진다
+        sim.Tick(new InputFrame(-1, false, false, false));   // 보스를 등진다
         TestConfigs.UntilWindup(sim);
         while (sim.NextActiveIn is > 5 * BattleSim.Dt)
         {
             sim.Tick(default);
         }
 
-        sim.Tick(new InputFrame(0, false, Dash: true, false, false));   // 칼이 서기 4틱 전의 대시
+        sim.Tick(new InputFrame(0, false, Dash: true, false));   // 칼이 서기 4틱 전의 대시
         for (int i = 0; i < 60 && sim.Events.Count == 0; i++)
         {
             sim.Tick(default);
@@ -202,10 +202,10 @@ public class LiveSwingTests
         TestConfigs.UntilFired(sim);
         sim.Events.Count.ShouldBe(0, "창이 열린 틱에 닿았다 — 이 테스트가 창 안의 뒤 틱을 안 본다");
 
-        sim.Tick(new InputFrame(1, Jump: true, false, false, false));
+        sim.Tick(new InputFrame(1, Jump: true, false, false));
         for (int i = 0; i < 20 && sim.Events.Count == 0; i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, false));
+            sim.Tick(new InputFrame(1, false, false, false));
         }
 
         DodgeEvent e = sim.Events.Single();
@@ -250,49 +250,5 @@ public class LiveSwingTests
         sim.Ticks.ShouldBe(50);
         sim.Events.ShouldBeEmpty("판이 끝날 때 열린 창이 관측을 지어냈다");
         log.Lines.ShouldContain($"[boss][D] cut_swing id={TestConfigs.SweepId} tick=50 reason=end");
-    }
-
-    [Fact]
-    public void 패리를_못_받는_산_판정_앞의_패리는_실효_방어가_아니다()
-    {
-        // 설계 §6.1 — 판정 보기의 몸통 색은 산 판정에 대한 **실효** 상태다. 산 판정이 없으면 파이터 쪽 상태 그대로다.
-        // Sweep 은 패리를 못 받는다 — 점프 공격의 착지(설계 §4.2)가 이 모양이다.
-        BattleSim idle = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
-        idle.Tick(new InputFrame(0, false, false, Parry: true, false));
-        idle.SwingLive.ShouldBeFalse();
-        idle.FighterDefense.ShouldBe(Defense.Parrying, "산 판정이 없는데 파이터의 패리 창을 안 칠한다");
-
-        BattleSim sim = TestConfigs.SweepSim(maxDistance: 50, activeSeconds: 0.5);
-        TestConfigs.UntilFired(sim);
-        sim.Tick(new InputFrame(0, false, false, Parry: true, false));
-        sim.SwingLive.ShouldBeTrue();
-        sim.Fighter.Parrying.ShouldBeTrue("파이터 쪽 창이 안 열렸다 — 이 테스트가 실효를 못 가른다");
-        sim.FighterDefense.ShouldBe(Defense.None, "패리를 못 받는 판정 앞에서 패리 창이라고 칠한다");
-    }
-
-    [Fact]
-    public void 닿아서_끝난_판정의_틱에도_몸통_색은_그_판정에_대한_실효_방어다()
-    {
-        // 설계 §6.1 · Review Focus 1 — 착지 띠(패리 불가)는 땅에 선 몸에 **첫 틱에** 닿아 그 틱에 끝난다. 판정 보기는 그 틱에 대 본
-        // 사각형을 그리므로 몸통 색도 같은 판정을 봐야 한다: 산 판정만 보면 닿아 끝난 바로 그 틱에 색이 파이터 쪽 패리 창(노랑)으로
-        // 돌아간다. 사거리 2000 의 Sweep(패리 불가)이 판정 3틱 전에 K 를 누른 파이터에게 첫 틱에 닿는다.
-        BattleSim sim = TestConfigs.SweepSim(maxDistance: 2000, activeSeconds: 0.5);
-        TestConfigs.UntilWindup(sim);
-        while (sim.NextActiveIn is > 3 * BattleSim.Dt)
-        {
-            sim.Tick(default);
-        }
-
-        sim.Tick(new InputFrame(0, false, false, Parry: true, false));
-        for (int i = 0; i < 10 && sim.Events.Count == 0; i++)
-        {
-            sim.Tick(default);
-        }
-
-        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Hit, "패리를 못 받는 판정을 받아쳤다");
-        sim.SwingLive.ShouldBeFalse("닿은 판정이 아직 산다 — 이 테스트가 닿아 끝난 틱을 안 본다");
-        sim.BossTestedRects.ShouldNotBeEmpty("닿은 틱에 대 본 사각형이 없다 — 판정 보기가 그 틱에 아무것도 안 그린다");
-        sim.Fighter.Parrying.ShouldBeTrue("파이터 쪽 창이 닫혔다 — 이 테스트가 실효를 못 가른다");
-        sim.FighterDefense.ShouldBe(Defense.None, "닿아 끝난 판정의 틱에 패리 창이라고 칠한다 — 그 틱에 그린 띠와 다른 말을 한다");
     }
 }

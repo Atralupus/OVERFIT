@@ -136,35 +136,6 @@ public sealed class FighterConfig
     /// </summary>
     public required double DashRecover { get; init; }
 
-    /// <summary>패리의 창 (설계 §5.3) — 누른 순간부터 이 안에 선 판정을 받아친다. 그 밖이면 그냥 맞는다. 조작의 정의라 캐릭터 성능이 아니다.</summary>
-    public required double ParryPreciseWindow { get; init; }
-
-    /// <summary>패리를 누를 때 드는 스태미나 (설계 §5.3: 15). 가드를 드는 값은 없다 — _note_guard.</summary>
-    public required double ParryCost { get; init; }
-
-    /// <summary>
-    /// 패리의 커밋(초) — 누르면 이 동안 가드 · 패리 · 대시 · 이동을 못 한다 (설계 §5.3). 앞쪽 <see cref="ParryPreciseWindow"/> 만
-    /// 받아치므로 나머지는 무방비다: 그것이 난사의 벌이라 연타 징벌이 따로 없다. 받아쳤으면 J 만은 커밋 안에서도 곧장
-    /// 1타다(<c>Fighter</c> 의 되받아치기).
-    /// </summary>
-    public required double ParryDuration { get; init; }
-
-    /// <summary>
-    /// 패리 뒤의 <b>경직</b>(초) (#82 · 설계 §5.3) — 커밋(<see cref="ParryDuration"/>)이 끝난 뒤 이만큼 더 커밋한다. <b>받아쳤든 헛쳤든</b>
-    /// 붙고, 그동안 가드 · 패리 · 대시 · 이동 · 점프가 막히고 스태미나도 안 찬다. 받아친 패리의 되받아치기(J → 곧장 1타)는 경직 안에서도
-    /// 그대로 선다 — 헛친 패리는 경직 내내 J 까지 버린다. 유저: "패리도 후경직이 좀 커야합니다". 틱으로 센다(0 이면 경직이 없다).
-    /// </summary>
-    public required double ParryStiff { get; init; }
-
-    /// <summary>패리가 도는 시트(<c>.tres</c> 의 이름). <b>규칙은 안 읽는다</b> — 뷰가 그리고 테스트가 커밋과 맞대어 본다.</summary>
-    public required string ParryAnim { get; init; }
-
-    /// <summary>패리 시트의 재생 속도(fps).</summary>
-    public required double ParryAnimFps { get; init; }
-
-    /// <summary>패리가 도는 장 수 — 0번부터(설계 §5.3: f0~f3 이면 4).</summary>
-    public required int ParryAnimFrames { get; init; }
-
     /// <summary>
     /// 칼질 목록 (설계 §5.1). <b>목록의 순서가 곧 몇 번째 칼질인가</b>다 — 1타 · 2타. 첫 칸이 J 를 눌렀을 때 나가는
     /// 칼이고, 칼질 도중 J 를 또 누르면 그 칼질이 끝나는 틱에 다음 칸이 이어진다 — 그 칼질 뒤 경직 중에 누르면 누른 틱에 이어진다(#82).
@@ -206,9 +177,7 @@ public sealed class FighterConfig
 
     /// <summary>
     /// 가드의 그림 — 이 시트의 <see cref="GuardFrame"/> 장에 <b>멈춰 선다</b> (#96 · 설계 §6). 팩에 막는 모션이 없어 칼을 사선으로 세운
-    /// <c>attack2</c> f1 을 빌린다. 패리가 같은 시트의 f0~f3 을 도는데 네 장은 칼과 몸이 같은 자세라(스카프와 2~4px 의 옆 밀림만 다르다)
-    /// 가드와 패리는 실루엣이 같다 — 둘을 가르는 것은 가드의 색과 링이다(패리는 칠하지 않는다). <b>규칙은 안 읽는다</b> — 뷰가
-    /// 그리고 <c>FighterDataTests</c> 가 팩의 <c>.tres</c> · 패리의 장과 맞대어 본다.
+    /// <c>attack2</c> f1 을 빌린다. <b>규칙은 안 읽는다</b> — 뷰가 그리고 <c>FighterDataTests</c> 가 팩의 <c>.tres</c> 와 맞대어 본다.
     /// </summary>
     public required string GuardAnim { get; init; }
 

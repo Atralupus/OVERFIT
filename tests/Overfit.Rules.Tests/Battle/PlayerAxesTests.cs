@@ -9,7 +9,7 @@ namespace Overfit.Rules.Tests.Battle;
 public class PlayerAxesTests
 {
     /// <summary>
-    /// 기본값은 <b>세 수단이 다 있었던</b> 판정이다 — 의존도 축의 분모에 들어가는 자리다.
+    /// 기본값은 <b>수단이 다 있었던</b> 판정이다 — 의존도 축의 분모에 들어가는 자리다.
     /// 수단 유무를 안 적은 테스트는 그 축을 보는 테스트가 아니므로 이 기본이 맞다.
     /// </summary>
     private static DodgeEvent Event(
@@ -22,10 +22,9 @@ public class PlayerAxesTests
         bool greedWindow = false,
         bool dashAvailable = true,
         bool jumpAvailable = true,
-        bool parryAvailable = true,
         bool guardAvailable = true) =>
         new("3연격", verb, verdict, timingError, direction, airborne, distance, greedWindow,
-            dashAvailable, jumpAvailable, parryAvailable, guardAvailable);
+            dashAvailable, jumpAvailable, guardAvailable);
 
     [Fact]
     public void 이벤트가_없으면_축이_전부_0_이다()
@@ -36,7 +35,6 @@ public class PlayerAxesTests
 
         axes.DashTimingBias.ShouldBe(0);
         axes.DashTimingVar.ShouldBe(0);
-        axes.ParryRate.ShouldBe(0);
         axes.GuardRate.ShouldBe(0);
         axes.Samples.ShouldBe(0);
     }
@@ -82,19 +80,6 @@ public class PlayerAxesTests
     }
 
     [Fact]
-    public void 패리_성공률은_패리_시도_중_받아친_비율이다()
-    {
-        PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
-        {
-            Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Parried),
-            Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Hit),
-            Event(verb: DodgeVerb.Dash, verdict: HitVerdict.Dodged),   // 패리가 아니라 세지 않는다
-        });
-
-        axes.ParryRate.ShouldBe(0.5, 0.001);
-    }
-
-    [Fact]
     public void 의존도는_선택지가_있었을_때_그_수단을_고른_비율이다()
     {
         // 스펙 8절의 정의다 — "대시로도 피할 수 있는 상황에서 점프를 고른 비율".
@@ -102,13 +87,12 @@ public class PlayerAxesTests
         // 패턴만 만났다" 를 구별하지 못한다. 그 둘은 봉인할 것이 정반대다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
-            Event(verb: DodgeVerb.Parry), Event(verb: DodgeVerb.Parry),
+            Event(verb: DodgeVerb.Guard), Event(verb: DodgeVerb.Guard),
             Event(verb: DodgeVerb.Jump),
             Event(verb: DodgeVerb.Dash),
         });
 
-        // 넷 다 세 수단이 있었다 — 넷 전부가 분모다.
-        axes.ParryReliance.ShouldBe(0.5, 0.001);
+        // 넷 다 대시 · 점프가 있었다 — 넷 전부가 분모다.
         axes.JumpReliance.ShouldBe(0.25, 0.001);
     }
 
@@ -119,9 +103,9 @@ public class PlayerAxesTests
         // 사용 비율이던 때는 이것이 1.00 이었다 — 망은 봉인할 이유가 없는 것을 봉인하려 든다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
-            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true, parryAvailable: false),
-            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true, parryAvailable: false),
-            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true, parryAvailable: false),
+            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true),
+            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true),
+            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true),
         });
 
         axes.JumpReliance.ShouldBe(0);
@@ -135,10 +119,10 @@ public class PlayerAxesTests
         // 선택지가 있던 둘 중 하나만 점프를 골랐으므로 0.5 다 — 사용 비율이면 4건 중 3건, 0.75 였다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
-            Event(verb: DodgeVerb.Jump, dashAvailable: true, jumpAvailable: true, parryAvailable: false),
-            Event(verb: DodgeVerb.Dash, dashAvailable: true, jumpAvailable: true, parryAvailable: false),
-            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true, parryAvailable: false),
-            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true, parryAvailable: false),
+            Event(verb: DodgeVerb.Jump, dashAvailable: true, jumpAvailable: true),
+            Event(verb: DodgeVerb.Dash, dashAvailable: true, jumpAvailable: true),
+            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true),
+            Event(verb: DodgeVerb.Jump, dashAvailable: false, jumpAvailable: true),
         });
 
         axes.JumpReliance.ShouldBe(0.5, 0.001);
@@ -148,15 +132,15 @@ public class PlayerAxesTests
     [Fact]
     public void 그_수단_자체가_없던_판정도_분모에_안_들어간다()
     {
-        // 패리 불가 패턴에서 대시로 피한 것은 "패리를 안 골랐다" 가 아니다 — 고를 수가 없었다.
+        // 점프로 못 넘는 판정에서 대시로 피한 것은 "점프를 안 골랐다" 가 아니다 — 고를 수가 없었다. 전에는 패리 불가 패턴으로 봤다(#168 에서 걷었다).
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
-            Event(verb: DodgeVerb.Dash, dashAvailable: true, jumpAvailable: true, parryAvailable: false),
-            Event(verb: DodgeVerb.Dash, dashAvailable: true, jumpAvailable: true, parryAvailable: false),
+            Event(verb: DodgeVerb.Dash, dashAvailable: true, jumpAvailable: false),
+            Event(verb: DodgeVerb.Dash, dashAvailable: true, jumpAvailable: false),
         });
 
-        axes.ParryReliance.ShouldBe(0);
-        axes.ParryChoiceSamples.ShouldBe(0);
+        axes.JumpReliance.ShouldBe(0);
+        axes.JumpChoiceSamples.ShouldBe(0);
     }
 
     [Fact]
@@ -241,7 +225,7 @@ public class PlayerAxesTests
         {
             Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash), Event(verb: DodgeVerb.Dash),
             Event(verb: DodgeVerb.Jump),
-            Event(verb: DodgeVerb.Parry), Event(verb: DodgeVerb.Parry),
+            Event(verb: DodgeVerb.Guard), Event(verb: DodgeVerb.Guard),
             Event(verb: DodgeVerb.Spacing),
             Event(verb: DodgeVerb.None),
         });
@@ -249,12 +233,11 @@ public class PlayerAxesTests
         axes.Samples.ShouldBe(8);
         axes.DashSamples.ShouldBe(3);
         axes.JumpSamples.ShouldBe(1);
-        axes.ParrySamples.ShouldBe(2);
+        axes.GuardSamples.ShouldBe(2);
 
         // 의존도 축은 부분집합의 부분집합이다 — 그 수단이 있었고 **다른 수단도 있었던** 판정만
         // 분모다. 그 얇기를 축만 보고는 알 수 없으므로 개수를 같이 싣는다.
         axes.JumpChoiceSamples.ShouldBe(8);
-        axes.ParryChoiceSamples.ShouldBe(8);
     }
 
     [Fact]
@@ -267,19 +250,18 @@ public class PlayerAxesTests
             Event(verb: DodgeVerb.Spacing, timingError: 0, direction: 0),
             Event(verb: DodgeVerb.Spacing, timingError: 0, direction: 0),
             Event(verb: DodgeVerb.Jump),
-            Event(verb: DodgeVerb.Parry),
+            Event(verb: DodgeVerb.Guard),
         });
 
         axes.DashSamples.ShouldBe(0);
         axes.DashDirectionBias.ShouldBe(0);
         axes.JumpReliance.ShouldBe(0.25, 0.001);
-        axes.ParryReliance.ShouldBe(0.25, 0.001);
     }
 
     [Fact]
     public void 가드는_축과_개수로_같이_실린다()
     {
-        // 가드는 11번째 축(GuardRate · 사용 비율)이고 개수(GuardSamples · GuardBrokenSamples)도 그대로 싣는다 (#104 · 설계 2026-09-28 §3.2).
+        // 가드는 마지막 축(GuardRate · 사용 비율)이고 개수(GuardSamples · GuardBrokenSamples)도 그대로 싣는다 (#104 · 설계 2026-09-28 §3.2).
         // 가드는 잡기 하나를 빼면 모든 판정에서 가능해 "고를 수 있었는데 골랐나" 의 분모가 거의 전부다 — 그러니 사용 비율이 곧
         // 정직한 성향이다. 의존도 축이 피하려던 혼동(가능했던 수단이 드문 패턴만 만났다)이 가드에는 없다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
@@ -287,7 +269,7 @@ public class PlayerAxesTests
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.GuardBroken),
-            Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Parried),
+            Event(verb: DodgeVerb.Dash, verdict: HitVerdict.Dodged),
         });
 
         axes.GuardRate.ShouldBe(0.75, 0.001);
@@ -295,11 +277,10 @@ public class PlayerAxesTests
         axes.GuardBrokenSamples.ShouldBe(1, "깨진 가드가 막아낸 가드와 한 점이 됐다");
 
         // 가드는 **다른 수단을 안 고른 것**으로도 세어진다 — 의존도의 분모는 그대로다.
-        axes.ParryChoiceSamples.ShouldBe(4);
-        axes.ParryReliance.ShouldBe(0.25, 0.001);
-        axes.DashSamples.ShouldBe(0);
+        axes.JumpChoiceSamples.ShouldBe(4);
+        axes.JumpReliance.ShouldBe(0);
+        axes.DashSamples.ShouldBe(1);
         axes.JumpSamples.ShouldBe(0);
-        axes.ParrySamples.ShouldBe(1);
     }
 
     [Fact]
@@ -307,18 +288,17 @@ public class PlayerAxesTests
     {
         // 설계 §7.3 — 잡힘은 실패다: 맞음과 같이 아무 축도 성공으로 안 센다. 가드로 버티다 잡힌 관측(수단 Guard · 설계 §4.7)은 가드를 고른
         // 것이라 가드 개수에 들고, 버텨 내지 못했으니 "버티다 무너진" 쪽에 든다 — 막아 낸 가드(Guarded)와 한 점이 되면 가드 개수에서
-        // 막은 수를 뺀 값이 거짓말한다. 잡기는 점프만 되는 판정이라(대시 · 패리 불가) 의존도의 분모에는 안 든다.
+        // 막은 수를 뺀 값이 거짓말한다. 잡기는 점프만 되는 판정이라(대시 · 가드 불가) 의존도의 분모에는 안 든다.
         PlayerAxes axes = PlayerAxes.From(new List<DodgeEvent>
         {
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Grabbed,
-                dashAvailable: false, parryAvailable: false, guardAvailable: false),
+                dashAvailable: false, guardAvailable: false),
         });
 
         axes.GuardSamples.ShouldBe(2);
         axes.GuardBrokenSamples.ShouldBe(1, "가드 중에 잡힌 것을 막아 낸 가드로 셌다");
         axes.JumpChoiceSamples.ShouldBe(1, "잡기가 점프 의존도의 분모에 들었다 — 점프만 되는 판정이다");
-        axes.ParryChoiceSamples.ShouldBe(1);
     }
 
     [Fact]
@@ -331,8 +311,8 @@ public class PlayerAxesTests
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Guarded),
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.GuardBroken),
             Event(verb: DodgeVerb.Guard, verdict: HitVerdict.Grabbed,
-                dashAvailable: false, parryAvailable: false, guardAvailable: false),
-            Event(verb: DodgeVerb.Parry, verdict: HitVerdict.Parried),
+                dashAvailable: false, guardAvailable: false),
+            Event(verb: DodgeVerb.Dash, verdict: HitVerdict.Dodged),
         });
 
         axes.GuardRate.ShouldBe(0.75, 0.001);
@@ -347,15 +327,16 @@ public class PlayerAxesTests
     }
 
     [Fact]
-    public void 축은_열한_개다()
+    public void 축은_아홉_개다()
     {
         // 축의 계약은 **망의 입력 모양**이다. 축을 하나 늘리면 지금까지의 입력 벡터가 전부
         // 다른 길이가 되므로, 수치 하나를 고치는 것과 다른 종류의 변경이다. 10 → 11(GuardRate)은 망을 세우는 자리에서
-        // 한 번에 정했다(#104 · 설계 2026-09-28 §3.2) — GuardSamples 의 주석이 미뤄 둔 바로 그 결정이다.
+        // 한 번에 정했다(#104 · 설계 2026-09-28 §3.2) — GuardSamples 의 주석이 미뤄 둔 바로 그 결정이다. 11 → 9 는 패리의 두 축(성공률 · 의존도)을
+        // 패리와 같이 걷은 것이다(#168).
         // 이름 목록으로 세지 않는 이유는 그러면 축을 더하면서 목록을 같이 고치는 것이
         // "계약을 지켰다" 로 보이기 때문이다 — 리플렉션이 그 손을 막는다.
         typeof(PlayerAxes).GetProperties().Count(p => p.PropertyType == typeof(double))
-            .ShouldBe(11, "축의 수가 바뀌었다 — 축의 계약은 가볍게 못 바꾼다");
+            .ShouldBe(9, "축의 수가 바뀌었다 — 축의 계약은 가볍게 못 바꾼다");
     }
 
 }

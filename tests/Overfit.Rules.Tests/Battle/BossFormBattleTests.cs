@@ -16,9 +16,9 @@ namespace Overfit.Rules.Tests.Battle;
 public class BossFormBattleTests
 {
     private const string _waitId = "기다림";
-    private static readonly InputFrame _bomb = new(0, false, false, false, false, Bomb: true);
-    private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
-    private static readonly InputFrame _right = new(1, false, false, false, false);
+    private static readonly InputFrame _bomb = new(0, false, false, false, Bomb: true);
+    private static readonly InputFrame _attack = new(0, false, false, Attack: true);
+    private static readonly InputFrame _right = new(1, false, false, false);
 
     private static FighterConfig Real() => TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter];
 
@@ -37,8 +37,6 @@ public class BossFormBattleTests
             DashDirection = "out",
             Jumpable = false,
             AntiAir = false,
-            Parryable = false,
-            ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,

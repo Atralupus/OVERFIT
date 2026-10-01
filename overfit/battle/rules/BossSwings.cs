@@ -41,9 +41,6 @@ public sealed class BossSwings
     /// </summary>
     private readonly List<(HitShape Shape, Placement At)> _tested = new();
 
-    /// <summary>이 틱에 받아친 판정이 있었나 — <see cref="Resolve"/> 가 돌려준다.</summary>
-    private bool _parried;
-
     /// <summary>이 틱에 대 본 판정의 태그 — <see cref="TestedTags"/>.</summary>
     private PatternTags? _testedTags;
 
@@ -114,12 +111,12 @@ public sealed class BossSwings
     /// <para>
     /// 산 판정(<see cref="Live"/>)이 아니라 <b>대 본</b> 판정이다. 몸에 닿은 판정은 그 틱에 끝나 산 목록에서 빠지는데, 색이 산 것만
     /// 보면 바로 그 틱 — 판정 보기가 그 사각형(<see cref="TestedRects"/>)을 그리는 틱 — 에 파이터 쪽 상태로 돌아간다. 착지 띠는
-    /// 땅에 선 몸에 첫 틱에 닿으므로, 그 앞에서 K 를 누른 파이터가 띠와 같은 그림에서 "패리 창" 색으로 칠해졌다.
+    /// 땅에 선 몸에 첫 틱에 닿으므로, 그 앞에서 패리(#168 에서 걷었다)를 누른 파이터가 띠와 같은 그림에서 "패리 창" 색으로 칠해졌다.
     /// </para>
     /// </summary>
     public PatternTags? TestedTags => _testedTags;
 
-    /// <summary>이 틱에 <b>대 본</b> 판정 — 그 판정의 답(대시 · 가드 · 패리 · #78)을 몸통 색이 같이 본다. <see cref="TestedTags"/> 와 같은 판정이다.</summary>
+    /// <summary>이 틱에 <b>대 본</b> 판정 — 그 판정의 답(대시 · 가드 · #78)을 몸통 색이 같이 본다. <see cref="TestedTags"/> 와 같은 판정이다.</summary>
     public HitBox? TestedBox => _testedBox;
 
     /// <summary>
@@ -142,18 +139,17 @@ public sealed class BossSwings
         _live.Add(new LiveSwing(box, tags, patternId, tick, BattleSim.TicksFor(box.ActiveSeconds)));
 
     /// <summary>
-    /// 살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다. <b>받아친 판정이 있었으면 true</b> —
-    /// 보스를 탈진시키는 것은 부르는 쪽(<c>BattleSim</c> 의 탈진 루틴)이다: 같은 틱의 순서가 보스 판정 → 파이터의 칼 → 끊기라서다
-    /// (설계 §3.5 5).
+    /// 살아 있는 판정을 전부 이 틱에 대 본다. 끝난 것은 빼고 산 것은 순서대로 남긴다. 같은 틱의 순서는 보스 판정 → 파이터의 칼 →
+    /// 끊기다(설계 §3.5 5 · <c>BattleSim</c>). 받아친 판정이 있었는지를 돌려주던 때가 있었다 — 패리를 걷으며(#168) 보스를 탈진시키는 길은
+    /// 경직 게이지 하나가 됐다.
     ///
     /// <para>
     /// 이 틱의 번호를 안 받는다 — 관측의 시각은 결과를 가른 틱이 아니라 창이 열린 틱(<see cref="Open"/> 이 받는다)이라서다
     /// (#72 · 설계 §3.6 ①). 받던 때는 그 번호가 타이밍 오차의 기준이었다.
     /// </para>
     /// </summary>
-    public bool Resolve()
+    public void Resolve()
     {
-        _parried = false;
         _tested.Clear();
         _testedTags = _live.Count > 0 ? _live[0].Tags : null;
         _testedBox = _live.Count > 0 ? _live[0].Box : null;
@@ -171,7 +167,6 @@ public sealed class BossSwings
         }
 
         _live.RemoveRange(kept, _live.Count - kept);
-        return _parried;
     }
 
     /// <summary>
@@ -198,7 +193,7 @@ public sealed class BossSwings
     /// 살아 있는 판정 하나를 이 틱에 대 본다. 끝났으면 true.
     ///
     /// <para>
-    /// 몸에 닿는 순간(맞음 · 패리 · 가드 · 붕괴 · 잡힘) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
+    /// 몸에 닿는 순간(맞음 · 가드 · 붕괴 · 잡힘) 그 휘두름은 끝난다 — <b>한 번 휘두르면 한 번만 맞는다.</b>
     /// 무적이 먹은 틱은 넘어가고 창은 계속 산다: 무적이 창보다 먼저 풀리면 그 뒤 틱에 맞는다(다크소울과 같다).
     /// 창이 닫힐 때까지 안 닿았으면 관측을 <b>하나</b> 남긴다 — 무적이 먹었으면 <b>처음 먹은 틱에 지어 둔</b>
     /// 관측(<see cref="LiveSwing.DodgeSnapshot"/>), 아니면 <b>창이 열린 틱에 지어 둔</b> 빗나감(<see cref="LiveSwing.MissSnapshot"/>)이다.
@@ -227,7 +222,7 @@ public sealed class BossSwings
 
         switch (verdict)
         {
-            case HitVerdict.Hit or HitVerdict.Parried or HitVerdict.Guarded or HitVerdict.GuardBroken or HitVerdict.Grabbed:
+            case HitVerdict.Hit or HitVerdict.Guarded or HitVerdict.GuardBroken or HitVerdict.Grabbed:
                 Land(swing, verdict);
                 return true;
 
@@ -260,7 +255,7 @@ public sealed class BossSwings
     }
 
     /// <summary>
-    /// 판정의 결과를 몸에 싣는다 — 맞음 · 패리 · 가드 · 붕괴 · 잡힘의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
+    /// 판정의 결과를 몸에 싣는다 — 맞음 · 가드 · 붕괴 · 잡힘의 부작용. 부르는 곳은 <see cref="Land"/> 하나이고, 몸에
     /// <b>닿은</b> 결과로만 부른다. 무적(Dodged)과 빗나감에는 부작용이 없어 <see cref="Step"/> 이 관측만 지어 두므로
     /// <c>default</c> 갈래는 지금 안 온다. <see cref="BuildEvent"/>(관측 짓기)와 갈라 둔 것은 그래서다 — 무적 · 빗나감의
     /// 관측은 부작용 없이 지어야 한다.
@@ -271,13 +266,6 @@ public sealed class BossSwings
         {
             case HitVerdict.Hit:
                 _fighter.TakeDamage(box.Damage);
-                break;
-
-            case HitVerdict.Parried:
-                // **어느 타든** 받아치면 보스가 탈진한다 (#72 · 설계 §4.3) — 전에는 마무리를 받아쳤을 때만 굳었다(이슈 #53).
-                // 탈진은 여기서 안 건다: 같은 틱에 파이터의 칼이 먼저 돌아야 하고(설계 §3.5 5), 탈진 루틴은 BattleSim 하나다.
-                _fighter.ParryPrecise();
-                _parried = true;
                 break;
 
             case HitVerdict.Guarded:
@@ -305,7 +293,7 @@ public sealed class BossSwings
     ///
     /// <para>
     /// <b>타이밍 오차의 기준은 결과와 무관하게 창이 열린 틱</b>(칼이 선 틱)이다 (#72 · 설계 §3.6 ①). 결과마다 다른 틱을 기준으로
-    /// 하면 대시 · 점프 · 패리의 오차가 서로 다른 자로 잰 값이 된다. 칼이 선 뒤에 시작한 수단은 양수로 남는다.
+    /// 하면 대시 · 점프 · 가드의 오차가 서로 다른 자로 잰 값이 된다. 칼이 선 뒤에 시작한 수단은 양수로 남는다.
     /// </para>
     /// </summary>
     private DodgeEvent BuildEvent(LiveSwing swing, HitBox box, HitVerdict verdict)
@@ -328,10 +316,9 @@ public sealed class BossSwings
             GreedWindow: _fighter.Action == FighterAction.Attack,
 
             // 태그를 아는 것은 여기뿐이다. 의존도 축은 "고를 수 있었는데 그걸 골랐나" 라서
-            // 이 셋이 없으면 만들어지지 않는다. 대시 · 패리는 태그를 판정의 답이 좁힌다 (#78 · 설계 §7.3) — 규칙(HitResolver.Effective)과
-            // 같은 두 값이다. 태그만 실으면 판정마다 답이 다른 패턴(옛 1타 잡기 · #78 — 1타는 다 되고 잡기는 점프만 됐다)에서 잡기가 "대시도 됐다" 로 실린다.
+            // 이 셋이 없으면 만들어지지 않는다. 대시는 태그를 판정의 답이 좁힌다 (#78 · 설계 §7.3) — 규칙(HitResolver.Effective)과
+            // 같은 값이다. 태그만 실으면 판정마다 답이 다른 패턴(옛 1타 잡기 · #78 — 1타는 다 되고 잡기는 점프만 됐다)에서 잡기가 "대시도 됐다" 로 실린다.
             DashAvailable: swing.Tags.DashWindow > 0 && box.Dashable,
-            ParryAvailable: swing.Tags.Parryable && box.Parryable,
 
             // 점프만은 **판정과 자리 단위**다 (#85 · 설계 §7.3) — 창이 열린 틱에 첫 판정이 선 자리에서 잰 값이다(Step). 태그(jumpable)를
             // 실으면 판정마다의 답이 뭉개지고, 모양 전체의 윗끝으로 재면(#72) 보스 앞에서 넘는 2타 · 바짝 붙어 넘는 3타가 "못 넘었다" 로 실린다.
@@ -349,18 +336,17 @@ public sealed class BossSwings
 
         // 지연 오버로드다. 이 줄은 **판정 하나마다** 나오고, 데이터 공장은 한 판에 10~150 판정을
         // 수백만 판 돌린다 — 즉시 오버로드면 LOG_LEVEL=off 여도 포맷 비용을 전부 낸다.
-        // qi 를 같이 찍는다. 정확·부정확이 둘 다 기를 주므로 이 줄만 보고 "받아냈나" 를 셀 수 있고,
         // 내상은 hp 에 이미 반영돼 있어 두 줄을 견주면 얼마를 흘렸는지가 나온다.
         // dist 를 뺐던 때는 이 줄만으로 verb 를 검산할 수 없었다 — "거리로 빗나갔다" 가 맞는 말인지
         // 보려면 그 순간의 거리가 있어야 하고, 잘못 붙은 verb 를 잡아낸 방법이 정확히 그 검산이다.
         //
         // air · dist 는 **관측 자신의 값**(evt)을 찍는다 (이슈 #59 · 최종 리뷰). 미룬 Dodged 는 무적이
         // 먹은 틱에 지어 두고 창이 닫히는 틱에 여기로 오므로, 그때의 라이브 값을 읽으면 한 줄에 두 틱이 섞인다 —
-        // 땅에서 사거리 안에서 피한 관측이 "공중 · 사거리 밖" 으로 찍혔다. hp · qi · stam 은 관측에 없는 값이라
+        // 땅에서 사거리 안에서 피한 관측이 "공중 · 사거리 밖" 으로 찍혔다. hp · stam 은 관측에 없는 값이라
         // 지금 값이다: 판정의 결과가 몸에 실린 뒤의 잔량이다.
         Log.Info("dodge", () => $"pattern={evt.PatternId} verb={evt.Verb} verdict={evt.Verdict}"
             + $" err={evt.TimingError:0.000} dir={evt.Direction} air={evt.Airborne}"
-            + $" dist={evt.Distance:0} hp={_fighter.Health} qi={_fighter.Qi}"
+            + $" dist={evt.Distance:0} hp={_fighter.Health}"
             // stam 을 같이 찍는다 (이슈 #47). 가드의 값은 체력이 아니라 스태미나로 나가므로,
             // 이 칸이 없으면 로그만 보고 "왜 깨졌나" 를 못 읽는다 — 붕괴는 남은 값이 모자란 것이다.
             + $" stam={_fighter.Stamina:0}");
@@ -369,7 +355,7 @@ public sealed class BossSwings
     /// <summary>
     /// 판정 하나가 끝났다 — 결과를 몸에 싣고 관측을 남긴다. 관측은 싣기 <b>전</b>의 몸으로 짓는다 (#78): 잡힘은 하던 행동을 끝내므로
     /// (<c>Fighter.Grab</c>) 실은 뒤에 지으면 칼질 중에 잡힌 사람의 욕심(<c>GreedWindow</c>)이 지워진다. 다른 결과는 행동도 자리도 안
-    /// 바꾸거나(맞음 · 받아침 · 막음) 가드를 끝낼 뿐이라(붕괴 — 가드는 욕심이 아니다) 순서가 관측을 안 바꾼다. 로그의 잔량(hp · stam)은
+    /// 바꾸거나(맞음 · 막음) 가드를 끝낼 뿐이라(붕괴 — 가드는 욕심이 아니다) 순서가 관측을 안 바꾼다. 로그의 잔량(hp · stam)은
     /// 실은 뒤다(<see cref="Commit"/>).
     /// </summary>
     private void Land(LiveSwing swing, HitVerdict verdict)

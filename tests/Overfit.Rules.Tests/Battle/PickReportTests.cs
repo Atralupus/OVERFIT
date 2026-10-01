@@ -15,7 +15,7 @@ public class PickReportTests
     private static readonly string[] _roster = ["3연격", "점프 공격", "엇박 3연격", "돌진", "잡기", "올려베기"];
 
     private static DodgeEvent Event(DodgeVerb verb) =>
-        new("3연격", verb, HitVerdict.Dodged, 0, 1, false, 100, false, true, true, true, true);
+        new("3연격", verb, HitVerdict.Dodged, 0, 1, false, 100, false, true, true, true);
 
     private static List<DodgeEvent> Events(params (DodgeVerb Verb, int Count)[] counts) =>
         [.. counts.SelectMany(c => Enumerable.Repeat(Event(c.Verb), c.Count))];
@@ -28,7 +28,7 @@ public class PickReportTests
             _roster,
             3,
             [],
-            Events((DodgeVerb.Dash, 15), (DodgeVerb.Guard, 10), (DodgeVerb.Parry, 5)),
+            Events((DodgeVerb.Dash, 15), (DodgeVerb.Guard, 10), (DodgeVerb.Jump, 5)),
             [],
             ["3연격", "엇박 3연격", "3연격"],
             [new("3연격", true), new("엇박 3연격", true), new("3연격", false)]);
@@ -36,7 +36,7 @@ public class PickReportTests
         lines.ShouldBe(
         [
             "보스가 계획을 무작위로 골랐습니다 — 계획 3개 · 캔슬 0번",
-            "이 판의 회피 30건: 대시 15 · 가드 10 · 패리 5",
+            "이 판의 회피 30건: 대시 15 · 가드 10 · 점프 5",
             "폭탄을 안 던졌습니다",
             "3연격 — 2번 나옴 · 1번 맞음",
             "점프 공격 — 안 나옴",
@@ -87,7 +87,7 @@ public class PickReportTests
     }
 
     [Fact]
-    public void 회피는_많은_순이고_같으면_대시_점프_패리_가드_거리_무대응_순이다()
+    public void 회피는_많은_순이고_같으면_대시_점프_가드_거리_무대응_순이다()
     {
         List<DodgeEvent> events = Events((DodgeVerb.None, 1), (DodgeVerb.Spacing, 2), (DodgeVerb.Guard, 1), (DodgeVerb.Jump, 2));
 

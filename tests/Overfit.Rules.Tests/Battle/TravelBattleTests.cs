@@ -12,7 +12,7 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class TravelBattleTests
 {
-    private static readonly InputFrame _bomb = new(0, false, false, false, false, Bomb: true);
+    private static readonly InputFrame _bomb = new(0, false, false, false, Bomb: true);
 
     private sealed class Recording(IBossController inner) : IBossController
     {

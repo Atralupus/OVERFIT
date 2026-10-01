@@ -13,7 +13,7 @@ namespace Overfit.Battle.Debug;
 /// <para>
 /// 전에는 벽시계로만 기다렸다 — 정해진 초에 셔터를 눌렀다. 그러면 <b>무엇이 찍힐지 아무도 모른다</b>:
 /// 패턴 주기(간격 0.8초 + 3연격 3.25초 또는 점프 공격 1.5초)와 어긋나 실행할 때마다 다른 순간이 나오고,
-/// 플레이어는 아무것도 안 하므로 대시·패리·공격은 한 번도 안 찍힌다.
+/// 플레이어는 아무것도 안 하므로 대시·가드·공격은 한 번도 안 찍힌다.
 /// </para>
 ///
 /// <para>
@@ -100,7 +100,7 @@ public partial class ShotRunner : Node
 
         await Shoot("battle-1-approach", 1.0);
 
-        // 보스 쪽으로 붙는다. 붙어 있어야 판정에 걸리고, 그래야 피격·패리가 찍힌다.
+        // 보스 쪽으로 붙는다. 붙어 있어야 판정에 걸리고, 그래야 피격이 찍힌다.
         await WalkIn();
 
         // ── 대시: 무적 창 한가운데를 잡는다 ────────────────────────────────
@@ -115,16 +115,6 @@ public partial class ShotRunner : Node
         // 설계상 여기서 맞는 것이 맞는데, 플레이어에게는 지금까지 보이지 않던 구간이다.
         await _drive.Frames(5);
         await Screenshot.CaptureAsync(this, "battle-3-dash-tail");
-
-        await _drive.Wait(0.5);
-
-        // ── 패리: 칼을 사선으로 세우는 0.33초 커밋의 한가운데 (설계 §5.3) ─────────
-        // 패리는 이제 누르는 것 한 번이다 — Tap. 가드(↓)와 그림이 갈리는지가 이 장의 증명이다: 패리는 칼을 세우며
-        // 움직이고 가드는 서 있다(battle-10-guard 와 나란히 본다). 20틱 커밋의 10틱째가 한가운데다.
-        Tap("parry");
-        await _drive.Until(() => _battle?.FighterParrying == true, _pollTimeout);
-        await _drive.Frames(10);
-        await Screenshot.CaptureAsync(this, "battle-4-parry");
 
         await _drive.Wait(0.5);
 
@@ -258,13 +248,12 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 방어 네 장 (이슈 #47 · #53 · #72). <b>버티는 자세 · 스태미나로 깨지는 순간 · 받아친 순간 · 받아쳐 무너진 보스.</b>
+    /// 방어 두 장 (이슈 #47 · #72). <b>버티는 자세 · 스태미나로 깨지는 순간.</b>
     ///
     /// <para>
-    /// 증명할 것이 둘이다. ① <b>가드가 깨지는 길은 스태미나 하나다</b>(설계 §5.2) — ↓ 를 붙든 채 맞기만 하면 가드는 Idle 이
-    /// 아니라 스태미나가 안 차고, 바닥나는 대에서 깨진다. 옛 빨간 가드 불가 마무리는 걷었다. ② <b>받아친 연출은 약하고, 대신 보스가
-    /// 무너진다</b>(설계 §4.3) — 받아친 고리는 가드가 받아낸 고리와 크기가 같고 색만 따뜻하다. 무너진 보스는 take-hit 를 한 번 돌고
-    /// 마지막 장에 선 채 푸른 톤이다. battle-10(가드) · battle-10d(받아침)를 나란히 놓으면 고리는 같은 크기 · 몸은 다른 그림이어야 한다.
+    /// 증명할 것은 <b>가드가 깨지는 길은 스태미나 하나다</b>(설계 §5.2) — ↓ 를 붙든 채 맞기만 하면 가드는 Idle 이
+    /// 아니라 스태미나가 안 차고, 바닥나는 대에서 깨진다. 옛 빨간 가드 불가 마무리는 걷었다. 받아친 순간 · 받아쳐 무너진 보스의 두 장
+    /// (<c>battle-10d</c> · <c>battle-10e</c>)은 패리와 같이 걷었다(#168) — 무너진 보스는 <c>battle-12b-poise-break</c> 가 찍는다.
     /// </para>
     ///
     /// <para>
@@ -295,56 +284,17 @@ public partial class ShotRunner : Node
         await _drive.Until(() => (_battle?.FighterGuardBreaks ?? 0) > broke, _guardBreakTimeout);
         await _drive.Frames(3);
         await Screenshot.CaptureAsync(this, "battle-10b-guard-break");
-
-        // ── 받아친 순간 (이슈 #53) ────────────────────────────────────────
-        // **↓ 로는 못 받아친다.** 받아치는 것은 K 다 — 판정 <b>직전에</b> 눌러야 창(0.133초) 안에 선다.
-        // 프레임을 세지 않고 남은 시간을 보고 누른다(봇이 쓰는 것과 같은 규칙이다): 세어 두면
-        // parry_precise_window 를 고치는 순간 이 장이 조용히 맞는 사진이 된다. 누른 것이 빗나가면(타이밍) 맞고 지나간다 — 받아칠 때까지
-        // 누른다(3연격만 도는 판이라 판정마다 받아칠 수 있다).
         Hold("guard", false);
-        int parried = _battle?.FighterParries ?? 0;
-        for (int i = 0; i < 60 * 12 && (_battle?.FighterParries ?? 0) == parried; i++)
-        {
-            if (_battle is { BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08)
-            {
-                Tap("parry");
-            }
-
-            await _drive.Frames(1);
-        }
-
-        if ((_battle?.FighterParries ?? 0) == parried)
-        {
-            Log.Warn("shots", "parry_not_seen");
-        }
-
-        // **히트스톱 안에서 J 를 누른다** (#71 · 설계 §1). 받아친 틱에 보스가 무너져 7프레임 히트스톱이 걸렸다 — 그동안 누른 키는
-        // 버려지지 않고 끝난 첫 틱에 넘어가 되받아치기 1타가 선다(로그 [battle][D] hitstop_carry … attack=True). 사람이 받아친 것을
-        // 보고 곧장 누르는 자리가 여기다.
-        Tap("attack");
-        await _drive.Frames(3);
-        await Screenshot.CaptureAsync(this, "battle-10d-parry");
-
-        // ── 받아쳐 무너진 보스 (#72 · 설계 §4.3) ──────────────────────────
-        // 어느 타를 받아쳐도 무너진다. take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야 마지막 장에 선 자세가 찍힌다 —
-        // 받아친 뒤 30프레임이다(위의 3 + 27). 탈진은 1.5초(90틱)라 아직 한참 남았다.
-        if (_battle is { BossExhausted: false })
-        {
-            Log.Warn("shots", "exhaust_not_seen");
-        }
-
-        await _drive.Frames(27);
-        await Screenshot.CaptureAsync(this, "battle-10e-boss-exhausted");
     }
 
     /// <summary>
-    /// 경직 게이지 두 장 (#71 · 설계 §4.5 · §9). <b>반쯤 찬 게이지 · 패리 없이 게이지로 무너진 보스.</b> 붙어서 2연격(J 두 번)을 두 번
+    /// 경직 게이지 두 장 (#71 · 설계 §4.5 · §9). <b>반쯤 찬 게이지 · 게이지로 무너진 보스.</b> 붙어서 2연격(J 두 번)을 두 번
     /// 넣는다 — 한 번은 55 로 안 무너지고, 연달아 두 번이면 두 번째 2타에 무너진다. 보스의 칼은 막지도 피하지도 않고 맞는다 —
     /// 칼질은 맞아도 안 끊기고(끝까지 커밋) 보스는 맞아도 하던 것을 안 멈춘다(흰 플래시뿐이다).
     ///
     /// <para>
     /// 셔터는 규칙에게 묻는다(<c>BossPoise</c> · <c>BossExhausted</c>) — 칼이 몇 번 닿았는지를 세면 경직도 데이터를 고치는 날 다른 장이
-    /// 찍힌다. 무너진 장은 take-hit(24프레임)를 다 돈 뒤다(<c>battle-10e</c> 와 같은 30프레임) — 보스는 마지막 장에 선 채 푸르고,
+    /// 찍힌다. 무너진 장은 take-hit(24프레임)를 다 돈 뒤다(30프레임) — 보스는 마지막 장에 선 채 푸르고,
     /// 게이지 자리는 파랗게 바뀌어 남은 탈진을 그린다.
     /// </para>
     /// </summary>
@@ -386,20 +336,20 @@ public partial class ShotRunner : Node
 
     /// <summary>
     /// 스태미나를 다 써 탈진한 파이터 한 장 (#71 · 설계 §5.5 · §9). <b>대시를 좌우로 네 번</b> 해 스태미나(25 씩)를 거의 다 쓰고, 남은 몇(대시
-    /// 사이 Idle 틱에 찬 것)을 <b>패리</b> 한 번으로 0 까지 쓴다 — 모자란 마지막 한 번도 나간다. 그 패리가 경직까지 끝나는 틱에 탈진한다.
+    /// 사이 Idle 틱에 찬 것)을 <b>1타</b> 한 번으로 0 까지 쓴다 — 모자란 마지막 한 번도 나간다. 그 칼질이 경직까지 끝나는 틱에 탈진한다.
     /// take-hit(10fps · 4장 = 24프레임)를 다 돈 뒤라야 마지막 장에 선 자세가 찍힌다 — 30프레임 뒤다. 몸은 탈진 색이고 스태미나 바는
     /// 파랗다(보스 게이지의 탈진과 같은 파랑). 가드 붕괴로 든 탈진과 같은 그림이다(<c>battle-10b</c> 는 붕괴의 순간 · 큰 고리).
     ///
     /// <para>
     /// <b>3연격만 도는 판(대본 · #78)에서</b> 찍는다. 3연격은 보스가 선 자리(1440 · 쉬는 동안 제자리)에서 3.25초 동안 427px 까지만
-    /// 쳐 파이터가 선 자리(480)에 안 닿고, 대시 넷(대시 11틱 + 대시 뒤 경직 6틱 + 돌아서는 틱)과 패리 하나(커밋 20틱 + 패리 뒤 경직 15틱 ·
+    /// 쳐 파이터가 선 자리(480)에 안 닿고, 대시 넷(대시 11틱 + 대시 뒤 경직 6틱 + 돌아서는 틱)과 1타 하나(15틱 + 1타 뒤 경직 24틱 ·
     /// 모두 ≈ 1.9초)와 셔터가 그 안에 든다. 점프 공격이면 도약이 파이터 앞에 내려 맞는 자세가 섞인다.
     /// </para>
     ///
     /// <para>
     /// <b>무엇으로 바닥내나를 두 번 옮겼다</b> (#82). 전에는 1타를 16프레임마다 눌렀다(여덟 번 ≈ 2.1초) — 칼질 뒤 경직(1타 0.40초)이 들자
     /// 여덟 번이 5초를 넘어 3연격 밖으로 나가고, 16프레임마다의 J 는 1타의 경직에 떨어져 2타가 됐다. 그다음 패리만 일곱 번 눌렀는데, 패리 뒤
-    /// 경직(0.25초)이 들자 한 번이 35틱이라 일곱 번이 4.1초로 다시 3연격 밖이다. 대시는 25 를 17틱에 써 가장 빠르다. <b>한쪽으로만 네 번</b>
+    /// 경직(0.25초)이 들자 한 번이 35틱이라 일곱 번이 4.1초로 다시 3연격 밖이었다(패리는 #168 에서 걷었고 마지막 한 번은 1타가 낸다). 대시는 25 를 17틱에 써 가장 빠르다. <b>한쪽으로만 네 번</b>
     /// 뛰면 벽에 붙어 몸이 화면 왼쪽 끝에서 잘렸다 — 그래서 왼쪽 · 오른쪽을 번갈아 뛰어 선 자리(480)로 돌아와 보스 쪽을 본 채 찍는다.
     /// 대시는 바라보는 쪽으로만 가서, 뛰기 전에 두 프레임 걸어 돌아선다(<see cref="Combo"/> 와 같은 이유로 두 프레임이다).
     /// </para>
@@ -423,7 +373,7 @@ public partial class ShotRunner : Node
 
         for (int f = 0; f < 3 * Engine.PhysicsTicksPerSecond && _battle is { FighterExhausted: false }; f++)
         {
-            await PressWhenFree("parry");
+            await PressWhenFree("attack");
         }
 
         if (_battle is { FighterExhausted: false })
@@ -734,8 +684,8 @@ public partial class ShotRunner : Node
     ///
     /// <para>
     /// ① <b>3연격의 세 장</b> — 판정마다 규칙이 대 본 틱에 한 장. 채운 사각형(규칙이 대 본 모양)이 그림의 흰 궤적과 겹쳐야 한다.
-    /// ② <b>착지 띠</b> — 바닥 전체 · 높이 0 ~ 60. ③ <b>착지 앞의 패리</b> — 착지 창이 열리기 직전에 K 를 눌러 패리 창 안에서
-    /// 착지를 맞는다. 파이터 몸통이 "패리 창" 색이 아니어야 한다: 착지는 패리를 안 받아 실효 방어가 없다(설계 §6.1).
+    /// ② <b>착지 띠</b> — 바닥 전체 · 높이 0 ~ 60. ③ <b>착지 앞의 가드</b> — ↓ 를 붙든 채
+    /// 착지를 맞는다. 파이터 몸통이 가드 색이 아니어야 한다: 착지는 가드를 안 받아 실효 방어가 없다(설계 §6.1). 전에는 패리였다(#168 에서 걷었다).
     /// ② · ③ 의 착지 띠는 땅에 선 몸에 창의 첫 틱에 닿고 그 판정은 그 틱에 끝난다 — 그래서 대 본 그 틱에 판을 세우고 찍는다
     /// (<see cref="CaptureTested"/>). ① 은 빗나간다: 대본의 첫 패턴이라 보스가 선 자리(1440 · 쉬는 동안 제자리라 파이터와 960 떨어져)에서 서고,
     /// 가만히 선 파이터에게 셋 다 사거리(427) 밖(<c>MissedTooFar</c>)이라 창 8틱을 다 산다. 그래도 같은 길로 찍는다 — 닿든 안 닿든 대 본 첫 틱이다.
@@ -743,7 +693,7 @@ public partial class ShotRunner : Node
     ///
     /// <para>
     /// (#78 · 설계 §9 의 5번 PR) ④ <b>잡기 띠</b> — 0.60초의 바닥 전체 띠. 가만히 선 몸에 첫 틱에 닿아 잡힌다 — 몸통은 맨몸의 색이다: 잡기는
-    /// 대시 · 가드 · 패리를 안 받는다. 착지 띠와 같은 모양이지만 흰 충격파가 없고 흰 구가 파이터를 감싼다. ⑤ <b>돌진 뒤 3타</b> — 달려와 멈춘
+    /// 대시 · 가드를 안 받는다. 착지 띠와 같은 모양이지만 흰 충격파가 없고 흰 구가 파이터를 감싼다. ⑤ <b>돌진 뒤 3타</b> — 달려와 멈춘
     /// 자리(파이터 앞 280)에서 3타의 궤적이 파이터에 닿는다. ⑥ <b>올려베기</b>(설계 2026-09-29 조각1 §2.1) — 손으로 적은 사각형 [0, 396, 0, 360] 이
     /// 뒤집어 그린 attack2 의 흰 궤적을 덮는다. 사각형이 그림보다 크다(유저 확인 — 그림과 달라도 크게). 멀리 선 몸이라 창 8틱을 다 산다.
     /// </para>
@@ -770,13 +720,12 @@ public partial class ShotRunner : Node
         await _drive.Until(() => _battle is { BossPattern: "점프 공격", BossWindingUp: true }, _patternTimeout);
         await CaptureTested("hitbox-2-landing", _pollTimeout);
 
-        // ③ 판정까지 5틱(0.08초) 안이면 누른다 — 패리 창(0.133초 = 8틱)이 착지 창의 첫 틱을 덮는다(battle-10d 와 같은 규칙).
+        // ③ ↓ 를 붙든 채 착지를 기다린다 — 가드는 누르고 있는 동안이라 판정 직전을 노릴 필요가 없다.
         await NewBattle("점프 공격");
-        await _drive.Until(
-            () => _battle is { BossPattern: "점프 공격", BossWindingUp: true } && _battle.BossNextActiveIn is > 0 and <= 0.08,
-            _patternTimeout);
-        Tap("parry");
-        await CaptureTested("hitbox-3-landing-parry", _pollTimeout);
+        Hold("guard", true);
+        await _drive.Until(() => _battle is { BossPattern: "점프 공격", BossWindingUp: true }, _patternTimeout);
+        await CaptureTested("hitbox-3-landing-guard", _pollTimeout);
+        Hold("guard", false);
 
         // ④ 잡기의 띠 — 동작의 판정이 이것 하나다.
         await NewBattle("잡기");
@@ -812,7 +761,7 @@ public partial class ShotRunner : Node
 
     /// <summary>
     /// 보스 앞 <see cref="_near"/> 까지 걸어 붙는다 — 시간이 아니라 거리로 멈춘다. 옛 장면들은 1.1초를 걸었는데, 그것으로 붙은 것은 쉬는 동안 보스가
-    /// 걸어와 준 덕이었다(설계 2026-09-29 조각1 §5.1 이 걷었다 — 그대로 두니 보스 앞 500 에 서서 가드 · 패리 장면이 판정을 못 만났다).
+    /// 걸어와 준 덕이었다(설계 2026-09-29 조각1 §5.1 이 걷었다 — 그대로 두니 보스 앞 500 에 서서 가드 장면이 판정을 못 만났다).
     /// </summary>
     private async Task WalkIn()
     {

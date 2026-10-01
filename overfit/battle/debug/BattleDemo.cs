@@ -185,23 +185,19 @@ public partial class BattleDemo : Node
         PlayerAxes axes = PlayerAxes.From(sim.Events);
         // 수단별 건수를 축 옆에 같이 찍는다. samples 만 보면 "관측 10건" 이 "대시 3건으로 낸 분산"
         // 까지 보증하는 것처럼 읽힌다. 의존도 축은 한 겹 더 얇다 — 그 수단이 가능했고 **다른
-        // 수단도 가능했던** 판정만 분모라, jump_rel_n · parry_rel_n 을 따로 찍는다.
-        //
-        // parry_n · guard_n · (samples - 나머지)가 **셋으로 갈린다** (이슈 #53): 패리 · 가드 ·
-        // 무반응. parry_rate 가 그중 첫째의 성공률이라, 이 줄 하나로 "무엇을 골랐고 얼마나
-        // 정확했나" 가 읽힌다. parry_late_n(부정확 패리)은 그 단계가 없어져 같이 빠졌다.
+        // 수단도 가능했던** 판정만 분모라, jump_rel_n 을 따로 찍는다. 패리의 칸(parry_n · parry_rel_n · parry_rate ·
+        // parry_rel)은 패리와 같이 걷었다(#168).
         Log.Info("axes", $"samples={axes.Samples} dash_n={axes.DashSamples} jump_n={axes.JumpSamples}"
-            + $" parry_n={axes.ParrySamples}"
             // guard_n · guard_broken_n 은 **개수**다 (이슈 #47) — 축은 끝의 guard_rate(#104)다. 둘을 같이 찍는 이유는
             // "버텨냈다" 와 "버티다 무너졌다" 가 결과가 정반대이기 때문이다 — 한 칸만 보면
             // 가드가 도는지는 알아도 그것이 일하는지는 모른다.
             + $" guard_n={axes.GuardSamples} guard_broken_n={axes.GuardBrokenSamples}"
             + $" jump_rel_n={axes.JumpChoiceSamples}"
-            + $" parry_rel_n={axes.ParryChoiceSamples} dash_bias={axes.DashTimingBias:0.000}"
+            + $" dash_bias={axes.DashTimingBias:0.000}"
             + $" dash_var={axes.DashTimingVar:0.000} dash_dir={axes.DashDirectionBias:0.00}"
             + $" jump_bias={axes.JumpTimingBias:0.000} jump_rel={axes.JumpReliance:0.00}"
-            + $" air_impact={axes.AirborneAtImpactRatio:0.00} parry_rate={axes.ParryRate:0.00}"
-            + $" parry_rel={axes.ParryReliance:0.00} greed={axes.Greed:0.00} dist={axes.DistanceBias:0}"
+            + $" air_impact={axes.AirborneAtImpactRatio:0.00}"
+            + $" greed={axes.Greed:0.00} dist={axes.DistanceBias:0}"
             + $" guard_rate={axes.GuardRate:0.00}");
 
         // 폭탄 (설계 2026-09-30 조각2 §4) — 결과 화면의 폭탄 줄과 같은 셈이다. reacted 는 보스가 끊은 던지기 수다(늦어서 떨어진 것도 든다).

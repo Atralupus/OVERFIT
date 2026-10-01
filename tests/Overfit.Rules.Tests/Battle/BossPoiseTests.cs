@@ -8,14 +8,14 @@ using Xunit;
 namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
-/// 경직 게이지가 판 위에서 도는가 (#71 · 설계 §4.3 · §4.5) — 칼이 채우고, 끝까지 차면 받아쳤을 때와 <b>같은</b> 탈진에 든다.
+/// 경직 게이지가 판 위에서 도는가 (#71 · 설계 §4.3 · §4.5) — 칼이 채우고, 끝까지 차면 탈진에 든다(받아쳐 무너지던 길은 #168 에서 걷었다).
 /// 게이지의 산수 자체는 <c>PoiseGaugeTests</c> 가 본다.
 /// </summary>
 public class BossPoiseTests
 {
     private const string _waitId = "기다림";
 
-    private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
+    private static readonly InputFrame _attack = new(0, false, false, Attack: true);
 
     /// <summary>보스 반폭 + 파이터 반폭 — 이 거리에 서면 기준 파이터의 칼(±90)이 보스 몸(±85)에 닿는다.</summary>
     private static double Standoff() => TestConfigs.Boss().HalfWidth + TestConfigs.Fighter().HalfWidth;
@@ -32,7 +32,7 @@ public class BossPoiseTests
     }
 
     /// <summary>
-    /// 선딜이 긴 패턴 하나 — <paramref name="at"/> 초에 판정 하나가 선다(패리를 받는다). 보스가 그동안 "하던 것" 이 있어야
+    /// 선딜이 긴 패턴 하나 — <paramref name="at"/> 초에 판정 하나가 선다. 보스가 그동안 "하던 것" 이 있어야
     /// 무너질 때 끊기는지를 본다. 판정은 보스 중심에서 <paramref name="reach"/> 까지 · 창 <paramref name="window"/> 초다(0 이면 한 틱).
     /// </summary>
     private static PatternDef Waiting(double at, double reach = 2000, double window = 0) => new()
@@ -43,8 +43,6 @@ public class BossPoiseTests
             DashDirection = "out",
             Jumpable = false,
             AntiAir = false,
-            Parryable = true,
-            ParryWindow = 0.12,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,
@@ -80,7 +78,7 @@ public class BossPoiseTests
 
         for (int i = 0; i < 600 && sim.Boss.X - sim.Fighter.X > Standoff(); i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, false));
+            sim.Tick(new InputFrame(1, false, false, false));
         }
 
         (sim.Boss.X - sim.Fighter.X).ShouldBeLessThanOrEqualTo(Standoff(), "파이터가 칼이 닿는 자리까지 못 걸어갔다");
@@ -155,9 +153,9 @@ public class BossPoiseTests
     }
 
     [Fact]
-    public void 게이지로_무너지면_하던_패턴이_끊기고_받아쳤을_때와_같은_90틱_탈진이다()
+    public void 게이지로_무너지면_하던_패턴이_끊기고_90틱_탈진이다()
     {
-        // 설계 §4.3 — 원인은 둘이고 루틴은 하나다. 보스가 무엇을 하고 있었든(여기서는 선딜) 그 자리에서 끊기고, 탈진은 1.5초 =
+        // 설계 §4.3 — 탈진의 루틴은 하나다. 보스가 무엇을 하고 있었든(여기서는 선딜) 그 자리에서 끊기고, 탈진은 1.5초 =
         // 90틱이다. 끊긴 패턴의 판정은 탈진이 풀린 뒤에도 안 온다.
         BattleSim sim = Beside(Fighter(100, 100), gap: 0.2);
         sim.Boss.CurrentPattern.ShouldBe(_waitId, "파이터가 닿기 전에 패턴이 안 섰다 — 끊기는 것을 못 본다");
@@ -238,29 +236,6 @@ public class BossPoiseTests
 
         sim.Tick(default);
         sim.Poise.Value.ShouldBe(10 - (10 * BattleSim.Dt), 1e-9);
-    }
-
-    [Fact]
-    public void 받아쳐_무너져도_게이지를_비운다()
-    {
-        // 탈진은 하나다(설계 §4.3) — 원인이 패리여도 게이지를 비운다. 안 비우면 반쯤 찬 게이지가 탈진이 풀리자마자 한 대에 무너진다.
-        BattleSim sim = Beside(TestConfigs.Fighter(), gap: 0.2, at: 4.0);
-        Strike(sim);
-        sim.Poise.Value.ShouldBe(10);
-        UntilIdle(sim);
-
-        double before = 0;
-        for (int i = 0; i < 600 && sim.Events.Count == 0; i++)
-        {
-            before = sim.Poise.Value;
-            bool press = sim.NextActiveIn is <= 4 * BattleSim.Dt && sim.Fighter.Action == FighterAction.Idle;
-            sim.Tick(new InputFrame(0, false, false, Parry: press, false));
-        }
-
-        sim.Events.Single().Verdict.ShouldBe(HitVerdict.Parried);
-        before.ShouldBeGreaterThan(0, "받아치기 전에 게이지가 이미 비었다 — 이 테스트가 비우는 것을 못 본다");
-        sim.Boss.Exhausted.ShouldBeTrue();
-        sim.Poise.Value.ShouldBe(0, "받아쳐 무너졌는데 게이지가 남았다");
     }
 
     [Fact]

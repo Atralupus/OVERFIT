@@ -27,7 +27,7 @@ public partial class BombView : Node2D
     /// <summary>심지의 불꽃 — 깜빡인다. 폭탄이 "곧 터진다" 는 것을 말하는 유일한 움직임이다.</summary>
     private static readonly Color _spark = new(1.00f, 0.74f, 0.28f, 1f);
 
-    /// <summary>터지는 불꽃 원 — 주황. 받아친 고리(따뜻한 흰색) · 가드 고리(보라)와 색으로 갈린다.</summary>
+    /// <summary>터지는 불꽃 원 — 주황. 가드 고리(보라)와 색으로 갈린다.</summary>
     private static readonly Color _boom = new(1.00f, 0.56f, 0.16f, 1f);
 
     /// <summary>끊겨 잃은 폭탄의 연기 — 탁한 회색. 터지지 않았다는 것이 색으로 보인다.</summary>
@@ -90,8 +90,8 @@ public partial class BombView : Node2D
     {
         _burst.Position = _target;
         _burst.Burst(
-            (float)_feel.ParryRingFrom,
-            (float)(_feel.ParryRingTo * 2),
+            (float)_feel.RingFrom,
+            (float)(_feel.RingTo * 2),
             _feel.BombBurstSeconds,
             _boom,
             _feel.SparkCount,

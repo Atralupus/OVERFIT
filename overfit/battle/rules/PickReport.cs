@@ -16,12 +16,11 @@ namespace Overfit.Battle.Rules;
 /// </summary>
 public static class PickReport
 {
-    /// <summary>회피 수단의 이름과 같은 수일 때의 순서 — 몸을 쓰는 수단(대시 · 점프 · 패리 · 가드)이 앞, 자리와 무대응이 뒤다.</summary>
+    /// <summary>회피 수단의 이름과 같은 수일 때의 순서 — 몸을 쓰는 수단(대시 · 점프 · 가드)이 앞, 자리와 무대응이 뒤다.</summary>
     private static readonly (DodgeVerb Verb, string Name)[] _verbs =
     [
         (DodgeVerb.Dash, "대시"),
         (DodgeVerb.Jump, "점프"),
-        (DodgeVerb.Parry, "패리"),
         (DodgeVerb.Guard, "가드"),
         (DodgeVerb.Spacing, "거리"),
         (DodgeVerb.None, "무대응"),
