@@ -77,6 +77,9 @@ public sealed class BossConfig
     /// <summary>폭탄 던지기를 보고 끊으려 할 때 (설계 2026-09-30 조각2 §2.4) — 반응 지연 · 멈칫 · 끊은 뒤의 동작.</summary>
     public required BombReactionDef BombReaction { get; init; }
 
+    /// <summary>세 페이즈 (설계 2026-10-01 조각1 §1) — 문턱과 전환의 길이. 판이 <see cref="BossForms"/> 로 세운다.</summary>
+    public required FormsDef Forms { get; init; }
+
     public required string Sprite { get; init; }
 }
 
@@ -98,6 +101,19 @@ public sealed class BombReactionDef
 }
 
 /// <summary>
+/// 보스의 형태 (설계 2026-10-01 조각1 §1) — <c>bosses.json</c> 의 <c>forms</c>. 이름이 phase 가 아닌 것은 <see cref="BossPhase"/>(선딜 · 판정 · 후딜)와
+/// 겹치지 않게다. 유저에게는 "페이즈" 다.
+/// </summary>
+public sealed class FormsDef
+{
+    /// <summary>남은 체력의 문턱들, 내려가는 순서 — 여기 닿으면 다음 형태로 바뀐다. 형태 수는 길이 + 1 이다.</summary>
+    public required IReadOnlyList<int> Thresholds { get; init; }
+
+    /// <summary>전환의 길이(초) — 무적 · idle · 흰 플래시. 탈진(1.5)과 같다: 흰 플래시 셋이 읽히는 가장 짧은 길이다.</summary>
+    public required double ShiftSeconds { get; init; }
+}
+
+/// <summary>
 /// 보스 상태. <b>플레이어를 모른다</b> — 볼 곳과 설 자리는 <see cref="BattleSim"/> 이 넣어준다(<see cref="Face"/> · <see cref="Move"/>).
 /// 그래야 패턴 테스트가 플레이어 없이 돈다. 쉬는 동안에는 제자리다 — 자리를 옮기는 길은 달리기 · 돌진 · 도약의 움직임 셋이다(설계 2026-09-29
 /// 조각1 §5.1).
@@ -113,14 +129,18 @@ public sealed class Boss
     /// <summary>이번 탈진의 길이(틱) — <see cref="ExhaustLeft"/> 의 분모다. 탈진에 들 때 받는다.</summary>
     private int _exhaustTotal;
 
-    public Boss(BossConfig config, Arena arena, double x)
+    /// <param name="config">보스 수치 — <c>bosses.json</c>.</param>
+    /// <param name="arena">아레나 — 자리를 그 안으로 자른다.</param>
+    /// <param name="x">시작 자리(발 중심 x).</param>
+    /// <param name="startHealth">시작 체력 — 대본으로 선 판만 쓴다(설계 2026-10-01 조각1 §2.5). 없으면 최대 체력.</param>
+    public Boss(BossConfig config, Arena arena, double x, int? startHealth = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(arena);
         _config = config;
         _arena = arena;
         X = x;
-        Health = config.MaxHealth;
+        Health = startHealth ?? config.MaxHealth;
     }
 
     public double X { get; private set; }

@@ -561,4 +561,8 @@
 # 둘은 반응의 돌진이 끊고(855 · 1090틱 — 마지막 돌진이 파이터를 쓰러뜨린다) 셋은 동작의 판정에 잃었다(246 엇박 3연격 · 590 3연격 · 1014 올려베기).
 # 판은 1090틱에 끝난다(보스 HP 808). 판에 닿은 규칙 코드는 BattleSim 의 반응(Watch · ReactNow · React · BeginReaction) · BombWatch · PlanFlow.Drop 이고
 # 데이터는 bosses.json 의 bomb_reaction 이다.
-51 1090 0 808 11 c48f81b92bff20c2
+# 2026-10-01 갱신 (강화학습 보스 조각 1 · 세 페이즈 — 설계 2026-10-01 조각1 §1 · §2): 51 1090 0 808 11 c48f81b92bff20c2 → 51 1090 0 1008 11 c48f81b92bff20c2.
+# 보스 HP 칸만 움직였다 — 최대 체력이 1000 → 1200 이라 같은 피해 192 뒤 남은 체력이 808 → 1008 이다. 1008 은 첫 문턱(900) 위라 전환이 없고, 틱 · 관측 ·
+# 다이제스트가 그대로다(판의 흐름이 안 바뀌었다). 판에 닿은 규칙 코드는 BattleSim 의 DamageBoss · CheckForm · BeginShift · BossForms 이고 데이터는
+# bosses.json 의 max_health · forms 다.
+51 1090 0 1008 11 c48f81b92bff20c2

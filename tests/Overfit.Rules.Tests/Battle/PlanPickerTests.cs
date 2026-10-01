@@ -28,7 +28,7 @@ public class PlanPickerTests
             seed, script);
 
     /// <summary>계획 번호 <paramref name="number"/> 의 부름 — 두 고르기는 번호만 읽는다.</summary>
-    private static PlanRequest Request(int number) => new(number, 0, Array.Empty<DodgeEvent>(), 0, 1, 0);
+    private static PlanRequest Request(int number) => new(number, 0, Array.Empty<DodgeEvent>(), 0, 1, 0, 1);
 
     private static bool HasPoints(int move) => _patterns[_roster[move]].CancelPoints is { Count: > 0 };
 
