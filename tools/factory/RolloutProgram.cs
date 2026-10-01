@@ -120,6 +120,8 @@ internal static class RolloutProgram
         }
 
         json.WriteEndArray();
+        json.WriteNumber("boss_max_health", tables.Boss.MaxHealth);
+        json.WriteNumber("fighter_max_health", tables.Fighter.MaxHealth);
         json.WriteNumber("rows", sum.Rows);
         json.WriteNumber("boss_wins", sum.BossWins);
         json.WriteNumber("ticks", sum.Ticks);

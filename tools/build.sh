@@ -24,6 +24,9 @@
 #                                      EXTRA="--history=<시도 기록.jsonl> --attempt=N" → 봇 대신 그 시도의 저장한 입력으로 판 전체를
 #                                      되살려 기록과 견준다 → [battle-demo][I] replay_match (다르면 [E] · 데이터가 바뀌었으면 [W])
 #                                      EXTRA="--record=<파일>" → 봇의 판을 시도 한 줄로 덧붙인다(--attempt=1 로 되살린다)
+#   tools/build.sh train [--iterations=N] [--name=…]  PPO 학습 → out/train/<이름>/ (조각 5 · ml/.venv)
+#   tools/build.sh compare --weights=FILE         규칙 · 무작위 · 망의 판 평균 보상 (조각 5)
+#   tools/build.sh mltest                          파이썬 테스트 (ml/rl)
 #   tools/build.sh rollout [인자…]     학습의 일꾼 — 보스를 망 조종기로 돌려 경험을 쓴다 → out/rollout/<시드>-<판 수>/ (조각 4)
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
 #                                      Godot 이 필요 없다(.NET 콘솔 · Release). 인자는 --help · 로그는 out/factory.log
@@ -442,6 +445,30 @@ cmd_factory() {
   ok "공장 통과 ($OUT/factory.log)"
 }
 
+# 강화학습 (설계 2026-10-01 조각5). PPO 학습기와 비교 — 파이썬은 ml/.venv(numpy · ml/requirements.txt). 학습기가 일꾼을 바퀴마다 부른다.
+ML_PYTHON="$ROOT/ml/.venv/bin/python"
+need_ml() {
+  [[ -x "$ML_PYTHON" ]] || die "학습의 파이썬이 없습니다 — $ML_PYTHON
+python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt 로 지으세요."
+}
+cmd_train() {
+  need_ml
+  say "학습 (PPO)"
+  (cd "$ROOT" && OPENBLAS_NUM_THREADS=1 "$ML_PYTHON" -m ml.rl.train "$@") || die "학습이 멈췄습니다 — 위 출력을 보세요."
+  ok "학습 끝 — out/train/"
+}
+cmd_compare() {
+  need_ml
+  say "비교 — 규칙 · 무작위 · 망"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.compare "$@") || die "비교가 멈췄습니다."
+}
+cmd_mltest() {
+  need_ml
+  say "파이썬 테스트"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout) || die "파이썬 테스트 실패."
+  ok "파이썬 테스트 통과"
+}
+
 # 학습의 일꾼 (설계 2026-10-01 조각4 §6). 같은 공장 콘솔의 --rollout — 보스를 망 조종기로 돌려 결정마다 관측 · 마스크 · 칸 · 확률 · 가치 · 보상을
 # out/rollout/<시드>-<판 수>/ 의 steps.bin · episodes.csv · manifest.json 에 쓴다. 학습기(ml/rl)가 바퀴마다 부른다. 판정은 공장과 같다.
 cmd_rollout() {
@@ -660,6 +687,9 @@ case "${1:-}" in
   demo)      shift; cmd_demo "$@" ;;
   factory)   shift; cmd_factory "$@" ;;
   rollout)   shift; cmd_rollout "$@" ;;
+  train)     shift; cmd_train "$@" ;;
+  compare)   shift; cmd_compare "$@" ;;
+  mltest)    shift; cmd_mltest "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
   gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;

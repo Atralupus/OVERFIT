@@ -1,5 +1,12 @@
 {
   "_comment": "강화학습의 설정 (설계 2026-10-01 조각4 §5 · 조각 5 가 PPO 수치를 더한다). 게임 데이터가 아니라 학습의 조건이라 overfit/data 밖에 둔다.",
   "_note_reward": "결정 i 의 보상 = w_dealt × (파이터가 잃은 체력 / 파이터 최대) − w_taken × (보스가 잃은 체력 / 보스 최대) − w_time × (지난 틱 / 60), 판의 끝에 이기면 w_win · 지면 −w_win(시간 초과도 짐). 체력을 최대로 나누는 것은 파이터(220)와 보스(1200)의 체력 차이가 보상을 한쪽으로 기울이지 않게다. w_time 은 판을 끄는 것을 아주 약하게 벌한다 — 크면 구석에서 기다리기만 하는 것보다 아무 공격이나 하는 쪽으로 기운다.",
-  "reward": { "w_dealt": 1.0, "w_taken": 1.0, "w_time": 0.002, "w_win": 1.0 }
+  "reward": { "w_dealt": 1.0, "w_taken": 1.0, "w_time": 0.002, "w_win": 1.0 },
+  "_note_ppo": "PPO 의 수치 (설계 2026-10-01 조각5 §1). 은닉 128 × 2 · 정책 · 가치 따로. 바퀴마다 판 256(결정 약 9천) · γ 0.99 · λ 0.95(결정 간격이 0.2초 남짓이라 지평이 수십 초) · clip 0.2 · 4 번 되풀이 · 미니배치 1024 · Adam 3e-4 · 가치 0.5 · 엔트로피 0.01 · 기울기 노름 0.5 — PPO 의 흔한 값. policy_last_scale 0.01 은 처음 정책을 고른 확률에 가깝게 둔다(1페이즈 = 거의 안 배운 보스). 바퀴의 일꾼 시드는 seed × 1,000,000 + 바퀴라 바퀴마다 다른 판이고, 비교(compare_seed)와 안 겹친다.",
+  "ppo": {
+    "seed": 1, "iterations": 200, "episodes": 256, "hidden": [128, 128],
+    "gamma": 0.99, "lam": 0.95, "clip": 0.2, "epochs": 4, "minibatch": 1024, "lr": 0.0003,
+    "value_coef": 0.5, "entropy_coef": 0.01, "max_grad_norm": 0.5, "policy_last_scale": 0.01, "checkpoint_every": 10,
+    "compare_seed": 777000000, "compare_episodes": 512
+  }
 }
