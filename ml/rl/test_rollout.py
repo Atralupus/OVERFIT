@@ -21,6 +21,7 @@ def main() -> None:
         # 가중치 없는 일꾼은 열린 칸에 같은 확률 — logp = −log(열린 칸 수).
         assert np.allclose(r.logp, -np.log(r.mask.sum(axis=1)), atol=1e-5), "같은 확률의 logp 가 아니다"
         assert r.done.sum() == m["episodes"], "판마다 끝이 하나가 아니다"
+        assert m["decide_ticks"] == 12, "보스의 결정 간격이 매니페스트에 없다"
         assert np.all(np.diff(r.episode) >= 0), "판 순서가 아니다"
         last = np.flatnonzero(r.done)
         assert np.array_equal(r.episode[last], np.arange(m["episodes"])), "끝 줄의 판 번호가 다르다"

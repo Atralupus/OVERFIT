@@ -113,4 +113,76 @@ public class RolloutRunTests
         // 같은 틱에 결정이 둘일 수 있다(물러서다 벽에 닿으면 그 틱에 다시 묻는다) — 앞의 것은 길이 0 이고 할인도 없다.
         e.Steps.ShouldAllBe(s => s.Span >= 0);
     }
+
+    private static readonly RewardDef _fighterReward = new() { WDealt = 1, WTaken = 1, WTime = 0, WWin = 1 };
+
+    [Fact]
+    public void 배우는_쪽이_파이터면_파이터의_결정만_6틱마다_적고_보상은_파이터_쪽이다()
+    {
+        // 설계 2026-10-01 조각6 §1.3 · §2 — 상대는 안 배운 보스 망(none). 보스 망의 결정은 안 적는다.
+        var matchup = new Matchup(RolloutSide.Fighter, new BossSpec(RolloutController.Net, null), new FighterSpec(FighterKind.Net, null));
+        Episode e = RolloutRun.Play(Tables, matchup, _reward, _fighterReward, seed: 4, episode: 1);
+        e.Steps.Select(s => s.Tick).ShouldBe(Enumerable.Range(0, e.Steps.Count).Select(k => k * 6));
+        e.Steps.ShouldAllBe(s => s.Observation.Count == new FighterObservation(Tables.Roster.Count).Size && s.Mask.Count == FighterActions.Count);
+        bool fighterWon = e.Outcome == BattleOutcome.Win;
+        double expected = (_fighterReward.WDealt * e.BossLost / Tables.Boss.MaxHealth) - (_fighterReward.WTaken * e.FighterLost / Tables.Fighter.MaxHealth)
+            + (fighterWon ? 1 : -1);
+        e.Steps.Sum(s => s.Reward).ShouldBe(expected, 1e-9);
+        e.Steps.Sum(s => s.Span).ShouldBe(e.Ticks);
+    }
+
+    [Fact]
+    public void 상대는_시드와_판으로_고르고_고른_칸을_싣는다()
+    {
+        int a = RolloutRun.Opponent(seed: 5, episode: 3, count: 4);
+        a.ShouldBe(RolloutRun.Opponent(5, 3, 4));
+        Enumerable.Range(0, 64).Select(ep => RolloutRun.Opponent(5, ep, 4)).Distinct().Count().ShouldBe(4, "상대 넷을 다 안 고른다");
+    }
+
+    [Fact]
+    public void 파이터가_배우는_여러_상대의_판도_스레드_수와_무관하게_같은_바이트이고_상대_칸을_싣는다()
+    {
+        // 최종 리뷰가 밟았다 — 스레드 무관 테스트가 옛 한 짝 오버로드만 돌았다. 상대 셋(규칙 · 무작위 · 안 배운 망) 중 판마다 하나.
+        Matchup[] matchups =
+        [
+            new(RolloutSide.Fighter, new BossSpec(RolloutController.Rule, null), new FighterSpec(FighterKind.Net, null)),
+            new(RolloutSide.Fighter, new BossSpec(RolloutController.Random, null), new FighterSpec(FighterKind.Net, null)),
+            new(RolloutSide.Fighter, new BossSpec(RolloutController.Net, null), new FighterSpec(FighterKind.Net, null)),
+        ];
+        string one = Path.Combine(Path.GetTempPath(), $"rollout-{Guid.NewGuid():N}");
+        string four = Path.Combine(Path.GetTempPath(), $"rollout-{Guid.NewGuid():N}");
+        try
+        {
+            RolloutWriter.Run(Tables, matchups, _reward, _fighterReward, seed: 6, episodes: 6, threads: 1, outDir: one);
+            RolloutWriter.Run(Tables, matchups, _reward, _fighterReward, seed: 6, episodes: 6, threads: 4, outDir: four);
+            File.ReadAllBytes(Path.Combine(one, "steps.bin")).ShouldBe(File.ReadAllBytes(Path.Combine(four, "steps.bin")));
+            string[] rows = File.ReadAllLines(Path.Combine(one, "episodes.csv"));
+            rows[0].ShouldStartWith("episode,opponent,");
+            rows.Skip(1).Select(r => int.Parse(r.Split(',')[1], System.Globalization.CultureInfo.InvariantCulture))
+                .ShouldBe(Enumerable.Range(0, 6).Select(e => RolloutRun.Opponent(6, e, 3)));
+        }
+        finally
+        {
+            Directory.Delete(one, true);
+            Directory.Delete(four, true);
+        }
+    }
+
+    [Fact]
+    public void 보스가_파이터_망과_싸워도_보스의_결정만_적는다()
+    {
+        var matchup = new Matchup(RolloutSide.Boss, new BossSpec(RolloutController.Net, null), new FighterSpec(FighterKind.Net, null));
+        Episode e = RolloutRun.Play(Tables, matchup, _reward, _fighterReward, seed: 8, episode: 0);
+        e.Steps.ShouldNotBeEmpty();
+        e.Steps.ShouldAllBe(s => s.Observation.Count == new BossObservation(Tables.Roster.Count).Size && s.Mask.Count == new BossActions(Tables.Roster).Count);
+        e.Habit.ShouldBe("net");
+    }
+
+    [Fact]
+    public void 학습_설정에_파이터_보상이_없으면_읽을_때_멈춘다()
+    {
+        // 최종 리뷰가 밟았다 — 없으면 보스의 보상(시간 벌 0.002)으로 조용히 대신했다. 스펙 §1.3 은 파이터에게 시간 벌이 없다.
+        const string json = """{ "reward": { "w_dealt": 1, "w_taken": 1, "w_time": 0.002, "w_win": 1 } }""";
+        Should.Throw<Overfit.Core.DataException>(() => Overfit.Core.JsonData<TrainConfig>.ParseOne(json, "시험"));
+    }
 }

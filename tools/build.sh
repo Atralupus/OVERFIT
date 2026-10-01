@@ -26,6 +26,8 @@
 #                                      EXTRA="--record=<파일>" → 봇의 판을 시도 한 줄로 덧붙인다(--attempt=1 로 되살린다)
 #   tools/build.sh train [--iterations=N] [--name=…]  PPO 학습 → out/train/<이름>/ (조각 5 · ml/.venv)
 #   tools/build.sh compare --weights=FILE         규칙 · 무작위 · 망의 판 평균 보상 (조각 5)
+#   tools/build.sh selfplay [--rounds=R]          보스 망 · 파이터 망을 번갈아 학습 → out/selfplay/<이름>/ (조각 6)
+#   tools/build.sh evalboss --name=NAME           보스 저장본마다 시험 묶음과의 승률 → eval.csv (조각 6)
 #   tools/build.sh mltest                          파이썬 테스트 (ml/rl)
 #   tools/build.sh rollout [인자…]     학습의 일꾼 — 보스를 망 조종기로 돌려 경험을 쓴다 → out/rollout/<시드>-<판 수>/ (조각 4)
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
@@ -470,6 +472,17 @@ cmd_compare() {
   say "비교 — 규칙 · 무작위 · 망"
   (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.compare "$@") || die "비교가 멈췄습니다."
 }
+cmd_selfplay() {
+  need_ml
+  say "셀프 플레이 — 보스 망 · 파이터 망을 번갈아"
+  (cd "$ROOT" && OPENBLAS_NUM_THREADS=1 "$ML_PYTHON" -m ml.rl.selfplay "$@") || die "셀프 플레이가 멈췄습니다 — 위 출력을 보세요."
+  ok "셀프 플레이 끝 — out/selfplay/"
+}
+cmd_evalboss() {
+  need_ml
+  say "보스 저장본마다 시험 묶음과의 승률"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.evalboss "$@") || die "평가가 멈췄습니다."
+}
 cmd_mltest() {
   need_ml
   say "파이썬 테스트"
@@ -698,6 +711,8 @@ case "${1:-}" in
   train)     shift; cmd_train "$@" ;;
   compare)   shift; cmd_compare "$@" ;;
   mltest)    shift; cmd_mltest "$@" ;;
+  selfplay)  shift; cmd_selfplay "$@" ;;
+  evalboss)  shift; cmd_evalboss "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
   gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;

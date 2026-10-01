@@ -19,6 +19,8 @@ internal static class RolloutProgram
 
           --weights=FILE|none  정책망 가중치 JSON (기본 none — 열린 칸에 같은 확률)
           --controller=K       net(기본) · rule · random — rule · random 은 비교의 대조군이라 결정을 안 적는다(episodes.csv 만)
+          --learner=SIDE       boss(기본) · fighter — 배우는 쪽. 그쪽의 결정만 적는다 (설계 2026-10-01 조각6)
+          --opponents=LIST     상대들(쉼표) — 판마다 하나를 고른다. 보스가 배우면 fleet · 파이터 망 JSON, 파이터가 배우면 rule · random · none · 보스 망 JSON
           --episodes=N         판 수 (기본 64)
           --seed=N             시드 (기본 0) — 판의 시드 · 상대 봇이 (시드, 판)에서 나온다
           --threads=N          동시에 도는 판 수 (기본 코어 수) — 결과는 스레드 수와 무관하다
@@ -34,9 +36,13 @@ internal static class RolloutProgram
         int threads = Program.Int(args, "--threads=") ?? Environment.ProcessorCount;
         string weights = CmdArgs.Text(args, "--weights=") ?? "none";
         string controllerText = CmdArgs.Text(args, "--controller=") ?? "net";
-        if (!Enum.TryParse(controllerText, ignoreCase: true, out RolloutController kind))
+        string learnerText = CmdArgs.Text(args, "--learner=") ?? "boss";
+        bool fighterLearns = learnerText == "fighter";
+        string[] opponents = (CmdArgs.Text(args, "--opponents=") ?? (fighterLearns ? "rule" : "fleet")).Split(',', StringSplitOptions.RemoveEmptyEntries);
+        if ((learnerText is not ("boss" or "fighter")) || !Enum.TryParse(controllerText, ignoreCase: true, out RolloutController kind)
+            || !Enum.IsDefined(kind) || opponents.Length == 0)
         {
-            Console.Error.WriteLine($"모르는 조종기 — {controllerText}");
+            Console.Error.WriteLine($"인자가 틀렸다 — controller={controllerText} learner={learnerText} opponents={string.Join(',', opponents)}");
             Console.Error.Write(Usage);
             return 2;
         }
@@ -54,6 +60,8 @@ internal static class RolloutProgram
 
         FactoryTables tables;
         RewardDef reward;
+        RewardDef fighterReward;
+        Matchup[] matchups;
         PolicyNet? net = null;
         string weightsSha = "none";
         string digest;
@@ -61,14 +69,19 @@ internal static class RolloutProgram
         {
             tables = FactoryTables.Load(data, fleetPath);
             digest = DataDigest.Of(name => File.ReadAllBytes(Path.Combine(data, name)));
-            reward = JsonData<TrainConfig>.ParseOne(File.ReadAllText(trainPath), trainPath).Reward;
+            TrainConfig train = JsonData<TrainConfig>.ParseOne(File.ReadAllText(trainPath), trainPath);
+            reward = train.Reward;
+            fighterReward = train.FighterReward;
             if (weights != "none")
             {
-                int obs = new BossObservation(tables.Roster.Count).Size;
-                int actions = new BossActions(tables.Roster).Count;
-                net = PolicyNet.Parse(File.ReadAllText(weights), weights, obs, actions, tables.Roster);
+                net = fighterLearns ? FighterNet(tables, weights) : BossNet(tables, weights);
                 weightsSha = Program.Hex(SHA256.HashData(File.ReadAllBytes(weights)));
             }
+
+            matchups = Array.ConvertAll(opponents, o => fighterLearns
+                ? new Matchup(RolloutSide.Fighter, Boss(tables, o), new FighterSpec(FighterKind.Net, net))
+                : new Matchup(RolloutSide.Boss, new BossSpec(kind, net), o == "fleet" ? new FighterSpec(FighterKind.Fleet, null)
+                    : new FighterSpec(FighterKind.Net, o == "none" ? null : FighterNet(tables, o))));
         }
         catch (Exception e) when (e is DataException or IOException or UnauthorizedAccessException)
         {
@@ -80,7 +93,7 @@ internal static class RolloutProgram
         RolloutSummary sum;
         try
         {
-            sum = RolloutWriter.Run(tables, net, reward, seed, episodes, threads, outDir, kind: kind);
+            sum = RolloutWriter.Run(tables, matchups, reward, fighterReward, seed, episodes, threads, outDir);
         }
         catch (AggregateException e)
         {
@@ -92,13 +105,14 @@ internal static class RolloutProgram
         double seconds = Math.Max(sum.Seconds, 1e-9);
         Say($"done episodes={sum.Episodes} rows={sum.Rows} boss_wins={sum.BossWins} ticks={sum.Ticks} seconds={seconds:0.00}"
             + $" decisions_per_s={sum.Rows / seconds:0} ticks_per_s={sum.Ticks / seconds:0}");
-        Manifest(Path.Combine(outDir, "manifest.json"), sum, seed, threads, weights, weightsSha, digest, commit, tables);
+        Manifest(Path.Combine(outDir, "manifest.json"), sum, seed, threads, weights, weightsSha, digest, commit, tables, learnerText, opponents);
         Log.Marker("rollout", "rollout=done");
         return 0;
     }
 
     private static void Manifest(
-        string path, RolloutSummary sum, ulong seed, int threads, string weights, string weightsSha, string digest, string commit, FactoryTables tables)
+        string path, RolloutSummary sum, ulong seed, int threads, string weights, string weightsSha, string digest, string commit, FactoryTables tables,
+        string learner, string[] opponents)
     {
         using FileStream stream = File.Create(path);
         using var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
@@ -107,6 +121,14 @@ internal static class RolloutProgram
         json.WriteNumber("seed", seed);
         json.WriteNumber("episodes", sum.Episodes);
         json.WriteNumber("threads", threads);
+        json.WriteString("learner", learner);
+        json.WriteStartArray("opponents");
+        foreach (string o in opponents)
+        {
+            json.WriteStringValue(o);
+        }
+
+        json.WriteEndArray();
         json.WriteString("weights", weights);
         json.WriteString("weights_sha256", weightsSha);
         json.WriteString("commit", commit);
@@ -122,6 +144,8 @@ internal static class RolloutProgram
         json.WriteEndArray();
         json.WriteNumber("boss_max_health", tables.Boss.MaxHealth);
         json.WriteNumber("fighter_max_health", tables.Fighter.MaxHealth);
+        // 배우는 쪽의 결정 간격 — 학습기가 할인의 단위로 읽는다(γ^(틱/간격)).
+        json.WriteNumber("decide_ticks", learner == "fighter" ? FighterNetDriver.DecideTicks : BattleSim.TicksFor(tables.Boss.DecideSeconds));
         json.WriteNumber("rows", sum.Rows);
         json.WriteNumber("boss_wins", sum.BossWins);
         json.WriteNumber("ticks", sum.Ticks);
@@ -134,11 +158,21 @@ internal static class RolloutProgram
         json.WriteEndObject();
     }
 
+    private static PolicyNet BossNet(FactoryTables tables, string path) => PolicyNet.Parse(
+        File.ReadAllText(path), path, new BossObservation(tables.Roster.Count).Size, new BossActions(tables.Roster).Count, tables.Roster);
+
+    private static PolicyNet FighterNet(FactoryTables tables, string path) => PolicyNet.Parse(
+        File.ReadAllText(path), path, new FighterObservation(tables.Roster.Count).Size, FighterActions.Count, tables.Roster);
+
+    /// <summary>파이터가 배울 때의 보스 상대 — rule · random · none(안 배운 망) · 보스 망 JSON.</summary>
+    private static BossSpec Boss(FactoryTables tables, string spec) => spec switch
+    {
+        "rule" => new BossSpec(RolloutController.Rule, null),
+        "random" => new BossSpec(RolloutController.Random, null),
+        "none" => new BossSpec(RolloutController.Net, null),
+        _ => new BossSpec(RolloutController.Net, BossNet(tables, spec)),
+    };
+
     private static void Say(string message) => Program.Write(LogLevel.Info, $"[rollout][I] {message}");
 }
 
-/// <summary><c>ml/rl/train.json</c> 의 모양 — 조각 5 가 PPO 수치를 더한다.</summary>
-public sealed class TrainConfig
-{
-    public required RewardDef Reward { get; init; }
-}

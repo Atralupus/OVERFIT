@@ -19,11 +19,11 @@ from ml.rl import episodes, net, ppo, worker
 ROOT = worker.ROOT
 
 
-def prepare_out(out: Path, force: bool) -> None:
+def prepare_out(out: Path, force: bool, pattern: str = "ckpt_*.json") -> None:
     """출력 폴더 — 옛 체크포인트가 있으면 멈춘다(force 면 지운다). 같은 이름으로 다시 돌리면 옛 판의 체크포인트가 새 것 옆에 남아 페이즈 고르기(조각 7)가
     다른 판의 것을 고른다(최종 리뷰가 밟았다)."""
     out.mkdir(parents=True, exist_ok=True)
-    old = sorted(out.glob("ckpt_*.json"))
+    old = sorted(out.glob(pattern))
     if old and not force:
         raise FileExistsError(f"{out} 에 옛 체크포인트 {len(old)} 개가 있다 — 다른 --name 을 쓰거나 --force")
     for p in old:
@@ -100,7 +100,7 @@ def main() -> None:
         for it in range(1, iterations + 1):
             t0 = time.time()
             r = worker.run(seed=cfg["seed"] * 1_000_000 + it, episodes=cfg["episodes"], out_dir=out / "rollout", weights=latest)
-            adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=cfg["decide_ticks"])
+            adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=r.manifest["decide_ticks"])
             s = update(policy, value, opt_p, opt_v, r, adv, ret, cfg, rng)
             net.save(latest, m["obs"], m["actions"], m["roster"], policy, value)
             if is_checkpoint(it, cfg["checkpoint_every"], cfg["checkpoint_dense_until"]):

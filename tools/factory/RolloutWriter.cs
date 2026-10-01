@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
@@ -21,16 +22,29 @@ public sealed record RolloutSummary(int Episodes, int Rows, int Obs, int Actions
 /// </summary>
 public static class RolloutWriter
 {
-    public const string EpisodesHeader = "episode,habit,outcome,boss_won,ticks,boss_lost,fighter_lost,steps,reward";
+    public const string EpisodesHeader = "episode,opponent,habit,outcome,boss_won,ticks,boss_lost,fighter_lost,steps,reward";
 
+    /// <summary>조각 4 · 5 의 일꾼 — 배우는 쪽이 보스이고 상대가 봇 함대다.</summary>
     public static RolloutSummary Run(
         FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episodes, int threads, string outDir, int chunk = 256,
-        RolloutController kind = RolloutController.Net)
+        RolloutController kind = RolloutController.Net) =>
+        Run(tables, [new Matchup(RolloutSide.Boss, new BossSpec(kind, net), new FighterSpec(FighterKind.Fleet, null))], reward, reward, seed, episodes, threads,
+            outDir, chunk);
+
+    /// <summary>
+    /// 짝들(상대마다 하나) 중 판마다 하나를 <see cref="RolloutRun.Opponent"/> 로 골라 돈다 (설계 2026-10-01 조각6 §2). 배우는 쪽은 모든 짝에서 같아야 한다 —
+    /// 관측 · 칸의 모양이 그쪽 것이다.
+    /// </summary>
+    public static RolloutSummary Run(
+        FactoryTables tables, IReadOnlyList<Matchup> matchups, RewardDef reward, RewardDef fighterReward, ulong seed, int episodes, int threads, string outDir,
+        int chunk = 256)
     {
         ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(matchups);
         Directory.CreateDirectory(outDir);
-        int obs = new BossObservation(tables.Roster.Count).Size;
-        int actions = new BossActions(tables.Roster).Count;
+        bool fighter = matchups[0].Learner == RolloutSide.Fighter;
+        int obs = fighter ? new FighterObservation(tables.Roster.Count).Size : new BossObservation(tables.Roster.Count).Size;
+        int actions = fighter ? FighterActions.Count : new BossActions(tables.Roster).Count;
         int rows = 0;
         int wins = 0;
         long ticks = 0;
@@ -41,9 +55,13 @@ public static class RolloutWriter
         using (var csv = new StreamWriter(episodesPath, false, new UTF8Encoding(false)))
         {
             csv.Write(EpisodesHeader + "\n");
-            FactoryBatch.Run(0, episodes, threads, e => RolloutRun.Play(tables, net, reward, seed, e, kind), results =>
+            FactoryBatch.Run(0, episodes, threads, e =>
             {
-                foreach (Episode e in results)
+                int o = RolloutRun.Opponent(seed, e, matchups.Count);
+                return (o, RolloutRun.Play(tables, matchups[o], reward, fighterReward, seed, e));
+            }, results =>
+            {
+                foreach ((int opponent, Episode e) in results)
                 {
                     double total = 0;
                     foreach (RolloutStep s in e.Steps)
@@ -56,7 +74,7 @@ public static class RolloutWriter
                     wins += e.BossWon ? 1 : 0;
                     ticks += e.Ticks;
                     csv.Write(string.Create(CultureInfo.InvariantCulture,
-                        $"{e.Index},{e.Habit},{e.Outcome},{(e.BossWon ? 1 : 0)},{e.Ticks},{e.BossLost},{e.FighterLost},{e.Steps.Count},{total:R}\n"));
+                        $"{e.Index},{opponent},{e.Habit},{e.Outcome},{(e.BossWon ? 1 : 0)},{e.Ticks},{e.BossLost},{e.FighterLost},{e.Steps.Count},{total:R}\n"));
                 }
             }, chunk);
         }

@@ -80,6 +80,10 @@
     <Compile Include="../../overfit/battle/rules/BossObservation.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/PolicyNet.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/NetController.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/MaskedSampler.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FighterActions.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FighterObservation.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FighterNetDriver.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FormReport.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BombRecord.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossSwings.cs" LinkBase="linked/battle/rules" />
