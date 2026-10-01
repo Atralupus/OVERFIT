@@ -21,8 +21,7 @@ def main() -> None:
     args = ap.parse_args()
     opponents = gate.test_pool(list((ROOT / "out" / "selfplay" / args.name).glob("fighter_r*.json")))
     worker.build()
-    cmd = ["dotnet", str(worker.DLL), "--qtrain", "--opponents=" + ",".join(opponents), f"--out={ROOT / 'out' / 'qtable' / args.name}",
-           "--log-level=info"]
+    cmd = ["dotnet", str(worker.DLL), "--qtrain", "--opponents=" + ",".join(opponents), f"--out={ROOT / 'out' / 'qtable' / args.name}"]
     if args.iterations:
         cmd.append(f"--iterations={args.iterations}")
     lines = []

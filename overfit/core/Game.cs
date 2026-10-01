@@ -122,6 +122,18 @@ public partial class Game : Node
         Log.Info("run", $"next_script={ScriptText(script)}" + (bossStartHealth is { } h ? $" boss_start_health={h}" : ""));
     }
 
+    /// <summary>
+    /// 다음 전투 하나의 보스 시작 체력만 정한다 — 대본 없이 단계의 조종기(망)로 선다(설계 2026-10-01 조각8 §3). 페이즈마다의 망 보스를 찍는 GIF 가 쓴다:
+    /// 형태는 시작 체력이 고른다. 그 전투가 가져가면 빈다.
+    /// </summary>
+    public void SetNextStart(int bossStartHealth)
+    {
+        _nextScript = null;
+        _nextActions = null;
+        _nextBossStartHealth = bossStartHealth;
+        Log.Info("run", $"next_start boss_start_health={bossStartHealth}");
+    }
+
     /// <summary>대본 전투의 보스 시작 체력을 가져가며 비운다 — <see cref="TakeScript"/> 와 같이 <c>Battle</c> 만 부른다.</summary>
     public int? TakeBossStartHealth()
     {

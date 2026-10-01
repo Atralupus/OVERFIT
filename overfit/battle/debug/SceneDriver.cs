@@ -68,13 +68,18 @@ public sealed class SceneDriver
     /// </summary>
     /// <param name="bossStartHealth">보스의 시작 체력 — 없으면 최대.</param>
     /// <param name="actions">칸 대본 — 있으면 대본 조종기로 선다(설계 2026-10-01 조각3 §4).</param>
-    /// <param name="script">계획 대본.</param>
+    /// <param name="script">계획 대본 — 비면 단계의 조종기로 선다.</param>
     public async Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, IReadOnlyList<string>? actions, params ScriptPlan[] script)
     {
         ArgumentNullException.ThrowIfNull(script);
         if (script.Length > 0)
         {
             Game.Instance.SetNextScript(script, bossStartHealth, actions);
+        }
+        else if (bossStartHealth is { } health)
+        {
+            // 계획이 빈 대본 — 단계의 조종기(망)로 서고 시작 체력만 넘긴다(설계 2026-10-01 조각8 §3 · 페이즈마다의 망 보스 GIF).
+            Game.Instance.SetNextStart(health);
         }
 
         Game.Instance.GoTo(Game.Scene.Battle);

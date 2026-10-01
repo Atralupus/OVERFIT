@@ -45,6 +45,18 @@ public partial class GifRunner : Node
     /// 잡을 구간은 [<see cref="GifScript.From"/>, <see cref="GifScript.To"/>) 패턴 틱 — 60fps 로 240장(4초)을 넘지 않는다(도구가 막는다).
     /// 대본마다 같은 입력을 규칙 위에서 틱까지 못박은 테스트가 있다(<c>MoveBattleTests</c>) — 숫자를 바꾸면 거기서 먼저 잰다.
     /// </summary>
+    /// <summary>망 보스 GIF 의 파이터 — 걸어 들어가 2연격을 세 번 친다(판의 시계).</summary>
+    private static readonly GifInput[] _netInputs =
+    {
+        new(_battleStart, 60, "move_right", OnBattleClock: true),
+        new(90, 90, "attack", OnBattleClock: true),
+        new(94, 94, "attack", OnBattleClock: true),
+        new(150, 150, "attack", OnBattleClock: true),
+        new(154, 154, "attack", OnBattleClock: true),
+        new(205, 205, "attack", OnBattleClock: true),
+        new(209, 209, "attack", OnBattleClock: true),
+    };
+
     private static readonly GifScript[] _scripts =
     {
         // 3연격 → 1타 뒤 캔슬 → 돌진 (조각1 §3). 파이터는 480 에 선 채다 — 1타는 960 밖에서 헛치고, 78틱에 끊어 달려와 113틱에 친다.
@@ -134,6 +146,12 @@ public partial class GifRunner : Node
         new("leap", Plans: SceneDriver.Moves("3연격"), Target: null,
             Inputs: Array.Empty<GifInput>(),
             From: 10, To: 140, Actions: new[] { "leap_over", "leap_back" }),
+
+        // 페이즈마다의 망 보스 (설계 2026-10-01 조각8 §3) — 계획 대본이 비어 단계의 조종기(형태마다의 망)로 서고, 시작 체력이 형태를 고른다(1200 · 899 · 399).
+        // 판은 세션 시드로 서고 망이 시드로 뽑으므로 장면은 시드가 정한다 — tools/build.sh gifs 는 늘 같은 세션 시드로 돈다. 파이터는 걸어 들어가 몇 번 친다.
+        new("net1", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 1200),
+        new("net2", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 899),
+        new("net3", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 399),
     };
 
     private readonly SceneDriver _drive;
