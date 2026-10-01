@@ -48,6 +48,17 @@ public sealed record FighterSpec(FighterKind Kind, PolicyNet? Net);
 /// <summary>판 하나의 짝 — 배우는 쪽 · 보스 · 파이터.</summary>
 public sealed record Matchup(RolloutSide Learner, BossSpec Boss, FighterSpec Fighter);
 
+/// <summary><c>ml/rl/train.json</c> 중 일꾼이 읽는 칸 — 보스 · 파이터의 보상. PPO 수치는 학습기(파이썬)만 읽는다.</summary>
+public sealed class TrainConfig
+{
+    public required RewardDef Reward { get; init; }
+
+    /// <summary>
+    /// 파이터 망의 보상 (설계 2026-10-01 조각6 §1.3) — 필수다. 없을 때 보스의 것으로 대신하던 때는 파이터가 시간 벌(스펙이 없앤)을 조용히 받았다(최종 리뷰).
+    /// </summary>
+    public required RewardDef FighterReward { get; init; }
+}
+
 /// <summary>경험의 줄 하나 — 망 조종기의 결정에 보상과 끝을 붙인 것.</summary>
 /// <remarks><c>Span</c> 은 이 결정에서 다음 적은 결정(또는 판의 끝 다음 틱)까지의 틱이다 — 학습기가 시간으로 할인한다(γ^(틱/12)).</remarks>
 public sealed record RolloutStep(

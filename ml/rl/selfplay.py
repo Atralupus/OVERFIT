@@ -45,6 +45,18 @@ class Side:
     def save(self, path: Path) -> None:
         net.save(path, *self.dims, self.policy, self.value)
 
+    def load(self, path: Path) -> None:
+        """저장본에서 이어 간다 — Adam 의 상태는 저장본에 없어 새로 선다(이어 간 첫 몇 바퀴의 걸음이 조금 크다)."""
+        self.policy, self.value = net.load(path)
+        self.opt_p, self.opt_v = ppo.Adam(self.policy.params, self.cfg["lr"]), ppo.Adam(self.value.params, self.cfg["lr"])
+        self.save(self.latest)
+
+
+def last_round(out: Path) -> int:
+    """보스 · 파이터 저장본이 둘 다 있는 마지막 라운드."""
+    rounds = [int(p.stem[-2:]) for p in out.glob("boss_r*.json") if (out / f"fighter_r{p.stem[-2:]}.json").exists()]
+    return max(rounds, default=-1)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -52,6 +64,7 @@ def main() -> None:
     ap.add_argument("--iterations", type=int, help="라운드마다 바퀴 수(보스 · 파이터 같게) — 시험용")
     ap.add_argument("--name")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--resume", action="store_true", help="같은 이름의 마지막 라운드 저장본에서 이어 간다")
     ap.add_argument("--config", default=str(ROOT / "ml" / "rl" / "train.json"))
     args = ap.parse_args()
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -59,22 +72,32 @@ def main() -> None:
     rounds = args.rounds or sp["rounds"]
     iters = {"boss": args.iterations or sp["boss_iterations"], "fighter": args.iterations or sp["fighter_iterations"]}
     out = ROOT / "out" / "selfplay" / (args.name or f"sp-{cfg['seed']}")
-    train.prepare_out(out, args.force, pattern="*_r*.json")
-    rng = np.random.default_rng(cfg["seed"])
+    start = last_round(out) + 1 if args.resume else 1
+    if not args.resume:
+        train.prepare_out(out, args.force, pattern="*_r*.json")
+    rng = np.random.default_rng(cfg["seed"] + start)
 
     worker.build()
     boss = Side("boss", worker.run(0, 1, out / "probe_boss").manifest, cfg, rng, out)
     fighter = Side("fighter", worker.run(0, 1, out / "probe_fighter", learner="fighter").manifest, cfg, rng, out)
-    snaps = {"boss": [out / "boss_r00.json"], "fighter": [out / "fighter_r00.json"]}
-    boss.save(snaps["boss"][0])
-    fighter.save(snaps["fighter"][0])
+    if args.resume and start > 1:
+        snaps = {s: [out / f"{s}_r{k:02d}.json" for k in range(start)] for s in ("boss", "fighter")}
+        boss.load(snaps["boss"][-1])
+        fighter.load(snaps["fighter"][-1])
+        print(f"resume from round {start - 1}", flush=True)
+    else:
+        snaps = {"boss": [out / "boss_r00.json"], "fighter": [out / "fighter_r00.json"]}
+        boss.save(snaps["boss"][0])
+        fighter.save(snaps["fighter"][0])
 
     fields = ["round", "side", "iteration", "rows", "episodes", "boss_win", "return", "ticks", "boss_lost", "fighter_lost",
               "policy_loss", "value_loss", "entropy", "approx_kl", "clip_frac", "seconds"]
-    with (out / "metrics.csv").open("w", newline="", encoding="utf-8") as f:
+    resuming = args.resume and start > 1
+    with (out / "metrics.csv").open("a" if resuming else "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
-        w.writeheader()
-        for rnd in range(1, rounds + 1):
+        if not resuming:
+            w.writeheader()
+        for rnd in range(start, rounds + 1):
             for side, other, base, opponents_fixed, eps in (
                 (boss, "fighter", 0, ["fleet"], sp["boss_episodes"]),
                 (fighter, "boss", 500, ["rule"], sp["fighter_episodes"]),
@@ -84,8 +107,7 @@ def main() -> None:
                     t0 = time.time()
                     seed = cfg["seed"] * 1_000_000 + rnd * 1000 + base + it
                     r = worker.run(seed, eps, out / f"rollout_{side.name}", weights=side.latest, learner=side.name, opponents=opponents)
-                    adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span,
-                                       unit=cfg["decide_ticks"] if side.name == "boss" else 6)
+                    adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=r.manifest["decide_ticks"])
                     s = train.update(side.policy, side.value, side.opt_p, side.opt_v, r, adv, ret, cfg, rng)
                     side.save(side.latest)
                     e = episodes.summary(out / f"rollout_{side.name}", config["reward"])

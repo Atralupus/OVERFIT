@@ -40,10 +40,39 @@ def test_pool_takes_latest_and_spread_older() -> None:
     assert selfplay.pool([], latest=3, spread=2) == []
 
 
+def test_selfplay_one_round_runs() -> None:
+    # 스펙 §5 — 셀프 플레이 한 라운드가 끝까지 돈다(최종 리뷰가 빠진 것을 짚었다). 판 수를 줄인 설정으로 바퀴 하나씩.
+    import json
+    import sys
+
+    from ml.rl import selfplay
+    config = json.loads((train.ROOT / "ml" / "rl" / "train.json").read_text(encoding="utf-8"))
+    config["selfplay"].update({"boss_episodes": 4, "fighter_episodes": 2})
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg_path = Path(tmp) / "train.json"
+        cfg_path.write_text(json.dumps(config), encoding="utf-8")
+        name = f"test-{Path(tmp).name}"
+        argv = sys.argv
+        sys.argv = ["selfplay", "--rounds=1", "--iterations=1", f"--name={name}", f"--config={cfg_path}"]
+        try:
+            selfplay.main()
+        finally:
+            sys.argv = argv
+        out = train.ROOT / "out" / "selfplay" / name
+        try:
+            assert (out / "boss_r01.json").exists() and (out / "fighter_r01.json").exists(), "라운드 저장본이 없다"
+            rows = (out / "metrics.csv").read_text(encoding="utf-8").strip().splitlines()
+            assert len(rows) == 3, rows
+        finally:
+            import shutil
+            shutil.rmtree(out, ignore_errors=True)
+
+
 def main() -> None:
     test_refuses_folder_with_old_checkpoints()
     test_checkpoints_dense_early_then_sparse()
     test_pool_takes_latest_and_spread_older()
+    test_selfplay_one_round_runs()
     print("ok")
 
 

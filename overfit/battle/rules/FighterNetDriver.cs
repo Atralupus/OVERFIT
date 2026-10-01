@@ -25,13 +25,22 @@ public sealed class FighterNetDriver
     private int _sinceDecision;
     private int _decisions;
 
+    /// <summary>
+    /// 결정 간격(틱) — 0.1초. 학습의 조건이라 게임 데이터가 아니다(파이터 망은 게임에 안 들어간다). 일꾼이 매니페스트에 싣고 학습기가 읽어 할인의 단위로 쓴다 —
+    /// 둘이 따로 적혀 있으면 한쪽만 바뀐 날 할인이 조용히 어긋난다(최종 리뷰).
+    /// </summary>
+    public const int DecideTicks = 6;
+
+    /// <summary>보스를 보는 늦춤(틱) — 0.2초 · 사람의 반응.</summary>
+    public const int DelayTicks = 12;
+
     /// <param name="net">파이터 정책망 — 없으면 열린 칸에 같은 확률.</param>
     /// <param name="seed">뽑기의 시드.</param>
     /// <param name="roster">보스전의 명부 — 보스 동작의 원핫.</param>
     /// <param name="arenaWidth">아레나 폭 — 자리의 나눗수.</param>
     /// <param name="decideTicks">결정 간격(틱).</param>
     /// <param name="delayTicks">보스를 보는 늦춤(틱).</param>
-    public FighterNetDriver(PolicyNet? net, ulong seed, IReadOnlyList<string> roster, double arenaWidth, int decideTicks = 6, int delayTicks = 12)
+    public FighterNetDriver(PolicyNet? net, ulong seed, IReadOnlyList<string> roster, double arenaWidth, int decideTicks = DecideTicks, int delayTicks = DelayTicks)
     {
         ArgumentNullException.ThrowIfNull(roster);
         _net = net;

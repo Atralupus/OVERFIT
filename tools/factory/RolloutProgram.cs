@@ -71,7 +71,7 @@ internal static class RolloutProgram
             digest = DataDigest.Of(name => File.ReadAllBytes(Path.Combine(data, name)));
             TrainConfig train = JsonData<TrainConfig>.ParseOne(File.ReadAllText(trainPath), trainPath);
             reward = train.Reward;
-            fighterReward = train.FighterReward ?? train.Reward;
+            fighterReward = train.FighterReward;
             if (weights != "none")
             {
                 net = fighterLearns ? FighterNet(tables, weights) : BossNet(tables, weights);
@@ -144,6 +144,8 @@ internal static class RolloutProgram
         json.WriteEndArray();
         json.WriteNumber("boss_max_health", tables.Boss.MaxHealth);
         json.WriteNumber("fighter_max_health", tables.Fighter.MaxHealth);
+        // 배우는 쪽의 결정 간격 — 학습기가 할인의 단위로 읽는다(γ^(틱/간격)).
+        json.WriteNumber("decide_ticks", learner == "fighter" ? FighterNetDriver.DecideTicks : BattleSim.TicksFor(tables.Boss.DecideSeconds));
         json.WriteNumber("rows", sum.Rows);
         json.WriteNumber("boss_wins", sum.BossWins);
         json.WriteNumber("ticks", sum.Ticks);
@@ -174,11 +176,3 @@ internal static class RolloutProgram
     private static void Say(string message) => Program.Write(LogLevel.Info, $"[rollout][I] {message}");
 }
 
-/// <summary><c>ml/rl/train.json</c> 의 모양 — 조각 5 가 PPO 수치를 더한다.</summary>
-public sealed class TrainConfig
-{
-    public required RewardDef Reward { get; init; }
-
-    /// <summary>파이터 망의 보상 (설계 2026-10-01 조각6 §1.3) — 없으면 보스의 것과 같은 가중치.</summary>
-    public RewardDef? FighterReward { get; init; }
-}

@@ -100,7 +100,7 @@ def main() -> None:
         for it in range(1, iterations + 1):
             t0 = time.time()
             r = worker.run(seed=cfg["seed"] * 1_000_000 + it, episodes=cfg["episodes"], out_dir=out / "rollout", weights=latest)
-            adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=cfg["decide_ticks"])
+            adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=r.manifest["decide_ticks"])
             s = update(policy, value, opt_p, opt_v, r, adv, ret, cfg, rng)
             net.save(latest, m["obs"], m["actions"], m["roster"], policy, value)
             if is_checkpoint(it, cfg["checkpoint_every"], cfg["checkpoint_dense_until"]):
