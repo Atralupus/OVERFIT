@@ -49,6 +49,10 @@ OVERFIT 은 보스전 하나를 싸우는 2D 횡스크롤 소울라이크입니�
 
 ## 계획
 
+보스는 결정 지점에서 판단합니다. 자유로워진 순간(동작이 끝남 · 탈진에 듦 · 페이즈 전환이 끝남), 쉬거나 달려드는 동안 0.2초마다, 달려들다 닿은 순간,
+캔슬 지점마다 한 목록에서 하나를 고릅니다: 기다리기 · 달려들기 · 지금 동작 이어 가기 · 동작 하나 시작하기. 보스가 보는 파이터는 0.3초 전의 모습입니다.
+지금의 보스는 계획을 통째로 세운 뒤 그 계획을 이 목록의 칸으로 냅니다.
+
 ```
 쉬기(제자리 · 파이터 쪽으로 돌아서기만) → [달리기] → 첫 동작 → [캔슬] → 잇는 동작 → 다음 계획
 ```
@@ -125,7 +129,8 @@ OVERFIT 은 보스전 하나를 싸우는 2D 횡스크롤 소울라이크입니�
 | 페이즈 | `overfit/battle/rules/BossForms.cs`, `FormReport.cs`, `BattleSim.cs` |
 | 폭탄 수치 | `overfit/data/fighters.json` (`bomb`) |
 | 고르기 수치 | `overfit/data/balance.json` (`picker`) |
-| 계획 · 캔슬 | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `PlanFlow.cs`, `BattleSim.cs` |
+| 결정 지점 · 조종기 | `overfit/battle/rules/BossDecision.cs`, `RuleController.cs`, `RandomController.cs`, `SightBuffer.cs`, `BattleSim.cs` |
+| 계획 · 캔슬 | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `RuleController.cs` |
 | 달리기 | `overfit/battle/rules/BattleSim.cs`, `RushMotion.cs` |
 | 폭탄 · 보스의 반응 | `overfit/battle/rules/Fighter.cs`, `Bombs.cs`, `BombWatch.cs`, `BombRecord.cs`, `BattleSim.cs` |
 | 시도 기록 · 되살리기 | `overfit/battle/rules/AttemptLog.cs`, `InputTape.cs`, `Replay.cs`, `overfit/battle/debug/BattleDemo.cs` |
