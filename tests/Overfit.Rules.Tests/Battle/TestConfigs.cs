@@ -384,6 +384,8 @@ public static class TestConfigs
             PoiseDecayDelay = data.PoiseDecayDelay,
             PoiseDecayPerSecond = data.PoiseDecayPerSecond,
             BombReaction = reaction ?? data.BombReaction,
+            DecideSeconds = data.DecideSeconds,
+            SightDelaySeconds = data.SightDelaySeconds,
 
             // 작은 체력(문턱 이하)을 쓰는 테스트는 한 형태로 둔다 — 문턱이 최대 체력 위면 판이 세울 때 거절한다(BossForms).
             Forms = maxHealth is { } m && data.Forms.Thresholds.Count > 0 && m <= data.Forms.Thresholds[0]

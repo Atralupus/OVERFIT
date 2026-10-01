@@ -150,6 +150,9 @@ public static class Det
         /// </summary>
         public const uint BotBomb = 16;
 
+        /// <summary>무작위 조종기 (설계 2026-10-01 조각2 §3.2) — 결정 번호가 k1 이다. 열린 칸 중 하나를 고른다.</summary>
+        public const uint BossControl = 17;
+
         /// <summary>로그용 이름. 모르는 번호는 숫자 그대로 — 값을 감추는 것보다 낫다.</summary>
         public static string Name(uint domain) => domain switch
         {

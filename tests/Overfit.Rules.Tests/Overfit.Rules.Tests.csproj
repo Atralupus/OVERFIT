@@ -81,6 +81,8 @@
     <Compile Include="../../overfit/battle/rules/Bombs.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BombWatch.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossForms.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossDecision.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/SightBuffer.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FormReport.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BombRecord.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossSwings.cs" LinkBase="linked/battle/rules" />
