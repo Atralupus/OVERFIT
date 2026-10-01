@@ -49,7 +49,10 @@ public interface IPlanPicker
 /// 대본의 한 칸 (설계 2026-09-29 조각1 §4.2) — 계획의 다섯을 다 적는다. GIF · 스크린샷 · 씬 순회가 판을 고정하는 데 쓴다: GIF 의 틱이 쉬기에
 /// 달려 있어 쉬는 길이까지 적어야 같은 장면이 선다. 동작은 id 로 적는다(명부의 칸 번호는 명부가 바뀌면 다른 동작을 가리킨다).
 /// </summary>
-/// <param name="RestSeconds">쉬는 길이(초) — 0 보다 크다.</param>
+/// <param name="RestSeconds">
+/// 쉬는 길이(초) — 0 보다 크다. 결정 간격(0.2초 · 설계 2026-10-01 조각2 §1)의 배수로 적는다: 규칙 조종기는 쉬기를 결정마다 재므로 배수가 아니면 다음
+/// 결정까지 늘어난다(2.5초는 2.6초가 된다).
+/// </param>
 /// <param name="Move">첫 동작의 id.</param>
 /// <param name="CancelPoint">캔슬 지점 — 첫 동작의 <see cref="PatternDef.CancelPoints"/> 의 칸. 끊지 않으면 null.</param>
 /// <param name="Next">잇는 동작의 id — <paramref name="CancelPoint"/> 와 같이 있거나 같이 없다.</param>

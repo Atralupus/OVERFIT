@@ -153,4 +153,26 @@ public class DecisionBattleTests
         at24.Sight.Fighter.X.ShouldBe(xs[6]);
         c.Seen.Single(d => d.Sight.Tick == 12).Sight.Fighter.X.ShouldBe(sim.Fighter.X - (24 * 7), 1e-9, "판 초반은 첫 모습이 아니다");
     }
+
+    /// <summary>열려 있으면 늘 다가가기, 아니면 기다리기.</summary>
+    private sealed class AlwaysApproach : IBossController
+    {
+        public bool ReactsToBombs => false;
+
+        public int Decide(BossDecision decision) => decision.Mask[BossActions.Approach] ? BossActions.Approach : BossActions.Wait;
+    }
+
+    [Fact]
+    public void 닿은_틱의_결정은_다가가기를_가린다()
+    {
+        // 최종 리뷰가 밟았다 — 닿은 틱에 다가가기를 다시 고르면 달리기가 같은 틱에 또 닿아 Arrived 를 또 묻고, 끝없이 되불러 프로세스가 죽었다(.NET 의
+        // 스택 넘침은 못 잡는다). 닿은 결정은 다가가기를 가린다 — 다음 다가가기는 다음 결정(12틱 뒤)이다.
+        var c = new Recording(new AlwaysApproach());
+        BattleSim sim = Sim(c);
+        TestConfigs.UntilTick(sim, 300);
+
+        BossDecision arrived = c.Seen.First(d => d.Point == DecisionPoint.Arrived);
+        arrived.Mask[BossActions.Approach].ShouldBeFalse();
+        c.Seen.Count(d => d.Point == DecisionPoint.Arrived && d.Sight.Tick == arrived.Sight.Tick).ShouldBe(1, "같은 틱에 Arrived 를 또 물었다");
+    }
 }

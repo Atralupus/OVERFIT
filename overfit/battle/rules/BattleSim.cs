@@ -110,7 +110,6 @@ public sealed class BattleSim
     private PatternRunner? _runner;
     private PatternDef? _current;
 
-    /// <summary>계획의 흐름 — 쉬기 · 첫 동작 · 캔슬 · 잇는 동작 (설계 2026-09-29 조각1 §3.3). 쉬는 틱도 틱으로 센다(설계 §3.6 ⑤).</summary>
     /// <summary>보스의 조종기 (설계 2026-10-01 조각2 §3) — 결정 지점마다 칸 하나를 고른다.</summary>
     private readonly IBossController _controller;
 
@@ -642,9 +641,9 @@ public sealed class BattleSim
             return;
         }
 
-        // 캔슬 지점의 틱이면 러너를 안 민다 — 그 단계에 들지 않고 끊는다(설계 2026-09-29 조각1 §3.2). 시계를 세운 틱에는 러너가 안 가므로 끊지
-        // 않는다(지점은 움직임 밖이라 오지 않는 자리다 · PatternDataTests).
-        // 캔슬 지점의 틱이면 묻는다 — 반응의 동작은 안 묻는다(0.11 은 반응이 계획을 버려 끊을 캔슬이 없었다 · 설계 2026-10-01 조각2 §3).
+        // 캔슬 지점의 틱이면 묻는다 — 끊으면 러너를 안 민다: 그 단계에 들지 않고 끊는다(설계 2026-09-29 조각1 §3.2). 시계를 세운 틱에는 러너가 안
+        // 가므로 안 묻는다(지점은 움직임 밖이라 오지 않는 자리다 · PatternDataTests). 반응의 동작은 안 묻는다(0.11 은 반응이 계획을 버려 끊을 캔슬이
+        // 없었다 · 설계 2026-10-01 조각2 §3).
         if (!_holdClock && !_watch.InReaction && CancelPointAt(_runner.Ticks + 1) is int point)
         {
             int at = _runner.Ticks + 1;
@@ -1200,8 +1199,10 @@ public sealed class BattleSim
         }
         else
         {
+            // 닿은 틱에는 다가가기를 가린다 — 다시 고르면 달리기가 같은 틱에 또 닿아 Arrived 를 또 묻고 끝없이 되불러 프로세스가 죽는다(최종 리뷰가 밟았다 ·
+            // .NET 의 스택 넘침은 못 잡는다). 다음 다가가기는 다음 결정(12틱 뒤)이다.
             mask[BossActions.Wait] = true;
-            mask[BossActions.Approach] = true;
+            mask[BossActions.Approach] = point != DecisionPoint.Arrived;
         }
 
         for (int i = 0; i < _setup.PatternIds.Count; i++)

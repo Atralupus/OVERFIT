@@ -683,7 +683,7 @@ public partial class ShotRunner : Node
     /// <summary>폭탄의 ② 끊기는 판 — <see cref="Bombs"/> 의 둘째 문단.</summary>
     private async Task BombCut()
     {
-        _battle = await _drive.NewBattle(new ScriptPlan(2.5, "3연격"));
+        _battle = await _drive.NewBattle(new ScriptPlan(2.4, "3연격"));
         if (_battle is null)
         {
             Log.Warn("shots", "battle_scene_missing script=bomb_cut");
