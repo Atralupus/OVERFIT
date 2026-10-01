@@ -47,6 +47,12 @@ public static class RolloutRun
 {
     private const int _stage = 1;
 
+    /// <summary>
+    /// 보스가 이겼나 — 판의 결과가 짐(게임의 말 · 파이터 쪽)이고 파이터가 쓰러졌다. 같은 틱에 둘 다 쓰러지면 게임은 파이터의 승리다(<c>BattleSim.Outcome</c> 이
+    /// 보스의 죽음을 먼저 본다) — 그 판을 보스의 승리로 치면 가장 큰 보상의 부호가 뒤집힌다(최종 리뷰가 밟았다). 시간 초과는 보스의 짐이다.
+    /// </summary>
+    public static bool BossWon(BattleOutcome outcome, bool fighterAlive) => outcome == BattleOutcome.Lose && !fighterAlive;
+
     public static Episode Play(FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episode)
     {
         ArgumentNullException.ThrowIfNull(tables);
@@ -80,7 +86,7 @@ public static class RolloutRun
             fighterHp.Add(sim.Fighter.Health);
         }
 
-        bool bossWon = !sim.Fighter.Alive;
+        bool bossWon = BossWon(outcome.Value, sim.Fighter.Alive);
         IReadOnlyList<NetStep> raw = controller.Steps;
         var steps = new RolloutStep[raw.Count];
         for (int i = 0; i < raw.Count; i++)

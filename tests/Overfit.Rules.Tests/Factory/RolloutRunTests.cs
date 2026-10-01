@@ -77,4 +77,16 @@ public class RolloutRunTests
             Directory.Delete(four, true);
         }
     }
+
+    [Theory]
+    [InlineData(BattleOutcome.Lose, false, true)]
+    [InlineData(BattleOutcome.Lose, true, false)]
+    [InlineData(BattleOutcome.Win, false, false)]
+    [InlineData(BattleOutcome.Win, true, false)]
+    public void 보스의_승리는_판의_결과가_짐이고_파이터가_쓰러진_것이다(BattleOutcome outcome, bool fighterAlive, bool bossWon)
+    {
+        // 최종 리뷰가 밟았다 — 같은 틱에 둘 다 쓰러지면 게임은 파이터의 승리다(BattleSim.Outcome 이 보스의 죽음을 먼저 본다). "파이터가 쓰러졌다" 만 보면
+        // 그 판을 보스의 승리로 쳐 가장 큰 보상의 부호가 뒤집힌다. 시간 초과(짐 · 파이터가 살아 있다)는 보스의 짐이다.
+        RolloutRun.BossWon(outcome, fighterAlive).ShouldBe(bossWon);
+    }
 }

@@ -1373,10 +1373,12 @@ public sealed class BattleSim
             progress = length <= 0 ? 0 : Math.Min(1, (double)_runner.Ticks / length);
             if (_current.CancelPoints is { } points)
             {
+                // 캔슬 결정이면 지금 묻는 지점(러너 틱 + 1)은 빼고 그다음 지점까지다 — 넣으면 늘 1틱이라 "더 기다리면 또 끊을 자리가 오나" 가 안 보였다(최종 리뷰).
+                int after = point == DecisionPoint.Cancel ? _runner.Ticks + 1 : _runner.Ticks;
                 foreach (CancelPointDef p in points)
                 {
                     int at = TicksFor(p.T);
-                    if (at > _runner.Ticks && (toCancel < 0 || at - _runner.Ticks < toCancel))
+                    if (at > after && (toCancel < 0 || at - _runner.Ticks < toCancel))
                     {
                         toCancel = at - _runner.Ticks;
                     }
