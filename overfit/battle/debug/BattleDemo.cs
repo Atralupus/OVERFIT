@@ -143,7 +143,7 @@ public partial class BattleDemo : Node
             Controller = controller,
             MaxTicks = battle.MaxTicks,
 
-            // 대본으로 선 시도는 시작 체력을 실었을 수 있다(GIF · 스크린샷 · 설계 2026-10-01 조각1 §2.5) — 되살리기는 그대로 세운다.
+            // 대본 · 망 GIF 로 선 시도는 시작 체력을 실었을 수 있다(GIF · 스크린샷 · 설계 2026-10-01 조각1 §2.5) — 되살리기는 그대로 세운다.
             BossStartHealth = replay?.BossStartHealth,
         };
 

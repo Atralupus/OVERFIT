@@ -36,7 +36,7 @@ namespace Overfit.Battle.Rules;
 /// 보스의 형태 전환을 시작한 틱들(<see cref="BossForms.Shifts"/> · 설계 2026-10-01 조각1 §3). 0.11 이하의 줄에는 없다(null) — 되살리기가 안 견준다
 /// (체력이 1000 이라 어차피 <see cref="ReplayVerdict.DataChanged"/> 다).
 /// </param>
-/// <param name="BossStartHealth">보스의 시작 체력 — 대본으로 선 판만 싣는다(§2.5). 없으면 최대 체력이고, 되살리기가 그대로 세운다.</param>
+/// <param name="BossStartHealth">보스의 시작 체력 — 대본 · 망 GIF 로 선 판만 싣는다(§2.5 · 조각8 §3). 없으면 최대 체력이고, 되살리기가 그대로 세운다.</param>
 public sealed record AttemptEntry(
     ulong SessionSeed, int Run, AttemptRecord Record, string PickerId, IReadOnlyList<PlanEntry> Plans, int Ticks,
     IReadOnlyList<PatternInstance>? Instances = null, IReadOnlyList<int[]>? Inputs = null, string? DataSha256 = null,

@@ -174,7 +174,7 @@ public sealed class Boss
     /// <param name="config">보스 수치 — <c>bosses.json</c>.</param>
     /// <param name="arena">아레나 — 자리를 그 안으로 자른다.</param>
     /// <param name="x">시작 자리(발 중심 x).</param>
-    /// <param name="startHealth">시작 체력 — 대본으로 선 판만 쓴다(설계 2026-10-01 조각1 §2.5). 없으면 최대 체력.</param>
+    /// <param name="startHealth">시작 체력 — 대본 · 망 GIF 로 선 판만 쓴다(설계 2026-10-01 조각1 §2.5 · 조각8 §3). 없으면 최대 체력.</param>
     public Boss(BossConfig config, Arena arena, double x, int? startHealth = null)
     {
         ArgumentNullException.ThrowIfNull(config);

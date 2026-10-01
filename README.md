@@ -40,10 +40,10 @@ game turns the fight into 104 numbers (the observation): the decision point, the
 fighter's position, HP, stamina, bombs, and action 0.3 seconds ago, the fighter's actions over the 0.8 seconds before that, and up to
 four bombs in flight. The network is a small stack of multiplications (104 → 128 → 128 → 13). It turns the 104 numbers into a score
 for each of 13 choices: wait, run in, back off, leap over, leap back, continue the current move, or start one of the seven moves. Choices
-that are not possible at that point (for example, "continue" while resting) are removed, and the boss picks one of the rest at random,
-weighted by the scores.
+that are not possible at that point (for example, "continue" while resting) are removed, and the boss picks one of the rest at random;
+a higher score makes a choice more likely (softmax).
 
-**How it learns.** The boss starts with equal scores and plays thousands of fights. After each decision it is given a reward: plus for
+**How it learns.** The boss starts with nearly equal scores and plays tens of thousands of fights (51,200 in all). After each decision it is given a reward: plus for
 damage dealt to the fighter, minus for damage taken, a small minus for time, and plus or minus 1 for winning or losing the fight. The
 training method (PPO) slightly raises the scores of choices that led to more reward than expected, and lowers the others. This repeats
 over many rounds. The training code is plain numpy in `ml/rl`; the fights are run by the game's own rules in C# (`tools/factory`), so the
@@ -52,8 +52,8 @@ boss learns against exactly the game that ships.
 **Who it fights while learning.** Against scripted bots alone, the boss found one weakness (the bots could not escape a grab) and used
 only the grab. So a second network learns to play the fighter, and the two train in turns (self-play). In each of 20 rounds the boss
 trains for 10 steps against bots and saved fighters, then the fighter trains for 10 steps against the rule boss and saved bosses. Each saved
-boss is then tested against the same set of opponents: the bot fleet and four saved fighters. The win rate rose from 21% (round 2)
-to 80% (round 20).
+boss is then tested against the same set of opponents: the bot fleet and four saved fighters. The untrained boss (round 0) won 38%;
+the win rate first fell to 21% (round 2), when the boss leaned on a few moves, and then rose to 80% (round 20).
 
 **Choosing the phases.** Phase 1 is the saved boss with the lowest win rate after round 0 (round 2, 21%); phase 3 is the last one
 (round 20, 80%); phase 2 is the one closest to halfway between them (round 8, 46%). The three networks are
@@ -63,7 +63,8 @@ to 80% (round 20).
 
 - **One list of choices.** The game asks a controller at each decision point. The rule controller (the boss of version 0.11) turns a
   random plan into choices; the network controller (`FormNetController`) runs the network of the current phase. `stages.json` chooses
-  the controller (`"controller": "net"`); scripted scenes always use the rule controller.
+  the controller (`"controller": "net"`); scripted scenes use the rule controller, or a fixed list of choices for the retreat and leap
+  scenes.
 - **Same seed, same fight.** The random pick uses the game's seeded random numbers (`overfit/core/Det.cs`), and the exponent function
   in the pick is computed with additions and multiplications only (`DetMath.Exp`), because the system's version may differ in the last
   bit between machines. A recorded attempt therefore replays the network boss exactly.
@@ -159,7 +160,9 @@ rest (in place, turning to face the player) → [run] → first move → [cancel
 
 ## The rule boss tries to interrupt
 
-This section is about the rule boss; the network boss has no built-in reaction. The rule boss sees a throw start and knows about it 0.3 seconds later; a "!" appears above its head. From then on it **always tries to
+This section is about the rule boss; the network boss has no built-in reaction.
+
+The rule boss sees a throw start and knows about it 0.3 seconds later; a "!" appears above its head. From then on it **always tries to
 interrupt, whatever it is doing,** at the nearest chance:
 
 | What the boss is doing | Chance to interrupt |

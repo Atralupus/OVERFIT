@@ -90,7 +90,7 @@ def main() -> None:
     dest = ROOT / "ml" / "rl" / "gate" / f"{args.name}.json"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"{'통과' if ok else '실패'} — 3페이즈 {rows[5]['boss_win']:.3f} vs {best} {dict((r['boss'], r['boss_win']) for r in rows)[best]:.3f}"
+    print(f"{'통과' if ok else '실패'} — 3페이즈 {dict((r['boss'], r['boss_win']) for r in rows)['form3']:.3f} vs {best} {dict((r['boss'], r['boss_win']) for r in rows)[best]:.3f}"
           f" (차이 {gap:+.3f} · 기준 {gcfg['margin']:+.3f}) → {dest}")
     if not ok:
         sys.exit(1)

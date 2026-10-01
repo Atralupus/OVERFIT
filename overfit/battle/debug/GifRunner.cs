@@ -40,11 +40,6 @@ public partial class GifRunner : Node
     /// <summary>엣지인 액션 (설계 §5.4 · <c>InputFrame</c>) — 한 틱 앞에 누른다(<see cref="Drive"/>). 나머지(이동 · 가드)는 레벨이다.</summary>
     private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "parry", "attack", "bomb" };
 
-    /// <summary>
-    /// 대본 (설계 §6.2 의 표 · #147). 틱은 패턴의 틱이고, 판의 틱으로 적은 것은 <see cref="GifInput.OnBattleClock"/> 이 참이다.
-    /// 잡을 구간은 [<see cref="GifScript.From"/>, <see cref="GifScript.To"/>) 패턴 틱 — 60fps 로 240장(4초)을 넘지 않는다(도구가 막는다).
-    /// 대본마다 같은 입력을 규칙 위에서 틱까지 못박은 테스트가 있다(<c>MoveBattleTests</c>) — 숫자를 바꾸면 거기서 먼저 잰다.
-    /// </summary>
     /// <summary>망 보스 GIF 의 파이터 — 걸어 들어가 2연격을 세 번 친다(판의 시계).</summary>
     private static readonly GifInput[] _netInputs =
     {
@@ -57,6 +52,12 @@ public partial class GifRunner : Node
         new(209, 209, "attack", OnBattleClock: true),
     };
 
+    /// <summary>
+    /// 대본 (설계 §6.2 의 표 · #147). 틱은 패턴의 틱이고, 판의 틱으로 적은 것은 <see cref="GifInput.OnBattleClock"/> 이 참이다.
+    /// 잡을 구간은 [<see cref="GifScript.From"/>, <see cref="GifScript.To"/>) 패턴 틱 — 60fps 로 240장(4초)을 넘지 않는다(도구가 막는다).
+    /// 동작 대본마다 같은 입력을 규칙 위에서 틱까지 못박은 테스트가 있다(<c>MoveBattleTests</c>) — 숫자를 바꾸면 거기서 먼저 잰다. 망 보스 대본(net1 ~ 3)은
+    /// 장면을 망과 세션 시드가 정해 못박지 않는다.
+    /// </summary>
     private static readonly GifScript[] _scripts =
     {
         // 3연격 → 1타 뒤 캔슬 → 돌진 (조각1 §3). 파이터는 480 에 선 채다 — 1타는 960 밖에서 헛치고, 78틱에 끊어 달려와 113틱에 친다.

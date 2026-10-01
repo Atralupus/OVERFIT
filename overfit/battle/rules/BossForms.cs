@@ -18,7 +18,7 @@ public sealed class BossForms
 
     /// <param name="thresholds">남은 체력의 문턱들 — 내려가고, 0 보다 크고 최대 체력보다 작다.</param>
     /// <param name="maxHealth">최대 체력.</param>
-    /// <param name="startHealth">시작 체력 — 대본 전용(§2.5). 든 칸이 시작 형태이고, 문턱과 같으면 어느 형태인지 몰라 거절한다.</param>
+    /// <param name="startHealth">시작 체력 — 대본 · 망 GIF 전용(§2.5 · 조각8 §3). 든 칸이 시작 형태이고, 문턱과 같으면 어느 형태인지 몰라 거절한다.</param>
     /// <param name="shiftTicks">전환의 길이(틱) — 1 이상.</param>
     public BossForms(IReadOnlyList<int> thresholds, int maxHealth, int startHealth, int shiftTicks)
     {
