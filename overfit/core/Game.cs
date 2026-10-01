@@ -62,7 +62,7 @@ public partial class Game : Node
     /// </summary>
     private IReadOnlyList<ScriptPlan>? _nextScript;
 
-    /// <summary>다음 대본 전투의 보스 시작 체력 (설계 2026-10-01 조각1 §2.5) — 대본과 같이 채우고 같이 비운다. 없으면 최대 체력.</summary>
+    /// <summary>다음 전투의 보스 시작 체력 (설계 2026-10-01 조각1 §2.5) — 대본과 같이, 또는 홀로(<see cref="SetNextStart"/> · 조각8 §3) 채우고 전투가 가져가며 비운다. 없으면 최대 체력.</summary>
     private int? _nextBossStartHealth;
 
     /// <summary>다음 대본 전투의 칸 대본 (설계 2026-10-01 조각3 §4) — 있으면 그 전투는 대본 조종기(<c>ScriptActions</c>)로 선다. 대본과 같이 비운다.</summary>
@@ -122,7 +122,19 @@ public partial class Game : Node
         Log.Info("run", $"next_script={ScriptText(script)}" + (bossStartHealth is { } h ? $" boss_start_health={h}" : ""));
     }
 
-    /// <summary>대본 전투의 보스 시작 체력을 가져가며 비운다 — <see cref="TakeScript"/> 와 같이 <c>Battle</c> 만 부른다.</summary>
+    /// <summary>
+    /// 다음 전투 하나의 보스 시작 체력만 정한다 — 대본 없이 단계의 조종기(망)로 선다(설계 2026-10-01 조각8 §3). 페이즈마다의 망 보스를 찍는 GIF 가 쓴다:
+    /// 형태는 시작 체력이 고른다. 그 전투가 가져가면 빈다.
+    /// </summary>
+    public void SetNextStart(int bossStartHealth)
+    {
+        _nextScript = null;
+        _nextActions = null;
+        _nextBossStartHealth = bossStartHealth;
+        Log.Info("run", $"next_start boss_start_health={bossStartHealth}");
+    }
+
+    /// <summary>다음 전투의 보스 시작 체력을 가져가며 비운다 — <see cref="TakeScript"/> 와 같이 <c>Battle</c> 만 부른다.</summary>
     public int? TakeBossStartHealth()
     {
         int? health = _nextBossStartHealth;

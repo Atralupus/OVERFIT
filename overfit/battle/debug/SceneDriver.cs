@@ -64,17 +64,22 @@ public sealed class SceneDriver
     public Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, params ScriptPlan[] script) => NewBattle(bossStartHealth, null, script);
 
     /// <summary>
-    /// 대본 판을 보스의 시작 체력과 같이 세운다 (설계 2026-10-01 조각1 §2.5) — 페이즈 전환을 찍는 GIF 가 쓴다. 시작 체력은 대본이 있을 때만 실린다.
+    /// 대본 판을 보스의 시작 체력과 같이 세운다 (설계 2026-10-01 조각1 §2.5) — 페이즈 전환을 찍는 GIF 가 쓴다. 대본이 비면 시작 체력만 실려 단계의 조종기(망)로 선다(조각8 §3).
     /// </summary>
     /// <param name="bossStartHealth">보스의 시작 체력 — 없으면 최대.</param>
     /// <param name="actions">칸 대본 — 있으면 대본 조종기로 선다(설계 2026-10-01 조각3 §4).</param>
-    /// <param name="script">계획 대본.</param>
+    /// <param name="script">계획 대본 — 비면 단계의 조종기로 선다.</param>
     public async Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, IReadOnlyList<string>? actions, params ScriptPlan[] script)
     {
         ArgumentNullException.ThrowIfNull(script);
         if (script.Length > 0)
         {
             Game.Instance.SetNextScript(script, bossStartHealth, actions);
+        }
+        else if (bossStartHealth is { } health)
+        {
+            // 계획이 빈 대본 — 단계의 조종기(망)로 서고 시작 체력만 넘긴다(설계 2026-10-01 조각8 §3 · 페이즈마다의 망 보스 GIF).
+            Game.Instance.SetNextStart(health);
         }
 
         Game.Instance.GoTo(Game.Scene.Battle);

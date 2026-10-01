@@ -28,6 +28,8 @@
 #   tools/build.sh compare --weights=FILE         규칙 · 무작위 · 망의 판 평균 보상 (조각 5)
 #   tools/build.sh selfplay [--rounds=R]          보스 망 · 파이터 망을 번갈아 학습 → out/selfplay/<이름>/ (조각 6)
 #   tools/build.sh evalboss --name=NAME           보스 저장본마다 시험 묶음과의 승률 → eval.csv (조각 6)
+#   tools/build.sh qtrain --name=NAME             Q 표 보스를 시험 묶음으로 학습 → out/qtable/<이름>/ (조각 8)
+#   tools/build.sh gate --name=NAME               비교 관문 — 3페이즈가 규칙 · Q 표를 이기나 → ml/rl/gate/<이름>.json (조각 8)
 #   tools/build.sh pick --name=NAME               eval.csv 에서 형태마다의 망을 골라 overfit/data/boss_net/ 에 · 골든도 (조각 7)
 #   tools/build.sh golden                         망의 골든(NetGolden.json)을 다시 짓는다 (조각 7)
 #   tools/build.sh mltest                          파이썬 테스트 (ml/rl)
@@ -486,6 +488,16 @@ cmd_evalboss() {
   say "보스 저장본마다 시험 묶음과의 승률"
   (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.evalboss "$@") || die "평가가 멈췄습니다."
 }
+cmd_qtrain() {
+  need_ml
+  say "Q 표 보스의 학습 (관문의 대조군)"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.qtrain "$@") || die "Q 표 학습이 멈췄습니다."
+}
+cmd_gate() {
+  need_ml
+  say "비교 관문 — 무작위 · 규칙 · Q 표 · 1 · 2 · 3페이즈 · 게임의 보스"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.gate "$@") || die "관문을 못 넘었거나 멈췄습니다."
+}
 cmd_pick() {
   need_ml
   say "페이즈 고르기 — 셀프 플레이의 eval.csv 에서 형태마다의 망"
@@ -501,7 +513,7 @@ cmd_golden() {
 cmd_mltest() {
   need_ml
   say "파이썬 테스트"
-  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout && "$ML_PYTHON" -m ml.rl.test_train) || die "파이썬 테스트 실패."
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout && "$ML_PYTHON" -m ml.rl.test_train && "$ML_PYTHON" -m ml.rl.test_gate) || die "파이썬 테스트 실패."
   ok "파이썬 테스트 통과"
 }
 
@@ -728,6 +740,8 @@ case "${1:-}" in
   mltest)    shift; cmd_mltest "$@" ;;
   selfplay)  shift; cmd_selfplay "$@" ;;
   evalboss)  shift; cmd_evalboss "$@" ;;
+  qtrain)    shift; cmd_qtrain "$@" ;;
+  gate)      shift; cmd_gate "$@" ;;
   pick)      shift; cmd_pick "$@" ;;
   golden)    shift; cmd_golden "$@" ;;
   shots)     shift; cmd_shots "$@" ;;

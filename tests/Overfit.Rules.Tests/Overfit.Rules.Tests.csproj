@@ -94,6 +94,8 @@
     <Compile Include="../../overfit/battle/rules/DetMath.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FormNetController.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossNets.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/QTable.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/QTableController.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FighterActions.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FighterObservation.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FighterNetDriver.cs" LinkBase="linked/battle/rules" />
@@ -129,6 +131,7 @@
     <Compile Include="../../tools/factory/FactoryStats.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/RolloutRun.cs" LinkBase="linked/factory" />
     <Compile Include="../../tools/factory/RolloutWriter.cs" LinkBase="linked/factory" />
+    <Compile Include="../../tools/factory/QTrain.cs" LinkBase="linked/factory" />
   </ItemGroup>
 
   <!-- 콘텐츠 JSON. 게임은 res:// 로 읽지만 테스트는 출력 폴더의 data/ 에서 읽는다.
