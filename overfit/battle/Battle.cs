@@ -703,7 +703,10 @@ public partial class Battle : Node2D
                     ? speed(_feel)
                     : 1.0,
             _sim.BossStep?.Mirror ?? false,
-            _sim.Forms.Shifting ? _sim.Forms.ShiftLeft : 0));
+
+            // 판이 끝나면 전환도 그림에서 끝난다 — 끝난 판은 틱을 안 밀어, 전환을 시작한 틱에 판이 끝나면(폭탄이 문턱을 넘긴 틱에 파이터가 쓰러짐 ·
+            // 시간 초과) 남은 몫이 1 에 멈춰 보스가 결과 화면 뒤에서 하얗게 남는다(최종 리뷰가 밟았다). 흰 구와 같은 거르기다.
+            _sim.Forms.Shifting && !_over ? _sim.Forms.ShiftLeft : 0));
 
         // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림 · 산 창)이 그 틱에 멈춰 남는다. 거르지 않으면
         // 흰 구가 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 잡기에 죽은 판도 같다: 판은 그 잡기가 닿은 틱에 끝나고

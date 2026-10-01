@@ -304,4 +304,47 @@ public class BossFormBattleTests
         log.Lines.ShouldContain($"[boss][I] form_shift from=1 to=2 hp=900 tick={sim.Ticks}");
         sim.Ticks.ShouldBe(122, "1타의 창이 닿는 틱 — GifRunner 의 form 대본이 이 틱을 둘러 잡는다");
     }
+
+    /// <summary>고르기가 받은 요청을 적어 두고 대본에 넘긴다 — 판이 고르기에 무엇을 넘기는지 본다.</summary>
+    private sealed class Recording(IPlanPicker inner) : IPlanPicker
+    {
+        public List<PlanRequest> Requests { get; } = new();
+
+        public BossPlan Next(PlanRequest request)
+        {
+            Requests.Add(request);
+            return inner.Next(request);
+        }
+    }
+
+    [Fact]
+    public void 전환_뒤의_첫_계획은_새_형태의_번호로_전환이_끝나는_틱에_고른다()
+    {
+        // 설계 2026-10-01 조각1 §2.2 · §2.4 (최종 리뷰가 밟았다) — 전환을 시작할 때 고르면 형태 2 에서 도는 첫 계획이 Form=1 로 골라진다. 조각 7 의
+        // 고르기는 형태마다 다른 망이라, 형태 2 의 첫 수를 형태 1 의 망이 고르게 된다. 그래서 전환이 끝나는 틱에 새 번호로 고른다.
+        string[] ids = [_waitId, "돌진"];
+        Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
+        patterns[_waitId] = Waiting();
+        var picker = new Recording(new ScriptPlanPicker(ids, patterns, [new ScriptPlan(0.2, _waitId)]));
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = Real(),
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(),
+            BossStartHealth = 930,
+            PatternIds = ids,
+            Patterns = patterns,
+            Seed = 51,
+            Picker = picker,
+            MaxTicks = TestConfigs.MaxTicks(),
+        });
+        int begun = ThrowIntoWait(sim);
+        int land = begun + 1 + Release + Flight;
+        TestConfigs.UntilTick(sim, land + Shift);
+
+        PlanRequest last = picker.Requests[^1];
+        (last.Form, last.Tick).ShouldBe((2, land + Shift), "전환 뒤의 첫 계획을 옛 형태로 · 전환을 시작할 때 골랐다");
+        picker.Requests.ShouldNotContain(r => r.Tick == land, "전환을 시작한 틱에 계획을 골랐다");
+    }
 }

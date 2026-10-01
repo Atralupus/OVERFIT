@@ -541,14 +541,15 @@ public sealed class BattleSim
         // 탈진 시계만은 탈진해 있어도 돈다 — 아니면 안 풀린다. 풀리는 틱부터 쉬는 갈래로 간다.
         Boss.Tick();
 
-        // 전환 중에는 아무것도 안 한다 — 돌아서지도 않는다(탈진과 같다 · 설계 2026-10-01 조각1 §2.2). 공중이면 높이만 따라 내린다. 쉬기도 안 센다:
-        // 전환을 시작할 때 고른 계획의 쉬기는 전환이 끝난 뒤부터다.
+        // 전환 중에는 아무것도 안 한다 — 돌아서지도 않는다(탈진과 같다 · 설계 2026-10-01 조각1 §2.2). 공중이면 높이만 따라 내린다. 계획도 없다 —
+        // 전환이 끝나는 틱에 새 형태의 번호로 고르고(BeginShift 의 주석), 쉬기는 그 다음 틱부터 센다.
         if (_forms.Shifting)
         {
             Fall();
             if (_forms.Tick())
             {
                 Log.Info("boss", $"form={_forms.Form} tick={Ticks}");
+                _flow.Choose();
             }
 
             return;
@@ -1094,8 +1095,10 @@ public sealed class BattleSim
 
     /// <summary>
     /// 전환을 시작한다 (§2.2) — 탈진과 같은 걷기다: 열린 창을 버리고 · 공중이면 높이만 따라 내리고 · 하던 것을 걷고 · 게이지를 비운다. 같은 틱에 게이지로
-    /// 무너졌으면 그 탈진을 끝낸다 — 전환이 이긴다(탈진이 남으면 전환 뒤 보스가 굳은 채 선다). 계획을 고르고, 그 쉬기는 전환이 끝난 뒤부터 센다
-    /// (<see cref="AdvanceBoss"/> 가 전환 동안 흐름을 안 민다). 본 던지기는 안 잊는다 — 전환이 끝나면 끊을 자리를 기다린다(§2.3).
+    /// 무너졌으면 그 탈진을 끝낸다 — 전환이 이긴다(탈진이 남으면 전환 뒤 보스가 굳은 채 선다). 계획은 버리고 **전환이 끝나는 틱에** 고른다
+    /// (<see cref="AdvanceBoss"/>) — 시작할 때 고르면 새 형태에서 도는 첫 계획이 옛 형태의 번호(<see cref="PlanRequest.Form"/>)와 1.5초 묵은 자리로
+    /// 골라진다(최종 리뷰가 밟았다 · 조각 7 의 형태마다 다른 고르기가 새 형태의 첫 수를 못 고른다). 쉬기는 그 뒤부터 센다. 본 던지기는 안 잊는다 — 전환이
+    /// 끝나면 끊을 자리를 기다린다(§2.3).
     /// </summary>
     private void BeginShift()
     {
@@ -1106,7 +1109,7 @@ public sealed class BattleSim
         Boss.Exhaust(0);
         _forms.Begin(Ticks);
         Log.Info("boss", $"form_shift from={_forms.Form} to={_forms.Form + 1} hp={Boss.Health} tick={Ticks}");
-        _flow.Choose();
+        _flow.Drop();
     }
 
     /// <summary>이번 칼질이 이미 보스에 닿았나. 창이 닫히면(<c>AttackActive</c> 가 꺼지면) 풀린다.</summary>
