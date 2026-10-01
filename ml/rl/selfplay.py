@@ -108,7 +108,9 @@ def main() -> None:
                     seed = cfg["seed"] * 1_000_000 + rnd * 1000 + base + it
                     r = worker.run(seed, eps, out / f"rollout_{side.name}", weights=side.latest, learner=side.name, opponents=opponents)
                     adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=r.manifest["decide_ticks"])
-                    s = train.update(side.policy, side.value, side.opt_p, side.opt_v, r, adv, ret, cfg, rng)
+                    # 파이터는 엔트로피를 따로 낮게 둔다(이슈 #167) — 보스의 0.03 을 같이 쓰면 파이터가 배운 타이밍에 못 모이고 고르게 흩어진다.
+                    side_cfg = {**cfg, "entropy_coef": cfg["fighter_entropy_coef"]} if side.name == "fighter" else cfg
+                    s = train.update(side.policy, side.value, side.opt_p, side.opt_v, r, adv, ret, side_cfg, rng)
                     side.save(side.latest)
                     e = episodes.summary(out / f"rollout_{side.name}", config["reward"])
                     ep_return = float(np.bincount(r.episode, weights=r.reward).mean()) if len(r.reward) else 0.0
