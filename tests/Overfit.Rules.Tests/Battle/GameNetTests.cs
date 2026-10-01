@@ -30,6 +30,43 @@ public class GameNetTests
         Math.Abs(DetMath.Exp(x) - want).ShouldBeLessThanOrEqualTo(want * 1e-14);
     }
 
+    /// <summary>
+    /// DetMath.Exp 의 상수와 연산 순서는 <b>계약이다</b>(Det 와 같다 · CLAUDE.md §4) — 망 보스의 뽑기가 이 비트에 달렸다. 위의 1e-14 는 호너의 묶음을 바꿔도
+    /// 초록이라 옛 시도의 되살리기가 같은 지문으로 다른 판이 된다(최종 리뷰). 값은 파이썬으로 알고리즘을 <b>따로 구현해</b> 얻었다(round = 짝수로 · ldexp).
+    /// ln2/2 는 x·(1/ln2) 가 정확히 0.5 라 짝수 반올림(k = 0)을 본다.
+    /// </summary>
+    [Theory]
+    [InlineData(-0.5, 0x3FE368B2FC6F960AUL)]
+    [InlineData(-1.0, 0x3FD78B56362CEF38UL)]
+    [InlineData(-3.7, 0x3F99511FC6871044UL)]
+    [InlineData(-20.0, 0x3E21B48655F37267UL)]
+    [InlineData(-100.25, 0x36E4ACD31E167EBBUL)]
+    [InlineData(-700.0, 0x00D14F2B0FB9307FUL)]
+    [InlineData(2.5, 0x40285D6FD931E0BBUL)]
+    [InlineData(0.34657359027997264, 0x3FF6A09E667F3BCCUL)]
+    [InlineData(-0.34657359027997264, 0x3FE6A09E667F3BCCUL)]
+    [InlineData(1e-09, 0x3FF000000044B830UL)]
+    [InlineData(-12.345678, 0x3ED23D2C7DA10725UL)]
+    public void DetMath_Exp_는_따로_구현한_파이썬과_비트까지_같다(double x, ulong bits)
+    {
+        BitConverter.DoubleToUInt64Bits(DetMath.Exp(x)).ShouldBe(bits, $"x={x:R}");
+    }
+
+    [Fact]
+    public void DetMath_Exp_의_훑기가_따로_구현한_파이썬과_같다()
+    {
+        // 위의 몇 점은 호너의 묶음(r·p/n → r·(p/n))이나 항 하나(14 → 13)를 바꿔도 같은 비트라 못 잡는다 — 2 만 점(3 에서 −71 까지)을 훑어 sha256 으로
+        // 견준다. 파이썬은 같은 알고리즘을 따로 구현했고 그 두 바꿈에서 다른 값(855b… · 3ec9…)을 낸다.
+        var bytes = new List<byte>(20000 * 8);
+        for (int i = 0; i < 20000; i++)
+        {
+            double x = (-i * 0.0037) + 3.0;
+            bytes.AddRange(BitConverter.GetBytes(DetMath.Exp(x)));
+        }
+
+        Convert.ToHexString(SHA256.HashData([.. bytes])).ToLowerInvariant().ShouldBe("b02b2283317e2083218dd4501e4a3de5469b46cc4c5d603cbf9adfb24ba0bdd5");
+    }
+
     [Fact]
     public void DetMath_Exp_는_0_에서_1_이고_아주_작으면_0_이다()
     {
@@ -128,6 +165,66 @@ public class GameNetTests
         (int, int) a = Run();
         log.Lines.ShouldNotContain(l => l.Contains("][E]", StringComparison.Ordinal));
         Run().ShouldBe(a);
+    }
+
+    /// <summary>판을 그대로 두고 조종기가 고른 칸만 적는다.</summary>
+    private sealed class Recording(IBossController inner) : IBossController
+    {
+        public List<int> Picks { get; } = [];
+
+        public bool ReactsToBombs => inner.ReactsToBombs;
+
+        public bool WantsObservation => inner.WantsObservation;
+
+        public int Decide(BossDecision decision)
+        {
+            int a = inner.Decide(decision);
+            Picks.Add(a);
+            return a;
+        }
+    }
+
+    [Theory]
+    [InlineData(null, 27, "bd479f01d5d3adc1", 1308, 1070)]
+    [InlineData(380, 46, "95c074ff9706154f", 1803, 210)]
+    public void 시드_51_의_망_보스가_고른_칸들이_박아_둔_값이다(int? startHealth, int picks, string sha16, int ticks, int health)
+    {
+        // 시작 체력 380 은 3페이즈(400 아래)에서 선다 — 첫 줄은 1페이즈만 돈다(봇이 900 까지 못 깎는다).
+        // 위의 "같은 시드면 같은 판" 은 한 기기의 두 번을 견줄 뿐이다 — 뽑기 · exp · 순전파의 어느 하나가 바뀌어도 둘 다 같이 바뀌어 초록이다(최종 리뷰).
+        // 고른 칸의 줄을 박아 둔다: 바뀌면 옛 시도의 되살리기가 같은 지문으로 다른 판이다. 일부러 바꿨으면(망 · 관측 · 뽑기) 이 값을 새로 적고 까닭을 남긴다.
+        var rec = new Recording(new FormNetController([Load(1), Load(2), Load(3)], new BossActions(Roster), seed: 51));
+        var sim = new BattleSim(new BattleSetup
+        {
+            Arena = TestConfigs.Arena(),
+            Fighter = TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter],
+            HitShapes = TestConfigs.HitShapes(),
+            Boss = TestConfigs.Boss(),
+            PatternIds = Roster,
+            Patterns = TestConfigs.Patterns(),
+            Seed = 51,
+            Controller = rec,
+            MaxTicks = TestConfigs.MaxTicks(),
+            BossStartHealth = startHealth,
+        });
+        var bot = new BotPolicy(51);
+        BattleOutcome? o = null;
+        while (o is null)
+        {
+            o = sim.Tick(bot.Next(sim));
+        }
+
+        string sha = Convert.ToHexString(SHA256.HashData(rec.Picks.Select(p => (byte)p).ToArray())).ToLowerInvariant()[..16];
+        (rec.Picks.Count, sha, sim.Ticks, sim.Boss.Health).ShouldBe((picks, sha16, ticks, health));
+    }
+
+    [Fact]
+    public void 데이터_지문은_보스들이_읽는_망을_빠짐없이_든다()
+    {
+        // DataDigest.Files 는 손으로 적은 목록이다(무엇이 판을 세우나의 선언) — bosses.json 의 forms.nets 와 갈리면 망을 바꾼 옛 시도가 [W] 대신
+        // 결정론 위반([E])으로 읽히거나, 지운 망을 지문이 읽다 부팅이 죽는다(최종 리뷰). 둘이 같아야 한다.
+        string[] nets = [.. TestConfigs.Bosses().Values.SelectMany(b => b.Forms.Nets ?? []).Distinct().Order(StringComparer.Ordinal)];
+        nets.ShouldNotBeEmpty();
+        Overfit.Core.DataDigest.Files.Where(f => f.StartsWith("boss_net/", StringComparison.Ordinal)).Order(StringComparer.Ordinal).ShouldBe(nets);
     }
 
     [Fact]
