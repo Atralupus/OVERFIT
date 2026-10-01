@@ -88,6 +88,8 @@
     <Compile Include="../../overfit/battle/rules/BossTravel.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/ScriptActions.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossObservation.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/PolicyNet.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/NetController.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FormReport.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BombRecord.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/BossSwings.cs" LinkBase="linked/battle/rules" />
