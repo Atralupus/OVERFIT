@@ -17,9 +17,18 @@ public sealed class RewardDef
     public required double WWin { get; init; }
 }
 
+/// <summary>일꾼의 보스 조종기 (설계 2026-10-01 조각5 §3) — 망은 경험을 적고, 규칙 · 무작위는 비교의 대조군이라 판의 결과만 낸다.</summary>
+public enum RolloutController
+{
+    Net,
+    Rule,
+    Random,
+}
+
 /// <summary>경험의 줄 하나 — 망 조종기의 결정에 보상과 끝을 붙인 것.</summary>
+/// <remarks><c>Span</c> 은 이 결정에서 다음 적은 결정(또는 판의 끝 다음 틱)까지의 틱이다 — 학습기가 시간으로 할인한다(γ^(틱/12)).</remarks>
 public sealed record RolloutStep(
-    int Tick, IReadOnlyList<double> Observation, IReadOnlyList<bool> Mask, int Action, double LogProb, double Value, double Reward, bool Done);
+    int Tick, IReadOnlyList<double> Observation, IReadOnlyList<bool> Mask, int Action, double LogProb, double Value, double Reward, bool Done, int Span);
 
 /// <summary>판 하나의 경험.</summary>
 /// <param name="Index">판 번호.</param>
@@ -53,14 +62,24 @@ public static class RolloutRun
     /// </summary>
     public static bool BossWon(BattleOutcome outcome, bool fighterAlive) => outcome == BattleOutcome.Lose && !fighterAlive;
 
-    public static Episode Play(FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episode)
+    public static Episode Play(
+        FactoryTables tables, PolicyNet? net, RewardDef reward, ulong seed, int episode, RolloutController kind = RolloutController.Net)
     {
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(reward);
         BotTraits traits = BotTraits.Sample(seed, episode, tables.Fleet);
         ulong battleSeed = Det.Hash64(seed, Det.Domain.Rollout, k1: episode, k2: 0);
-        var controller = new NetController(net, Det.Hash64(seed, Det.Domain.Rollout, k1: episode, k2: 1));
+        ulong pickSeed = Det.Hash64(seed, Det.Domain.Rollout, k1: episode, k2: 1);
         IReadOnlyList<string> roster = StageRoster.For(tables.Stages, _stage);
+        var netController = kind == RolloutController.Net ? new NetController(net, pickSeed) : null;
+        IBossController controller = kind switch
+        {
+            RolloutController.Rule => new RuleController(
+                new UniformPlanPicker(new PickerInputs(roster, tables.Patterns, tables.RestTicks, tables.Knobs, Array.Empty<AttemptRecord>(), battleSeed)),
+                new BossActions(roster), roster, tables.Patterns, tables.RestTicks),
+            RolloutController.Random => new RandomController(pickSeed),
+            _ => netController!,
+        };
         var sim = new BattleSim(new BattleSetup
         {
             Arena = tables.Arena,
@@ -87,7 +106,7 @@ public static class RolloutRun
         }
 
         bool bossWon = BossWon(outcome.Value, sim.Fighter.Alive);
-        IReadOnlyList<NetStep> raw = controller.Steps;
+        IReadOnlyList<NetStep> raw = netController?.Steps ?? (IReadOnlyList<NetStep>)Array.Empty<NetStep>();
         var steps = new RolloutStep[raw.Count];
         for (int i = 0; i < raw.Count; i++)
         {
@@ -104,7 +123,7 @@ public static class RolloutRun
             }
 
             NetStep s = raw[i];
-            steps[i] = new RolloutStep(s.Tick, s.Observation, s.Mask, s.Action, s.LogProb, s.Value, r, done);
+            steps[i] = new RolloutStep(s.Tick, s.Observation, s.Mask, s.Action, s.LogProb, s.Value, r, done, span);
         }
 
         return new Episode(episode, traits.Habit.ToString(), outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps);

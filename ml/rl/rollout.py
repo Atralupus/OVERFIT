@@ -1,6 +1,7 @@
 """학습의 일꾼이 쓴 경험을 넘파이로 읽는다 (설계 2026-10-01 조각4 §6).
 
-steps.bin 의 한 줄(작은 끝): obs float32[D] · mask uint8[A] · action int16 · logp float32 · value float32 · reward float32 · done uint8 · episode int32.
+steps.bin 의 한 줄(작은 끝): obs float32[D] · mask uint8[A] · action int16 · logp float32 · value float32 · reward float32 · done uint8 · span int32 ·
+episode int32. span 은 결정의 길이(틱) — 학습기가 시간으로 할인한다.
 D · A 는 manifest.json 에 있다. 일꾼을 부르는 것(run)도 여기다 — 학습기(조각 5)가 바퀴마다 부른다.
 """
 
@@ -26,6 +27,7 @@ def step_dtype(obs: int, actions: int) -> np.dtype:
         ("value", "<f4"),
         ("reward", "<f4"),
         ("done", "u1"),
+        ("span", "<i4"),
         ("episode", "<i4"),
     ])
 
@@ -42,6 +44,7 @@ class Rollout:
     value: np.ndarray
     reward: np.ndarray
     done: np.ndarray
+    span: np.ndarray
     episode: np.ndarray
 
 
@@ -60,6 +63,7 @@ def read(out_dir: str | Path) -> Rollout:
         value=rows["value"].astype(np.float64),
         reward=rows["reward"].astype(np.float64),
         done=rows["done"].astype(bool),
+        span=rows["span"].astype(np.int64),
         episode=rows["episode"].astype(np.int64),
     )
 

@@ -18,6 +18,7 @@ internal static class RolloutProgram
         tools/build.sh rollout [인자…]  — 학습의 일꾼: 보스를 망 조종기로 돌려 경험을 쓴다 (설계 2026-10-01 조각4)
 
           --weights=FILE|none  정책망 가중치 JSON (기본 none — 열린 칸에 같은 확률)
+          --controller=K       net(기본) · rule · random — rule · random 은 비교의 대조군이라 결정을 안 적는다(episodes.csv 만)
           --episodes=N         판 수 (기본 64)
           --seed=N             시드 (기본 0) — 판의 시드 · 상대 봇이 (시드, 판)에서 나온다
           --threads=N          동시에 도는 판 수 (기본 코어 수) — 결과는 스레드 수와 무관하다
@@ -32,6 +33,13 @@ internal static class RolloutProgram
         int episodes = Program.Int(args, "--episodes=") ?? 64;
         int threads = Program.Int(args, "--threads=") ?? Environment.ProcessorCount;
         string weights = CmdArgs.Text(args, "--weights=") ?? "none";
+        string controllerText = CmdArgs.Text(args, "--controller=") ?? "net";
+        if (!Enum.TryParse(controllerText, ignoreCase: true, out RolloutController kind))
+        {
+            Console.Error.WriteLine($"모르는 조종기 — {controllerText}");
+            Console.Error.Write(Usage);
+            return 2;
+        }
         string trainPath = CmdArgs.Text(args, "--train=") ?? Path.Combine("ml", "rl", "train.json");
         string data = CmdArgs.Text(args, "--data=") ?? Path.Combine("overfit", "data");
         string fleetPath = CmdArgs.Text(args, "--fleet=") ?? Path.Combine("tools", "factory", "fleet.json");
@@ -68,11 +76,11 @@ internal static class RolloutProgram
             return 1;
         }
 
-        Say($"start seed={seed} episodes={episodes} threads={threads} weights={weights} data_digest={digest[..12]} commit={commit} out={outDir}");
+        Say($"start seed={seed} episodes={episodes} threads={threads} controller={kind} weights={weights} data_digest={digest[..12]} commit={commit} out={outDir}");
         RolloutSummary sum;
         try
         {
-            sum = RolloutWriter.Run(tables, net, reward, seed, episodes, threads, outDir);
+            sum = RolloutWriter.Run(tables, net, reward, seed, episodes, threads, outDir, kind: kind);
         }
         catch (AggregateException e)
         {
@@ -112,6 +120,8 @@ internal static class RolloutProgram
         }
 
         json.WriteEndArray();
+        json.WriteNumber("boss_max_health", tables.Boss.MaxHealth);
+        json.WriteNumber("fighter_max_health", tables.Fighter.MaxHealth);
         json.WriteNumber("rows", sum.Rows);
         json.WriteNumber("boss_wins", sum.BossWins);
         json.WriteNumber("ticks", sum.Ticks);

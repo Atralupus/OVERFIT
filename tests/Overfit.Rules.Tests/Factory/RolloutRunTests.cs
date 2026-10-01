@@ -89,4 +89,28 @@ public class RolloutRunTests
         // 그 판을 보스의 승리로 쳐 가장 큰 보상의 부호가 뒤집힌다. 시간 초과(짐 · 파이터가 살아 있다)는 보스의 짐이다.
         RolloutRun.BossWon(outcome, fighterAlive).ShouldBe(bossWon);
     }
+
+    [Theory]
+    [InlineData(RolloutController.Rule)]
+    [InlineData(RolloutController.Random)]
+    public void 규칙_무작위_조종기의_판은_결정을_안_적고_E_없이_끝까지_간다(RolloutController kind)
+    {
+        // 설계 2026-10-01 조각5 §3 — 비교의 대조군. 판의 체력 · 틱 · 승패만 쓴다(episodes.csv).
+        using var log = new LogCapture();
+        Episode e = RolloutRun.Play(Tables, null, _reward, seed: 11, episode: 0, kind);
+        e.Steps.ShouldBeEmpty();
+        e.Ticks.ShouldBeGreaterThan(0);
+        log.Lines.ShouldNotContain(l => l.Contains("][E]", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void 결정의_길이는_다음_결정까지의_틱이고_합이_판의_남은_길이다()
+    {
+        // 최종 리뷰가 밟았다 — 할인을 결정마다 하면 결정이 길수록(잡기처럼) 끝의 보상이 덜 깎여, 결정 수를 줄이는 쪽으로 기운다. 학습기는 결정의 길이로
+        // 할인한다(γ^(틱/12)) — 그 길이를 일꾼이 싣는다.
+        Episode e = RolloutRun.Play(Tables, null, _reward, seed: 3, episode: 0);
+        e.Steps.Sum(s => s.Span).ShouldBe(e.Ticks - e.Steps[0].Tick + 1);
+        // 같은 틱에 결정이 둘일 수 있다(물러서다 벽에 닿으면 그 틱에 다시 묻는다) — 앞의 것은 길이 0 이고 할인도 없다.
+        e.Steps.ShouldAllBe(s => s.Span >= 0);
+    }
 }
