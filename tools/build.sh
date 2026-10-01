@@ -28,6 +28,8 @@
 #   tools/build.sh compare --weights=FILE         규칙 · 무작위 · 망의 판 평균 보상 (조각 5)
 #   tools/build.sh selfplay [--rounds=R]          보스 망 · 파이터 망을 번갈아 학습 → out/selfplay/<이름>/ (조각 6)
 #   tools/build.sh evalboss --name=NAME           보스 저장본마다 시험 묶음과의 승률 → eval.csv (조각 6)
+#   tools/build.sh pick --name=NAME               eval.csv 에서 형태마다의 망을 골라 overfit/data/boss_net/ 에 · 골든도 (조각 7)
+#   tools/build.sh golden                         망의 골든(NetGolden.json)을 다시 짓는다 (조각 7)
 #   tools/build.sh mltest                          파이썬 테스트 (ml/rl)
 #   tools/build.sh rollout [인자…]     학습의 일꾼 — 보스를 망 조종기로 돌려 경험을 쓴다 → out/rollout/<시드>-<판 수>/ (조각 4)
 #   tools/build.sh factory [인자…]     데이터 공장 — 봇 함대가 보스와 싸운 기록을 짓는다 → out/factory/<시드>-<from>-<to>/ (#108)
@@ -483,6 +485,18 @@ cmd_evalboss() {
   say "보스 저장본마다 시험 묶음과의 승률"
   (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.evalboss "$@") || die "평가가 멈췄습니다."
 }
+cmd_pick() {
+  need_ml
+  say "페이즈 고르기 — 셀프 플레이의 eval.csv 에서 형태마다의 망"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.pick "$@") || die "고르기가 멈췄습니다."
+  cmd_golden
+}
+cmd_golden() {
+  need_ml
+  say "망의 골든 — 순수 파이썬의 로짓을 C# 테스트가 비트까지 견준다"
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.golden) || die "골든을 못 지었습니다."
+  ok "overfit/data/boss_net/ · NetGolden.json 을 같이 커밋하세요."
+}
 cmd_mltest() {
   need_ml
   say "파이썬 테스트"
@@ -713,6 +727,8 @@ case "${1:-}" in
   mltest)    shift; cmd_mltest "$@" ;;
   selfplay)  shift; cmd_selfplay "$@" ;;
   evalboss)  shift; cmd_evalboss "$@" ;;
+  pick)      shift; cmd_pick "$@" ;;
+  golden)    shift; cmd_golden "$@" ;;
   shots)     shift; cmd_shots "$@" ;;
   gifs)      shift; cmd_gifs "$@" ;;
   export)    shift; cmd_export "$@" ;;

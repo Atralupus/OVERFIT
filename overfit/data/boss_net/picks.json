@@ -1,0 +1,27 @@
+{
+  "_comment": "형태(페이즈)마다의 보스 망 — tools/build.sh pick 이 셀프 플레이의 eval.csv 에서 골랐다(설계 2026-10-01 조각7 §1). 손으로 고치지 말고 다시 고른다.",
+  "selfplay": "sp-1",
+  "forms": [
+    {
+      "form": 1,
+      "from": "boss_r02",
+      "boss_win": 0.2109,
+      "return": -1.2207,
+      "sha256": "71fcf440e13ded9b41ac5f58a6103455e895d93facf4b809ce337769e2ec8553"
+    },
+    {
+      "form": 2,
+      "from": "boss_r08",
+      "boss_win": 0.457,
+      "return": -0.4315,
+      "sha256": "1232b74c3280761eca4f96448818bfc48ba2933b725ef52b69671eada06c277d"
+    },
+    {
+      "form": 3,
+      "from": "boss_r20",
+      "boss_win": 0.8008,
+      "return": 0.9641,
+      "sha256": "3a54b6773ff7fae30c9242af1d25e3a7d5a22a99d30060813cca1bfd21b37bd1"
+    }
+  ]
+}
