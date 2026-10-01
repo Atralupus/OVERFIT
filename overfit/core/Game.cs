@@ -107,6 +107,11 @@ public partial class Game : Node
             // README 의 패턴별 GIF (#78 · 설계 §6.2) — tools/build.sh gifs 가 창과 Movie Maker 로 띄운다. 스크린샷처럼 창이 있어야 그린 것이 있다.
             AddChild(new Battle.Debug.GifRunner { ScriptId = gif });
         }
+        else if (OS.IsDebugBuild() && CmdArgs.Text(args, "--duel=") is { } fighterNet)
+        {
+            // 학습한 파이터와 보스의 한 판 영상 (이슈 #167) — tools/build.sh duel 이 창과 Movie Maker 로 띄운다.
+            AddChild(new Battle.Debug.DuelRunner { FighterNet = fighterNet, Seed = CmdArgs.UInt64(args, "--duel-seed=") ?? 1 });
+        }
     }
 
     /// <summary>다음 전투 하나를 대본으로 세운다 (<see cref="_nextScript"/>). 그 전투가 가져가면 비고, 그 뒤의 전투는 단계의 고르기로 돌아간다.</summary>

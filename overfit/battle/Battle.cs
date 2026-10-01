@@ -161,6 +161,12 @@ public partial class Battle : Node2D
     /// </summary>
     public bool Over => _over;
 
+    /// <summary>
+    /// 사람 대신 파이터를 모는 것 (이슈 #167 — 학습한 파이터와 보스의 한 판을 영상으로 · <c>DuelRunner</c>). 있으면 키를 안 읽고 판의 틱마다 한 번 부른다 —
+    /// 히트스톱 동안에는 판이 안 가므로 안 부른다(망 운전수는 틱마다 늦은 관측의 고리를 민다). 디버그 전용이다.
+    /// </summary>
+    public System.Func<BattleSim, InputFrame>? Pilot { get; set; }
+
     /// <summary>결과 화면이 떴나. 위와 같이 디버그 전용 읽기다.</summary>
     public bool ResultVisible => _resultShown;
 
@@ -460,7 +466,7 @@ public partial class Battle : Node2D
         // 버리지 않고 모아 끝난 첫 틱에 넘긴다(#71) — 게임은 멈췄어도 손은 안 멈췄다.
         if (_hitstopLeft > 0)
         {
-            _carried = InputFrame.Carry(_carried, Read());
+            _carried = Pilot is null ? InputFrame.Carry(_carried, Read()) : default;
             _hitstopLeft--;
             if (_hitstopLeft == 0)
             {
@@ -470,7 +476,7 @@ public partial class Battle : Node2D
             return;
         }
 
-        InputFrame input = InputFrame.Carry(_carried, Read());
+        InputFrame input = Pilot is { } pilot ? pilot(_sim) : InputFrame.Carry(_carried, Read());
 
         // 넘긴 **엣지**가 있을 때만 적는다. _carried 에는 레벨(이동 · 가드)도 모이는데 넘기는 것은 엣지뿐이다 — 통째로 default 와 견주면
         // 방향이나 ↓ 를 붙든 채 멈춤을 지난 것만으로 아무것도 안 넘긴 hitstop_carry 가 찍힌다.

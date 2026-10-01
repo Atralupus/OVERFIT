@@ -488,6 +488,25 @@ cmd_evalboss() {
   say "보스 저장본마다 시험 묶음과의 승률"
   (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.evalboss "$@") || die "평가가 멈췄습니다."
 }
+# 학습한 파이터 망과 게임의 보스가 한 판을 끝까지 싸우는 영상 (이슈 #167). 창을 띄워 Movie Maker 로 avi 를 받고 ffmpeg 으로 mp4 로 엮는다.
+#   tools/build.sh duel <파이터 망 JSON> [시드]   → out/duel/duel-<시드>.mp4
+cmd_duel() {
+  need_godot
+  [[ -x "$FFMPEG" ]] || die "ffmpeg 이 없습니다 — $FFMPEG"
+  local net="${1:-}" seed="${2:-1}"
+  [[ -n "$net" && -f "$net" ]] || die "파이터 망 JSON 을 주세요 — tools/build.sh duel out/selfplay/<이름>/fighter_r20.json [시드]"
+  net="$(cd "$(dirname "$net")" && pwd)/$(basename "$net")"
+  cmd_build
+  say "학습한 파이터 대 보스 — 한 판 영상"
+  local dir="$OUT/duel" log="$OUT/duel/duel-$seed.log" code=0
+  mkdir -p "$dir"
+  rm -f "$dir/duel-$seed.avi"
+  "$GODOT" --path "$PROJECT" --write-movie "$dir/duel-$seed.avi" --fixed-fps 60 --quit-after 40000 -- "--duel=$net" "--duel-seed=$seed" $SESSION_ARG $LOG_ARG > "$log" 2>&1 || code=$?
+  judge_headless "영상" "$log" "duel=done" "$code"
+  "$FFMPEG" -y -loglevel error -i "$dir/duel-$seed.avi" -c:v libx264 -pix_fmt yuv420p -crf 23 -preset veryfast "$dir/duel-$seed.mp4" || die "ffmpeg 이 멈췄습니다"
+  rm -f "$dir/duel-$seed.avi"
+  ok "$dir/duel-$seed.mp4 ($(du -sh "$dir/duel-$seed.mp4" | cut -f1)) · $(grep -o 'over ticks=[0-9]*' "$log" | head -1)"
+}
 cmd_qtrain() {
   need_ml
   say "Q 표 보스의 학습 (관문의 대조군)"
@@ -741,6 +760,7 @@ case "${1:-}" in
   selfplay)  shift; cmd_selfplay "$@" ;;
   evalboss)  shift; cmd_evalboss "$@" ;;
   qtrain)    shift; cmd_qtrain "$@" ;;
+  duel)      shift; cmd_duel "$@" ;;
   gate)      shift; cmd_gate "$@" ;;
   pick)      shift; cmd_pick "$@" ;;
   golden)    shift; cmd_golden "$@" ;;
