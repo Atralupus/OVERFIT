@@ -53,7 +53,7 @@ public class QTrainTests
         QTrain.Epsilon(Def(1), 0).ShouldBe(0.3);
     }
 
-    [Fact(Skip = "#168: 패리를 걷어 관측이 바뀌었다 — 망을 다시 배우면 되살린다")]
+    [Fact]
     public void 일꾼의_게임_보스는_형태마다의_망으로_돌고_결정을_안_적는다()
     {
         // 관문의 game 열(설계 2026-10-01 조각8 §2) — 사람이 만나는 보스와 같은 FormNetController 다.

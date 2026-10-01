@@ -81,7 +81,7 @@ public class GameNetTests
         File.ReadAllText(Path.Combine("data", "boss_net", $"form{form}.json")), $"form{form}",
         new BossObservation(Roster.Count).Size, new BossActions(Roster).Count, Roster);
 
-    [Fact(Skip = "#168: 패리를 걷어 관측이 바뀌었다 — 망을 다시 배우면 되살린다")]
+    [Fact]
     public void 세_망의_로짓과_가치가_파이썬과_비트까지_같다()
     {
         // ml/rl/golden.py 가 순수 파이썬(덧셈 순서를 PolicyNet 과 같게)으로 셈한 값 — 망을 바꾸고 골든을 안 지으면 sha256 이 먼저 잡는다.
@@ -105,7 +105,7 @@ public class GameNetTests
 
     private static string Hex(double x) => BitConverter.DoubleToInt64Bits(x).ToString("x16", System.Globalization.CultureInfo.InvariantCulture);
 
-    [Fact(Skip = "#168: 패리를 걷어 관측이 바뀌었다 — 망을 다시 배우면 되살린다")]
+    [Fact]
     public void 형태_조종기는_형태마다_다른_망으로_고르고_가려진_칸을_안_고른다()
     {
         PolicyNet[] nets = [Load(1), Load(2), Load(3)];
@@ -133,7 +133,7 @@ public class GameNetTests
         picks.Values.Select(s => string.Join(',', s.Order())).Distinct().Count().ShouldBeGreaterThan(1);
     }
 
-    [Fact(Skip = "#168: 패리를 걷어 관측이 바뀌었다 — 망을 다시 배우면 되살린다")]
+    [Fact]
     public void 형태_조종기의_판은_E_없이_끝까지_가고_같은_시드면_같은_판이다()
     {
         PolicyNet[] nets = [Load(1), Load(2), Load(3)];
@@ -184,13 +184,13 @@ public class GameNetTests
         }
     }
 
-    [Theory(Skip = "#168: 패리를 걷어 관측이 바뀌었다 — 망을 다시 배우면 되살린다")]
-    [InlineData(null, 33, "5bc2d1f09d78a119", 1748, 590)]
-    [InlineData(380, 398, "ec844dff64ed37a8", 7185, 0)]
+    [Theory]
+    [InlineData(null, 46, "8a1e84f601171920", 1612, 670)]
+    [InlineData(380, 85, "e65681edaa4cfa85", 3111, 30)]
     public void 시드_51_의_망_보스가_고른_칸들이_박아_둔_값이다(int? startHealth, int picks, string sha16, int ticks, int health)
     {
-        // 시작 체력 380 은 3페이즈(400 아래)에서 선다 — 첫 줄은 1페이즈에서 서 2페이즈(590)에서 끝나고, 둘째 줄은 봇이 보스를 쓰러뜨린다. 값은 이슈 #167 의 데이터(체력 800 ·
-        // 문턱 600 · 400 · 후딜 +0.3초)와 셀프 플레이 sp-3 의 망(r11 · r17 · r19)으로 적었다 — 망을 다시 배우면 다시 적는다.
+        // 시작 체력 380 은 3페이즈(400 아래)에서 선다 — 첫 줄은 1페이즈(670)에서 끝나고, 둘째 줄은 3페이즈(30)에서 끝난다. 값은 이슈 #167 의 데이터(체력 800 ·
+        // 문턱 600 · 400 · 후딜 +0.3초)와 셀프 플레이 sp-4 의 망(r10 · r16 · r20 · 패리를 걷은 #168 뒤)으로 적었다 — 망을 다시 배우면 다시 적는다.
         // 위의 "같은 시드면 같은 판" 은 한 기기의 두 번을 견줄 뿐이다 — 뽑기 · exp · 순전파의 어느 하나가 바뀌어도 둘 다 같이 바뀌어 초록이다(최종 리뷰).
         // 고른 칸의 줄을 박아 둔다: 바뀌면 옛 시도의 되살리기가 같은 지문으로 다른 판이다. 일부러 바꿨으면(망 · 관측 · 뽑기) 이 값을 새로 적고 까닭을 남긴다.
         var rec = new Recording(new FormNetController([Load(1), Load(2), Load(3)], new BossActions(Roster), seed: 51));
@@ -240,7 +240,7 @@ public class GameNetTests
         (scripted.ControllerId, scripted.PickerId).ShouldBe(("rule", "script"));
     }
 
-    [Fact(Skip = "#168: 패리를 걷어 관측이 바뀌었다 — 망을 다시 배우면 되살린다")]
+    [Fact]
     public void 보스의_망_목록으로_형태_조종기를_세운다()
     {
         BossConfig boss = TestConfigs.Boss();

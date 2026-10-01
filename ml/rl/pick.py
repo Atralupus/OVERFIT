@@ -57,6 +57,9 @@ def main() -> None:
     args = ap.parse_args()
     src = ROOT / "out" / "selfplay" / args.name
     rows = list(csv.DictReader((src / "eval.csv").open(encoding="utf-8")))
+    # 번갈아 배운 라운드의 저장본만 — 보스만 더 배운 라운드(boss_extra_rounds)는 마지막 파이터의 빈틈만 판다(sp-4 의 r21 ~ r25 · train.json 의 _note_boss_extra).
+    alternating = len(list(src.glob("fighter_r*.json")))
+    rows = rows[:alternating]
     cfg = json.loads((ROOT / "ml" / "rl" / "train.json").read_text(encoding="utf-8"))["pick"]
     shares = {}
     for r in rows:
