@@ -227,8 +227,8 @@ public class PatternRunnerTests
     [Fact]
     public void 실제_1단계_패턴은_스펙의_틱에_판정과_도약을_낸다()
     {
-        // 설계 §4.1 · §4.2 의 틱 표 그대로다 — 3연격의 판정은 51 · 93 · 159틱에 서고 195틱에 끝난다. 점프 공격은 24틱에 뛰고
-        // 60틱에 착지 판정이 서고 90틱에 끝난다. 틱은 패턴의 첫 틱을 1로 센다(§3.6 ⑤).
+        // 설계 §4.1 · §4.2 의 틱 표에 이슈 #167 의 후딜 +18틱을 더했다 — 3연격의 판정은 51 · 93 · 159틱에 서고 213틱에 끝난다. 점프 공격은
+        // 24틱에 뛰고 60틱에 착지 판정이 서고 108틱에 끝난다. 틱은 패턴의 첫 틱을 1로 센다(§3.6 ⑤).
         Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
 
         (List<int> Hits, List<int> Motions, int End) Run(string id)
@@ -255,11 +255,11 @@ public class PatternRunnerTests
         (List<int> comboHits, List<int> comboMotions, int comboEnd) = Run("3연격");
         comboHits.ShouldBe(new[] { 51, 93, 159 });
         comboMotions.ShouldBeEmpty();
-        comboEnd.ShouldBe(195);
+        comboEnd.ShouldBe(213);
 
         (List<int> leapHits, List<int> leapMotions, int leapEnd) = Run("점프 공격");
         leapHits.ShouldBe(new[] { 60 });
         leapMotions.ShouldBe(new[] { 24 });
-        leapEnd.ShouldBe(90);
+        leapEnd.ShouldBe(108);
     }
 }

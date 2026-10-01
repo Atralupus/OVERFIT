@@ -66,15 +66,15 @@ public partial class GifRunner : Node
             Inputs: Array.Empty<GifInput>(),
             From: 1, To: 141),
 
-        // 3연격 → 2타 뒤 캔슬 → 잡기. 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음)에서 ↓ 를 붙들어 두 타를 받고, 144틱에 잡기로 이어 180틱에
-        // 가드째 붙든다. 붙든 1초 뒤까지 잡는다. MoveBattleTests.GIF_grab.
+        // 3연격 → 2타 뒤 캔슬 → 잡기. 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음)에서 ↓ 를 붙들어 두 타를 받고, 144틱에 잡기로 이어 204틱에
+        // 가드째 붙든다(잡기 선딜 1.0초 · #167). 붙든 1초 뒤까지 잡는다. MoveBattleTests.GIF_grab.
         new("grab", Plans: new[] { new ScriptPlan(0.8, "3연격", CancelPoint: 1, Next: "잡기") }, Target: "3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 86, "move_right", OnBattleClock: true),
                 new GifInput(87, 100_000, "guard", OnBattleClock: true),
             },
-            From: 80, To: 256),
+            From: 80, To: 280),
 
         // 점프 공격 한 번 — 480 에 선 채 30틱에 뛰어 착지(60틱)를 넘는다. MoveBattleTests 의 점프 공격 테스트("jump").
         new("jump", Plans: SceneDriver.Moves("점프 공격"), Target: "점프 공격",
@@ -90,16 +90,17 @@ public partial class GifRunner : Node
             },
             From: 1, To: 111),
 
-        // 빠른 3연격 — 판이 선 뒤 74틱 걸어 3연격 사거리 밖(보스 앞 442)에 선다. 3연격이 헛친 뒤 167 · 170 틱에 J 두 번(2연격), 보스는 0.4초 쉬고
-        // 달려와 빠른 3연격을 연다 — 2연격에 묶여 1타에 맞는다. MoveBattleTests.GIF_fast. 1타에 누른 대시는 이 대본에 없다(묶여 버려지므로 그림이 같다).
+        // 빠른 3연격 — 판이 선 뒤 74틱 걸어 3연격 사거리 밖(보스 앞 442)에 선다. 3연격이 헛친 뒤 185 · 188 틱에 J 두 번(2연격), 보스는 3연격이
+        // 끝난(213) 뒤 0.4초 쉬고 달려와 빠른 3연격을 연다 — 2연격에 묶여 1타에 맞는다. MoveBattleTests.GIF_fast. 1타에 누른 대시는 이 대본에 없다(묶여
+        // 버려지므로 그림이 같다).
         new("fast", Plans: new[] { new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true) }, Target: "3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 74, "move_right", OnBattleClock: true),
-                new GifInput(167, 167, "attack"),
-                new GifInput(170, 170, "attack"),
+                new GifInput(185, 185, "attack"),
+                new GifInput(188, 188, "attack"),
             },
-            From: 150, To: 300),
+            From: 168, To: 318),
 
         // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
         // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
@@ -126,15 +127,15 @@ public partial class GifRunner : Node
             Inputs: new[] { new GifInput(2, 2, "bomb") },
             From: 1, To: 141),
 
-        // 페이즈 전환 (설계 2026-10-01 조각1 §2 · §4) — 보스는 905 에서 서고 3초 쉰다. 파이터가 115틱 걸어(보스 앞 155) 118틱에 J — 1타(10)가 122틱에
-        // 900 에 멈추며 전환이 선다: idle · 흰 플래시 셋 · 무적 1.5초(212틱까지). 판의 시계로 잡는다(Target 없음). BossFormBattleTests.GIF_form.
+        // 페이즈 전환 (설계 2026-10-01 조각1 §2 · §4) — 보스는 605 에서 서고 3초 쉰다. 파이터가 115틱 걸어(보스 앞 155) 118틱에 J — 1타(10)가 122틱에
+        // 600(문턱 · #167)에 멈추며 전환이 선다: idle · 흰 플래시 셋 · 무적 1.5초(212틱까지). 판의 시계로 잡는다(Target 없음). BossFormBattleTests.GIF_form.
         new("form", Plans: new[] { new ScriptPlan(3.0, "3연격") }, Target: null,
             Inputs: new[]
             {
                 new GifInput(_battleStart, 115, "move_right", OnBattleClock: true),
                 new GifInput(118, 118, "attack", OnBattleClock: true),
             },
-            From: 100, To: 236, BossStartHealth: 905),
+            From: 100, To: 236, BossStartHealth: 605),
 
         // 판의 시계로 잡는 대본은 From 이 10 쯤부터다 — 고리는 판이 몇 틱(재 보니 5틱) 돈 뒤에 돌아 그 앞의 틱은 못 잡는다.
         // 물러서기 (설계 2026-10-01 조각3) — 파이터가 다가오면 보스가 파이터를 본 채 뒤로 달린다(12틱 · 24틱 · 36틱의 결정). 칸 대본이라 판의 시계로 잡는다.
@@ -148,10 +149,10 @@ public partial class GifRunner : Node
             Inputs: Array.Empty<GifInput>(),
             From: 10, To: 140, Actions: new[] { "leap_over", "leap_back" }),
 
-        // 페이즈마다의 망 보스 (설계 2026-10-01 조각8 §3) — 계획 대본이 비어 단계의 조종기(형태마다의 망)로 서고, 시작 체력이 형태를 고른다(1200 · 899 · 399).
+        // 페이즈마다의 망 보스 (설계 2026-10-01 조각8 §3) — 계획 대본이 비어 단계의 조종기(형태마다의 망)로 서고, 시작 체력이 형태를 고른다(800 · 599 · 399 — 문턱 600 · 400 · #167).
         // 판은 세션 시드로 서고 망이 시드로 뽑으므로 장면은 시드가 정한다 — tools/build.sh gifs 는 늘 같은 세션 시드로 돈다. 파이터는 걸어 들어가 몇 번 친다.
-        new("net1", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 1200),
-        new("net2", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 899),
+        new("net1", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 800),
+        new("net2", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 599),
         new("net3", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 399),
     };
 

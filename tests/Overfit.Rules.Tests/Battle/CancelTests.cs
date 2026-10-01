@@ -185,14 +185,14 @@ public class CancelTests
     public void 잇는_동작은_지점이_있어도_끝까지_간다()
     {
         // 설계 §3.2 — 계획 하나에 캔슬 한 번. 3연격을 1타 뒤에 끊고 빠른 3연격으로 이으면, 빠른 3연격은 제 지점(36 · 69틱)이 있어도 끊기지 않고 세
-        // 타를 다 친다(끝 120틱).
+        // 타를 다 친다(끝 138틱).
         BattleSim sim = Sim([new ScriptPlan(0.8, "3연격", 0, "빠른 3연격")], ["3연격", "빠른 3연격"]);
         int fast = UntilBegins(sim, "빠른 3연격");
-        UntilTick(sim, fast, 119);
+        UntilTick(sim, fast, 137);
 
         sim.Boss.CurrentPattern.ShouldBe("빠른 3연격", "잇는 동작이 끝나기 전에 끊겼다");
-        UntilTick(sim, fast, 120);
-        sim.Boss.CurrentPattern.ShouldBeNull("잇는 동작이 120틱에 안 끝났다");
+        UntilTick(sim, fast, 138);
+        sim.Boss.CurrentPattern.ShouldBeNull("잇는 동작이 138틱에 안 끝났다");
         sim.Cancels.ShouldBe(new[] { ("3연격", "빠른 3연격") });
     }
 

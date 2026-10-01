@@ -513,7 +513,7 @@ cmd_golden() {
 cmd_mltest() {
   need_ml
   say "파이썬 테스트"
-  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout && "$ML_PYTHON" -m ml.rl.test_train && "$ML_PYTHON" -m ml.rl.test_gate) || die "파이썬 테스트 실패."
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout && "$ML_PYTHON" -m ml.rl.test_train && "$ML_PYTHON" -m ml.rl.test_gate && "$ML_PYTHON" -m ml.rl.test_pick) || die "파이썬 테스트 실패."
   ok "파이썬 테스트 통과"
 }
 

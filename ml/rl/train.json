@@ -1,20 +1,24 @@
 {
   "_comment": "강화학습의 설정 (설계 2026-10-01 조각4 §5 · 조각 5 가 PPO 수치를 더한다). 게임 데이터가 아니라 학습의 조건이라 overfit/data 밖에 둔다.",
   "_note_reward": "결정 i 의 보상 = w_dealt × (파이터가 잃은 체력 / 파이터 최대) − w_taken × (보스가 잃은 체력 / 보스 최대) − w_time × (지난 틱 / 60), 판의 끝에 이기면 w_win · 지면 −w_win(시간 초과도 짐). 체력을 최대로 나누는 것은 파이터(220)와 보스(1200)의 체력 차이가 보상을 한쪽으로 기울이지 않게다. w_time 은 판을 끄는 것을 아주 약하게 벌한다 — 크면 구석에서 기다리기만 하는 것보다 아무 공격이나 하는 쪽으로 기운다.",
-  "reward": { "w_dealt": 1.0, "w_taken": 1.0, "w_time": 0.002, "w_win": 1.0 },
+  "_note_variety": "w_variety (이슈 #167) — 한 판에서 어느 공격을 처음 쓰는 결정에 w_variety / 7. 일곱을 다 쓰면 판마다 +0.5(이김의 절반). 유저: \"어떤 페이즈든 공격 자체는 전체 다 써야\". sp-1 은 엔트로피 0.01 만으로 3연격 · 엇박 3연격을 거의 버렸다(빠른 3연격에 밀린다). 파이터의 보상에는 없다.",
+  "reward": { "w_dealt": 1.0, "w_taken": 1.0, "w_time": 0.002, "w_win": 1.0, "w_variety": 0.5 },
   "_note_fighter_reward": "파이터 망의 보상 (설계 2026-10-01 조각6 §1.3) — 보스가 잃은 체력/최대 − 파이터가 잃은 체력/최대, 끝에 파이터가 이기면 +1 · 지면 −1(시간 초과도 짐). 시간 벌은 없다 — 보스의 시간 벌이 판을 끄는 것을 이미 막는다.",
   "fighter_reward": { "w_dealt": 1.0, "w_taken": 1.0, "w_time": 0.0, "w_win": 1.0 },
   "_note_selfplay": "번갈아 학습 (설계 2026-10-01 조각6 §3). 라운드마다 보스 boss_iterations 바퀴 → 파이터 fighter_iterations 바퀴. 상대 묶음은 최신 셋 + 처음부터 고르게 둘(최신 상대 하나에만 강해지는 편향을 막는다) — 보스의 상대에는 봇 함대가, 파이터의 상대에는 규칙 보스가 늘 든다. 파이터는 6틱마다 고르므로 판 하나의 결정이 보스의 열 배쯤이라 바퀴의 판 수를 줄인다(fighter_episodes). 평가는 끝난 뒤 모든 보스 저장본 × (봇 함대 + 파이터 저장본 넷)(eval_episodes · compare_seed).",
   "selfplay": { "rounds": 20, "boss_iterations": 10, "fighter_iterations": 10, "boss_episodes": 256, "fighter_episodes": 64, "pool_latest": 3, "pool_spread": 2, "eval_episodes": 256 },
   "_note_qtable": "Q 표 보스 — 비교 관문의 대조군 (설계 2026-10-01 조각8 §1). 셀프 플레이의 보스가 본 판 수와 같은 51,200 판(200 바퀴 × 256). 칸은 결정 지점 · 파이터와의 거리(|dx|/아레나 폭이 distance_edges 아래 · 위) · 떠 있나(높이/300 이 air 보다 큰가) · 파이터의 행동 · 지금 동작 · 형태. 몬테카를로 Q · α 0.1 · 탐색 ε 은 0.3 에서 0.05 로 곧게 준다. 할인은 ppo.gamma 를 같이 쓴다. 상대는 관문의 시험 묶음 그대로 준다(tools/build.sh qtrain) — 시험을 보고 배운 대조군이라 Q 표에 유리하다.",
   "qtable": { "seed": 2, "iterations": 200, "episodes": 256, "alpha": 0.1, "epsilon_start": 0.3, "epsilon_end": 0.05, "distance_edges": [0.1, 0.2, 0.35], "air": 0.05 },
+  "_note_pick": "페이즈 고르기 (이슈 #167) — 평가에서 일곱 공격이 저마다 동작 시작의 min_move_share 이상인 저장본만 페이즈가 된다.",
+  "pick": { "min_move_share": 0.02 },
   "_note_gate": "비교 관문 (설계 2026-10-01 조각8 §2) — 보스마다 시험 묶음과 episodes 판(seed 는 ppo.compare_seed). 3페이즈의 승률이 규칙 · Q 표 중 센 쪽보다 margin 이상 높아야 통과다. 512 판의 승률 표준오차는 많아야 2.2%p · 둘의 차이는 3.1%p 라 0.10 은 그 세 배다.",
   "gate": { "episodes": 512, "margin": 0.10 },
+  "_note_entropy": "엔트로피 0.03 (이슈 #167) — 0.01 의 sp-1 은 라운드 2 에서 점프 공격 · 잡기 둘로 몰렸고 그 저장본이 1페이즈가 돼 1페이즈가 공격 두 개만 썼다. 유저: \"어떤 페이즈든 공격 자체는 전체 다 써야\". 고르기의 분포를 더 넓게 붙들고, 페이즈 고르기(pick)가 평가에서 일곱 공격을 다 쓴 저장본만 받는다.",
   "_note_ppo": "PPO 의 수치 (설계 2026-10-01 조각5 §1). 은닉 128 × 2 · 정책 · 가치 따로. 바퀴마다 판 256(결정 약 9천) · γ 0.99 · λ 0.95(결정 간격이 0.2초 남짓이라 지평이 수십 초) · clip 0.2 · 4 번 되풀이 · 미니배치 1024 · Adam 3e-4 · 가치 0.5 · 엔트로피 0.01 · 기울기 노름 0.5 — PPO 의 흔한 값. policy_last_scale 0.01 은 처음 정책을 고른 확률에 가깝게 둔다(1페이즈 = 거의 안 배운 보스). 할인 γ 는 결정 간격(일꾼의 매니페스트 decide_ticks — 보스 12틱 · 파이터 6틱) 하나의 할인이고 결정의 길이로 거듭제곱한다 — 결정마다 할인하면 긴 결정(잡기)이 이득이 된다(최종 리뷰). 체크포인트는 처음 20 바퀴는 바퀴마다, 그 뒤 10 바퀴마다 — 초반에 정책이 빨리 바뀐다. 바퀴의 일꾼 시드는 seed × 1,000,000 + 바퀴라 바퀴마다 다른 판이고, 비교(compare_seed)와 안 겹친다.",
   "ppo": {
     "seed": 1, "iterations": 200, "episodes": 256, "hidden": [128, 128],
     "gamma": 0.99, "lam": 0.95, "clip": 0.2, "epochs": 4, "minibatch": 1024, "lr": 0.0003,
-    "value_coef": 0.5, "entropy_coef": 0.01, "max_grad_norm": 0.5, "policy_last_scale": 0.01, "checkpoint_every": 10, "checkpoint_dense_until": 20,
+    "value_coef": 0.5, "entropy_coef": 0.03, "max_grad_norm": 0.5, "policy_last_scale": 0.01, "checkpoint_every": 10, "checkpoint_dense_until": 20,
     "compare_seed": 777000000, "compare_episodes": 512
   }
 }

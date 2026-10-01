@@ -98,23 +98,23 @@ public class BossFormBattleTests
     [Fact]
     public void 문턱을_넘는_폭탄은_문턱에서_멈추고_그_틱에_전환이_선다()
     {
-        BattleSim sim = Sim(930);
+        BattleSim sim = Sim(630);
         int begun = ThrowIntoWait(sim);
         int land = begun + 1 + Release + Flight;
         using var log = new LogCapture();
         TestConfigs.UntilTick(sim, land);
 
-        sim.Boss.Health.ShouldBe(900, "60 이 문턱 900 아래로 깎았다");
+        sim.Boss.Health.ShouldBe(600, "60 이 문턱 600 아래로 깎았다");
         (sim.Forms.Shifting, sim.Forms.Form).ShouldBe((true, 1));
         sim.Forms.Shifts.ShouldBe(new[] { land });
         sim.Boss.CurrentPattern.ShouldBeNull("전환이 하던 동작을 안 걷었다");
-        log.Lines.ShouldContain($"[boss][I] form_shift from=1 to=2 hp=900 tick={land}");
+        log.Lines.ShouldContain($"[boss][I] form_shift from=1 to=2 hp=600 tick={land}");
     }
 
     [Fact]
     public void 전환은_90틱_뒤에_끝나_형태_2_바닥_400_이고_쉬기는_그_뒤부터다()
     {
-        BattleSim sim = Sim(930, new ScriptPlan(0.2, _waitId), new ScriptPlan(1.0, _waitId));
+        BattleSim sim = Sim(630, new ScriptPlan(0.2, _waitId), new ScriptPlan(1.0, _waitId));
         int begun = ThrowIntoWait(sim);
         int land = begun + 1 + Release + Flight;
         TestConfigs.UntilTick(sim, land);
@@ -138,7 +138,7 @@ public class BossFormBattleTests
     {
         // 무적이 막는 폭탄은 판 위에서 거의 안 생긴다 — 던지기(89) · 경직(15) · 비행(30)이 전환(90)보다 길어, 첫 폭탄이 세운 전환 안에 둘째가 못 떨어진다.
         // 막는 길은 칼과 같은 한 자리(BattleSim.DamageBoss)라 칼 테스트가 본다. 여기서는 전환을 세운 폭탄이 기록에 landed 로 남는지만 본다.
-        BattleSim sim = Sim(905);
+        BattleSim sim = Sim(605);
         int begun = ThrowIntoWait(sim);
         TestConfigs.UntilTick(sim, begun + 1 + Release + Flight);
         sim.Forms.Shifting.ShouldBeTrue();
@@ -148,11 +148,11 @@ public class BossFormBattleTests
     [Fact]
     public void 전환_중의_칼은_피해도_경직_채움도_없다()
     {
-        // 시작 체력 905 · 첫 칼(10)이 900 에 멈추며 전환을 세우고, 전환 중의 칼은 막힌다.
-        BattleSim sim = Sim(905, new ScriptPlan(3.0, _waitId));
+        // 시작 체력 605 · 첫 칼(10)이 600 에 멈추며 전환을 세우고, 전환 중의 칼은 막힌다.
+        BattleSim sim = Sim(605, new ScriptPlan(3.0, _waitId));
         using var log = new LogCapture();
         StrikeUntilShift(sim, 20);
-        sim.Boss.Health.ShouldBe(900);
+        sim.Boss.Health.ShouldBe(600);
         int shiftAt = sim.Ticks;
         for (int i = 0; i < Shift - 1; i++)
         {
@@ -161,7 +161,7 @@ public class BossFormBattleTests
 
         sim.Ticks.ShouldBe(shiftAt + Shift - 1);
         sim.Forms.Shifting.ShouldBeTrue();
-        sim.Boss.Health.ShouldBe(900, "무적 동안 체력이 깎였다");
+        sim.Boss.Health.ShouldBe(600, "무적 동안 체력이 깎였다");
         sim.Poise.Value.ShouldBe(0, "무적 동안 게이지가 찼다");
         log.Lines.ShouldContain(l => l.StartsWith("[boss][D] shielded src=strike ", StringComparison.Ordinal));
     }
@@ -170,7 +170,7 @@ public class BossFormBattleTests
     public void 전환_중에_본_던지기는_전환이_끝난_뒤에_끊는다()
     {
         // 칼로 전환을 세우고 전환 중에 던진다. 보스는 던진 틱 + 18 에 알지만 전환 동안은 아무것도 안 하고, 전환이 끝나면 쉬는 중이라 곧 끊는다(§2.3).
-        BattleSim sim = Sim(905, new ScriptPlan(3.0, _waitId));
+        BattleSim sim = Sim(605, new ScriptPlan(3.0, _waitId));
         StrikeUntilShift(sim, 20);
         int shiftAt = sim.Forms.Shifts.Single();
         using var log = new LogCapture();
@@ -205,14 +205,14 @@ public class BossFormBattleTests
 
     [Fact]
     public void 문턱과_같은_시작_체력은_판을_세울_때_거절한다() =>
-        Should.Throw<ArgumentException>(() => Sim(900));
+        Should.Throw<ArgumentException>(() => Sim(600));
 
     [Fact]
     public void 같은_틱에_게이지로_무너져도_전환이_이기고_탈진은_풀린다()
     {
-        // 2연격 둘(10 · 30 · 10 · 30 · 경직 10 · 45 · 10 · 45)이면 넷째 칼에 게이지가 찬다(100). 시작 체력을 900 + 80 − 1 로 두면 넷째 칼이 문턱도 넘는다 —
+        // 2연격 둘(10 · 30 · 10 · 30 · 경직 10 · 45 · 10 · 45)이면 넷째 칼에 게이지가 찬다(100). 시작 체력을 600 + 80 − 1 로 두면 넷째 칼이 문턱도 넘는다 —
         // 같은 틱에 탈진(cause=poise)과 전환이 선다. 전환이 이겨 탈진이 풀리고 게이지가 빈다.
-        BattleSim sim = Sim(900 + 10 + 30 + 10 + 30 - 1, new ScriptPlan(3.0, _waitId));
+        BattleSim sim = Sim(600 + 10 + 30 + 10 + 30 - 1, new ScriptPlan(3.0, _waitId));
         using var log = new LogCapture();
         StrikeUntilShift(sim, 10);
         int shiftAt = sim.Forms.Shifts.Single();
@@ -237,7 +237,7 @@ public class BossFormBattleTests
                 Fighter = Real(),
                 HitShapes = TestConfigs.HitShapes(),
                 Boss = TestConfigs.Boss(reaction: new BombReactionDef { DelaySeconds = 100, HesitateSeconds = 0.25, Move = "돌진" }),
-                BossStartHealth = 930,
+                BossStartHealth = 630,
                 PatternIds = ids,
                 Patterns = patterns,
                 Seed = 51,
@@ -273,10 +273,10 @@ public class BossFormBattleTests
     }
 
     [Fact]
-    public void GIF_form_905_에서_걸어_들어가_친_1타가_900_에_멈추며_전환을_세운다()
+    public void GIF_form_605_에서_걸어_들어가_친_1타가_600_에_멈추며_전환을_세운다()
     {
         // GifRunner 의 form 대본 — 보스전의 명부 위에 3초 쉬고 3연격. 판이 선 뒤 115틱 걸어(805px · 보스 앞 155) 118틱에 J 를 누른다. 1타(10)가
-        // 905 → 900 에 멈추고 그 틱에 전환이 선다 — 보스는 아직 쉬는 중이다(180틱 전).
+        // 605 → 600 에 멈추고 그 틱에 전환이 선다 — 보스는 아직 쉬는 중이다(180틱 전).
         IReadOnlyList<string> roster = StageRoster.For(TestConfigs.Stages(), 1);
         Dictionary<string, PatternDef> patterns = TestConfigs.Patterns();
         var sim = new BattleSim(new BattleSetup
@@ -285,7 +285,7 @@ public class BossFormBattleTests
             Fighter = Real(),
             HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(),
-            BossStartHealth = 905,
+            BossStartHealth = 605,
             PatternIds = roster,
             Patterns = patterns,
             Seed = 51,
@@ -299,9 +299,9 @@ public class BossFormBattleTests
         }
 
         sim.Forms.Shifting.ShouldBeTrue("1타가 안 닿았다");
-        sim.Boss.Health.ShouldBe(900);
+        sim.Boss.Health.ShouldBe(600);
         sim.Boss.CurrentPattern.ShouldBeNull("보스가 쉬기 전에 3연격을 열었다");
-        log.Lines.ShouldContain($"[boss][I] form_shift from=1 to=2 hp=900 tick={sim.Ticks}");
+        log.Lines.ShouldContain($"[boss][I] form_shift from=1 to=2 hp=600 tick={sim.Ticks}");
         sim.Ticks.ShouldBe(122, "1타의 창이 닿는 틱 — GifRunner 의 form 대본이 이 틱을 둘러 잡는다");
     }
 
@@ -332,7 +332,7 @@ public class BossFormBattleTests
             Fighter = Real(),
             HitShapes = TestConfigs.HitShapes(),
             Boss = TestConfigs.Boss(),
-            BossStartHealth = 930,
+            BossStartHealth = 630,
             PatternIds = ids,
             Patterns = patterns,
             Seed = 51,

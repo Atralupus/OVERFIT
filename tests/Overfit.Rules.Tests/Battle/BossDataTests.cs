@@ -251,7 +251,7 @@ public class BossDataTests
     [Fact]
     public void 형태의_문턱은_내려가고_전환은_정수_틱이다()
     {
-        // 설계 2026-10-01 조각1 §1 — 체력 1200 · 문턱 900 · 400 · 전환 1.5초(90틱). 판이 세울 때 같은 조건으로 거절한다(BossForms).
+        // 이슈 #167 — 체력 800 · 문턱 600 · 400 · 전환 1.5초(90틱)(설계 2026-10-01 조각1 §1 의 1200 · 900 에서 줄였다). 판이 세울 때 같은 조건으로 거절한다(BossForms).
         foreach ((string id, BossConfig boss) in TestConfigs.Bosses())
         {
             _ = new BossForms(boss.Forms.Thresholds, boss.MaxHealth, boss.MaxHealth, BattleSim.TicksFor(boss.Forms.ShiftSeconds));
@@ -259,8 +259,8 @@ public class BossDataTests
         }
 
         BossConfig real = TestConfigs.Boss();
-        real.MaxHealth.ShouldBe(1200);
-        real.Forms.Thresholds.ShouldBe(new[] { 900, 400 });
+        real.MaxHealth.ShouldBe(800);
+        real.Forms.Thresholds.ShouldBe(new[] { 600, 400 });
         BattleSim.TicksFor(real.Forms.ShiftSeconds).ShouldBe(90);
     }
 

@@ -235,17 +235,17 @@ public class MoveBattleTests
     [Theory]
     [InlineData(false, DodgeVerb.Dash, HitVerdict.Dodged)]
     [InlineData(true, DodgeVerb.None, HitVerdict.Hit)]
-    public void 빠른_3연격은_앞_3연격의_마지막_창_뒤_2연격을_시작한_사람을_잡고_1타만_친_사람은_못_잡는다(bool chain, DodgeVerb verb, HitVerdict verdict)
+    public void 빠른_3연격의_1타는_2연격에_묶인_사람의_대시를_버리고_1타만_친_사람은_흘린다(bool chain, DodgeVerb verb, HitVerdict verdict)
     {
-        // 설계 2026-09-29 조각1 §2.2 · §3.4 — 3연격의 마지막 창(159 ~ 166)이 닫힌 뒤 남은 후딜 28틱 + 짧은 쉬기 24틱 + 달리기 12틱 = 64틱. 창이 닫힌
-        // 다음 틱(167)에 J 를 누르고 2타를 이은 사람(2연격 · 106틱)은 빠른 3연격이 선 뒤에도 묶여 있어, 1타(24틱)에 누른 대시가 버려지고 맞는다 —
-        // 칼질 중이라 욕심으로 남는다. 1타만 친 사람(40틱)은 이미 풀려 같은 대시로 흘린다. 3연격은 사거리 밖(보스 앞 440)에서 헛치게 두고 — 셋 다
-        // 피하려면 427 넘게 떨어져야 한다 — 보스가 쉬기 뒤 파이터 앞 280 까지 달려와(160px · 12틱) 빠른 3연격을 연다. 옛 판은 쉬는 동안 보스가
-        // 걸어와(0.8초에 128px) 같은 자리를 만들었다 — 쉬는 동안 제자리가 된 뒤로는 달리기가 그 몫이다(§5).
+        // 설계 2026-09-29 조각1 §3.4 · 이슈 #167 — 동작이 습관을 겨냥하도록 맞춘 박자는 없다. 여기는 칼질에 묶인 사람과 풀린 사람이 같은 대시에 다르게
+        // 끝나는 역학만 본다. 3연격의 끝(213) 뒤 짧은 쉬기 24틱 + 달리기 12틱 뒤에 빠른 3연격이 선다. 185틱에 J 를 누르고 2타를 이은 사람(2연격 ·
+        // 106틱)은 빠른 3연격이 선 뒤에도 묶여 있어, 1타(24틱)에 누른 대시가 버려지고 맞는다 — 칼질 중이라 욕심으로 남는다. 1타만 친 사람(40틱)은
+        // 이미 풀려 같은 대시로 흘린다. 3연격은 사거리 밖(보스 앞 440)에서 헛치게 두고 — 셋 다 피하려면 427 넘게 떨어져야 한다 — 보스가 쉬기 뒤
+        // 파이터 앞 280 까지 달려와(160px · 12틱) 빠른 3연격을 연다.
         BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true));
         int triple = UntilBegins(sim, "3연격", _ => Toward(sim, _outOfReach));
         UntilTick(sim, triple, 166, _ => Toward(sim, _outOfReach));
-        UntilTick(sim, triple, 180, p => p == 167 || (chain && p == 170) ? _attack : default);
+        UntilTick(sim, triple, 198, p => p == 185 || (chain && p == 188) ? _attack : default);
         int fast = UntilBegins(sim, "빠른 3연격");
         UntilTick(sim, fast, 31, p => p == 24 ? _dash : default);
 
@@ -300,17 +300,17 @@ public class MoveBattleTests
 
     [Theory]
     [InlineData("jump", 13, DodgeVerb.Jump, HitVerdict.MissedByHeight)]
-    [InlineData("jump", 33, DodgeVerb.Jump, HitVerdict.MissedByHeight)]
-    [InlineData("jump", 34, DodgeVerb.Jump, HitVerdict.Grabbed)]
-    [InlineData("dash", 32, DodgeVerb.Dash, HitVerdict.Grabbed)]
+    [InlineData("jump", 57, DodgeVerb.Jump, HitVerdict.MissedByHeight)]
+    [InlineData("jump", 58, DodgeVerb.Jump, HitVerdict.Grabbed)]
+    [InlineData("dash", 56, DodgeVerb.Dash, HitVerdict.Grabbed)]
     public void 잡기는_보고_뛴_사람을_못_잡고_대시한_사람을_붙든다(string answer, int at, DodgeVerb verb, HitVerdict verdict)
     {
-        // 설계 2026-09-29 조각1 §2.4 — 흰 구가 나는 선딜(0.60초)이 예고의 전부다. 동작이 선 틱(1)에 보고 반응 0.2초(12틱) 뒤 13틱에 뛴 사람은
-        // 넘는다. 점프는 누른 틱 + 3 부터 발이 60 위라 창(36틱)에 닿는 마지막 누름은 33틱이다 — 반응할 틈 33틱(옛 0.40초면 21틱). 한 틱 늦으면
-        // 잡힌다. 대시 무적 8틱(32 ~ 39)이 창의 첫 틱을 덮어도 잡힌다 — 잡기는 무적을 안 받는다.
+        // 설계 2026-09-29 조각1 §2.4 · 이슈 #167 — 흰 구가 나는 선딜(1.0초)이 예고의 전부다. 동작이 선 틱(1)에 보고 반응 0.2초(12틱) 뒤 13틱에 뛴
+        // 사람은 넘는다(발이 누른 틱 + 3 ~ + 55 동안 60 위 — 창 60 ~ 67 을 덮는다). 창(60틱)에 닿는 마지막 누름은 57틱이다 — 반응할 틈 57틱(옛
+        // 0.60초면 33틱). 한 틱 늦으면 잡힌다. 대시 무적 8틱(56 ~ 63)이 창의 첫 틱을 덮어도 잡힌다 — 잡기는 무적을 안 받는다.
         BattleSim sim = Sim(null, "잡기");
         int begun = UntilBegins(sim, "잡기");
-        UntilTick(sim, begun, 44, p => p == at ? (answer == "jump" ? _jump : _dash) : default);
+        UntilTick(sim, begun, 68, p => p == at ? (answer == "jump" ? _jump : _dash) : default);
 
         DodgeEvent grab = sim.Events.ShouldHaveSingleItem("잡기의 관측이 하나가 아니다");
         (grab.Verb, grab.Verdict).ShouldBe((verb, verdict));
@@ -355,9 +355,8 @@ public class MoveBattleTests
     {
         // 설계 §4.7 · §6 「잡기」 — 흰 구가 날고 · 붙들고 · 흩어지는 시각은 규칙의 단계와 잡힘이 정한다(규칙은 흰 구를 모른다). 뷰가 읽는 두 자리를
         // 못박는다. ① 지금 단계 바로 다음이 판정이면 그 판정과 지난 몫(BossHitAhead) — 잡기는 idle 한 장에서 곧장 창이라 동작의 첫 틱(1)부터 난다:
-        // 몫은 idle 이 든 틱(1)에서 창(36)까지의 몫이라 첫 틱에 0 · 창 한 틱 앞(35)에 34/35 다. 쉬는 동안은 비었다. ② 잡기 창이 산 동안(GrabLive) —
-        // 뛰어넘은 사람에게는 창 8틱
-        // (36 ~ 43)이 끝날 때까지 참이고, 흰 구는 그동안 바닥에서 기다렸다 흩어진다.
+        // 몫은 idle 이 든 틱(1)에서 창(60)까지의 몫이라 첫 틱에 0 · 창 한 틱 앞(59)에 58/59 다. 쉬는 동안은 비었다. ② 잡기 창이 산 동안(GrabLive) —
+        // 뛰어넘은 사람에게는 창 8틱(60 ~ 67)이 끝날 때까지 참이고, 흰 구는 그동안 바닥에서 기다렸다 흩어진다. 20틱에 뛰면 발이 23 ~ 75틱에 60 위다.
         BattleSim sim = Sim(null, "잡기");
         for (int i = 0; i < 40; i++)
         {
@@ -366,20 +365,20 @@ public class MoveBattleTests
         }
 
         int begun = UntilBegins(sim, "잡기");
-        for (int p = 1; p <= 35; p++)
+        for (int p = 1; p <= 59; p++)
         {
             UntilTick(sim, begun, p, q => q == 20 ? _jump : default);
             (HitBox hit, double progress) = sim.BossHitAhead.ShouldNotBeNull($"{p}틱: 흰 구가 날 자리가 비었다");
             hit.GrabHoldSeconds.ShouldBeGreaterThan(0);
-            progress.ShouldBe((p - 1) / 35.0, 1e-9, $"{p}틱: 지난 몫이 idle 에서 창까지의 몫이 아니다");
+            progress.ShouldBe((p - 1) / 59.0, 1e-9, $"{p}틱: 지난 몫이 idle 에서 창까지의 몫이 아니다");
             sim.GrabLive.ShouldBeFalse();
         }
 
-        for (int p = 36; p <= 43; p++)
+        for (int p = 60; p <= 67; p++)
         {
             UntilTick(sim, begun, p);
             sim.BossHitAhead.ShouldBeNull($"{p}틱: 창이 열렸는데 아직 날고 있다");
-            sim.GrabLive.ShouldBe(p < 43, $"{p}틱: 뛰어넘은 사람 앞의 잡기 창");
+            sim.GrabLive.ShouldBe(p < 67, $"{p}틱: 뛰어넘은 사람 앞의 잡기 창");
         }
 
         sim.Fighter.Held.ShouldBeFalse();
@@ -399,15 +398,15 @@ public class MoveBattleTests
         UntilTick(sim, begun, 1);
         sim.BossHitAhead.ShouldNotBeNull("잡기의 첫 틱인데 날 자리가 없다 — 이 테스트가 나는 동안을 안 본다");
 
-        for (int i = 0; i < 35 && !sim.Boss.Exhausted; i++)
+        for (int i = 0; i < 59 && !sim.Boss.Exhausted; i++)
         {
             sim.Tick(sim.Fighter.Action == FighterAction.Idle ? _attack : default);
         }
 
         sim.Boss.Exhausted.ShouldBeTrue("흰 구가 나는 동안 못 무너뜨렸다");
-        (sim.Ticks - begun).ShouldBeLessThan(36, "잡기 창이 열린 뒤에 무너졌다");
+        (sim.Ticks - begun).ShouldBeLessThan(60, "잡기 창이 열린 뒤에 무너졌다");
         sim.BossHitAhead.ShouldBeNull("무너졌는데 흰 구가 날 자리가 남았다");
-        UntilTick(sim, begun, 60);
+        UntilTick(sim, begun, 84);
         sim.GrabLive.ShouldBeFalse();
         sim.Fighter.Held.ShouldBeFalse("무너진 보스의 잡기가 섰다");
     }
@@ -418,7 +417,7 @@ public class MoveBattleTests
         // 한 번 휘두르면 한 번만 맞는다(설계 §3.5) — 잡은 창은 그 틱에 끝난다. 흰 구는 그때부터 창이 아니라 붙들림(Fighter.Held)을 따라간다.
         BattleSim sim = Sim(null, "잡기");
         int begun = UntilBegins(sim, "잡기");
-        UntilTick(sim, begun, 36);
+        UntilTick(sim, begun, 60);
 
         sim.Fighter.Held.ShouldBeTrue();
         sim.GrabLive.ShouldBeFalse("잡은 창이 살아 있다");
@@ -433,7 +432,7 @@ public class MoveBattleTests
         // 본 판정이 붙드는 판정이면(BossTestedGrab) 충격파를 안 건다 — 판정의 깃발로 가른다(CLAUDE.md §2). 뛰어넘은 사람 앞에서 창 8틱 내내 본다.
         BattleSim grab = Sim(null, "잡기");
         int begun = UntilBegins(grab, "잡기");
-        for (int p = 36; p <= 43; p++)
+        for (int p = 60; p <= 67; p++)
         {
             UntilTick(grab, begun, p, q => q == 20 ? _jump : default);
             FloorWave.Find(grab.BossTestedRects, grab.Boss.X, TestConfigs.Arena().Width).ShouldNotBeNull($"{p}틱: 잡기의 띠가 바닥 전체가 아니다");
@@ -551,11 +550,11 @@ public class MoveBattleTests
     [Fact]
     public void GIF_grab_가드로_버틴_사람을_3연격_2타_뒤에_끊은_잡기가_붙든다()
     {
-        // 1타 사거리 안(보스 앞 358)으로 걸어 들어가 ↓ 를 붙든다 — 1타 · 2타는 가드로 받고, 둘째 캔슬 지점(144)에서 잡기로 이어 36틱(180)에
+        // 1타 사거리 안(보스 앞 358)으로 걸어 들어가 ↓ 를 붙든다 — 1타 · 2타는 가드로 받고, 둘째 캔슬 지점(144)에서 잡기로 이어 60틱(204)에
         // 가드째 붙든다. 잡기는 가드를 안 받는다.
         BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격", CancelPoint: 1, Next: "잡기"));
         int begun = UntilBegins(sim, "3연격", WalkIn);
-        UntilTick(sim, begun, 180, p => begun + p <= 86 ? _right : _guard);
+        UntilTick(sim, begun, 204, p => begun + p <= 86 ? _right : _guard);
 
         sim.Events.Select(e => (e.Verb, e.Verdict)).ShouldBe(new[]
         {
@@ -581,13 +580,13 @@ public class MoveBattleTests
     }
 
     [Fact]
-    public void GIF_fast_3연격_뒤_2연격을_시작한_사람을_달려온_빠른_3연격이_친다()
+    public void GIF_fast_2연격에_묶인_사람을_달려온_빠른_3연격이_친다()
     {
-        // 위의 빠른 3연격 테스트를 정해진 입력으로 — 판이 선 뒤 74틱 걸어 보스 앞 442(3연격이 안 닿는 427 밖)에 선다. 3연격이 헛친 뒤 167 · 170 에
+        // 위의 빠른 3연격 테스트를 정해진 입력으로 — 판이 선 뒤 74틱 걸어 보스 앞 442(3연격이 안 닿는 427 밖)에 선다. 3연격이 헛친 뒤 185 · 188 에
         // J 두 번(2연격), 보스는 0.4초 쉬고 달려와 빠른 3연격을 연다. 1타(24)에 누른 대시는 2연격에 묶여 버려지고 맞는다.
         BattleSim sim = Sim(null, new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true));
         int triple = UntilBegins(sim, "3연격", t => t <= 74 ? _right : default);
-        UntilTick(sim, triple, 180, p => p is 167 or 170 ? _attack : default);
+        UntilTick(sim, triple, 198, p => p is 185 or 188 ? _attack : default);
         int fast = UntilBegins(sim, "빠른 3연격");
         UntilTick(sim, fast, 31, p => p == 24 ? _dash : default);
 

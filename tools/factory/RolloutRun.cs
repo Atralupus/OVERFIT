@@ -15,6 +15,12 @@ public sealed class RewardDef
     public required double WTime { get; init; }
 
     public required double WWin { get; init; }
+
+    /// <summary>
+    /// 공격을 고루 쓰는 몫 (이슈 #167) — 한 판에서 어느 공격을 처음 쓰는 결정에 이 값 / 명부 길이를 더한다. 없으면 0(파이터 · 옛 설정). 유저: "어떤
+    /// 페이즈든 공격 자체는 전체 다 써야" — 엔트로피만으로는 sp-1 의 보스가 3연격 · 엇박 3연격을 버렸다(빠른 3연격에 밀린다).
+    /// </summary>
+    public double WVariety { get; init; }
 }
 
 /// <summary>일꾼의 보스 조종기 (설계 2026-10-01 조각5 §3) — 망은 경험을 적고, 규칙 · 무작위는 비교의 대조군이라 판의 결과만 낸다.</summary>
@@ -216,6 +222,9 @@ public static class RolloutRun
         IReadOnlyList<NetStep> raw, FactoryTables tables, RewardDef reward, List<int> bossHp, List<int> fighterHp, int ticks, bool bossWon)
     {
         var steps = new RolloutStep[raw.Count];
+        int roster = tables.Roster.Count;
+        int firstMove = new BossActions(tables.Roster).Count - roster;
+        var used = new bool[roster];
         for (int i = 0; i < raw.Count; i++)
         {
             int from = i == 0 ? 0 : raw[i].Tick - 1;
@@ -224,6 +233,13 @@ public static class RolloutRun
             double r = (reward.WDealt * (fighterHp[from] - fighterHp[to]) / tables.Fighter.MaxHealth)
                 - (reward.WTaken * (bossHp[from] - bossHp[to]) / tables.Boss.MaxHealth)
                 - (reward.WTime * span / 60.0);
+            int move = raw[i].Action - firstMove;
+            if (move >= 0 && !used[move])
+            {
+                used[move] = true;
+                r += reward.WVariety / roster;
+            }
+
             bool done = i == raw.Count - 1;
             if (done)
             {

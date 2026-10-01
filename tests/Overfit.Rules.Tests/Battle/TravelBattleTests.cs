@@ -110,9 +110,9 @@ public class TravelBattleTests
     [Fact]
     public void 뛰는_중에_전환하면_높이만_따라_내리고_착지의_자유로워짐은_전환이_끝날_때다()
     {
-        // 930 에서 1틱에 던진 폭탄은 120틱에 떨어진다. 보스는 기다리기 일곱(12 ~ 84) 뒤 96틱에 뒤로 뛰어 111 ~ 147틱에 떠 있다.
+        // 630 에서 1틱에 던진 폭탄은 120틱에 떨어진다. 보스는 기다리기 일곱(12 ~ 84) 뒤 96틱에 뒤로 뛰어 111 ~ 147틱에 떠 있다.
         Recording c = Script([.. Enumerable.Repeat("wait", 7), "leap_back"]);
-        BattleSim sim = Sim(c, startHealth: 930);
+        BattleSim sim = Sim(c, startHealth: 630);
         sim.Tick(_bomb);
         TestConfigs.UntilTick(sim, 120);
 
