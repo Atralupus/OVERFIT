@@ -76,7 +76,7 @@ public class RuleControllerTests
     [Fact]
     public void 틀린_계획은_E_를_남기고_가장_짧은_쉬기_뒤_다시_고른다()
     {
-        // 0.11 그대로(PlanFlow) — 틀린 계획은 버리고 가장 짧은 쉬기(24) 뒤 번호 + 1 로 다시 고른다. 다시 고른 계획의 쉬기는 그 결정부터 센다.
+        // 0.11 그대로(옛 PlanFlow) — 틀린 계획은 버리고 가장 짧은 쉬기(24) 뒤 번호 + 1 로 다시 고른다. 다시 고른 계획의 쉬기는 그 결정부터 센다.
         RuleController c = Make(new BadFirst());
         using var log = new LogCapture();
         c.Decide(D(DecisionPoint.Freed, 0, _freed)).ShouldBe(BossActions.Wait);

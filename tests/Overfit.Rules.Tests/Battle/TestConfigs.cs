@@ -384,7 +384,10 @@ public static class TestConfigs
             PoiseDecayDelay = data.PoiseDecayDelay,
             PoiseDecayPerSecond = data.PoiseDecayPerSecond,
             BombReaction = reaction ?? data.BombReaction,
-            DecideSeconds = data.DecideSeconds,
+
+            // 쉬기를 손으로 준 테스트(3틱 · 10틱 · 2.2초 …)는 쉬기의 틱을 잰다 — 결정 간격(12틱)의 배수가 아니면 동작이 다음 결정까지 밀린다. 그 보스는
+            // 결정 간격을 한 틱으로 둔다(설계 2026-10-01 조각2 §1 · 실제 데이터의 쉬기는 늘 배수다 — BossDataTests).
+            DecideSeconds = rest is null ? data.DecideSeconds : BattleSim.Dt,
             SightDelaySeconds = data.SightDelaySeconds,
 
             // 작은 체력(문턱 이하)을 쓰는 테스트는 한 형태로 둔다 — 문턱이 최대 체력 위면 판이 세울 때 거절한다(BossForms).

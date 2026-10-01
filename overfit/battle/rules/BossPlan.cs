@@ -36,8 +36,8 @@ public sealed record BossPlan(int RestTicks, int Move, int? CancelPoint, int? Ne
 public readonly record struct PlanRequest(int Number, int Tick, IReadOnlyList<DodgeEvent> Events, double BossX, int BossFacing, double FighterX, int Form);
 
 /// <summary>
-/// 다음 계획을 고른다 (설계 2026-09-29 조각1 §4.1). 부르는 자리는 <see cref="BattleSim"/> 하나다 — 판이 설 때 · 계획이 끝날 때(탈진으로
-/// 끊겨도). 명부 밖 · 없는 지점 · 첫 동작과 같은 잇는 동작을 내면 판이 <c>[E] plan_invalid</c> 를 남기고 그 계획을 버린다(<see cref="PlanFlow"/>).
+/// 다음 계획을 고른다 (설계 2026-09-29 조각1 §4.1). 부르는 자리는 규칙 조종기(<see cref="RuleController"/>) 하나다 — 보스가 자유로워진 결정(판이 설 때 ·
+/// 계획이 끝날 때 · 탈진으로 끊겨도). 명부 밖 · 없는 지점 · 첫 동작과 같은 잇는 동작을 내면 그 조종기가 <c>[E] plan_invalid</c> 를 남기고 그 계획을 버린다.
 /// 고르기를 하나 더할 때 등록표(<see cref="PatternPickers"/>)에 한 줄이다 — <see cref="BattleSim"/> 은 안 연다.
 /// </summary>
 public interface IPlanPicker
