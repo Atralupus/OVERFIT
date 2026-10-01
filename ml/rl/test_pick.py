@@ -20,6 +20,13 @@ def test_phases_sit_between_untrained_and_final() -> None:
     assert got == ["boss_r03", "boss_r05", "boss_r06"], got
 
 
+def test_phase3_is_strongest_not_last() -> None:
+    # 마지막 저장본이 평가에서 앞 라운드보다 약할 수 있다(sp-3 — r19 72% · r20 67%). 3페이즈는 가장 센 것이다.
+    rows = _rows([0.40, 0.50, 0.60, 0.90, 0.80])
+    full = {r["boss"]: [1 / 7] * 7 for r in rows}
+    assert pick.choose(rows, full, min_share=0.01, targets=[0.5, 0.75])[2]["boss"] == "boss_r03"
+
+
 def test_every_phase_uses_every_move() -> None:
     # 이슈 #167 — 유저: "어떤 페이즈든 공격 자체는 전체 다 써야". 일곱 공격 중 하나라도 min_share 밑인 저장본은 어느 페이즈도 못 된다.
     rows = _rows([0.40, 0.42, 0.55, 0.66, 0.70, 0.82, 0.90])
@@ -28,7 +35,7 @@ def test_every_phase_uses_every_move() -> None:
     shares["boss_r03"] = [0.5, 0.49, 0.01, 0.0, 0.0, 0.0, 0.0]
     shares["boss_r06"] = [0.3, 0.3, 0.3, 0.1, 0.0, 0.0, 0.0]
     got = [r["boss"] for r in pick.choose(rows, shares, min_share=0.01, targets=[0.5, 0.75])]
-    # 3페이즈는 쓸 수 있는 마지막(r05 · 0.82)이고 자는 0.40 → 0.82 · 과녁 0.61 · 0.715 다.
+    # 3페이즈는 쓸 수 있는 것 중 가장 센 것(r05 · 0.82)이고 자는 0.40 → 0.82 · 과녁 0.61 · 0.715 다.
     assert got == ["boss_r02", "boss_r04", "boss_r05"], got
 
 
@@ -40,6 +47,7 @@ def test_move_shares_counts_only_move_starts() -> None:
 
 def main() -> None:
     test_phases_sit_between_untrained_and_final()
+    test_phase3_is_strongest_not_last()
     test_every_phase_uses_every_move()
     test_move_shares_counts_only_move_starts()
     print("ok")

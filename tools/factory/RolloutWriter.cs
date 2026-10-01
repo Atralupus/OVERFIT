@@ -22,7 +22,7 @@ public sealed record RolloutSummary(int Episodes, int Rows, int Obs, int Actions
 /// </summary>
 public static class RolloutWriter
 {
-    public const string EpisodesHeader = "episode,opponent,habit,outcome,boss_won,ticks,boss_lost,fighter_lost,steps,reward";
+    public const string EpisodesHeader = "episode,opponent,habit,outcome,boss_won,ticks,boss_lost,fighter_lost,steps,reward,parries";
 
     /// <summary>조각 4 · 5 의 일꾼 — 배우는 쪽이 보스이고 상대가 봇 함대다.</summary>
     public static RolloutSummary Run(
@@ -74,7 +74,7 @@ public static class RolloutWriter
                     wins += e.BossWon ? 1 : 0;
                     ticks += e.Ticks;
                     csv.Write(string.Create(CultureInfo.InvariantCulture,
-                        $"{e.Index},{opponent},{e.Habit},{e.Outcome},{(e.BossWon ? 1 : 0)},{e.Ticks},{e.BossLost},{e.FighterLost},{e.Steps.Count},{total:R}\n"));
+                        $"{e.Index},{opponent},{e.Habit},{e.Outcome},{(e.BossWon ? 1 : 0)},{e.Ticks},{e.BossLost},{e.FighterLost},{e.Steps.Count},{total:R},{e.Parries}\n"));
                 }
             }, chunk);
         }

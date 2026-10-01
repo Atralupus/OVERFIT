@@ -1,6 +1,6 @@
 """페이즈 고르기 (설계 2026-10-01 조각7 §1). 실행: tools/build.sh pick --name=sp-1
 
-셀프 플레이의 eval.csv 에서 — 3페이즈: 마지막 저장본 · 1 · 2페이즈: 안 배운 r00 에서 3페이즈까지의 승률 자에서 targets 자리(choose).
+셀프 플레이의 eval.csv 에서 — 3페이즈: 승률이 가장 높은 저장본 · 1 · 2페이즈: 안 배운 r00 에서 3페이즈까지의 승률 자에서 targets 자리(choose).
 **평가에서 일곱 공격을 모두 쓴 저장본만 고른다**(이슈 #167 — 유저: "어떤 페이즈든 공격 자체는 전체 다 써야"): 공격마다 동작 시작의 min_share 이상.
 sp-1 의 1페이즈(r02 · "가장 약한 저장본")는 점프 공격 · 잡기 둘에 몰려 있었고 너무 약했다. 고른 가중치를 overfit/data/boss_net/form{1,2,3}.json 으로 복사하고 picks.json 에 출처를 남긴다.
 """
@@ -33,14 +33,15 @@ def move_shares(action: np.ndarray, actions: int, roster: int) -> list[float]:
 def choose(rows: list[dict], shares: dict[str, list[float]], min_share: float, targets: list[float]) -> list[dict]:
     """eval.csv 의 줄(저장본 순) → 형태 1 · 2 · 3 의 줄.
 
-    3페이즈는 일곱 공격을 모두 쓰는(공격마다 min_share 이상) 마지막 저장본이다. 안 배운 r00 의 승률부터 3페이즈의 승률까지를 자로 삼아, 1 · 2페이즈는
+    3페이즈는 일곱 공격을 모두 쓰는(공격마다 min_share 이상) 저장본 중 승률이 가장 높은 것이다(같으면 나중 것 — 마지막 저장본이 평가에서 앞 라운드보다
+    약할 수 있다: sp-3 은 r19 72% · r20 67%). 안 배운 r00 의 승률부터 3페이즈의 승률까지를 자로 삼아, 1 · 2페이즈는
     그 자의 targets 자리에 승률이 가장 가까운 저장본이다(같으면 이른 것). 이슈 #167 — 유저: "1페이즈도 적당히 학습된 보스여야합니다. 너무 안된 보스말고요".
     """
     base = float(rows[0]["boss_win"])
     eligible = [r for r in rows[1:] if min(shares[r["boss"]]) >= min_share]
     if len(eligible) < 3:
         raise SystemExit(f"공격을 모두 쓰는 저장본이 {len(eligible)} 개뿐이다 — 페이즈 셋을 못 고른다")
-    last = eligible[-1]
+    last = max(eligible, key=lambda r: (float(r["boss_win"]), r["boss"]))
     top = float(last["boss_win"])
     picked: list[dict] = []
     for t in targets:
