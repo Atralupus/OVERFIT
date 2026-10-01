@@ -26,8 +26,10 @@ public sealed class RetreatMotion : IBossMotion
             away = -context.Facing;
         }
 
+        // 끝은 아레나 끝까지 남은 거리로 잰다 — "움직인 거리 < 한 걸음" 은 소수 자리의 뺄셈이 2 의 거듭제곱(1024 …)을 건너면 한 걸음보다 조금 작게
+        // 나와 벽에서 먼 데서 끝났다고 했다(최종 리뷰가 밟았다). 돌진(RushMotion)이 남은 거리(ahead)로 재는 것과 같다.
+        double room = away > 0 ? _bounds.MaxX - context.BossX : context.BossX - _bounds.MinX;
         double x = Math.Clamp(context.BossX + (away * _step), _bounds.MinX, _bounds.MaxX);
-        bool stuck = Math.Abs(x - context.BossX) < _step;
-        return new MotionStep(x, 0, 0, Finished: stuck, HoldClock: false, GoalX: x);
+        return new MotionStep(x, 0, 0, Finished: room <= _step, HoldClock: false, GoalX: x);
     }
 }

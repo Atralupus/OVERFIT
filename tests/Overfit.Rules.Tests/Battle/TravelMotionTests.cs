@@ -67,4 +67,22 @@ public class TravelMotionTests
         (step.X, step.Finished).ShouldBe((1835.0, true));
         retreat.Tick(new MotionContext(1835, 0, -1, 480, 1)).Finished.ShouldBeTrue();
     }
+
+    [Theory]
+    [InlineData(1015.3333333333334)]
+    [InlineData(1020.1)]
+    [InlineData(500.7)]
+    public void 물러서기는_끝이_아닌_데서_소수_자리로_안_끝난다(double bossX)
+    {
+        // 최종 리뷰가 밟았다 — "움직인 거리 < 한 걸음" 은 소수 자리의 뺄셈이 2 의 거듭제곱(1024 …)을 건너면 한 걸음보다 조금 작게 나와, 벽에서 먼 데서
+        // 끝났다고 했다. 끝은 아레나 끝까지 남은 거리로 잰다.
+        IBossMotion retreat = Make(new MotionDef { Id = "retreat", Speed = 840 });
+        double x = bossX;
+        for (int t = 0; t < 40; t++)
+        {
+            MotionStep step = retreat.Tick(new MotionContext(x, 0, -1, 400, t));
+            step.Finished.ShouldBe(step.X >= 1835, $"{t}: {x} → {step.X} 에서 끝났다고 했다");
+            x = step.X;
+        }
+    }
 }

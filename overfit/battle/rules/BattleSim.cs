@@ -1224,7 +1224,7 @@ public sealed class BattleSim
         var bounds = new MotionBounds(Boss.HalfWidth, _setup.Arena.Width - Boss.HalfWidth, Standoff);
         if (_travel.Start(kind, bounds, Ticks))
         {
-            Log.Debug("boss", () => $"travel_begin kind={kind} x={Boss.X:0} tick={Ticks}");
+            LogTravel("travel_begin", kind);
             TravelStep(counted: false);
         }
     }
@@ -1244,7 +1244,7 @@ public sealed class BattleSim
 
         if (_travel.Step(Boss, Fighter.X))
         {
-            Log.Debug("boss", () => $"travel_end kind={kind} x={Boss.X:0} tick={Ticks}");
+            LogTravel("travel_end", kind);
             if (kind == TravelKind.Retreat)
             {
                 Decide(DecisionPoint.Arrived);
@@ -1257,6 +1257,18 @@ public sealed class BattleSim
         else if (kind == TravelKind.Retreat && counted && ++_sinceDecision >= _decideTicks)
         {
             Decide(DecisionPoint.Retreat);
+        }
+    }
+
+    /// <summary>
+    /// 움직임의 시작 · 끝 줄 — 따로 둔 메서드인 것은 지역 값(<c>kind</c>)을 붙잡는 람다가 클로저를 메서드 입구에서 매 틱 짓기 때문이다(<see cref="Strike"/>
+    /// 의 주석 · 최종 리뷰가 밟았다). 물러서기 · 점프는 매 틱 걷는다.
+    /// </summary>
+    private void LogTravel(string what, TravelKind kind)
+    {
+        if (Log.IsEnabled(LogLevel.Debug))
+        {
+            Log.Debug("boss", $"{what} kind={kind} x={Boss.X:0} tick={Ticks}");
         }
     }
 
