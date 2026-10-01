@@ -114,7 +114,7 @@ public static class Replay
 
     /// <summary>
     /// 되살린 판이 기록과 같은가 — 틱 수 · 결과 · 입력의 길이 · 계획 전부 · 관측 전부 · 폭탄 전부(설계 2026-09-30 조각2 §4 — 폭탄 칸이 없는 옛 줄은
-    /// 안 견준다: 던졌어도 적지 않던 때가 있다). 다르면 지문(<paramref name="dataSha256"/> — 지금 데이터의 <c>DataDigest</c>)이 까닭을 가른다: 같으면
+    /// 안 견준다: 던졌어도 적지 않던 때가 있다) · 형태 전환의 틱들(설계 2026-10-01 조각1 §3 — 칸이 없는 0.11 이하의 줄은 안 견준다). 다르면 지문(<paramref name="dataSha256"/> — 지금 데이터의 <c>DataDigest</c>)이 까닭을 가른다: 같으면
     /// 결정론이 깨졌고, 다르면 데이터가 바뀌었을 수 있다. 입력이 없는 줄은 판이 우연히 같아 보여도 <see cref="ReplayVerdict.NoInputs"/> 다 — 입력 없이 선
     /// 판은 그 줄의 판이 아니다.
     /// </summary>
@@ -132,7 +132,8 @@ public static class Replay
             && sim.Result == logged.Record.Outcome
             && sim.PlanEntries.SequenceEqual(logged.Plans)
             && sim.Events.SequenceEqual(logged.Record.Events)
-            && (logged.Bombs is not { } bombs || sim.BombRecords.SequenceEqual(bombs));
+            && (logged.Bombs is not { } bombs || sim.BombRecords.SequenceEqual(bombs))
+            && (logged.FormShifts is not { } shifts || sim.Forms.Shifts.SequenceEqual(shifts));
         if (same)
         {
             return ReplayVerdict.Match;
@@ -154,7 +155,8 @@ public static class Replay
         return $"ticks={logged.Ticks}/{sim.Ticks} outcome={logged.Record.Outcome}/{sim.Result?.ToString() ?? "none"}"
             + $" plans={logged.Plans.Count}/{plans.Count}{Diff("plan_diff", logged.Plans, plans)}"
             + $" events={logged.Record.Events.Count}/{sim.Events.Count}{Diff("event_diff", logged.Record.Events, sim.Events)}"
-            + (logged.Bombs is { } was ? $" bombs={was.Count}/{bombs.Count}{Diff("bomb_diff", was, bombs)}" : $" bombs=-/{bombs.Count}");
+            + (logged.Bombs is { } was ? $" bombs={was.Count}/{bombs.Count}{Diff("bomb_diff", was, bombs)}" : $" bombs=-/{bombs.Count}")
+            + (logged.FormShifts is { } fs ? $" form_shifts={string.Join('/', fs)}|{string.Join('/', sim.Forms.Shifts)}" : "");
     }
 
     private static int TapeTicks(IReadOnlyList<int[]> inputs)

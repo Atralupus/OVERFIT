@@ -822,7 +822,7 @@ public partial class ShotRunner : Node
     }
 
     /// <summary>
-    /// 새 판을 세워 <see cref="_battle"/> 에 둔다 — <paramref name="script"/> 를 주면 그 판 하나를 대본으로 세운다(<see cref="SceneDriver.NewBattle"/>).
+    /// 새 판을 세워 <see cref="_battle"/> 에 둔다 — <paramref name="script"/> 를 주면 그 판 하나를 대본으로 세운다(<see cref="SceneDriver.NewBattle(ScriptPlan[])"/>).
     /// 판이 안 섰으면 <c>[W] battle_scene_missing</c> 이다 — 스크린샷이 못 찍힌 것은 게임의 규칙 위반이 아니다(<c>shots</c> 는 PNG 개수를 세어
     /// 0장이면 실패시킨다). 같은 사건을 GIF 러너는 <c>[E]</c> 로 본다 — 무게는 부르는 쪽이 정한다(<see cref="SceneDriver"/> 의 주석 · #96).
     /// </summary>

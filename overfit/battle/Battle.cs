@@ -95,6 +95,9 @@ public partial class Battle : Node2D
     /// <summary>결과 화면의 리포트 줄들 (#122 · 설계 2026-09-29 조각1 §4.5) — 끝날 때 짓고 결과 화면이 띄운다.</summary>
     private IReadOnlyList<string> _report = [];
 
+    /// <summary>이 판의 보스 시작 체력 — 대본으로 선 판만 있다(설계 2026-10-01 조각1 §2.5). 시도 기록이 싣는다.</summary>
+    private int? _bossStartHealth;
+
     /// <summary>판을 사례로 가른다 — 공장과 같은 정의(<see cref="InstanceTracker"/> · #114). 틱마다 보고, 끝날 때 사례와 라벨을 기록이 싣는다.</summary>
     private InstanceTracker _instances = new();
 
@@ -347,6 +350,7 @@ public partial class Battle : Node2D
 
         _fighterConfig = fighter;
         _bossConfig = boss;
+        _hud.SetFormMarks(boss.Forms.Thresholds, boss.MaxHealth);
 
         // 시도 하나를 연다 (#72 · 설계 §4.4) — 번호가 오르고 시드가 새로 나와 재시도마다 순서가 대개 달라진다. 명부와 고르기는
         // data/stages.json 이 정하고, 고르기는 그때까지의 기록으로 한 번 세운다(데모와 같은 자리 — StageRoster.Setup). 대본 칸이 차
@@ -362,6 +366,7 @@ public partial class Battle : Node2D
         }
 
         _setup = stage;
+        _bossStartHealth = Game.Instance.TakeBossStartHealth();
         _instances = new InstanceTracker();
         Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
 
@@ -376,6 +381,7 @@ public partial class Battle : Node2D
             Seed = _attempt.Seed,
             Picker = stage.Picker,
             MaxTicks = battle.MaxTicks,
+            BossStartHealth = _bossStartHealth,
         });
 
         _grabOrb = new GrabOrb();
@@ -574,7 +580,7 @@ public partial class Battle : Node2D
         List<PatternInstance> instances = _instances.Finish(_sim.Events);
         var entry = new AttemptEntry(
             history.SessionSeed, history.Run, record, _setup.PickerId, _sim.PlanEntries, _sim.Ticks, instances, [.. _tape.Runs], _dataSha256,
-            [.. _sim.BombRecords]);
+            [.. _sim.BombRecords], [.. _sim.Forms.Shifts], _bossStartHealth);
         if (AttemptFile.Append(entry) is { } path)
         {
             Log.Debug("run", $"logged attempt={_attempt.Number} instances={instances.Count} plans={entry.Plans.Count} inputs={_tape.Runs.Count}"
@@ -583,8 +589,16 @@ public partial class Battle : Node2D
 
         // 리포트 (#122 · 설계 2026-09-29 조각1 §4.5) — 모든 판의 결과 화면에 선다. 계획 수 · 캔슬 수가 머리이고 끊은 짝마다 한 줄이다.
         // 옛 망이 걷혀 확률 줄이 없다. 폭탄은 회피 다음 한 줄이다(설계 2026-09-30 조각2 §4).
-        _report = PickReport.Lines(
-            _setup.PickerId, _setup.PatternIds, _sim.Plans.Count, _sim.Cancels, _sim.Events, _sim.BombRecords, _sim.Drawn, instances);
+        // 페이즈 줄(설계 2026-10-01 조각1 §3)은 머리 바로 뒤다 — 판이 어디까지 갔는지가 회피 · 폭탄보다 먼저 읽힌다.
+        List<string> report = [.. PickReport.Lines(
+            _setup.PickerId, _setup.PatternIds, _sim.Plans.Count, _sim.Cancels, _sim.Events, _sim.BombRecords, _sim.Drawn, instances)];
+        string forms = FormReport.Line(_sim.Forms.Shifts, _sim.Ticks, _sim.Forms.Count);
+        if (forms.Length > 0)
+        {
+            report.Insert(Math.Min(1, report.Count), forms);
+        }
+
+        _report = report;
         foreach (string line in _report)
         {
             Log.Debug("report", $"line=\"{line}\"");
@@ -688,7 +702,11 @@ public partial class Battle : Node2D
                 : _sim.BossStep?.Motion is { } motion && _motionAnimSpeed.TryGetValue(motion.Id, out Func<FeelBalance, double>? speed)
                     ? speed(_feel)
                     : 1.0,
-            _sim.BossStep?.Mirror ?? false));
+            _sim.BossStep?.Mirror ?? false,
+
+            // 판이 끝나면 전환도 그림에서 끝난다 — 끝난 판은 틱을 안 밀어, 전환을 시작한 틱에 판이 끝나면(폭탄이 문턱을 넘긴 틱에 파이터가 쓰러짐 ·
+            // 시간 초과) 남은 몫이 1 에 멈춰 보스가 결과 화면 뒤에서 하얗게 남는다(최종 리뷰가 밟았다). 흰 구와 같은 거르기다.
+            _sim.Forms.Shifting && !_over ? _sim.Forms.ShiftLeft : 0));
 
         // 판이 끝나면 흰 구가 그릴 까닭이 없다 — 끝난 판은 틱을 안 밀어 규칙의 값(날 자리 · 붙들림 · 산 창)이 그 틱에 멈춰 남는다. 거르지 않으면
         // 흰 구가 나는 동안 이긴 판에서 흰 구가 두 몸 사이에 멈춘 채 결과 화면까지 떠 있다. 잡기에 죽은 판도 같다: 판은 그 잡기가 닿은 틱에 끝나고

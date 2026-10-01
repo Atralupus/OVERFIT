@@ -131,6 +131,11 @@ public sealed class FeelBalance
     /// </summary>
     public required double BossHitFlashSeconds { get; init; }
 
+    /// <summary>
+    /// 페이즈 전환의 흰 플래시 수 (설계 2026-10-01 조각1 §4) — 전환(1.5초)을 이만큼 칸으로 나눠 칸마다 1 → 0 으로 민다. 맞은 플래시와 같은 셰이더다.
+    /// </summary>
+    public required int BossFormFlashes { get; init; }
+
     /// <summary>화면 흔들림의 길이(초).</summary>
     public required double ShakeSeconds { get; init; }
 

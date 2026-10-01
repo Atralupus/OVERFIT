@@ -231,4 +231,31 @@ public class ReplayTests
 
         (sim.Ticks, sim.Result).ShouldBe((60, (BattleOutcome?)null));
     }
+
+    [Fact]
+    public void 형태_전환의_틱이_다르면_같은_판이_아니다()
+    {
+        // 설계 2026-10-01 조각1 §3 — 되살리기가 전환을 시작한 틱들도 견준다. 데모의 판을 지은 줄에 지금 판의 전환을 싣고, 하나를 바꾸면 Mismatch 다.
+        (AttemptEntry entry, BattleSim sim) = DemoFight();
+        AttemptEntry same = entry with { FormShifts = [.. sim.Forms.Shifts] };
+        AttemptEntry changed = entry with { FormShifts = [.. sim.Forms.Shifts, 99_999] };
+
+        BattleSim again = Replay.Run(DemoSetup(), entry.Inputs.ShouldNotBeNull());
+
+        Replay.Verdict(same, again, _sha).ShouldBe(ReplayVerdict.Match);
+        Replay.Verdict(changed, again, _sha).ShouldBe(ReplayVerdict.Mismatch);
+        Replay.Compare(changed, again).ShouldContain(" form_shifts=");
+    }
+
+    [Fact]
+    public void 형태_칸이_없는_옛_줄은_형태를_안_견준다()
+    {
+        (AttemptEntry entry, _) = DemoFight();
+        AttemptEntry old = entry with { FormShifts = null };
+
+        BattleSim again = Replay.Run(DemoSetup(), entry.Inputs.ShouldNotBeNull());
+
+        Replay.Verdict(old, again, _sha).ShouldBe(ReplayVerdict.Match);
+        Replay.Compare(old, again).ShouldNotContain("form_shifts");
+    }
 }

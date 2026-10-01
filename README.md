@@ -2,13 +2,14 @@
 
 [한국어](README.ko.md)
 
-OVERFIT is a 2D side-scrolling soulslike with one boss fight. Before each attack the boss makes a whole plan: how long to rest,
-whether to run in, which move to open with, and whether to cancel that move into another one. In this version the boss plans at random,
-and when the player throws a bomb, the boss sees it and tries to interrupt the throw. A later version will read the player's habits and
-plan against them.
+OVERFIT is a 2D side-scrolling soulslike with one boss fight. The boss has 1,200 HP and three phases: it changes phase at 900 and
+400 HP remaining. Before each attack the boss makes a whole plan: how long to rest, whether to run in, which move to open with, and
+whether to cancel that move into another one. In this version the boss plans at random in every phase, and when the player throws a
+bomb, the boss sees it and tries to interrupt the throw.
 
-The purpose is to check whether a boss that adapts to the player's habits is fair and fun to fight. This version builds the moves,
-the cancels, and the running that the adaptive boss will plan with, plus the player's bombs and a boss that tries to interrupt them.
+The purpose is a boss that learns to fight. A network trained by reinforcement learning will choose the boss's moves, and each phase
+will use the network at a different point of its training: barely trained, partly trained, and fully trained. This version builds the
+phases, the moves, the cancels, the running, and the player's bombs that the trained boss will fight with.
 
 ## Scenes
 
@@ -21,10 +22,15 @@ the cancels, and the running that the adaptive boss will plan with, plus the pla
 | **Fast 3-hit combo.** Catches a player still in a 2-hit combo | **Off-beat 3-hit combo.** Catches a parry timed to the normal rhythm |
 | <img src="docs/gifs/bombcut.gif" width="420"> | <img src="docs/gifs/bomb.gif" width="420"> |
 | **Bomb, interrupted.** The boss cancels at the next cancel point and rushes in before the release | **Bomb, landed.** Thrown as the combo starts, the first cancel point comes too late |
+| <img src="docs/gifs/form.gif" width="420"> | |
+| **Phase change.** At 900 HP the boss stands still, flashes white three times, and takes no damage for 1.5 seconds | |
 
 ## The fight
 
-- One boss with 1,000 HP. The fighter has 220 HP and one life. A fight that lasts 10 minutes is a loss.
+- One boss with 1,200 HP in three phases. The fighter has 220 HP and one life. A fight that lasts 10 minutes is a loss.
+- **Phase change.** When the boss's HP reaches 900 or 400, the boss drops its move, stands still, flashes white three times, and takes
+  no damage for 1.5 seconds; then the next phase starts. Damage that would go past 900 or 400 stops there, so the phases take exactly
+  300, 500, and 400 HP. The boss's HP bar marks both points.
 - The fighter can dash (a short invincibility), jump, guard (costs stamina), parry, attack (one or two hits), and throw bombs
   (10 per fight).
 - A parry at the right moment stops the boss's move and exhausts the boss for 1.5 seconds. Hits also fill the boss's poise gauge,
@@ -101,31 +107,33 @@ interrupt, whatever it is doing,** at the nearest chance:
 ## Replays
 
 Each finished attempt adds one JSON line to `user://attempts/<session seed>.jsonl`: the plans, the inputs (run-length encoded;
-the longest fight is about 27 KB), the dodge events, the bombs (the throw tick, the boss's move at that moment, the outcome — landed,
+the longest fight is about 27 KB), the ticks the phase changes started, the dodge events, the bombs (the throw tick, the boss's move at that moment, the outcome — landed,
 interrupted by the boss, lost to another hit, or cut short by the end of the fight — and the tick the boss interrupted), and a hash of the
 game data. Nothing is uploaded.
 
 - `EXTRA="--history=<file> --attempt=N" tools/build.sh demo` replays an attempt with its saved inputs and compares the plans,
-  the length, the result, every dodge event, and every bomb. It logs `replay_match`, `[E] replay_mismatch` (determinism broke),
+  the length, the result, the phase changes, every dodge event, and every bomb. It logs `replay_match`, `[E] replay_mismatch` (determinism broke),
   or `[W] replay_data_changed` (the game data changed since the attempt).
 - Lines written by version 0.9 and earlier have no inputs and cannot be replayed (`[E] replay_no_inputs`). Lines written by 0.10 have
-  no bombs, so bombs are not compared for them.
-- The result screen shows how the boss planned: the number of plans and cancels, the dodges used in the fight, what happened to the
+  no bombs, so bombs are not compared for them. Lines written by 0.11 and earlier have no phase changes, so phase changes are not
+  compared for them.
+- The result screen shows how long each phase took and how the boss planned: the number of plans and cancels, the dodges used in the fight, what happened to the
   bombs, how many times each move appeared and hit, and each cancel pair.
 
-## The adaptive boss
+## The trained boss
 
 Version 0.9 (tag [`v0.9.2`](https://github.com/Atralupus/OVERFIT/tree/v0.9.2)) had a neural network that predicted,
 from the player's stage-1 dodges, how likely the player was to be hit by each stage-2 pattern. It was removed with this version's
-move rework, because its outputs were tied to the old patterns. A new network that plans from recent and accumulated habits comes in
-slice 4 of the [design](docs/superpowers/specs/2026-09-29-똑똑한-보스-design.md) (Korean).
+move rework, because its outputs were tied to the old patterns. The next network chooses the boss's moves directly and is
+trained by reinforcement learning. The plan is in the [design](docs/superpowers/specs/2026-10-01-강화학습-보스-design.md) (Korean).
 
 ## Where things are
 
 | Part | Location |
 |---|---|
 | Moves, cancel points | `overfit/data/patterns.json` |
-| Boss numbers (rest, run, bomb reaction) | `overfit/data/bosses.json` |
+| Boss numbers (HP, phases, rest, run, bomb reaction) | `overfit/data/bosses.json` |
+| Phases | `overfit/battle/rules/BossForms.cs`, `FormReport.cs`, `BattleSim.cs` |
 | Bomb numbers | `overfit/data/fighters.json` (`bomb`) |
 | Picker settings | `overfit/data/balance.json` (`picker`) |
 | Plans and cancels | `overfit/battle/rules/BossPlan.cs`, `PatternPickers.cs`, `PlanFlow.cs`, `BattleSim.cs` |

@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using Godot;
+using Overfit.Core;
 
 namespace Overfit.Battle.View;
 
@@ -31,6 +34,7 @@ public partial class BattleHud : Control
     private Label _bossNumber = null!;
     private Label _bombs = null!;
 
+
     public override void _Ready()
     {
         _health = GetNode<ProgressBar>("%Health");
@@ -41,6 +45,34 @@ public partial class BattleHud : Control
         _bossNumber = GetNode<Label>("%BossNumber");
         _bombs = GetNode<Label>("%Bombs");
         _poise.MaxValue = 1;
+    }
+
+    /// <summary>
+    /// 보스 체력 바에 페이즈의 문턱을 긋는다 (설계 2026-10-01 조각1 §4) — 판을 세울 때 한 번. 바가 왼쪽에서 차므로 문턱의 자리는 문턱 / 최대다. 색은
+    /// 여기 없다 — 테마의 <c>FormMark</c>(금색 패널)다.
+    /// </summary>
+    /// <param name="thresholds">남은 체력의 문턱들(<c>bosses.json</c> 의 <c>forms.thresholds</c>).</param>
+    /// <param name="maxHealth">보스 최대 체력.</param>
+    public void SetFormMarks(IReadOnlyList<int> thresholds, int maxHealth)
+    {
+        ArgumentNullException.ThrowIfNull(thresholds);
+        foreach (int t in thresholds)
+        {
+            float at = (float)t / maxHealth;
+            _bossHealth.AddChild(new Panel
+            {
+                ThemeTypeVariation = "FormMark",
+                MouseFilter = MouseFilterEnum.Ignore,
+                AnchorLeft = at,
+                AnchorRight = at,
+                AnchorTop = 0,
+                AnchorBottom = 1,
+                OffsetLeft = -1.5f,
+                OffsetRight = 1.5f,
+            });
+        }
+
+        Log.Debug("hud", $"form_marks thresholds={string.Join(',', thresholds)} max={maxHealth}");
     }
 
     public void Show(HudFrame frame)

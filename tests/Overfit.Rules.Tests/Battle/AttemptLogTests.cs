@@ -188,4 +188,31 @@ public class AttemptLogTests
         e.Message.ShouldContain("attempts.jsonl:9");
         e.Message.ShouldContain("1번 칸 [192, 1]");
     }
+
+    [Fact]
+    public void 형태_전환과_시작_체력이_왕복하고_폭탄_앞에_선다()
+    {
+        // 설계 2026-10-01 조각1 §3 — 전환을 시작한 틱들과 대본의 시작 체력. 입력이 줄 끝이라는 규약을 지켜 폭탄 앞에 선다.
+        AttemptEntry entry = Entry() with { FormShifts = [2520, 6720], BossStartHealth = 905, Bombs = [] };
+
+        string line = AttemptLog.Line(entry);
+
+        line.ShouldContain("\"form_shifts\":[2520,6720],\"boss_start_health\":905,\"bombs\":[]");
+        AttemptEntry back = AttemptLog.Parse(line, "시험");
+        ShouldMatch(back, entry);
+        back.FormShifts.ShouldNotBeNull().ShouldBe(new[] { 2520, 6720 });
+        back.BossStartHealth.ShouldBe(905);
+    }
+
+    [Fact]
+    public void 형태_칸이_없는_옛_줄은_null_이다()
+    {
+        string old = AttemptLog.Line(Entry())
+            .Replace(",\"form_shifts\":null", "", System.StringComparison.Ordinal)
+            .Replace(",\"boss_start_health\":null", "", System.StringComparison.Ordinal);
+        old.ShouldNotContain("form_shifts");
+
+        AttemptEntry back = AttemptLog.Parse(old, "옛 줄");
+        (back.FormShifts, back.BossStartHealth).ShouldBe((null, null));
+    }
 }

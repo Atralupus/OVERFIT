@@ -153,7 +153,9 @@ public partial class BossView : Node2D
         _hitFlashLeft = System.Math.Max(0, _hitFlashLeft - dt);
         HoldLastFrameWhenDead();
 
-        string anim = AnimationFor(frame.Anim, frame.Exhausted);
+        // 페이즈 전환(설계 2026-10-01 조각1 §4)은 idle 이다 — 전환이 하던 동작을 걷어 단계의 그림이 없고, 탈진도 풀려 있다.
+        bool shifting = frame.FormShiftLeft > 0;
+        string anim = shifting && !_dead ? "idle" : AnimationFor(frame.Anim, frame.Exhausted);
         switch (BossStepDraw.Next(_heldAnim, anim, frame.Anim, frame.Frame))
         {
             case StepDraw.Hold:
@@ -178,7 +180,9 @@ public partial class BossView : Node2D
         _sprite.Modulate = Tint(phase, frame.Exhausted);
 
         // 흰 플래시는 틴트 위에 셰이더가 민다 — COLOR 에 modulate 가 이미 곱해져 있어 선딜 · 탈진 틴트 위에서도 희다.
-        double flash = _feel.BossHitFlashSeconds <= 0 ? 0 : _hitFlashLeft / _feel.BossHitFlashSeconds;
+        double flash = shifting
+            ? ShiftFlash(frame.FormShiftLeft, _feel.BossFormFlashes)
+            : _feel.BossHitFlashSeconds <= 0 ? 0 : _hitFlashLeft / _feel.BossHitFlashSeconds;
         _hitFlash.SetShaderParameter(_flashParam, (float)flash);
 
         // 장을 고른 **뒤**에 찍어야 플래시 아래 실제로 그린 장이다(Hit 의 요약).
@@ -224,6 +228,21 @@ public partial class BossView : Node2D
     {
         _hitFlashLeft = _feel.BossHitFlashSeconds;
         _flashLogPending = true;
+    }
+
+    /// <summary>
+    /// 전환의 흰 플래시 (설계 2026-10-01 조각1 §4) — 전환을 <paramref name="count"/> 칸으로 나눠 칸마다 1 → 0 으로 민다. 남은 몫(1 → 0)을 지난 몫으로
+    /// 바꿔 칸 안의 자리를 잰다. 맞은 플래시(1 → 0)와 같은 모양이라 같은 셰이더 값 하나로 그린다.
+    /// </summary>
+    private static double ShiftFlash(double left, int count)
+    {
+        if (count <= 0)
+        {
+            return 0;
+        }
+
+        double done = (1 - left) * count;
+        return 1 - (done - System.Math.Floor(done));
     }
 
     public void Die()

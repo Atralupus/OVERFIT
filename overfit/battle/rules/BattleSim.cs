@@ -53,6 +53,9 @@ public sealed class BattleSetup
 
     /// <summary>이 틱을 넘기면 시간 초과로 패배. <b>한 판이 반드시 끝나게 하는 안전장치다.</b></summary>
     public required int MaxTicks { get; set; }
+
+    /// <summary>보스의 시작 체력 — <b>대본으로 선 판만</b> 쓴다(GIF · 스크린샷이 전환을 찍으려고 · 설계 2026-10-01 조각1 §2.5). 없으면 최대 체력.</summary>
+    public int? BossStartHealth { get; set; }
 }
 
 /// <summary>
@@ -177,6 +180,9 @@ public sealed class BattleSim
     /// <summary>이 판의 던지기들 (설계 2026-09-30 조각2 §4) — 시도 기록이 싣는다(<see cref="BombRecords"/>).</summary>
     private readonly BombLedger _ledger = new();
 
+    /// <summary>보스의 형태 — 세 페이즈 (설계 2026-10-01 조각1 §2).</summary>
+    private readonly BossForms _forms;
+
     public BattleSim(BattleSetup setup)
     {
         ArgumentNullException.ThrowIfNull(setup);
@@ -195,7 +201,8 @@ public sealed class BattleSim
         // 반응의 동작(설계 2026-09-30 조각2 §2.3)은 명부에 없어도 된다 — 그 판정도 여기서 짓는다. 데이터에 없으면 건너뛰고 끊을 때 [E] 다.
         _hits = BossHits.Resolve([.. setup.PatternIds, setup.Boss.BombReaction.Move], setup.Patterns, setup.HitShapes);
         Fighter = new Fighter(setup.Fighter, setup.Arena, setup.Arena.Width * 0.25);
-        Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75);
+        Boss = new Boss(setup.Boss, setup.Arena, setup.Arena.Width * 0.75, setup.BossStartHealth);
+        _forms = new BossForms(setup.Boss.Forms.Thresholds, setup.Boss.MaxHealth, Boss.Health, TicksFor(setup.Boss.Forms.ShiftSeconds));
         _swings = new BossSwings(Fighter, Boss, _credit, new JumpClearance(setup.Fighter));
         _poise = PoiseGauge.For(setup.Boss);
         _bombs = new Bombs(setup.Fighter.Bomb);
@@ -231,7 +238,7 @@ public sealed class BattleSim
     }
 
     /// <summary>계획 번호 → 고르기에 넘길 것 — 이 판의 틱 · 관측 · 자리 (설계 2026-09-29 조각1 §4.1).</summary>
-    private PlanRequest Request(int number) => new(number, Ticks, Events, Boss.X, Boss.Facing, Fighter.X);
+    private PlanRequest Request(int number) => new(number, Ticks, Events, Boss.X, Boss.Facing, Fighter.X, _forms.Form);
 
     /// <summary>
     /// 칼질 단계마다 칼의 모양을 찾는다. <b>판을 세울 때</b> 한 번이다 — 칼이 처음 서는 틱에 찾다 틀리면 판이 한참
@@ -284,6 +291,9 @@ public sealed class BattleSim
     /// <see cref="Exhaust"/>). 부르는 쪽은 <see cref="PoiseGauge.Value"/> · <see cref="PoiseGauge.Max"/> 만 읽는다.
     /// </summary>
     public PoiseGauge Poise => _poise;
+
+    /// <summary>보스의 형태 — 세 페이즈 (설계 2026-10-01 조각1 §2). 뷰 · 시도 기록 · 결과 화면이 읽는다.</summary>
+    public BossForms Forms => _forms;
 
     /// <summary>지금까지 진행한 틱 수.</summary>
     public int Ticks { get; private set; }
@@ -475,6 +485,7 @@ public sealed class BattleSim
         }
 
         Bomb();
+        CheckForm();
 
         BattleOutcome? outcome = Outcome();
         if (outcome is not null)
@@ -529,6 +540,20 @@ public sealed class BattleSim
     {
         // 탈진 시계만은 탈진해 있어도 돈다 — 아니면 안 풀린다. 풀리는 틱부터 쉬는 갈래로 간다.
         Boss.Tick();
+
+        // 전환 중에는 아무것도 안 한다 — 돌아서지도 않는다(탈진과 같다 · 설계 2026-10-01 조각1 §2.2). 공중이면 높이만 따라 내린다. 계획도 없다 —
+        // 전환이 끝나는 틱에 새 형태의 번호로 고르고(BeginShift 의 주석), 쉬기는 그 다음 틱부터 센다.
+        if (_forms.Shifting)
+        {
+            Fall();
+            if (_forms.Tick())
+            {
+                Log.Info("boss", $"form={_forms.Form} tick={Ticks}");
+                _flow.Choose();
+            }
+
+            return;
+        }
         if (Boss.Exhausted)
         {
             // 탈진한 보스는 달리지도 돌아서지도 않는다(설계 §4.3) — 공중에서 무너졌으면 높이만 따라 내린다.
@@ -877,7 +902,7 @@ public sealed class BattleSim
         {
             BombsLanded += landed;
             _ledger.Landed(landed);
-            Boss.TakeDamage(landed * _bombs.Damage);
+            DamageBoss(landed * _bombs.Damage, "bomb");
             if (Log.IsEnabled(LogLevel.Debug))
             {
                 Log.Debug("bomb", $"land dmg={landed * _bombs.Damage} boss_hp={Boss.Health} tick={Ticks}");
@@ -1013,8 +1038,12 @@ public sealed class BattleSim
         }
 
         int damage = Fighter.AttackDamage;
-        Boss.TakeDamage(damage);
         _struckThisSwing = true;
+        if (!DamageBoss(damage, "strike"))
+        {
+            return false;
+        }
+
         double filled = Boss.Alive && !Boss.Exhausted ? _poise.Fill(Fighter.AttackPoise) : 0;
 
         // 레벨을 먼저 묻고 즉시 오버로드를 쓴다 — 지연 오버로드(람다)를 여기서 쓰면 안 된다 (이슈 #59 · 최종 리뷰).
@@ -1032,6 +1061,55 @@ public sealed class BattleSim
         }
 
         return filled > 0 && _poise.Full;
+    }
+
+    /// <summary>
+    /// 보스에게 피해를 준다 — 칼과 폭탄이 지나는 한 자리 (설계 2026-10-01 조각1 §2.1 · §2.3). 전환 중이면 무적이라 안 깎고 <c>[D] shielded</c> 를
+    /// 남긴다. 아니면 바닥(다음 문턱)까지만 깎는다 — 페이즈마다 깎을 체력이 정확히 300 · 500 · 400 이다(930 에서 폭탄 60 을 맞아도 900).
+    /// </summary>
+    /// <returns>깎았나 — 무적이면 거짓. 칼은 거짓이면 경직도 안 채운다.</returns>
+    private bool DamageBoss(int amount, string source)
+    {
+        if (_forms.Shifting)
+        {
+            if (Log.IsEnabled(LogLevel.Debug))
+            {
+                Log.Debug("boss", $"shielded src={source} dmg={amount} tick={Ticks}");
+            }
+
+            return false;
+        }
+
+        Boss.TakeDamage(Math.Min(amount, Boss.Health - _forms.Floor));
+        return true;
+    }
+
+    /// <summary>바닥에 닿았으면 전환을 시작한다 — 폭탄 뒤 · 승패 앞(§2.2). 칼과 폭탄이 같은 틱에 닿아도 한 번이다.</summary>
+    private void CheckForm()
+    {
+        if (_forms.Reached(Boss.Health))
+        {
+            BeginShift();
+        }
+    }
+
+    /// <summary>
+    /// 전환을 시작한다 (§2.2) — 탈진과 같은 걷기다: 열린 창을 버리고 · 공중이면 높이만 따라 내리고 · 하던 것을 걷고 · 게이지를 비운다. 같은 틱에 게이지로
+    /// 무너졌으면 그 탈진을 끝낸다 — 전환이 이긴다(탈진이 남으면 전환 뒤 보스가 굳은 채 선다). 계획은 버리고 **전환이 끝나는 틱에** 고른다
+    /// (<see cref="AdvanceBoss"/>) — 시작할 때 고르면 새 형태에서 도는 첫 계획이 옛 형태의 번호(<see cref="PlanRequest.Form"/>)와 1.5초 묵은 자리로
+    /// 골라진다(최종 리뷰가 밟았다 · 조각 7 의 형태마다 다른 고르기가 새 형태의 첫 수를 못 고른다). 쉬기는 그 뒤부터 센다. 본 던지기는 안 잊는다 — 전환이
+    /// 끝나면 끊을 자리를 기다린다(§2.3).
+    /// </summary>
+    private void BeginShift()
+    {
+        _swings.Cut(Ticks, "form");
+        _fall = Boss.Y > 0 ? (_motion ?? _fall) : null;
+        ClearPattern();
+        _poise.Empty();
+        Boss.Exhaust(0);
+        _forms.Begin(Ticks);
+        Log.Info("boss", $"form_shift from={_forms.Form} to={_forms.Form + 1} hp={Boss.Health} tick={Ticks}");
+        _flow.Drop();
     }
 
     /// <summary>이번 칼질이 이미 보스에 닿았나. 창이 닫히면(<c>AttackActive</c> 가 꺼지면) 풀린다.</summary>

@@ -301,5 +301,5 @@ public class StageRosterTests
             stages, 1, seed, System.Array.Empty<AttemptRecord>(), Patterns(), BattleSim.RestTicks(TestConfigs.Boss()), TestConfigs.Balance().Picker, script);
 
     /// <summary>계획 번호 <paramref name="number"/> 의 부름 — 무작위 · 대본 고르기는 번호만 읽는다.</summary>
-    private static PlanRequest Request(int number) => new(number, 0, System.Array.Empty<DodgeEvent>(), 0, 1, 0);
+    private static PlanRequest Request(int number) => new(number, 0, System.Array.Empty<DodgeEvent>(), 0, 1, 0, 1);
 }

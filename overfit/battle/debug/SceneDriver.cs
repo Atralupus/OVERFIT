@@ -57,11 +57,17 @@ public sealed class SceneDriver
     /// 그 줄마다 경고한다.
     /// </para>
     /// </summary>
-    public async Task<Overfit.Battle.Battle?> NewBattle(params ScriptPlan[] script)
+    public Task<Overfit.Battle.Battle?> NewBattle(params ScriptPlan[] script) => NewBattle(null, script);
+
+    /// <summary>
+    /// 대본 판을 보스의 시작 체력과 같이 세운다 (설계 2026-10-01 조각1 §2.5) — 페이즈 전환을 찍는 GIF 가 쓴다. 시작 체력은 대본이 있을 때만 실린다.
+    /// </summary>
+    public async Task<Overfit.Battle.Battle?> NewBattle(int? bossStartHealth, params ScriptPlan[] script)
     {
+        ArgumentNullException.ThrowIfNull(script);
         if (script.Length > 0)
         {
-            Game.Instance.SetNextScript(script);
+            Game.Instance.SetNextScript(script, bossStartHealth);
         }
 
         Game.Instance.GoTo(Game.Scene.Battle);

@@ -32,7 +32,8 @@ public sealed record BossPlan(int RestTicks, int Move, int? CancelPoint, int? Ne
 /// <param name="BossX">보스의 자리.</param>
 /// <param name="BossFacing">보스가 보는 쪽(+1 · −1).</param>
 /// <param name="FighterX">파이터의 자리.</param>
-public readonly record struct PlanRequest(int Number, int Tick, IReadOnlyList<DodgeEvent> Events, double BossX, int BossFacing, double FighterX);
+/// <param name="Form">보스의 지금 형태 — 1 부터(설계 2026-10-01 조각1 §2.4). 조각 1 의 고르기는 안 읽는다 — 조각 7 의 망이 형태마다 가중치를 고르는 자리다.</param>
+public readonly record struct PlanRequest(int Number, int Tick, IReadOnlyList<DodgeEvent> Events, double BossX, int BossFacing, double FighterX, int Form);
 
 /// <summary>
 /// 다음 계획을 고른다 (설계 2026-09-29 조각1 §4.1). 부르는 자리는 <see cref="BattleSim"/> 하나다 — 판이 설 때 · 계획이 끝날 때(탈진으로
