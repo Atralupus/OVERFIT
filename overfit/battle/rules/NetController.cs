@@ -19,7 +19,7 @@ public sealed record NetStep(int Tick, IReadOnlyList<double> Observation, IReadO
 /// 없다. 폭탄에는 반응 장치를 안 켠다 — 끊을지는 망이 고른다.
 ///
 /// <para>
-/// <b>이 뽑기는 학습용이다</b> — 소프트맥스에 exp 를 쓴다. 게임의 결정 경로(사칙연산만 · 우산 §6.1)는 조각 7 이 정한다.
+/// <b>학습의 일꾼이 쓴다</b> — 결정을 적는다. 게임은 형태마다의 망을 쓰는 <see cref="FormNetController"/> 다(뽑기는 같은 <see cref="MaskedSampler"/>).
 /// </para>
 /// </summary>
 public sealed class NetController : IBossController

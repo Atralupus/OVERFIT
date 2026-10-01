@@ -457,9 +457,10 @@ public sealed class BattleSim
 
     /// <summary>
     /// 보스가 던지기를 아나 (설계 2026-09-30 조각2 §2.1) — 던진 틱부터 반응 지연이 지나고 던지기가 도는 동안이다. 뷰가 보스 머리 위에 "!" 를 띄운다 —
-    /// 끊을 자리가 아직 안 와 못 끊고 있어도 "보고 있다" 가 보인다. 규칙은 이 값 대신 <see cref="BombWatch"/> 를 묻는다.
+    /// 끊을 자리가 아직 안 와 못 끊고 있어도 "보고 있다" 가 보인다. 규칙은 이 값 대신 <see cref="BombWatch"/> 를 묻는다. 반응 장치를 안 켜는 조종기(망)면
+    /// 늘 거짓이다 — 띄우면 끊어 줄 보스를 약속하는 거짓말이 된다(설계 2026-10-01 조각7 §6).
     /// </summary>
-    public bool BossAlert => _watch.Aware(Ticks, Fighter.Throwing);
+    public bool BossAlert => _controller.ReactsToBombs && _watch.Aware(Ticks, Fighter.Throwing);
 
     /// <summary>보스가 끊고 멈칫하는 중인가 (§2.3) — 뷰가 idle 첫 장에 세운다. 규칙은 안 읽는다.</summary>
     public bool BossHesitating => _watch.Hesitating;

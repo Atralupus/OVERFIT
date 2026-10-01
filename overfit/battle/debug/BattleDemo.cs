@@ -122,6 +122,12 @@ public partial class BattleDemo : Node
             return;
         }
 
+        if (!data.TryController(setup, boss, seed, out IBossController? controller))
+        {
+            GetTree().Quit(1);
+            return;
+        }
+
         Log.Info("battle-demo", $"start seed={seed} fighter={fighterId} stage={setup.Stage} patterns={setup.PatternIds.Count} picker={setup.PickerId}");
 
         var battleSetup = new BattleSetup
@@ -134,6 +140,7 @@ public partial class BattleDemo : Node
             Patterns = data.Patterns,
             Seed = seed,
             Picker = setup.Picker,
+            Controller = controller,
             MaxTicks = battle.MaxTicks,
 
             // 대본으로 선 시도는 시작 체력을 실었을 수 있다(GIF · 스크린샷 · 설계 2026-10-01 조각1 §2.5) — 되살리기는 그대로 세운다.

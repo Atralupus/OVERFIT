@@ -91,6 +91,9 @@
     <Compile Include="../../overfit/battle/rules/PolicyNet.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/NetController.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/MaskedSampler.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/DetMath.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/FormNetController.cs" LinkBase="linked/battle/rules" />
+    <Compile Include="../../overfit/battle/rules/BossNets.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FighterActions.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FighterObservation.cs" LinkBase="linked/battle/rules" />
     <Compile Include="../../overfit/battle/rules/FighterNetDriver.cs" LinkBase="linked/battle/rules" />
@@ -132,6 +135,9 @@
        덕분에 테스트가 저장소 경로를 몰라도 되고, 값을 고치면 다음 빌드가 복사한다. -->
   <ItemGroup>
     <None Include="../../overfit/data/*.json" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 형태마다의 보스 망(설계 2026-10-01 조각7) — 골든 테스트가 읽는다. -->
+    <None Include="../../overfit/data/boss_net/*.json" LinkBase="data/boss_net" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Battle/NetGolden.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- 그림 팩의 SpriteFrames — 텍스트라 저장소에 있다(PNG 는 없다). 타임라인의 anim · frame 이 팩에 있는 이름과 장인지 대 본다. -->
     <None Include="../../overfit/assets/spriteframes/*.tres" LinkBase="spriteframes" CopyToOutputDirectory="PreserveNewest" />
     <!-- 리플레이 골든. 테스트가 출력 폴더에서 읽는다 — 저장소 경로를 몰라도 되고, 고치면 다음 빌드가 복사한다. -->

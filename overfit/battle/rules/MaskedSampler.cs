@@ -5,7 +5,7 @@ namespace Overfit.Battle.Rules;
 
 /// <summary>
 /// 열린 칸의 소프트맥스에서 하나 뽑기 — 보스 망 조종기와 파이터 망 조종기가 같이 쓴다(설계 2026-10-01 조각4 §4 · 조각6). 로짓이 없으면 열린 칸에 같은 확률이다.
-/// <b>학습용</b> — exp 를 쓴다. 게임의 결정 경로는 조각 7 이 정한다.
+/// exp 는 <see cref="DetMath.Exp"/> 다(설계 2026-10-01 조각7 §3) — 사칙연산뿐이라 플랫폼이 달라도 같은 칸이다. 게임과 학습이 같은 함수를 쓴다.
 /// </summary>
 public static class MaskedSampler
 {
@@ -31,7 +31,7 @@ public static class MaskedSampler
         double sum = 0;
         for (int i = 0; i < mask.Count; i++)
         {
-            p[i] = mask[i] ? Math.Exp((logits?[i] ?? 0) - max) : 0;
+            p[i] = mask[i] ? DetMath.Exp((logits?[i] ?? 0) - max) : 0;
             sum += p[i];
         }
 

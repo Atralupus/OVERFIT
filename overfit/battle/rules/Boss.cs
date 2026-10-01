@@ -147,6 +147,12 @@ public sealed class FormsDef
 
     /// <summary>전환의 길이(초) — 무적 · idle · 흰 플래시. 탈진(1.5)과 같다: 흰 플래시 셋이 읽히는 가장 짧은 길이다.</summary>
     public required double ShiftSeconds { get; init; }
+
+    /// <summary>
+    /// 형태마다의 망 — <c>data/</c> 밑의 경로, 형태 1 부터 (설계 2026-10-01 조각7 §1). 단계의 조종기가 <c>net</c> 일 때만 읽는다. 길이는 형태 수다
+    /// (<see cref="BossNets.Create"/> 가 대 본다).
+    /// </summary>
+    public IReadOnlyList<string>? Nets { get; init; }
 }
 
 /// <summary>

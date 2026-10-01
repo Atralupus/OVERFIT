@@ -165,7 +165,7 @@ public class StageRosterTests
         scripted.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
         Enumerable.Range(0, 5).Select(k => scripted.Picker.Next(Request(k))).ShouldAllBe(p => scripted.PatternIds[p.Move] == "점프 공격");
 
-        Setup(Stages(), seed).ShouldNotBeNull().PickerId.ShouldBe("uniform");
+        Setup(Stages(), seed).ShouldNotBeNull().PickerId.ShouldBe("net"); // 보스전의 조종기(설계 2026-10-01 조각7 §2)
     }
 
     [Fact]
@@ -226,10 +226,27 @@ public class StageRosterTests
         StageSetup setup = Setup(Stages(), seed).ShouldNotBeNull();
 
         setup.PatternIds.ShouldBe(StageRoster.For(Stages(), 1));
-        setup.PickerId.ShouldBe("uniform");
+        // 보스전은 망 조종기다(설계 2026-10-01 조각7 §2) — 그래도 단계의 고르기(uniform)는 선다: 대본 없는 규칙의 판(봇 함대 · 테스트)이 그 계획으로 돈다.
+        (setup.PickerId, setup.ControllerId).ShouldBe(("net", "net"));
         Enumerable.Range(0, 50).Select(k => setup.Picker.Next(Request(k)).Move)
             .ShouldBe(Enumerable.Range(0, 50).Select(k => Det.RollInt(seed, Det.Domain.PatternPick, setup.PatternIds.Count, k1: k)),
                 "무작위 계획의 첫 동작이 옛 uniform 의 좌표가 아니다(설계 2026-09-29 조각1 §3.5)");
+    }
+
+    [Fact]
+    public void 모르는_조종기의_단계는_세우지_않고_규칙_위반을_남긴다()
+    {
+        // 설계 2026-10-01 조각7 §2 — rule · net 밖의 id 로 판이 서면 어느 보스로 도는지 아무도 모른다. 빠진 것은 rule 이다.
+        using var log = new LogCapture();
+        var stages = new Dictionary<string, StageDef>
+        {
+            ["1"] = new() { Want = 2, Patterns = new[] { "3연격", "점프 공격" }, Picker = "uniform", Controller = "없는조종기" },
+        };
+
+        Setup(stages, 51).ShouldBeNull();
+        log.Lines.ShouldContain(l => l.Contains("[stage][E] controller_missing id=없는조종기", System.StringComparison.Ordinal));
+        stages["1"].Controller = StageRoster.RuleController;
+        Setup(stages, 51).ShouldNotBeNull().ControllerId.ShouldBe("rule");
     }
 
     [Fact]

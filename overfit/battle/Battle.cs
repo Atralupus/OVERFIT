@@ -371,9 +371,15 @@ public partial class Battle : Node2D
             return;
         }
 
+        IReadOnlyList<string>? actions = Game.Instance.TakeActions();
+        if (!data.TryController(stage, _bossConfig, _attempt.Seed, out IBossController? controller))
+        {
+            _broken = true; // [E] 는 BattleTables 가 남겼다
+            return;
+        }
+
         _setup = stage;
         _bossStartHealth = Game.Instance.TakeBossStartHealth();
-        IReadOnlyList<string>? actions = Game.Instance.TakeActions();
         _instances = new InstanceTracker();
         Log.Info("run", $"attempt={_attempt.Number} stage={stage.Stage} seed={_attempt.Seed} picker={stage.PickerId} history={history.Records.Count}");
 
@@ -391,7 +397,8 @@ public partial class Battle : Node2D
             BossStartHealth = _bossStartHealth,
 
             // 칸 대본(GIF 의 움직임 · 설계 2026-10-01 조각3 §4)이면 대본 조종기다. 되살리기는 계획 대본으로 서므로 이 판은 되살리지 못한다(디버그 전용).
-            Controller = actions is null ? null : new ScriptActions(new BossActions(stage.PatternIds), actions),
+            // 아니면 단계의 조종기(망 · 설계 2026-10-01 조각7 §2) — 규칙이면 null 이라 판이 Picker 로 세운다.
+            Controller = actions is null ? controller : new ScriptActions(new BossActions(stage.PatternIds), actions),
         });
 
         _grabOrb = new GrabOrb();

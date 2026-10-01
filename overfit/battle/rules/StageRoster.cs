@@ -19,6 +19,12 @@ public sealed class StageDef
     /// 읽히면 어느 고르기로 돌지를 코드의 기본값이 조용히 정한다. 모르는 id 는 데이터 테스트가 막는다.
     /// </summary>
     public required string Picker { get; set; }
+
+    /// <summary>
+    /// 보스의 조종기 (설계 2026-10-01 조각7 §2) — <c>rule</c>(계획 고르기 위의 규칙 조종기 · 0.11 의 보스) · <c>net</c>(형태마다의 망 · <see cref="BossNets"/>).
+    /// 빠지면 <c>rule</c> 이다 — 조각 7 앞의 데이터 · 테스트의 단계가 그대로 0.11 의 판이어야 한다.
+    /// </summary>
+    public string Controller { get; set; } = StageRoster.RuleController;
 }
 
 /// <summary>
@@ -28,7 +34,10 @@ public sealed class StageDef
 /// <param name="PickerId">고르기 id — 로그의 <c>picker=</c>. 대본을 넘긴 전투면 <c>script</c>, 아니면 단계의 id 그대로다.</param>
 /// <param name="Picker">그 시도의 시드와 기록으로 세운 계획 고르기 — <c>BattleSetup.Picker</c>.</param>
 /// <param name="Stage">실제로 싸우는 단계 — 범위 밖을 물으면 가장 가까운 단계로 잘라 쓴 값이다(#112 · 설계 2026-09-28 §6.5). 기록이 이것을 싣는다.</param>
-public sealed record StageSetup(IReadOnlyList<string> PatternIds, string PickerId, IPlanPicker Picker, int Stage);
+/// <param name="ControllerId">
+/// 조종기 — <c>rule</c> · <c>net</c> (설계 2026-10-01 조각7 §2). <c>net</c> 이면 <see cref="Picker"/> 는 안 쓰이고 판은 <see cref="BossNets.Create"/> 의 조종기로 선다.
+/// </param>
+public sealed record StageSetup(IReadOnlyList<string> PatternIds, string PickerId, IPlanPicker Picker, int Stage, string ControllerId = StageRoster.RuleController);
 
 /// <summary>
 /// 단계 번호 → 그 단계가 쓰는 패턴 id 목록과 고르기.
@@ -42,6 +51,12 @@ public sealed record StageSetup(IReadOnlyList<string> PatternIds, string PickerI
 /// </summary>
 public static class StageRoster
 {
+    /// <summary>규칙 조종기의 id — <see cref="StageDef.Controller"/> 의 기본값.</summary>
+    public const string RuleController = "rule";
+
+    /// <summary>망 조종기의 id — 시도 기록의 고르기 칸에도 이 값이 실린다(설계 2026-10-01 조각7 §5).</summary>
+    public const string NetController = "net";
+
     /// <summary>
     /// <paramref name="stage"/> 단계의 명부와 고르기를 세운다 (#72 · 설계 §4.4). <b>게임(<c>Battle</c>)과 데모(<c>BattleDemo</c>)가
     /// 이 한 자리에서 세운다</b> — 따로 세우면 로그의 <c>seed=</c> 를 데모에 넘겨도 다른 고르기로 돌 수 있다. 고르기는 시도를
@@ -94,6 +109,19 @@ public static class StageRoster
         if (picker is null)
         {
             Log.Error("stage", $"picker_missing id={id} stage={used}");
+            return null;
+        }
+
+        // 대본(GIF · 스크린샷)으로 선 판은 늘 규칙 조종기다 — 대본은 계획이라 규칙 조종기만 읽는다(설계 2026-10-01 조각7 §2).
+        string controller = script is null ? def.Controller : RuleController;
+        if (controller == NetController)
+        {
+            return new StageSetup(def.Patterns, NetController, picker, used, NetController);
+        }
+
+        if (controller != RuleController)
+        {
+            Log.Error("stage", $"controller_missing id={controller} stage={used}");
             return null;
         }
 
