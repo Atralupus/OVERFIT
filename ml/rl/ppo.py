@@ -13,16 +13,24 @@ def log_softmax_masked(logits: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return z - m - s
 
 
-def gae(reward: np.ndarray, value: np.ndarray, done: np.ndarray, gamma: float, lam: float) -> tuple[np.ndarray, np.ndarray]:
-    """일반화 이점 추정 — 줄은 판 순서이고, 판의 끝(done) 다음 가치는 0 이다(판 경계를 안 넘는다)."""
+def gae(reward: np.ndarray, value: np.ndarray, done: np.ndarray, gamma: float, lam: float,
+        span: np.ndarray | None = None, unit: float = 12.0) -> tuple[np.ndarray, np.ndarray]:
+    """일반화 이점 추정 — 줄은 판 순서이고, 판의 끝(done) 다음 가치는 0 이다(판 경계를 안 넘는다).
+
+    span 을 주면 **결정의 길이로 할인한다** — γ^(span/unit) · (γλ)^(span/unit). 결정마다 할인하면 결정이 길수록(잡기처럼) 끝의 보상이 덜 깎여 결정 수를
+    줄이는 쪽으로 기운다(조각 5 의 최종 리뷰). unit 은 결정 간격(12틱)이다 — γ 는 "결정 간격 하나" 의 할인이다.
+    """
     n = len(reward)
     adv = np.zeros(n)
     last = 0.0
     for t in range(n - 1, -1, -1):
+        k = 1.0 if span is None else span[t] / unit
+        g = gamma ** k
+        gl = (gamma * lam) ** k
         next_value = 0.0 if done[t] else value[t + 1]
         nonterminal = 0.0 if done[t] else 1.0
-        delta = reward[t] + gamma * next_value - value[t]
-        last = delta + gamma * lam * nonterminal * last
+        delta = reward[t] + g * next_value - value[t]
+        last = delta + gl * nonterminal * last
         adv[t] = last
     return adv, adv + value
 

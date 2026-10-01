@@ -69,6 +69,16 @@ def test_gae_stops_at_episode_end() -> None:
     assert np.allclose(ret, adv)
 
 
+def test_gae_discounts_by_time() -> None:
+    # 결정의 길이로 할인한다(최종 리뷰) — γ^(span/12). 길이 24 의 결정 뒤 보상은 γ² 로 깎인다. 판의 끝은 끊긴다.
+    reward = np.array([0.0, 1.0, 5.0])
+    value = np.zeros(3)
+    done = np.array([False, True, True])
+    span = np.array([24, 12, 12])
+    adv, _ = ppo.gae(reward, value, done, gamma=0.5, lam=1.0, span=span, unit=12)
+    assert np.allclose(adv, [0.25 * 1.0, 1.0, 5.0]), adv
+
+
 def test_json_round_trip_and_matches_csharp() -> None:
     # 넘파이 가중치를 C# 일꾼에 넘기고, 일꾼이 적은 logp 를 넘파이가 다시 셈한다(설계 §4).
     with tempfile.TemporaryDirectory() as tmp:
@@ -93,6 +103,7 @@ def main() -> None:
     test_mlp_gradient()
     test_ppo_logit_gradient()
     test_gae_stops_at_episode_end()
+    test_gae_discounts_by_time()
     test_json_round_trip_and_matches_csharp()
     print("ok")
 

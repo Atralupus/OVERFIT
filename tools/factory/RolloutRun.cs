@@ -26,8 +26,9 @@ public enum RolloutController
 }
 
 /// <summary>경험의 줄 하나 — 망 조종기의 결정에 보상과 끝을 붙인 것.</summary>
+/// <remarks><c>Span</c> 은 이 결정에서 다음 적은 결정(또는 판의 끝 다음 틱)까지의 틱이다 — 학습기가 시간으로 할인한다(γ^(틱/12)).</remarks>
 public sealed record RolloutStep(
-    int Tick, IReadOnlyList<double> Observation, IReadOnlyList<bool> Mask, int Action, double LogProb, double Value, double Reward, bool Done);
+    int Tick, IReadOnlyList<double> Observation, IReadOnlyList<bool> Mask, int Action, double LogProb, double Value, double Reward, bool Done, int Span);
 
 /// <summary>판 하나의 경험.</summary>
 /// <param name="Index">판 번호.</param>
@@ -122,7 +123,7 @@ public static class RolloutRun
             }
 
             NetStep s = raw[i];
-            steps[i] = new RolloutStep(s.Tick, s.Observation, s.Mask, s.Action, s.LogProb, s.Value, r, done);
+            steps[i] = new RolloutStep(s.Tick, s.Observation, s.Mask, s.Action, s.LogProb, s.Value, r, done, span);
         }
 
         return new Episode(episode, traits.Habit.ToString(), outcome.Value, bossWon, sim.Ticks, bossHp[0] - sim.Boss.Health, fighterHp[0] - sim.Fighter.Health, steps);

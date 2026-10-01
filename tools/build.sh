@@ -362,6 +362,14 @@ cmd_check() {
 
   say "판정 모양 (hitboxes.json ↔ 그림)"
   cmd_hitboxes
+
+  # 파이썬 학습기(ml/rl · 조각 5) — 일꾼의 steps.bin 모양이나 PolicyNet 을 고치면 넘파이와 C# 의 logp 가 어긋날 수 있다. 가상 환경이 없는 체크아웃(클라우드
+  # 세션 등)은 무엇을 어긴 것이 아니라 볼 도구가 없을 뿐이라 경고로 건너뛴다 — 판정 모양의 그림이 없을 때와 같은 대우다.
+  if [[ -x "$ML_PYTHON" ]]; then
+    cmd_mltest
+  else
+    warn "ml/.venv 가 없어 파이썬 테스트를 건너뜁니다 — python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/requirements.txt"
+  fi
 }
 
 cmd_run() {
@@ -465,7 +473,7 @@ cmd_compare() {
 cmd_mltest() {
   need_ml
   say "파이썬 테스트"
-  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout) || die "파이썬 테스트 실패."
+  (cd "$ROOT" && "$ML_PYTHON" -m ml.rl.test_net && "$ML_PYTHON" -m ml.rl.test_rollout && "$ML_PYTHON" -m ml.rl.test_train) || die "파이썬 테스트 실패."
   ok "파이썬 테스트 통과"
 }
 

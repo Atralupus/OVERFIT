@@ -15,7 +15,7 @@ public sealed record RolloutSummary(int Episodes, int Rows, int Obs, int Actions
 ///
 /// <para>
 /// <c>steps.bin</c> 의 한 줄(작은 끝): <c>obs float32[D] · mask uint8[A] · action int16 · logp float32 · value float32 · reward float32 · done uint8 ·
-/// episode int32</c>. 넘파이가 구조체 dtype 하나로 읽는다(<c>ml/rl/rollout.py</c>). float32 인 것은 학습에 충분하고 파일이 절반이라서다 — 게임의 망은 가중치
+/// span int32 · episode int32</c> — span 은 결정의 길이(틱)이고 학습기가 시간으로 할인한다(조각 5 의 최종 리뷰). 넘파이가 구조체 dtype 하나로 읽는다(<c>ml/rl/rollout.py</c>). float32 인 것은 학습에 충분하고 파일이 절반이라서다 — 게임의 망은 가중치
 /// JSON 을 double 로 읽는다.
 /// </para>
 /// </summary>
@@ -82,6 +82,7 @@ public static class RolloutWriter
         bin.Write((float)s.Value);
         bin.Write((float)s.Reward);
         bin.Write((byte)(s.Done ? 1 : 0));
+        bin.Write(s.Span);
         bin.Write(episode);
     }
 
