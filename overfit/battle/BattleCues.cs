@@ -57,9 +57,6 @@ public sealed class BattleCues
     /// <summary>지난 틱의 칼질 번호. 1타가 끝나는 틱에 이어진 2타는 행동이 Attack 그대로라, 이 번호가 바뀐 것으로 본다.</summary>
     private int _lastComboStep;
 
-    /// <summary>지난 틱에 패리 중이었나. 꺼졌다 켜진 틱이 새 패리다 — 칼질과 같은 규약이다.</summary>
-    private bool _lastParrying;
-
     /// <summary>지난 틱에 보스가 탈진해 있었나. 꺼졌다 켜진 틱이 <b>무너지는 순간</b>이다 — 히트스톱이 거기 걸린다.</summary>
     private bool _lastBossExhausted;
 
@@ -101,9 +98,6 @@ public sealed class BattleCues
     /// <summary>이 판에서 가드가 깨진 횟수 (이슈 #47). <b>스크린샷이 그 순간을 노리는 데만 쓴다.</b></summary>
     public int GuardBreaks { get; private set; }
 
-    /// <summary>이 판에서 받아친 횟수 (이슈 #53). 위와 같이 스크린샷 전용이다.</summary>
-    public int Parries { get; private set; }
-
     /// <summary>
     /// 방금 지난 틱을 앞 틱과 견줘 뷰에 알린다. <paramref name="input"/> 은 그 틱에 규칙이 받은 입력이다.
     /// </summary>
@@ -125,15 +119,6 @@ public sealed class BattleCues
                 DodgeEvent e = _sim.Events[i];
                 switch (e.Verdict)
                 {
-                    // 받아쳤다 — 작은 고리와 약한 흔들림이다(요청이 "화면이 약간 흔들리고 작은 성공 표시" · 이슈 #53). 0.7 은
-                    // 판정마다 도는 것(0.45)보다 조금 세고 피격(1.0)보다 훨씬 약하다. 받아치면 보스가 무너지는데(#72) 그 히트스톱과
-                    // 큰 흔들림은 여기가 아니라 탈진에 드는 틱이 건다(아래) — 원인이 무엇이든 같은 탈진에 같이 걸리게.
-                    case HitVerdict.Parried:
-                        Parries++;
-                        _fighterView.ParrySuccess();
-                        _shake(0.7);
-                        break;
-
                     // 버텨낸 것과 깨진 것은 **다른 연출**이어야 한다 (이슈 #47). 같으면 화면은
                     // "막았다" 만 말하고 "무너졌다" 는 안 말하는데, 그 뒤 탈진(exhaust_seconds · #71) 동안은 아무것도 못 한다.
                     case HitVerdict.Guarded:
@@ -164,8 +149,8 @@ public sealed class BattleCues
             _bossView.Hit();
         }
 
-        // **보스가 무너지는 틱** (#72 · 설계 §4.3 · §7.2) — 히트스톱과 흔들림이 여기 걸린다. 관측(받아친 판정)이 아니라
-        // 탈진에 드는 것을 앞 틱과 견줘 잡는다: 경직 게이지로 무너진 탈진(#71)에는 받아친 관측이 없다.
+        // **보스가 무너지는 틱** (#72 · 설계 §4.3 · §7.2) — 히트스톱과 흔들림이 여기 걸린다. 관측이 아니라
+        // 탈진에 드는 것을 앞 틱과 견줘 잡는다: 경직 게이지로 무너진 탈진(#71)에는 그 틱의 관측이 없다.
         if (_sim.Boss.Exhausted && !_lastBossExhausted)
         {
             _shake(1.0);
@@ -216,14 +201,6 @@ public sealed class BattleCues
 
         _lastSwinging = swinging;
         _lastComboStep = step;
-
-        bool parrying = _sim.Fighter.Action == FighterAction.Parry;
-        if (parrying && !_lastParrying)
-        {
-            _fighterView.ParryBegan();
-        }
-
-        _lastParrying = parrying;
 
         // 판정이 서는 **그 틱**에만 한 번. 계속 참인 동안 매 프레임 섬광을 내면 번쩍임이 아니라 조명이 된다.
         // 그림이 칼이 나가는 장으로 맞춰 서는 것도 이 틱이다 — 시트의 시계에 맡기지 않는다(이슈 #54).

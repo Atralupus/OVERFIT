@@ -10,7 +10,6 @@ public enum BotHabit
     Mixed,
     Dash,
     Jump,
-    Parry,
     Guard,
     Spacing,
 }
@@ -21,8 +20,7 @@ public enum BotHabit
 /// <param name="Habit">습관 — 뽑은 방식의 기록이다. 봇은 안 읽고 공장과 검증이 봇을 자르는 데 쓴다.</param>
 /// <param name="Dash">판정이 오면 대시로 받는 비중.</param>
 /// <param name="Jump">점프로 받는 비중.</param>
-/// <param name="Parry">패리로 받는 비중.</param>
-/// <param name="Guard">패턴을 가드로 받는 비중 — 넷의 합은 1 이다.</param>
+/// <param name="Guard">패턴을 가드로 받는 비중 — 셋의 합은 1 이다. 패리로 받는 비중(<c>Parry</c>)은 패리와 같이 걷었다(#168).</param>
 /// <param name="ReactionSeconds">선딜이 시작하고 누를 수 있게 되기까지(초).</param>
 /// <param name="JitterSeconds">누르는 시각의 편차(초).</param>
 /// <param name="BiasSeconds">누르는 시각의 편향(초) — 음수가 먼저다.</param>
@@ -36,7 +34,6 @@ public sealed record BotTraits(
     BotHabit Habit,
     double Dash,
     double Jump,
-    double Parry,
     double Guard,
     double ReactionSeconds,
     double JitterSeconds,
@@ -59,25 +56,26 @@ public sealed record BotTraits(
         ArgumentNullException.ThrowIfNull(fleet);
         double U(int j) => Det.Roll01(fleetSeed, Det.Domain.FleetBot, k1: bot, k2: 1 + j);
 
-        BotHabit habit = U(0) < fleet.HabitShare ? (BotHabit)(1 + (int)(U(1) * 5)) : BotHabit.Mixed;
+        BotHabit habit = U(0) < fleet.HabitShare ? (BotHabit)(1 + (int)(U(1) * 4)) : BotHabit.Mixed;
 
         double[] w;
-        if (habit is BotHabit.Dash or BotHabit.Jump or BotHabit.Parry or BotHabit.Guard)
+        if (habit is BotHabit.Dash or BotHabit.Jump or BotHabit.Guard)
         {
-            // 주된 수단이 habit_dominant 를 갖고 나머지 셋이 남은 몫을 똑같이 나눈다 — 가드가 0.9 여도 대시 · 점프 · 패리가 0 이 안 된다.
+            // 주된 수단이 habit_dominant 를 갖고 나머지 둘이 남은 몫을 똑같이 나눈다 — 가드가 0.9 여도 대시 · 점프가 0 이 안 된다.
             double dominant = Lerp(fleet.HabitDominant, U(2));
-            double rest = (1 - dominant) / 3;
-            w = [rest, rest, rest, rest];
+            double rest = (1 - dominant) / 2;
+            w = [rest, rest, rest];
             w[(int)habit - 1] = dominant;
         }
         else
         {
-            // 혼합형과 간격 습관형 — 간격의 습관은 수단이 아니라 서는 자리(RestGap)다.
-            w = [U(2), U(3), U(4), U(5)];
-            double sum = w[0] + w[1] + w[2] + w[3];
-            for (int i = 0; i < 4; i++)
+            // 혼합형과 간격 습관형 — 간격의 습관은 수단이 아니라 서는 자리(RestGap)다. 좌표 5 는 패리의 몫이었다(#168) — 비워 두고
+            // 뒤의 좌표를 안 당긴다: 당기면 남은 성향들이 한꺼번에 다른 값으로 뽑힌다.
+            w = [U(2), U(3), U(4)];
+            double sum = w[0] + w[1] + w[2];
+            for (int i = 0; i < 3; i++)
             {
-                w[i] = sum > 0 ? w[i] / sum : 0.25;
+                w[i] = sum > 0 ? w[i] / sum : 1.0 / 3;
             }
         }
 
@@ -86,7 +84,6 @@ public sealed record BotTraits(
             w[0],
             w[1],
             w[2],
-            w[3],
             ReactionSeconds: Lerp(fleet.Reaction, U(6)),
             JitterSeconds: Lerp(fleet.Jitter, U(7)),
             BiasSeconds: Lerp(fleet.Bias, U(8)),

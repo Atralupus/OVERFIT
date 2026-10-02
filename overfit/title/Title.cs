@@ -26,7 +26,6 @@ public partial class Title : Control
         ("점프", new[] { "jump" }),
         ("대시", new[] { "dash" }),
         ("가드", new[] { "guard" }),
-        ("패리", new[] { "parry" }),
         ("공격", new[] { "attack" }),
         ("폭탄", new[] { "bomb" }),
     };

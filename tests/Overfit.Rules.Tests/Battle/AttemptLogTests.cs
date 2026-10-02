@@ -14,9 +14,9 @@ public class AttemptLogTests
 {
     private static readonly DodgeEvent[] _events =
     [
-        new("엇박 3연격", DodgeVerb.Parry, HitVerdict.Hit, 0.1 + 0.2, -1, true, 123.456789012345, true, true, false, true, true),
-        new("잡기", DodgeVerb.Dash, HitVerdict.Grabbed, -0.05000000000000002, 1, false, 0, false, false, true, false, false),
-        new("빠른 3연격", DodgeVerb.Guard, HitVerdict.GuardBroken, 0, 0, false, 1e-300, false, true, true, false, true),
+        new("엇박 3연격", DodgeVerb.Jump, HitVerdict.Hit, 0.1 + 0.2, -1, true, 123.456789012345, true, true, false, true),
+        new("잡기", DodgeVerb.Dash, HitVerdict.Grabbed, -0.05000000000000002, 1, false, 0, false, false, true, false),
+        new("빠른 3연격", DodgeVerb.Guard, HitVerdict.GuardBroken, 0, 0, false, 1e-300, false, true, true, true),
     ];
 
     private static AttemptEntry Entry() => new(

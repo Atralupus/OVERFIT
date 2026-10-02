@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="OVERFIT"
-config/version="0.12.0"
+config/version="0.13.0"
 run/main_scene="res://title/Title.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
@@ -71,15 +71,11 @@ dash={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"keycode":4194325,"pressed":true)]
 }
-parry={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"keycode":75,"pressed":true)]
-}
 attack={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"keycode":74,"pressed":true)]
 }
-; 폭탄은 L 이다 (설계 2026-09-30 조각2 §1.1) — 공격 J · 패리 K 옆이라 한 손이 세 키를 다 쥔다.
+; 폭탄은 L 이다 (설계 2026-09-30 조각2 §1.1) — 공격 J 옆이라 한 손이 쥔다. 사이의 K 는 패리의 키였고 패리와 같이 걷었다(#168).
 bomb={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"keycode":76,"pressed":true)]

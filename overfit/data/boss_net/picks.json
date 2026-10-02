@@ -1,27 +1,54 @@
 {
   "_comment": "형태(페이즈)마다의 보스 망 — tools/build.sh pick 이 셀프 플레이의 eval.csv 에서 골랐다(설계 2026-10-01 조각7 §1). 손으로 고치지 말고 다시 고른다.",
-  "selfplay": "sp-1",
+  "selfplay": "sp-4",
   "forms": [
     {
       "form": 1,
-      "from": "boss_r02",
-      "boss_win": 0.2109,
-      "return": -1.2207,
-      "sha256": "71fcf440e13ded9b41ac5f58a6103455e895d93facf4b809ce337769e2ec8553"
+      "from": "boss_r10",
+      "boss_win": 0.625,
+      "return": 0.2758,
+      "move_shares": [
+        0.0518,
+        0.0386,
+        0.0409,
+        0.5271,
+        0.2611,
+        0.0325,
+        0.0481
+      ],
+      "sha256": "7c8b9abe21cab7b159220aa8a2a2371fa00f626d1ffce0d0b2aef7ecfcad1db7"
     },
     {
       "form": 2,
-      "from": "boss_r08",
-      "boss_win": 0.457,
-      "return": -0.4315,
-      "sha256": "1232b74c3280761eca4f96448818bfc48ba2933b725ef52b69671eada06c277d"
+      "from": "boss_r16",
+      "boss_win": 0.707,
+      "return": 0.5673,
+      "move_shares": [
+        0.167,
+        0.0713,
+        0.0766,
+        0.4464,
+        0.1715,
+        0.0357,
+        0.0315
+      ],
+      "sha256": "16f412d0bcd54c2ecde157e52a4d70809ce0d0e6069fb9295823ac678b15f2a3"
     },
     {
       "form": 3,
       "from": "boss_r20",
-      "boss_win": 0.8008,
-      "return": 0.9641,
-      "sha256": "3a54b6773ff7fae30c9242af1d25e3a7d5a22a99d30060813cca1bfd21b37bd1"
+      "boss_win": 0.8945,
+      "return": 1.088,
+      "move_shares": [
+        0.1652,
+        0.0792,
+        0.0563,
+        0.431,
+        0.1694,
+        0.042,
+        0.0569
+      ],
+      "sha256": "4f19ce4d008085ab186a314f6673f60aaa05721a332c7810168b2f7c1ad2a29e"
     }
   ]
 }

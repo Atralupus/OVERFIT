@@ -185,11 +185,12 @@ public class GameNetTests
     }
 
     [Theory]
-    [InlineData(null, 27, "bd479f01d5d3adc1", 1308, 1070)]
-    [InlineData(380, 46, "95c074ff9706154f", 1803, 210)]
+    [InlineData(null, 46, "8a1e84f601171920", 1612, 670)]
+    [InlineData(380, 85, "e65681edaa4cfa85", 3111, 30)]
     public void 시드_51_의_망_보스가_고른_칸들이_박아_둔_값이다(int? startHealth, int picks, string sha16, int ticks, int health)
     {
-        // 시작 체력 380 은 3페이즈(400 아래)에서 선다 — 첫 줄은 1페이즈만 돈다(봇이 900 까지 못 깎는다).
+        // 시작 체력 380 은 3페이즈(400 아래)에서 선다 — 첫 줄은 1페이즈(670)에서 끝나고, 둘째 줄은 3페이즈(30)에서 끝난다. 값은 이슈 #167 의 데이터(체력 800 ·
+        // 문턱 600 · 400 · 후딜 +0.3초)와 셀프 플레이 sp-4 의 망(r10 · r16 · r20 · 패리를 걷은 #168 뒤)으로 적었다 — 망을 다시 배우면 다시 적는다.
         // 위의 "같은 시드면 같은 판" 은 한 기기의 두 번을 견줄 뿐이다 — 뽑기 · exp · 순전파의 어느 하나가 바뀌어도 둘 다 같이 바뀌어 초록이다(최종 리뷰).
         // 고른 칸의 줄을 박아 둔다: 바뀌면 옛 시도의 되살리기가 같은 지문으로 다른 판이다. 일부러 바꿨으면(망 · 관측 · 뽑기) 이 값을 새로 적고 까닭을 남긴다.
         var rec = new Recording(new FormNetController([Load(1), Load(2), Load(3)], new BossActions(Roster), seed: 51));
@@ -265,7 +266,7 @@ public class GameNetTests
             Controller = new RandomController(1),
             MaxTicks = TestConfigs.MaxTicks(),
         });
-        sim.Tick(new InputFrame(0, false, false, false, false, Bomb: true));
+        sim.Tick(new InputFrame(0, false, false, false, Bomb: true));
         TestConfigs.UntilTick(sim, 40);
         sim.Fighter.Throwing.ShouldBeTrue();
         sim.BossAlert.ShouldBeFalse();

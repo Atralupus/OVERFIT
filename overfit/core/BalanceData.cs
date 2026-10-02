@@ -72,8 +72,8 @@ public sealed class FeelBalance
     /// 달라지면 같은 입력이 다른 판을 내고 리플레이도 학습 데이터도 통째로 못 쓰게 된다.
     ///
     /// <para>
-    /// <b>보스가 탈진에 드는 틱에 건다</b> (#72 · 설계 §4.3) — 뷰가 앞 틱의 탈진 여부와 견줘 잡는다. 받아친 관측에 걸지 않는
-    /// 것은 경직 게이지로 무너진 탈진(#71)에 받아친 관측이 없어서다: 원인이 무엇이든 같은 탈진에 같이 걸린다. 그동안 누른 키는
+    /// <b>보스가 탈진에 드는 틱에 건다</b> (#72 · 설계 §4.3) — 뷰가 앞 틱의 탈진 여부와 견줘 잡는다. 관측에 걸지 않는
+    /// 것은 경직 게이지로 무너진 탈진(#71)에 그 틱의 관측이 없어서다(받아친 관측에 걸던 패리는 #168 에서 걷었다). 그동안 누른 키는
     /// 버리지 않고 끝난 첫 틱에 넘긴다(<c>InputFrame.Carry</c> · #71).
     /// </para>
     ///
@@ -118,7 +118,7 @@ public sealed class FeelBalance
     /// <summary>잔상 하나가 사라지는 데 걸리는 시간(초).</summary>
     public required double DashGhostFade { get; init; }
 
-    /// <summary>공격 판정 · 패리 성공 섬광의 길이(초).</summary>
+    /// <summary>공격 판정 섬광의 길이(초).</summary>
     public required double FlashSeconds { get; init; }
 
     /// <summary>파이터가 맞았을 때 붉은 플래시와 <c>hit</c> 자세의 길이(초).</summary>
@@ -148,18 +148,21 @@ public sealed class FeelBalance
     /// <summary>링 선의 두께(px). 이 크기에서 가늘면 아예 안 보인다.</summary>
     public required double RingWidth { get; init; }
 
-    /// <summary>패리 창이 열릴 때 링의 시작 반지름(px).</summary>
-    public required double ParryRingFrom { get; init; }
+    /// <summary>
+    /// 퍼지는 고리의 시작 반지름(px) — 가드의 고리 · 폭탄 불꽃이 쓴다. 패리 창의 링이 쓰던 칸이라 전에는 <c>parry_ring_from</c> 이었고
+    /// 패리를 걷으며(#168) 이름만 바꿨다 — 값은 그대로다.
+    /// </summary>
+    public required double RingFrom { get; init; }
 
-    /// <summary>패리 창이 닫힐 때 링의 끝 반지름(px).</summary>
-    public required double ParryRingTo { get; init; }
+    /// <summary>퍼지는 고리의 끝 반지름(px) — <see cref="RingFrom"/> 과 짝이다(전에는 <c>parry_ring_to</c>).</summary>
+    public required double RingTo { get; init; }
 
     /// <summary>성공 섬광(링 + 스파크)이 퍼지는 시간(초).</summary>
     public required double BurstSeconds { get; init; }
 
     /// <summary>
-    /// 섬광에 싣는 스파크 개수. 싣는 곳은 둘이다 — 2타(무거운 칼질)의 칼 섬광과 가드 붕괴의 고리(<c>FighterView</c>). 패리 성공과 깎인 가드는
-    /// 일부러 약해(#53 · #47) 스파크 없이 고리만 튼다 — 전에는 이 칸이 "패리 성공 스파크" 였는데, 패리가 약해진 뒤로 패리는 이것을 안 쓴다(#96).
+    /// 섬광에 싣는 스파크 개수. 싣는 곳은 둘이다 — 2타(무거운 칼질)의 칼 섬광과 가드 붕괴의 고리(<c>FighterView</c>). 깎인 가드는
+    /// 일부러 약해(#47) 스파크 없이 고리만 튼다 — 전에는 이 칸이 "패리 성공 스파크" 였다(패리는 #96 에서 약해졌고 #168 에서 걷었다).
     /// </summary>
     public required int SparkCount { get; init; }
 
@@ -270,7 +273,7 @@ public sealed class FeelBalance
     /// <summary>나는 폭탄의 포물선 높이(px) — 손과 보스 몸 가운데를 잇는 선 위로 가운데에서 이만큼 뜬다.</summary>
     public required double BombArcHeight { get; init; }
 
-    /// <summary>폭탄이 터지는 불꽃 원의 길이(초) — 반지름은 <c>parry_ring_from</c> → <c>parry_ring_to</c> 의 두 배로 퍼진다(보스 몸을 덮을 만큼).</summary>
+    /// <summary>폭탄이 터지는 불꽃 원의 길이(초) — 반지름은 <c>ring_from</c> → <c>ring_to</c> 의 두 배로 퍼진다(보스 몸을 덮을 만큼).</summary>
     public required double BombBurstSeconds { get; init; }
 
     /// <summary>

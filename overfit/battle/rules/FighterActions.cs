@@ -1,8 +1,9 @@
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 파이터 망의 칸 (설계 2026-10-01 조각6 §1.1) — 6틱마다 하나를 고르고, 고른 칸은 다음 결정까지의 입력이다. 엣지(점프 · 대시 · 공격 · 패리 · 폭탄)는 첫 틱에만
+/// 파이터 망의 칸 (설계 2026-10-01 조각6 §1.1) — 6틱마다 하나를 고르고, 고른 칸은 다음 결정까지의 입력이다. 엣지(점프 · 대시 · 공격 · 폭탄)는 첫 틱에만
 /// 누른다 — 6틱 내내 누르면 엔진이 엣지를 한 번만 세는 것과 달라진다(사람의 누름은 한 번이다). 이동 · 가드는 6틱 내내 붙든다.
+/// 패리 칸(9)은 패리와 같이 걷었다(#168) — 뒤의 칸이 한 칸씩 당겨졌으므로 그 앞에 배운 파이터 망은 이 표와 안 맞는다.
 /// </summary>
 public static class FighterActions
 {
@@ -15,12 +16,11 @@ public static class FighterActions
     public const int DashLeft = 6;
     public const int DashRight = 7;
     public const int Attack = 8;
-    public const int Parry = 9;
-    public const int Guard = 10;
-    public const int Bomb = 11;
+    public const int Guard = 9;
+    public const int Bomb = 10;
 
     /// <summary>칸 수.</summary>
-    public const int Count = 12;
+    public const int Count = 11;
 
     /// <summary>칸 <paramref name="action"/> 의 결정 뒤 <paramref name="tick"/> 번째(0 부터) 틱의 입력.</summary>
     public static InputFrame Input(int action, int tick)
@@ -36,7 +36,6 @@ public static class FighterActions
             move,
             Jump: first && action is Jump or JumpLeft or JumpRight,
             Dash: first && action is DashLeft or DashRight,
-            Parry: first && action == Parry,
             Attack: first && action == Attack,
             GuardHeld: action == Guard,
             Bomb: first && action == Bomb);

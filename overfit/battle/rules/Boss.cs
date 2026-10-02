@@ -46,15 +46,12 @@ public sealed class BossConfig
     public required IReadOnlyList<double> RestSeconds { get; init; }
 
     /// <summary>
-    /// <b>탈진</b>의 길이(초) — 받아치면 어느 타든 보스가 탈진한다 (#72 · 설계 §4.3). 틱으로는 <c>BattleSim</c> 이 바꿔 넘긴다
+    /// <b>탈진</b>의 길이(초) — 경직 게이지가 끝까지 차면 보스가 탈진한다 (#71 · #72 · 설계 §4.3). 틱으로는 <c>BattleSim</c> 이 바꿔 넘긴다
     /// (1.5초 = 90틱 · 보스는 <c>BattleSim</c> 을 모른다).
     ///
     /// <para>
-    /// 길이는 <b>반격 2연격이 확실히 들어가는가</b>로 잰다. 받아친 패리의 커밋 안에서 누른 J 는 곧장 1타라(되받아치기)
-    /// 가장 이른 J 는 받아친 다음 틱이고, 그 2연격의 2타가 창의 끝 틱에 닿기까지 0.0167 + 0.25 + 0.6667 + 0.1667 = 1.1001초다.
-    /// 1.5 에서 0.3999 가 남는다 — <c>BossDataTests</c> 가 사람의 반응 여유 0.15 를 넣어 <c>fighters.json</c> 과 대조한다.
-    /// 전에는 마무리를 받아쳤을 때만 굳었고(<c>finisher_parry_stagger</c> 2.3 · 이슈 #53) 앞의 연타를 받아친 상은 피해 0 뿐이었다 —
-    /// 스펙이 "어느 타든 끊고 탈진" 으로 바꿨다.
+    /// 1.5 는 받아친(패리) 뒤의 되받아치기 2연격(1.1001초)이 반응 여유를 남기고 확실히 들어가게 잰 길이였다. 패리를 걷은 뒤(#168)로는
+    /// 게이지로 무너뜨린 뒤의 반격(1타 하나 · <c>BossDataTests</c>)이 그 안에 드는지가 이 값을 지킨다 — 값은 그대로다.
     /// </para>
     /// </summary>
     public required double ExhaustSeconds { get; init; }
@@ -236,7 +233,7 @@ public sealed class Boss
     public double ExhaustLeft => _exhaustTotal <= 0 ? 0 : (double)_exhaustLeft / _exhaustTotal;
 
     /// <summary>
-    /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(패리 · 경직 게이지 — #71)이 몇이든
+    /// 탈진에 든다. 부르는 곳은 <c>BattleSim</c> 의 탈진 루틴 하나다 — 원인(경직 게이지 — #71 · 패리는 #168 에서 걷었다)이 무엇이든
     /// 같은 상태 · 같은 그림에 닿아야 한다(설계 §4.3). 길이는 틱이다 — 반올림은 <c>BattleSim.TicksFor</c> 한 곳이다.
     /// </summary>
     public void Exhaust(int ticks)
@@ -261,7 +258,7 @@ public sealed class Boss
     ///
     /// <para>
     /// 그 잠금이 이 메서드의 존재 이유다. 스윙 도중에 따라 돌면 <b>예고가 거짓말이 된다</b> —
-    /// 예고를 보고 왼쪽으로 피했는데 보스가 휙 돌아 따라오면, 이 게임에서 패리를 가르치는
+    /// 예고를 보고 왼쪽으로 피했는데 보스가 휙 돌아 따라오면, 이 게임에서 피하기를 가르치는
     /// 유일한 수단이 무너진다. 3연격은 세 칼이 모두 한쪽을 쳐서 특히 그렇다 — 선딜을 보고 등 뒤로 돌아간 판단이
     /// 헛것이 되면 안 된다. 예외는 점프 공격의 도약 한 틱뿐이다(착지할 자리로 돌아선다 · 스펙 §4.2).
     /// </para>

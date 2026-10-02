@@ -8,22 +8,20 @@ namespace Overfit.Battle.Rules;
 ///
 /// <para>
 /// <see cref="BattleSim"/> 에서 떼어 냈다 (이슈 #59 · 1번 PR 최종 리뷰). 한 판을 미는 일과 공을 돌리는 일은
-/// 따로 바뀐다 — 조작이 바뀌면(2연격 · 가드 · 패리) 여기가, 보스가 바뀌면 <see cref="BattleSim"/> 이 바뀐다.
+/// 따로 바뀐다 — 조작이 바뀌면(2연격 · 가드 · 패리를 걷은 #168) 여기가, 보스가 바뀌면 <see cref="BattleSim"/> 이 바뀐다.
 /// 한 파일에 둘 때는 주석을 빼고 413줄이라 "이 파일이 무엇을 하는가" 를 한 문장으로 못 말했다(CLAUDE.md §7).
 /// </para>
 ///
 /// <para>
 /// 회피 수단마다 <b>따로</b> 시작 시각을 들고 있는다(초, NaN = 지금 그 수단이 없다).
 /// 슬롯이 하나였을 때는 "가장 최근에 시작한 행동" 이 판정을 다 가져갔다 —
-/// 점프로 넘긴 지면쓸기가 같이 눌러둔 패리의 공이 되어, 데모 10건 중 4건이
-/// 엉뚱한 verb 로 기록됐고 parry_rate 까지 그 실패로 오염됐다.
+/// 점프로 넘긴 지면쓸기가 같이 눌러둔 패리(#168 에서 걷었다)의 공이 되어, 데모 10건 중 4건이
+/// 엉뚱한 verb 로 기록됐고 그 수단의 성공률까지 그 실패로 오염됐다.
 /// </para>
 /// </summary>
 public sealed class DodgeCredit
 {
     private double _dashStartedAt = double.NaN;
-
-    private double _parryStartedAt = double.NaN;
 
     private double _jumpStartedAt = double.NaN;
 
@@ -31,8 +29,7 @@ public sealed class DodgeCredit
     /// 가드가 선 시각(초, NaN = 지금 가드가 아니다) — 이슈 #47 · 설계 §5.2.
     ///
     /// <para>
-    /// 패리 칸과 <b>따로</b> 둔다 — 둘은 다른 키 · 다른 행동이다(설계 §5.2 · §5.3). 가드 칸은 ↓ 를 누르고 서 있는
-    /// 내내 살아 있고(연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
+    /// 가드 칸은 ↓ 를 누르고 서 있는 내내 살아 있고(연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
     /// </para>
     /// </summary>
     private double _guardStartedAt = double.NaN;
@@ -103,21 +100,6 @@ public sealed class DodgeCredit
             _dashStartBody = null;
         }
 
-        // 패리 칸은 **패리 행동이 도는 동안** 산다 (이슈 #59 · 설계 §5.3). 패리는 이제 0.333초 커밋이라 그 동안이
-        // "이 누름이 겨냥한 판정" 이 성립하는 구간이다 — 대시의 공이 대시 행동이 도는 동안인 것과 같은 경계다.
-        // 옛 경계는 누름의 기억 창(0.5초)이었고 스펙이 그 창을 지웠다. 창을 놓치고 커밋 안에서 맞은 판정은
-        // 그대로 이 누름의 시도로 남는다 — "늦어서 못 받았다" 가 "아무것도 안 했다" 와 같은 점이 되지 않게.
-        // (#82) 패리 행동은 커밋 뒤의 **패리 뒤 경직**까지다(Action 이 Parry 인 채 Fighter.Stiff) — 경직 중에 맞은 판정도 이 누름의 시도다.
-        // 대시 경직과 같은 규칙이고, 패리 행동(35틱)이 3연격의 판정 사이(42 · 66틱)보다 짧아 누름 하나가 두 판정을 설명하지 않는다.
-        if (fighter.Action == FighterAction.Parry && fighter.ActionElapsed <= BattleSim.Dt)
-        {
-            _parryStartedAt = now;
-        }
-        else if (fighter.Action != FighterAction.Parry)
-        {
-            _parryStartedAt = double.NaN;
-        }
-
         // 가드 칸은 **누름이 아니라 서 있는 동안**을 잡는다. 서 있는 내내 살아 있고
         // (연속타를 여러 대 받아내므로 한 대가 기록을 소비하면 안 된다), 놓으면 지워진다.
         if (fighter.Guarding)
@@ -144,7 +126,7 @@ public sealed class DodgeCredit
 
     /// <summary>
     /// 이 판정을 <b>무엇이</b> 그렇게 만들었나. 결과가 이미 답을 들고 있다 —
-    /// 무적이 먹었으면 대시, 패리가 받았으면 패리, 높이가 어긋났으면 점프다. 거리로 빗나간 것만은 반사실로 가른다(<see cref="CreditDistance"/>).
+    /// 무적이 먹었으면 대시, 가드가 받았으면 가드, 높이가 어긋났으면 점프다. 거리로 빗나간 것만은 반사실로 가른다(<see cref="CreditDistance"/>).
     /// 그 순간 돌고 있던 행동으로 추측하지 않는다.
     ///
     /// <para>
@@ -163,10 +145,6 @@ public sealed class DodgeCredit
         return verdict switch
         {
             HitVerdict.Dodged => (DodgeVerb.Dash, _dashStartedAt),
-
-            // 받아친 것은 패리다. 시각은 **누름**이다 — 창 안에 들어왔는가가 이 판정의 전부라,
-            // 재야 하는 것은 "언제 눌렀나" 이지 "언제부터 서 있었나" 가 아니다.
-            HitVerdict.Parried => (DodgeVerb.Parry, _parryStartedAt),
 
             // 막아냈든 깨졌든 **고른 것은 가드**다 (이슈 #47) — 둘의 차이는 verb 가 아니라
             // Verdict 가 나른다. 시각은 가드가 **선** 순간이다: 그래야 "얼마나 오래 버티고
@@ -260,7 +238,7 @@ public sealed class DodgeCredit
     /// <summary>
     /// 지금 돌고 있는 회피 행동 중 <b>가장 늦게</b> 시작한 것. 맞은 · 잡힌 판정에만 쓴다 —
     /// 겹쳐 있으면 그 판정을 겨냥한 쪽이 더 나중이다.
-    /// 동시 시작은 대시 → 패리 → 점프 → 가드 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
+    /// 동시 시작은 대시 → 점프 → 가드 순으로 **고정**한다. 순서를 안 박아두면 같은 시드가
     /// 다른 라벨을 내 학습 데이터가 재현되지 않는다.
     ///
     /// <para>
@@ -277,12 +255,6 @@ public sealed class DodgeCredit
         {
             verb = DodgeVerb.Dash;
             at = _dashStartedAt;
-        }
-
-        if (!double.IsNaN(_parryStartedAt) && (double.IsNaN(at) || _parryStartedAt > at))
-        {
-            verb = DodgeVerb.Parry;
-            at = _parryStartedAt;
         }
 
         if (!double.IsNaN(_jumpStartedAt) && (double.IsNaN(at) || _jumpStartedAt > at))

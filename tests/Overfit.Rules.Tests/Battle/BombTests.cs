@@ -14,7 +14,7 @@ public class BombTests
 {
     private const string _waitId = "기다림";
 
-    private static readonly InputFrame _bomb = new(0, false, false, false, false, Bomb: true);
+    private static readonly InputFrame _bomb = new(0, false, false, false, Bomb: true);
 
     private static BombDef Bomb => TestConfigs.Fighter().Bomb;
 
@@ -41,8 +41,6 @@ public class BombTests
             DashDirection = "out",
             Jumpable = false,
             AntiAir = false,
-            Parryable = false,
-            ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,
@@ -162,10 +160,10 @@ public class BombTests
         double reach = sim.Boss.X - sim.Boss.HalfWidth - TestConfigs.TestSword().Bounds.X1 + 1;
         for (int i = 0; i < 600 && sim.Fighter.X < reach; i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, false));
+            sim.Tick(new InputFrame(1, false, false, false));
         }
 
-        sim.Tick(new InputFrame(0, false, false, false, Attack: true));
+        sim.Tick(new InputFrame(0, false, false, Attack: true));
         for (int i = 0; i < 60 && !sim.Boss.Exhausted; i++)
         {
             sim.Tick(default);
@@ -228,7 +226,7 @@ public class BombTests
     {
         // 파이터는 보스를 모른다 — 판이 돌려세운다(설계 2026-09-30 조각2 §1.1). 왼쪽으로 한 걸음 걸어 등을 보인 뒤 던진다.
         BattleSim sim = Resting();
-        sim.Tick(new InputFrame(-1, false, false, false, false));
+        sim.Tick(new InputFrame(-1, false, false, false));
         sim.Fighter.Facing.ShouldBe(-1);
 
         sim.Tick(_bomb);

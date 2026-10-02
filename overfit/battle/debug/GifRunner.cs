@@ -38,7 +38,7 @@ public partial class GifRunner : Node
     private const int _battleStart = 1;
 
     /// <summary>엣지인 액션 (설계 §5.4 · <c>InputFrame</c>) — 한 틱 앞에 누른다(<see cref="Drive"/>). 나머지(이동 · 가드)는 레벨이다.</summary>
-    private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "parry", "attack", "bomb" };
+    private static readonly HashSet<string> _edges = new(StringComparer.Ordinal) { "jump", "dash", "attack", "bomb" };
 
     /// <summary>망 보스 GIF 의 파이터 — 걸어 들어가 2연격을 세 번 친다(판의 시계).</summary>
     private static readonly GifInput[] _netInputs =
@@ -66,15 +66,15 @@ public partial class GifRunner : Node
             Inputs: Array.Empty<GifInput>(),
             From: 1, To: 141),
 
-        // 3연격 → 2타 뒤 캔슬 → 잡기. 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음)에서 ↓ 를 붙들어 두 타를 받고, 144틱에 잡기로 이어 180틱에
-        // 가드째 붙든다. 붙든 1초 뒤까지 잡는다. MoveBattleTests.GIF_grab.
+        // 3연격 → 2타 뒤 캔슬 → 잡기. 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음)에서 ↓ 를 붙들어 두 타를 받고, 144틱에 잡기로 이어 204틱에
+        // 가드째 붙든다(잡기 선딜 1.0초 · #167). 붙든 1초 뒤까지 잡는다. MoveBattleTests.GIF_grab.
         new("grab", Plans: new[] { new ScriptPlan(0.8, "3연격", CancelPoint: 1, Next: "잡기") }, Target: "3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 86, "move_right", OnBattleClock: true),
                 new GifInput(87, 100_000, "guard", OnBattleClock: true),
             },
-            From: 80, To: 256),
+            From: 80, To: 280),
 
         // 점프 공격 한 번 — 480 에 선 채 30틱에 뛰어 착지(60틱)를 넘는다. MoveBattleTests 의 점프 공격 테스트("jump").
         new("jump", Plans: SceneDriver.Moves("점프 공격"), Target: "점프 공격",
@@ -90,51 +90,39 @@ public partial class GifRunner : Node
             },
             From: 1, To: 111),
 
-        // 빠른 3연격 — 판이 선 뒤 74틱 걸어 3연격 사거리 밖(보스 앞 442)에 선다. 3연격이 헛친 뒤 167 · 170 틱에 J 두 번(2연격), 보스는 0.4초 쉬고
-        // 달려와 빠른 3연격을 연다 — 2연격에 묶여 1타에 맞는다. MoveBattleTests.GIF_fast. 1타에 누른 대시는 이 대본에 없다(묶여 버려지므로 그림이 같다).
+        // 빠른 3연격 — 판이 선 뒤 74틱 걸어 3연격 사거리 밖(보스 앞 442)에 선다. 3연격이 헛친 뒤 185 · 188 틱에 J 두 번(2연격), 보스는 3연격이
+        // 끝난(213) 뒤 0.4초 쉬고 달려와 빠른 3연격을 연다 — 2연격에 묶여 1타에 맞는다. MoveBattleTests.GIF_fast. 1타에 누른 대시는 이 대본에 없다(묶여
+        // 버려지므로 그림이 같다).
         new("fast", Plans: new[] { new ScriptPlan(0.8, "3연격"), new ScriptPlan(0.4, "빠른 3연격", Run: true) }, Target: "3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 74, "move_right", OnBattleClock: true),
-                new GifInput(167, 167, "attack"),
-                new GifInput(170, 170, "attack"),
+                new GifInput(185, 185, "attack"),
+                new GifInput(188, 188, "attack"),
             },
-            From: 150, To: 300),
+            From: 168, To: 318),
 
-        // 패리를 많이 한다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
-        // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱의 2틱 앞 · 49틱)에 K 를 누른다 — 엇박의
-        // 1타는 60틱이라 패리의 창(+6)을 지나 커밋(+18) 안에 떨어져 맨몸으로 맞는다. 헛친 한 번(커밋과 패리 뒤 경직 · 0.583초 · #82)이 84틱에 풀리면
-        // 맞은 틱(60)에서 3연격의 간격(42틱)을 재어 2틱 앞(100)에 또 누른다 — 늦은 2타(111)에 또 맞는다. 둘째 + 30 까지 잡는다.
+        // 박자로 누른다 → 엇박 3연격 (설계 §4.9). 1타 사거리 안(보스 앞 358 · 판이 선 뒤 86틱 걸음 — 보스는 쉬는 동안 제자리라 1440 에 선다 ·
+        // 설계 2026-09-29 조각1 §5.1)으로 걸어 들어가 3연격의 박자(1타 51틱)에 안쪽 대시를 누른다 — 3연격이면 무적(51 ~ 58틱)으로 흘릴 대시다.
+        // 엇박의 1타는 60틱이라 무적이 닫힌 뒤 대시 안에 떨어져 맨몸으로 맞는다. 전에는 박자로 누른 패리(K)가 창 밖 커밋 안에서 맞았다 — 패리는
+        // #168 에서 걷었다. MoveBattleTests.엇박_3연격은_3연격의_박자에_누른_대시를_무적이_닫힌_뒤에_맞힌다.
         new("offbeat", Plans: SceneDriver.Moves("엇박 3연격"), Target: "엇박 3연격",
             Inputs: new[]
             {
                 new GifInput(_battleStart, 86, "move_right", OnBattleClock: true),
-                new GifInput(49, 49, "parry"),
-                new GifInput(100, 100, "parry"),
+                new GifInput(51, 51, "dash"),
             },
             From: 1, To: 141),
 
-        // 폭탄이 끊긴다 (조각2 §2). 960 떨어져 3연격 50틱에 던진다 — 보스는 68틱에 알고("!") 첫 캔슬 지점(78)에서 끊어, 멈칫 뒤 달려와 놓기(139) 전에
-        // 친다. 폭탄을 잃는다. BombReactionTests.GIF_bombcut.
-        new("bombcut", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
-            Inputs: new[] { new GifInput(50, 50, "bomb") },
-            From: 30, To: 170),
-
-        // 폭탄이 떨어진다 — 3연격이 서자마자(2틱) 던지면 첫 캔슬 지점(78)이 늦다. 보스는 끊고 달려오지만 폭탄이 먼저 놓이고(91) 달려오는 보스에게
-        // 떨어진다(121). 1틱은 못 누른다 — 엣지는 한 틱 앞에 누르는데 그 틱에는 겨냥한 동작이 아직 안 섰다(Drive). BombReactionTests.GIF_bomb.
-        new("bomb", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
-            Inputs: new[] { new GifInput(2, 2, "bomb") },
-            From: 1, To: 141),
-
-        // 페이즈 전환 (설계 2026-10-01 조각1 §2 · §4) — 보스는 905 에서 서고 3초 쉰다. 파이터가 115틱 걸어(보스 앞 155) 118틱에 J — 1타(10)가 122틱에
-        // 900 에 멈추며 전환이 선다: idle · 흰 플래시 셋 · 무적 1.5초(212틱까지). 판의 시계로 잡는다(Target 없음). BossFormBattleTests.GIF_form.
+        // 페이즈 전환 (설계 2026-10-01 조각1 §2 · §4) — 보스는 605 에서 서고 3초 쉰다. 파이터가 115틱 걸어(보스 앞 155) 118틱에 J — 1타(10)가 122틱에
+        // 600(문턱 · #167)에 멈추며 전환이 선다: idle · 흰 플래시 셋 · 무적 1.5초(212틱까지). 판의 시계로 잡는다(Target 없음). BossFormBattleTests.GIF_form.
         new("form", Plans: new[] { new ScriptPlan(3.0, "3연격") }, Target: null,
             Inputs: new[]
             {
                 new GifInput(_battleStart, 115, "move_right", OnBattleClock: true),
                 new GifInput(118, 118, "attack", OnBattleClock: true),
             },
-            From: 100, To: 236, BossStartHealth: 905),
+            From: 100, To: 236, BossStartHealth: 605),
 
         // 판의 시계로 잡는 대본은 From 이 10 쯤부터다 — 고리는 판이 몇 틱(재 보니 5틱) 돈 뒤에 돌아 그 앞의 틱은 못 잡는다.
         // 물러서기 (설계 2026-10-01 조각3) — 파이터가 다가오면 보스가 파이터를 본 채 뒤로 달린다(12틱 · 24틱 · 36틱의 결정). 칸 대본이라 판의 시계로 잡는다.
@@ -148,10 +136,10 @@ public partial class GifRunner : Node
             Inputs: Array.Empty<GifInput>(),
             From: 10, To: 140, Actions: new[] { "leap_over", "leap_back" }),
 
-        // 페이즈마다의 망 보스 (설계 2026-10-01 조각8 §3) — 계획 대본이 비어 단계의 조종기(형태마다의 망)로 서고, 시작 체력이 형태를 고른다(1200 · 899 · 399).
+        // 페이즈마다의 망 보스 (설계 2026-10-01 조각8 §3) — 계획 대본이 비어 단계의 조종기(형태마다의 망)로 서고, 시작 체력이 형태를 고른다(800 · 599 · 399 — 문턱 600 · 400 · #167).
         // 판은 세션 시드로 서고 망이 시드로 뽑으므로 장면은 시드가 정한다 — tools/build.sh gifs 는 늘 같은 세션 시드로 돈다. 파이터는 걸어 들어가 몇 번 친다.
-        new("net1", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 1200),
-        new("net2", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 899),
+        new("net1", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 800),
+        new("net2", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 599),
         new("net3", Plans: Array.Empty<ScriptPlan>(), Target: null, Inputs: _netInputs, From: 10, To: 250, BossStartHealth: 399),
     };
 
@@ -259,10 +247,10 @@ public partial class GifRunner : Node
     /// 입력은 <paramref name="battleTick"/>, 패턴의 틱으로 적은 입력은 <paramref name="patternTick"/>(패턴 앞이면 <c>int.MinValue</c>)로 잰다.
     ///
     /// <para>
-    /// <b>엣지(대시 · 패리 · 공격 · 점프)는 한 틱 앞의 신호 자리에서 누르고 다음 신호 자리에서 뗀다.</b> 엔진은 누름을 그다음 물리 프레임의
+    /// <b>엣지(대시 · 공격 · 점프 · 폭탄)는 한 틱 앞의 신호 자리에서 누르고 다음 신호 자리에서 뗀다.</b> 엔진은 누름을 그다음 물리 프레임의
     /// "막 눌렀다"(<c>IsActionJustPressed</c>)로 센다 — 재 보니 99틱의 신호 자리에서 누른 대시가 100틱에 섰고, 1타 창이 열리는 틱(99)에 서야 할
     /// 대시가 1타에 맞았다. 레벨(이동 · 가드 — <c>IsActionPressed</c>)은 누른 그 틱에 읽힌다. 스크린샷 대본은 몇 프레임 뒤를 찍어 이 한 틱이
-    /// 안 보이지만 이 대본은 틱을 박자로 쓴다. 한 판의 입력 규약(엣지 넷 · 레벨 둘)은 설계 §5.4 다.
+    /// 안 보이지만 이 대본은 틱을 박자로 쓴다. 한 판의 입력 규약(엣지 넷 · 레벨 둘 — 패리 엣지는 #168 에서 걷었고 폭탄이 넷째다)은 설계 §5.4 다.
     /// </para>
     /// </summary>
     private static void Drive(GifScript script, int battleTick, int patternTick, Dictionary<string, bool> held)
@@ -293,7 +281,7 @@ public partial class GifRunner : Node
 
     /// <summary>입력 하나 — [<paramref name="From"/>, <paramref name="To"/>] 틱(끝 포함) 동안 <paramref name="Action"/> 을 누르고 있는다.</summary>
     /// <param name="From">첫 틱.</param>
-    /// <param name="To">끝 틱(포함). 엣지(대시 · 패리)는 From 과 같게 적는다 — 한 틱 누른다.</param>
+    /// <param name="To">끝 틱(포함). 엣지(대시 · 점프)는 From 과 같게 적는다 — 한 틱 누른다.</param>
     /// <param name="Action">InputMap 의 액션 — 사람이 누르는 것과 같은 길이다.</param>
     /// <param name="OnBattleClock">판의 틱으로 적었나 — 패턴 앞의 입력("판이 설 때부터")이다. 거짓이면 겨냥한 패턴의 틱이다.</param>
     private readonly record struct GifInput(int From, int To, string Action, bool OnBattleClock = false);

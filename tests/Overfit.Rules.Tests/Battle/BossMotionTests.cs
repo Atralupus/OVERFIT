@@ -299,7 +299,7 @@ public class BossMotionTests
             BattleSim sim = RushSim();
             TestConfigs.UntilTick(sim, 42 + lead);
 
-            sim.Tick(new InputFrame(0, false, Dash: true, false, false));
+            sim.Tick(new InputFrame(0, false, Dash: true, false));
             for (int i = 0; i < 40 && sim.Boss.CurrentPattern is not null && sim.NextActiveIn is > 15 * BattleSim.Dt + 1e-9; i++)
             {
                 sim.Tick(default);
@@ -360,7 +360,7 @@ public class BossMotionTests
         {
             bool press = !pressed && sim.Boss.CurrentPattern is not null && sim.Boss.X - sim.Fighter.X <= 85 + 90 + (5 * 60);
             pressed |= press;
-            sim.Tick(new InputFrame(0, false, false, false, Attack: press));
+            sim.Tick(new InputFrame(0, false, false, Attack: press));
         }
 
         sim.Boss.Exhausted.ShouldBeTrue("달리는 보스를 못 무너뜨렸다");

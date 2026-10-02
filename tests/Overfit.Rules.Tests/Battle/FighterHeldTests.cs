@@ -8,7 +8,7 @@ using Xunit;
 namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
-/// 잡힘과 붙들림 (#78 · 설계 §4.7) — 유저: "잡기는 대시중에도 잡히는 공격이고 … 가드도 패리도 안되고 점프로만 회피 가능하면 됩니다."
+/// 잡힘과 붙들림 (#78 · 설계 §4.7) — 유저: "잡기는 대시중에도 잡히는 공격이고 … 가드도 패리도 안되고 점프로만 회피 가능하면 됩니다." 패리는 #168 에서 걷었다.
 /// 붙드는 판정(<c>grab_hold_seconds</c> &gt; 0)이 맨몸에 닿으면 결과는 <see cref="HitVerdict.Grabbed"/> 이고, 파이터는 피해를 받고
 /// 붙들린다(<see cref="Fighter.Held"/>). 붙들림은 탈진과 <b>같은 고정</b>(<see cref="Fighter.Locked"/>)을 쓰는 <b>다른 상태</b>다 —
 /// 겹치면 고정은 남은 것과 새 것 중 긴 쪽이다.
@@ -28,14 +28,13 @@ public class FighterHeldTests
     /// <summary>잡기의 피해 — 25(설계 §4.7). 여기서는 붙들림의 산수를 볼 뿐이라 값 자체를 재지 않는다.</summary>
     private const int _damage = 25;
 
-    private static readonly InputFrame _dash = new(0, false, true, false, false);
-    private static readonly InputFrame _parry = new(0, false, false, true, false);
-    private static readonly InputFrame _attack = new(0, false, false, false, true);
-    private static readonly InputFrame _guard = new(0, false, false, false, false, GuardHeld: true);
-    private static readonly InputFrame _jump = new(0, true, false, false, false);
+    private static readonly InputFrame _dash = new(0, false, true, false);
+    private static readonly InputFrame _attack = new(0, false, false, true);
+    private static readonly InputFrame _guard = new(0, false, false, false, GuardHeld: true);
+    private static readonly InputFrame _jump = new(0, true, false, false);
 
-    /// <summary>할 수 있는 것을 전부 누른다 — 걷기 · 점프 · 대시 · 패리 · 칼질 · 가드. 고정이 하나라도 안 막으면 무언가가 선다.</summary>
-    private static readonly InputFrame _everything = new(1, true, true, true, true, GuardHeld: true);
+    /// <summary>할 수 있는 것을 전부 누른다 — 걷기 · 점프 · 대시 · 칼질 · 가드. 고정이 하나라도 안 막으면 무언가가 선다.</summary>
+    private static readonly InputFrame _everything = new(1, true, true, true, GuardHeld: true);
 
     private static Fighter Spawn() => new(TestConfigs.Fighter(), TestConfigs.Arena(), 960);
 
@@ -91,18 +90,16 @@ public class FighterHeldTests
 
     [Theory]
     [InlineData(FighterAction.Dash)]
-    [InlineData(FighterAction.Parry)]
     [InlineData(FighterAction.Attack)]
     [InlineData(FighterAction.Guard)]
     public void 잡기는_하던_행동을_그_자리에서_끝낸다(FighterAction action)
     {
-        // 설계 §4.7 — 하던 행동(칼질 · 대시 · 패리 · 가드)이 그 자리에서 끝난다. 칼질 칸과 눌러 둔 칼도 지운다: 안 지우면 풀린 뒤 누른 한
+        // 설계 §4.7 — 하던 행동(칼질 · 대시 · 가드)이 그 자리에서 끝난다. 칼질 칸과 눌러 둔 칼도 지운다: 안 지우면 풀린 뒤 누른 한
         // 대가 2타로 선다(탈진이 지우는 것과 같은 자리다 · Fighter.Exhaust).
         Fighter f = Spawn();
         InputFrame press = action switch
         {
             FighterAction.Dash => _dash,
-            FighterAction.Parry => _parry,
             FighterAction.Attack => _attack,
             _ => _guard,
         };
@@ -124,14 +121,13 @@ public class FighterHeldTests
     [Theory]
     [InlineData(FighterAction.Attack)]
     [InlineData(FighterAction.Dash)]
-    [InlineData(FighterAction.Parry)]
     public void 행동_뒤_경직_중에_잡히면_경직도_같이_끝나고_풀린_다음_틱에_곧장_선다(FighterAction action)
     {
         // Review Focus 1 — 1타만 치고 빠지는 사람(돌진이 겨냥한다)과 대시로만 피하는 사람(잡기가 겨냥한다)은 행동 뒤 경직(#82) 중에 잡히기
         // 쉽다. 경직은 그 행동의 끝자락이라(행동이 그대로다) 잡기가 행동과 같이 끝낸다: 붙들림이 풀린 다음 틱에 곧장 새 행동이 선다 — 남은
         // 경직이 붙들림 뒤에 이어지면 풀려도 서 있다. 붙들린 동안 누른 J 는 버린다(1타의 경직 중 J 가 2타를 잇는 갈래로 새지 않는다).
         Fighter f = Spawn();
-        f.Tick(action switch { FighterAction.Attack => _attack, FighterAction.Dash => _dash, _ => _parry }, _dt);
+        f.Tick(action == FighterAction.Attack ? _attack : _dash, _dt);
         for (int i = 0; i < 60 && !f.Stiff; i++)
         {
             f.Tick(default, _dt);
@@ -254,15 +250,15 @@ public class FighterHeldTests
         rested.Grab(_damage, _hold);
         rested.Exhausted.ShouldBeFalse("스태미나가 남은 대시를 끊었는데 탈진했다");
 
-        // 칼질 · 패리도 값이 있는 행동이다 — 대시만 보면 끊긴 행동의 종류에서 둘을 빼먹은 판단이 산다(Fighter.Grab 의 spent).
-        foreach (InputFrame last in new[] { _attack, _parry })
+        // 칼질도 값이 있는 행동이다 — 대시만 보면 끊긴 행동의 종류에서 칼질을 빼먹은 판단이 산다(Fighter.Grab 의 spent).
+        foreach (InputFrame last in new[] { _attack })
         {
             Fighter f = Spawn();
             f.Spend(f.Stamina - 5);
             f.Tick(last, _dt);
             f.Stamina.ShouldBe(0, "마지막 행동이 0 까지 안 썼다");
             f.Grab(_damage, _hold);
-            f.Exhausted.ShouldBeTrue($"마지막 스태미나의 {(last.Attack ? "칼질을" : "패리를")} 끊었는데 탈진이 안 들었다");
+            f.Exhausted.ShouldBeTrue("마지막 스태미나의 칼질을 끊었는데 탈진이 안 들었다");
         }
     }
 
@@ -317,7 +313,7 @@ public class FighterHeldTests
         (10 + LockedTicks(broken)).ShouldBe(exhaust, "짧은 붙들림이 남은 탈진을 줄였다");
     }
 
-    /// <summary>붙드는 판정 하나짜리 시험 패턴 — 태그로는 대시 · 패리가 되는데 판정의 답이 셋 다 막는다(설계 §4.7).</summary>
+    /// <summary>붙드는 판정 하나짜리 시험 패턴 — 태그로는 대시가 되는데 판정의 답이 대시 · 가드를 막는다(설계 §4.7).</summary>
     private static PatternDef Grab() => new()
     {
         Tags = new PatternTags
@@ -326,8 +322,6 @@ public class FighterHeldTests
             DashDirection = "either",
             Jumpable = true,
             AntiAir = false,
-            Parryable = true,
-            ParryWindow = 0.18,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,
@@ -339,7 +333,7 @@ public class FighterHeldTests
             new()
             {
                 T = 0.5, Kind = "active", Band = new double[] { 0, 1920, 0, 60 }, Damage = _damage, ActiveSeconds = 0.125,
-                Dash = false, Guard = false, Parry = false, GrabHoldSeconds = 1.0,
+                Dash = false, Guard = false, GrabHoldSeconds = 1.0,
             },
             new() { T = 2.0, Kind = "end" },
         },
@@ -385,33 +379,22 @@ public class FighterHeldTests
     [Theory]
     [InlineData(FighterAction.Dash)]
     [InlineData(FighterAction.Guard)]
-    [InlineData(FighterAction.Parry)]
-    public void 잡기는_대시_무적도_가드도_패리도_안_받고_그_수단으로_잡힌다(FighterAction action)
+    public void 잡기는_대시_무적도_가드도_안_받고_그_수단으로_잡힌다(FighterAction action)
     {
-        // 설계 §4.7 — 대시 무적을 안 받는다 · 가드 중이어도 맨몸이다(붕괴가 아니다) · 패리 창 안이어도 맨몸이다. 창이 열리기 한 틱 앞에
-        // 눌러 창의 첫 틱이 무적 · 패리 창 · 가드 한가운데다. 결과는 잡힘이고 수단은 그 순간 하던 것 중 가장 최근에 시작한 것이다 —
+        // 설계 §4.7 — 대시 무적을 안 받는다 · 가드 중이어도 맨몸이다(붕괴가 아니다). 창이 열리기 한 틱 앞에
+        // 눌러 창의 첫 틱이 무적 · 가드 한가운데다. 결과는 잡힘이고 수단은 그 순간 하던 것 중 가장 최근에 시작한 것이다 —
         // 가드도 든다(설계 §12 「잡힘」: 가드로 버티다 잡힌 기록이 "아무것도 안 함" 이 되지 않게). 고를 수 있던 것은 점프뿐이다(설계 §7.3).
         BattleSim sim = GrabSim();
         Until(sim, 1);
-        InputFrame press = action switch
-        {
-            FighterAction.Dash => _dash,
-            FighterAction.Parry => _parry,
-            _ => _guard,
-        };
+        InputFrame press = action == FighterAction.Dash ? _dash : _guard;
         sim.Tick(press);
         sim.Fighter.Action.ShouldBe(action, "누른 수단이 안 섰다");
 
         DodgeEvent e = UntilEvent(sim, action == FighterAction.Guard ? _guard : default);
 
         e.Verdict.ShouldBe(HitVerdict.Grabbed);
-        e.Verb.ShouldBe(action switch
-        {
-            FighterAction.Dash => DodgeVerb.Dash,
-            FighterAction.Parry => DodgeVerb.Parry,
-            _ => DodgeVerb.Guard,
-        });
-        (e.DashAvailable, e.GuardAvailable, e.ParryAvailable, e.JumpAvailable).ShouldBe((false, false, false, true));
+        e.Verb.ShouldBe(action == FighterAction.Dash ? DodgeVerb.Dash : DodgeVerb.Guard);
+        (e.DashAvailable, e.GuardAvailable, e.JumpAvailable).ShouldBe((false, false, true));
         sim.Fighter.Held.ShouldBeTrue("잡혔는데 붙들리지 않았다");
         sim.Fighter.Action.ShouldBe(FighterAction.Idle, "잡혔는데 하던 것이 이어진다");
     }

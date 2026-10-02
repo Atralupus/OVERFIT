@@ -70,7 +70,7 @@ public sealed class BattleSetup
 /// <para>
 /// 보스의 판정을 파이터 몸에 대고, 그 결과를 몸에 싣고, 관측을 짓는 것은 여기가 아니라 <see cref="BossSwings"/> 다
 /// (<see cref="BossSwings.Resolve"/> · #72 · 설계 §10 의 3번). 여기는 러너가 낸 판정을 거기 열고(<see cref="BossSwings.Open"/>)
-/// 받아쳤다는 답을 받아 탈진 루틴을 부른다 — 같은 틱의 순서(보스 판정 → 파이터의 칼 → 끊기 · 설계 §3.5 5)가 여기 있다.
+/// 파이터의 칼이 게이지를 채워 무너뜨리면 탈진 루틴을 부른다 — 같은 틱의 순서(보스 판정 → 파이터의 칼 → 끊기 · 설계 §3.5 5)가 여기 있다.
 /// </para>
 ///
 /// <para>
@@ -439,8 +439,8 @@ public sealed class BattleSim
 
     /// <summary>
     /// 파이터가 지금 <b>실제로</b> 무엇으로 받나 (#72 · 설계 §6.1) — 이 틱에 대 본 판정이 있으면 그 판정의 태그와 답(#78 · 대시 ·
-    /// 가드 · 패리)에 견준 실효 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(패리 불가) 앞에서 누른 패리가
-    /// "패리 창" 색으로 칠해지면 그 색이 거짓말을 한다. 같은 틱의 사각형(<see cref="BossTestedRects"/>)과 같은 판정을 본다 —
+    /// 가드)에 견준 실효 상태다(<see cref="HitResolver.Effective"/>). 판정 보기의 몸통 색이 이것이다: 착지 띠(가드 불가) 앞에서 든 가드가
+    /// 가드 색으로 칠해지면 그 색이 거짓말을 한다. 같은 틱의 사각형(<see cref="BossTestedRects"/>)과 같은 판정을 본다 —
     /// 닿아서 그 틱에 끝난 판정도 그 틱에는 이 색을 정한다. 대 본 판정이 없으면 파이터 쪽 상태 그대로다.
     /// </summary>
     public Defense FighterDefense => HitResolver.Effective(Fighter, _swings.TestedTags, _swings.TestedBox);
@@ -506,16 +506,10 @@ public sealed class BattleSim
         _credit.Remember(Ticks * Dt, input, wasGrounded, wasX, wasY, Fighter, Boss);
         AdvanceBoss();
 
-        // 같은 틱의 순서는 보스 판정 → 파이터의 칼 → 끊기다 (설계 §3.5 5). 받아친 틱에 파이터의 칼이 먼저 돌고,
-        // 그 뒤에 보스가 무너져 남은 창을 버린다. 파이터가 게이지로 무너뜨린 틱(#71)에 보스의 칼이 먼저 닿았으면 파이터는 맞는다.
-        // 원인이 둘이어도 탈진은 한 번이다 — 받아친 틱에는 파이터가 패리 커밋 중이라 칼이 안 서지만, 둘이 겹치면 패리를 원인으로 친다.
-        bool parried = _swings.Resolve();
-        bool broken = Strike();
-        if (parried)
-        {
-            Exhaust("parry");
-        }
-        else if (broken)
+        // 같은 틱의 순서는 보스 판정 → 파이터의 칼 → 끊기다 (설계 §3.5 5). 파이터가 게이지로 무너뜨린 틱(#71)에 보스의 칼이 먼저
+        // 닿았으면 파이터는 맞는다. 받아친 틱(패리)도 원인이었다 — 패리를 걷으며(#168) 원인은 게이지 하나다.
+        _swings.Resolve();
+        if (Strike())
         {
             Exhaust("poise");
         }
@@ -868,13 +862,13 @@ public sealed class BattleSim
     }
 
     /// <summary>
-    /// <b>탈진 루틴 — 하나다</b> (#72 · #71 · 설계 §4.3). 원인이 패리든 경직 게이지든 같은 상태 · 같은 그림에 닿아야
-    /// 유저가 말한 "패리당했을때와 동일하게" 가 선다. 하던 패턴이 그 자리에서 끊기고(남은 타격은 안 온다 · 움직임은 공중이면 높이만
+    /// <b>탈진 루틴 — 하나다</b> (#72 · #71 · 설계 §4.3). 원인은 경직 게이지다 — 받아침(패리)도 원인이던 때 유저가 말한
+    /// "패리당했을때와 동일하게" 가 이 한 루틴으로 섰고, 패리는 #168 에서 걷었다. 하던 패턴이 그 자리에서 끊기고(남은 타격은 안 온다 · 움직임은 공중이면 높이만
     /// 따라 내리고 땅이면 멈춘다 — <see cref="Fall"/>), 열린 창은 관측 없이 버린다(<see cref="BossSwings.Cut"/>). 게이지는 원인과
     /// 무관하게 비운다 — 안 비우면 반쯤 찬 게이지가 탈진이 풀리자마자 한 대에 무너진다. 계획이 끝난다 — 남은 캔슬 · 잇는 동작은 버리고 다음
     /// 계획을 이 틱에 고르며, 그 쉬기는 탈진이 풀린 뒤부터 센다(설계 2026-09-29 조각1 §3.2).
     /// </summary>
-    /// <param name="cause">무엇이 무너뜨렸나 — <c>parry</c> · <c>poise</c>. 로그의 <c>cause=</c> 다.</param>
+    /// <param name="cause">무엇이 무너뜨렸나 — 지금은 <c>poise</c> 하나다(#168 전에는 <c>parry</c> 도). 로그의 <c>cause=</c> 다.</param>
     private void Exhaust(string cause)
     {
         // 탈진한 보스에게는 판정도 채움도 없어 다시 무너질 길이 없다 — 오면 규칙 위반이다.

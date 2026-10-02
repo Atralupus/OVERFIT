@@ -42,7 +42,7 @@ public sealed class JumpClearance
         // 가로는 안 쓴다 — 벽에 안 막히게 넓은 방 한가운데서 제자리로 뛴다.
         var body = new Fighter(fighter, new Arena(1_000_000), 500_000);
         var feet = new List<double>();
-        body.Tick(new InputFrame(0, Jump: true, false, false, false), BattleSim.Dt);
+        body.Tick(new InputFrame(0, Jump: true, false, false), BattleSim.Dt);
         while (!body.Grounded)
         {
             feet.Add(body.Y);

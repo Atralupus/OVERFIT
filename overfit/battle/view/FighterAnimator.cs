@@ -5,7 +5,7 @@ using Overfit.Core;
 namespace Overfit.Battle.View;
 
 /// <summary>
-/// 파이터 스프라이트의 <b>시트를 어느 장에 세우고 언제 흘리나</b> — 칼질의 선딜 · 칼 · 경직, 대시와 패리의 마지막 자세, 가드의 멈춘 자세.
+/// 파이터 스프라이트의 <b>시트를 어느 장에 세우고 언제 흘리나</b> — 칼질의 선딜 · 칼 · 경직, 대시의 마지막 자세, 가드의 멈춘 자세.
 /// <see cref="FighterView"/> 가 무엇을 그릴지(자세 · 색 · 링 · 섬광)를 정하고, 이 클래스는 그 자세를 시트의 장으로 옮긴다.
 ///
 /// <para>
@@ -22,15 +22,6 @@ public sealed class FighterAnimator
     /// 여기 숫자를 박으면 시트를 갈아끼울 때 조용히 엉뚱한 장에서 시작한다.
     /// </summary>
     private SwingSheet[] _swings = System.Array.Empty<SwingSheet>();
-
-    /// <summary>패리가 도는 시트 — <c>attack2</c> 의 f0~f3 (설계 §5.3). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
-    private SwingSheet _parry;
-
-    /// <summary>
-    /// 패리가 도는 장 수(<c>parry_anim_frames</c> — f0~f3 이면 4). 패리의 마지막 장이 어디인지를 이것으로 안다(<see cref="HoldParry"/>) —
-    /// 시트(<c>attack2</c>)는 그 뒤에 칼이 나가는 f4 · f5 가 더 있다.
-    /// </summary>
-    private int _parryFrames;
 
     /// <summary>가드가 멈춰 서는 장 — 칼을 사선으로 세운 <c>attack2</c> f1 (#96 · 설계 §6). <c>Battle</c> 이 데이터에서 옮겨 준다.</summary>
     private StillFrame _guard;
@@ -67,9 +58,6 @@ public sealed class FighterAnimator
     /// <summary>지금 칼질의 시트 이름. 칼질 목록이 빈 판이면 null 이다(<see cref="Sheet"/>).</summary>
     public string? SwingAnim => Sheet.Anim;
 
-    /// <summary>패리가 도는 시트 이름.</summary>
-    public string ParryAnim => _parry.Anim;
-
     /// <summary>
     /// 가드가 서는 시트 이름. 팩에 그 시트가 없으면 <c>idle</c> 이다 — #96 전의 가드 그림(선 자세 위의 색과 멈춘 링)으로 물러선다.
     /// 없는 이름을 <see cref="Animate"/> 에 넘기면 가드 내내 매 프레임 <c>[W]</c> 가 찍히고 앞 그림이 남는다(<see cref="FighterView.Load"/> 가
@@ -84,20 +72,16 @@ public sealed class FighterAnimator
     private SwingSheet Sheet => _swings.Length == 0 ? default : _swings[System.Math.Clamp(_swing, 0, _swings.Length - 1)];
 
     /// <summary>
-    /// 칼질마다의 시트와 패리의 시트, 가드의 장을 받는다 — <see cref="FighterView.Load"/> 가 옮겨 준다.
-    /// <paramref name="parry"/> 는 칼이 나가는 장이 없다(<c>BladeFrame</c> 은 안 쓴다).
-    /// <paramref name="parryFrames"/> 는 그 시트에서 패리가 도는 장 수다(<c>parry_anim_frames</c>).
+    /// 칼질마다의 시트와 가드의 장을 받는다 — <see cref="FighterView.Load"/> 가 옮겨 준다.
     /// <paramref name="guard"/> 는 가드가 멈춰 서는 장이다(<c>guard_anim</c> · <c>guard_frame</c>).
     /// <paramref name="throwWindup"/> · <paramref name="throwRelease"/> 는 폭탄의 선딜과 놓은 뒤에 멈춰 서는 장이다(<c>bomb</c>).
     /// </summary>
     public void SetSheets(
-        IReadOnlyList<SwingSheet> swings, SwingSheet parry, int parryFrames, StillFrame guard, StillFrame throwWindup, StillFrame throwRelease)
+        IReadOnlyList<SwingSheet> swings, StillFrame guard, StillFrame throwWindup, StillFrame throwRelease)
     {
-        _parry = parry;
         _guard = guard;
         _throwWindup = throwWindup;
         _throwRelease = throwRelease;
-        _parryFrames = parryFrames;
         _swings = new SwingSheet[swings.Count];
         for (int i = 0; i < _swings.Length; i++)
         {
@@ -136,7 +120,6 @@ public sealed class FighterAnimator
             if (free)
             {
                 HoldDash(frame, anim);
-                HoldParry(frame);
                 HoldGuard(frame);
                 HoldThrow(frame);
             }
@@ -150,19 +133,6 @@ public sealed class FighterAnimator
         _swing = step;
         _bladeOut = false;
         _windupFresh = true;
-    }
-
-    /// <summary>패리가 시작된 <b>그 틱</b> — 시트를 처음부터 다시 돌린다. 왜 사건으로 트는지는 <see cref="FighterView.ParryBegan"/> 의 주석을 보라.</summary>
-    public void ParryBegan()
-    {
-        if (!HasSheet(_parry))
-        {
-            return;
-        }
-
-        _sprite.Play(_parry.Anim, SpeedFor(_parry));
-        _sprite.SetFrameAndProgress(_parry.StartFrame, 0.0f);
-        AlignToGround(_parry.Anim);
     }
 
     /// <summary>
@@ -191,7 +161,7 @@ public sealed class FighterAnimator
         if (!_sprite.SpriteFrames.HasAnimation(name))
         {
             // 없는 이름으로 Play 하면 엔진이 ERROR: 를 찍고, 그건 헤드리스 판정(judge_headless)을
-            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 여섯을 확인한다 — 2타 · 패리 ·
+            // 실패시킨다. 지금 팩에는 다 있지만(install_assets.py 의 REQUIRED_ANIMS 가 여섯을 확인한다 — 2타 ·
             // 가드의 attack2 까지) 팩을 갈아끼우는 것이 이 파일의 전제라 확인은 남긴다.
             Log.Warn("view", $"anim_missing name={name}");
             return;
@@ -283,7 +253,7 @@ public sealed class FighterAnimator
     /// <para>
     /// <b>마지막 장을 붙들지 않는다 — 실제로 밟았다.</b> 처음에는 시트의 마지막 장(f5)을 경직 내내 붙들었는데, 두 시트 다 f5 가 흩어지는
     /// 흰 궤적이다. 판정은 이미 꺼졌는데 큰 흰 호가 1타 뒤 0.40초 · 2타 뒤 0.50초 동안 얼어붙어 살아 있는 칼로 읽혔다(<c>battle-6-windup</c> ·
-    /// <c>10e</c> · <c>12b</c> · #82 리뷰). 대시 · 패리처럼 그 행동의 마지막 자세를 붙들 수 없는 까닭이 그것이다 — 칼질의 마지막 자세가
+    /// <c>10e</c> · <c>12b</c> · #82 리뷰). 대시처럼 그 행동의 마지막 자세를 붙들 수 없는 까닭이 그것이다 — 칼질의 마지막 자세가
     /// 곧 궤적이다. 팩에 칼을 거둔 장이 따로 없어 선 자세(<c>idle</c> f0)를 빌리고, 흘리지 않고 멈춰 둔다: 경직 동안은 가만히 서 있고,
     /// 풀리면 숨 쉬는 <c>idle</c> 이 다시 흐른다(<see cref="Unstand"/>).
     /// </para>
@@ -348,8 +318,8 @@ public sealed class FighterAnimator
     /// 방향키를 쥔 채 대시한 사람(가장 흔한 입력이다 — 가운데 Idle 한 틱이 없다)이 멈춘 <c>run</c> 장 하나로 미끄러져 걸었다 —
     /// 키를 떼거나 다른 그림으로 바뀔 때까지. <c>battle-9c</c> 의 대본이 바로 그 길인데 찍기 직전에 키를 떼 Idle 로 찍히므로 사진에는
     /// 안 나왔다 — 리뷰가 찾았고, 매 프레임 장 번호 로그로 확인했다(대시 뒤 걸음에서 멈춘 <c>run</c> 18프레임 → 0).
-    /// 시트가 <c>run</c> 일 때만 푼다 — 팩에 <c>run</c> 이 없어 <see cref="Animate"/> 가 앞 시트를 남겼으면 그 시트(붙든
-    /// 패리의 마지막 장 · 가드의 멈춘 장)를 흘려서는 안 된다. 칼질의 경직은 시트가 아니라 멈춘 `idle` 을 붙들고, 그건 걸음으로 풀리기 전에 이미 흐른다.
+    /// 시트가 <c>run</c> 일 때만 푼다 — 팩에 <c>run</c> 이 없어 <see cref="Animate"/> 가 앞 시트를 남겼으면 그 시트(가드의
+    /// 멈춘 장)를 흘려서는 안 된다. 칼질의 경직은 시트가 아니라 멈춘 `idle` 을 붙들고, 그건 걸음으로 풀리기 전에 이미 흐른다.
     /// </para>
     /// </summary>
     /// <param name="frame">이 프레임의 상태.</param>
@@ -375,44 +345,12 @@ public sealed class FighterAnimator
     }
 
     /// <summary>
-    /// 패리 — 칼을 사선으로 세운 <b>마지막 장</b>(f3)에 닿으면 거기 선다 (#82). 패리는 <c>attack2</c> 의 앞 네 장만 쓰는데 시트는 그 뒤로
-    /// 칼이 나가는 f4 · f5 가 더 있어, 커밋(0.333초 = 네 장) 뒤의 <b>패리 뒤 경직</b>(0.25초) 동안 흘려 두면 휘두르지 않은 칼이 화면에서
-    /// 나간다 — 받아친 줄 알았던 사람에게 거짓 반격으로 읽힌다. idle 로 두면 키가 안 먹는데 풀린 것처럼 보인다(대시 경직과 같은 이유).
-    /// 그래서 세운 자세를 붙들어 "아직 패리에 묶였다" 를 말한다. 경직 중에 맞았다 돌아오면(<see cref="Animate"/> 가 시트를 처음부터 튼다)
-    /// 곧장 마지막 장으로 선다 — 패리를 다시 세우는 그림이 아니다. 새 패리는 <see cref="ParryBegan"/> 이 처음부터 돌린다.
-    /// </summary>
-    private void HoldParry(FighterFrame frame)
-    {
-        if (frame.Pose != FighterPose.Parry || _parryFrames <= 0 || !HasSheet(_parry) || _sprite.Animation != _parry.Anim)
-        {
-            return;
-        }
-
-        int last = System.Math.Min(
-            _parry.StartFrame + _parryFrames - 1, _sprite.SpriteFrames!.GetFrameCount(_parry.Anim) - 1);
-        if ((frame.Stiff || _sprite.Frame >= last) && (_sprite.Frame != last || _sprite.IsPlaying()))
-        {
-            _sprite.Frame = last;
-            _sprite.Pause();
-        }
-    }
-
-    /// <summary>
     /// 가드 — 칼을 사선으로 세운 장(<c>guard_frame</c> · <c>attack2</c> f1)에 <b>멈춰 선다</b> (#96 · 설계 §6). 팩에 막는 모션이 없어 빌린
     /// 자세이고, 버티는 동안 아무것도 안 변하는 것이 가드라 흘리지 않는다 — 가드 링이 크기를 안 바꾸는 것과 같은 말이다.
     ///
     /// <para>
-    /// <b>패리와 실루엣이 같다 — 움직임으로는 거의 안 갈린다.</b> 패리는 같은 시트의 f0~f3 을 흘리고 경직 동안 f3 에 서는데
-    /// (<see cref="HoldParry"/>), 이 네 장은 칼과 몸이 같은 자세다: 장마다 다른 것은 날리는 붉은 스카프와 몸 전체가 옆으로 밀리는
-    /// 2~4px(2.5배로 화면 5~10px)뿐이다(#96 에서 시트를 쟀다 — 칼의 흰 픽셀은 네 장 모두 같은 덩어리이고 원본 200px 칸의
-    /// x 82~102 안에서 옆으로만 옮긴다). 그래서 가드와 패리를 가르는 것은 <c>FighterView</c> 의 가드 색과 가드 링이다(패리는 칠하지
-    /// 않는다). 다른 장을 골라도 안 갈린다 — 네 장의 칼이 같다.
-    /// </para>
-    ///
-    /// <para>
     /// 가드는 처음부터 f1 에 멈춰 있다. 그래서 드는 순간 곧장 그 장이다: <see cref="Animate"/> 가 시트를 f0 부터 틀어도 같은 프레임에 여기서 세운다.
-    /// 패리 경직에서 ↓ 를 쥔 채 풀리면 이름이 같아(<c>attack2</c>) <see cref="Animate"/> 가 안 트는데, 그때도 f3 에서 f1 로 곧장 옮겨 선다.
-    /// 놓으면 자세가 Idle 이라 <see cref="Animate"/> 가 <c>idle</c> 을 튼다. 가드 중에 누른 패리는 <see cref="ParryBegan"/> 이 f0 부터 돌린다.
+    /// 놓으면 자세가 Idle 이라 <see cref="Animate"/> 가 <c>idle</c> 을 튼다.
     /// </para>
     ///
     /// <para>

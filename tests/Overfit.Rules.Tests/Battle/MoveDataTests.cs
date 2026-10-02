@@ -44,17 +44,18 @@ public class MoveDataTests
     [Fact]
     public void 일곱_동작의_판정_창과_끝은_스펙의_틱이다()
     {
-        // 설계 2026-09-29 조각1 §2.5 의 표 그대로 — 러너의 첫 틱이 1 이고 판정 창은 8틱(0.125초)이다. 후딜은 마지막 창이 닫힌 뒤 끝까지다(잡기는
-        // 붙드는 60틱이 끝까지 간다). 돌진의 판정은 **선 시계**로 센 틱이다 — 달리는 동안 시계가 서므로 판 위의 틱은 도착에 달렸다(MoveBattleTests).
+        // 설계 2026-09-29 조각1 §2.5 의 표에서 끝만 이슈 #167 로 0.3초(18틱) 늦췄다 — 러너의 첫 틱이 1 이고 판정 창은 8틱(0.125초)이다. 후딜은 마지막
+        // 창이 닫힌 뒤 끝까지다. 잡기는 창을 36 → 60틱으로 미루고 끝을 창의 끝 + 1.5초(90틱)로 뒀다 — 붙드는 60틱보다 길어 붙든 뒤에도 보스가 선다.
+        // 돌진의 판정은 **선 시계**로 센 틱이다 — 달리는 동안 시계가 서므로 판 위의 틱은 도착에 달렸다(MoveBattleTests).
         var table = new (string Id, int[] Windows, int End, int Recover)[]
         {
-            ("3연격", [51, 93, 159], 195, 28),
-            ("엇박 3연격", [60, 111, 186], 222, 28),
-            ("빠른 3연격", [24, 51, 84], 120, 28),
-            ("돌진", [24], 60, 28),
-            ("잡기", [36], 96, 52),
-            ("점프 공격", [60], 90, 22),
-            ("올려베기", [51], 87, 28),
+            ("3연격", [51, 93, 159], 213, 46),
+            ("엇박 3연격", [60, 111, 186], 240, 46),
+            ("빠른 3연격", [24, 51, 84], 138, 46),
+            ("돌진", [24], 78, 46),
+            ("잡기", [60], 158, 90),
+            ("점프 공격", [60], 108, 40),
+            ("올려베기", [51], 105, 46),
         };
         Dictionary<string, PatternDef> patterns = Patterns();
 
@@ -138,7 +139,7 @@ public class MoveDataTests
     [Fact]
     public void 빠른_3연격은_3연격과_같은_세_타를_빠른_박자로_친다()
     {
-        // 설계 2026-09-29 조각1 §2.2 — 앞 동작의 마지막 창 뒤 2연격을 시작한 사람을 벌한다. 모양 · 피해 · 그림은 3연격과 같고(attack1 ~ 3 · 8 · 8 · 14)
+        // 설계 2026-09-29 조각1 §2.2 — 모양 · 피해 · 그림은 3연격과 같고(attack1 ~ 3 · 8 · 8 · 14)
         // 박자만 다르다: 판정 24 · 51 · 84틱. 칼이 오르는 f1 에서 판정까지는 3연격과 같은 7틱이다 — 빨라도 그 한 장이 예고다. 판정 사이 27 · 33틱은
         // 대시(17틱)로 이어 피할 수 있고 판정 사이에 한 번 치는 것(40틱)은 못 들어간다.
         Dictionary<string, PatternDef> p = Patterns();
@@ -160,30 +161,30 @@ public class MoveDataTests
 
         int[] windows = Windows(p["빠른 3연격"]);
         (windows[1] - windows[0], windows[2] - windows[1]).ShouldBe((27, 33), "판정 사이가 스펙과 다르다");
-        p["빠른 3연격"].Tags.PunishGreed.ShouldBeTrue("욕심을 벌하는 동작인데 punish_greed 가 거짓이다");
+        p["빠른 3연격"].Tags.PunishGreed.ShouldBeTrue("patterns.json 의 태그(punish_greed)가 거짓이다 — 망의 입력이 바뀐다");
     }
 
     [Fact]
-    public void 점프_공격은_한_번_뛰고_착지는_대시_가드_패리가_안_되며_피해는_24다()
+    public void 점프_공격은_한_번_뛰고_착지는_대시_가드가_안_되며_피해는_24다()
     {
         // 설계 2026-09-29 조각1 §2.3 — 옛 점프 3연속과 단발을 하나로 합쳤다(유저: "점프공격이 3회, 2회 막반복되니까 지루합니다"). 도약 한 번 · 착지 한 번.
-        // 착지의 답 셋이 거짓이라 대시 무적 · 가드 · 패리가 모두 맨몸이고, 띠가 아레나 전체라 거리로도 못 피한다 — 발이 60 위여야만 넘는다. 태그의
+        // 착지의 답 둘이 거짓이라 대시 무적 · 가드가 모두 맨몸이고, 띠가 아레나 전체라 거리로도 못 피한다 — 발이 60 위여야만 넘는다. 태그의
         // dash_window 는 0 이다 — 관측(DashAvailable)이 같은 말을 한다. 옛 "창이 열리는 바로 그 틱의 대시만 산다" 는 없어졌다.
         PatternDef jump = Patterns()["점프 공격"];
         HitBox[] hits = Hits(jump);
 
         jump.Timeline.Count(s => s.Motion is { Id: "leap" }).ShouldBe(1, "도약이 한 번이 아니다");
         hits.Length.ShouldBe(1, "착지가 한 번이 아니다");
-        (hits[0].Dashable, hits[0].Guardable, hits[0].Parryable).ShouldBe((false, false, false), "착지가 대시 · 가드 · 패리 중 무엇을 받는다");
+        (hits[0].Dashable, hits[0].Guardable).ShouldBe((false, false), "착지가 대시 · 가드 중 무엇을 받는다");
         hits[0].Damage.ShouldBe(24);
         hits[0].GrabHoldSeconds.ShouldBe(0, "착지가 붙든다");
-        (jump.Tags.DashWindow, jump.Tags.Parryable, jump.Tags.Jumpable).ShouldBe((0.0, false, true));
+        (jump.Tags.DashWindow, jump.Tags.Jumpable).ShouldBe((0.0, true));
     }
 
     [Fact]
     public void 판정의_답은_판정_단계에만_거짓으로_적는다()
     {
-        // 설계 §7.3 · §8.1 — dash · guard · parry 는 태그를 **좁히기만** 한다. true 는 태그대로라 적을 까닭이 없고, 적으면 "넓힌다" 로 읽혀
+        // 설계 §7.3 · §8.1 — dash · guard 는 태그를 **좁히기만** 한다. true 는 태그대로라 적을 까닭이 없고, 적으면 "넓힌다" 로 읽혀
         // 태그가 막은 수단을 연다고 오해한다 — 규칙은 태그와 답을 둘 다 봐서 넓히지 못한다(HitResolver.Effective). 판정이 아닌 단계의 답과
         // 붙드는 시간은 아무도 안 읽는다 — JsonData 가 조용히 받으므로 여기서 막는다.
         int answers = 0;
@@ -191,7 +192,7 @@ public class MoveDataTests
         {
             foreach (PatternStep s in def.Timeline)
             {
-                bool?[] keys = { s.Dash, s.Guard, s.Parry };
+                bool?[] keys = { s.Dash, s.Guard };
                 if (s.Kind != "active")
                 {
                     keys.ShouldAllBe(k => k == null, $"{id}: t={s.T} 판정이 아닌 단계에 답이 있다");
@@ -212,7 +213,7 @@ public class MoveDataTests
     public void 붙드는_판정의_패턴은_창이_열린_뒤_붙드는_시간이_지나야_끝난다()
     {
         // 설계 §4.7 「패턴이 끝나는 시각」 — 흰 구가 붙들고 있는 동안 보스가 다음 패턴을 시작하면 그림이 거짓말이다. 창이 열린 뒤 붙드는 시간이
-        // 지나야 끝난다(잡기 0.60 + 1.0 = 1.60초). 창의 끝 틱에 잡히면 몇 틱 더 붙들리지만 그 사이는 쉬는 간격이라 다음 칼이 없다.
+        // 지나야 끝난다. 잡기는 이슈 #167 로 창의 끝 + 1.5초(2.625초)에 끝나 붙드는 시간(1.00 + 1.0 = 2.00초)보다 넉넉히 길다.
         int grabs = 0;
         foreach ((string id, PatternDef def) in Patterns())
         {
@@ -228,17 +229,17 @@ public class MoveDataTests
     }
 
     [Fact]
-    public void 잡기는_0_60초에_점프만_받고_1_0초_붙든다()
+    public void 잡기는_1_0초에_점프만_받고_1_0초_붙든다()
     {
         // 설계 2026-09-29 조각1 §2.4 — 옛 1타 잡기의 1.30초 뒤를 당겨 단독 동작으로 떼어 냈다. 앞에서 알리던 1타가 없어 흰 구가 나는 선딜이 예고의
-        // 전부라 0.40 → 0.60초로 늘렸다(유저 확인 · 반응할 틈 21 → 33틱). 답은 점프 하나다 — 대시 · 가드 · 패리 셋 다 거짓이다(대시 무적 중에도 ·
+        // 전부라 0.40 → 0.60초(유저 확인) → 1.0초(이슈 #167 — "잡기 선딜과 후딜 많이 늘려야합니다")로 늘렸다. 답은 점프 하나다 — 대시 · 가드 둘 다 거짓이다(대시 무적 중에도 ·
         // 가드 중에도 잡힌다). 보스는 idle 로 선다 — 흰 구가 예고다(뷰 · GrabOrb).
         PatternDef grab = Patterns()["잡기"];
         HitBox[] hits = Hits(grab);
 
         hits.Length.ShouldBe(1);
-        Windows(grab).ShouldBe(new[] { 36 });
-        (hits[0].Dashable, hits[0].Guardable, hits[0].Parryable).ShouldBe((false, false, false), "잡기가 대시 · 가드 · 패리 중 무엇을 받는다");
+        Windows(grab).ShouldBe(new[] { 60 });
+        (hits[0].Dashable, hits[0].Guardable).ShouldBe((false, false), "잡기가 대시 · 가드 중 무엇을 받는다");
         hits[0].GrabHoldSeconds.ShouldBe(1.0);
         hits[0].Damage.ShouldBe(25);
         grab.Timeline.Where(s => s.Kind != "end").Select(s => s.Anim).ShouldAllBe(a => a == "idle", "잡기의 보스가 idle 이 아닌 그림을 든다");
@@ -300,7 +301,7 @@ public class MoveDataTests
     {
         // 설계 2026-09-29 조각1 §2.1 — attack2 의 높은 궤적은 보스 등 뒤라(x −352 ~ −132) 그림을 좌우로 뒤집는다(mirror · 뷰만 읽는다 — 네 장 다).
         // 판정은 그림에서 뽑지 않고 손으로 적는다(유저 확인 — 그림과 달라도 크게): [0, 396, 0, 360] 한 장. 3연격 1타와 같은 51틱에 친다 — 3연격 1타를
-        // 점프로 넘으려 먼저 뛴 사람을 잡는다. 선 사람은 대시 · 가드 · 패리로 받는다.
+        // 점프로 넘으려 먼저 뛴 사람을 잡는다. 선 사람은 대시 · 가드로 받는다.
         Dictionary<string, PatternDef> patterns = Patterns();
         PatternDef up = patterns["올려베기"];
 
@@ -310,7 +311,7 @@ public class MoveDataTests
         });
         HitBox hit = Hits(up).Single();
         hit.Shape.Local.ShouldBe(new[] { new HitRect(0, 396, 0, 360) });
-        (hit.Damage, hit.Dashable, hit.Guardable, hit.Parryable).ShouldBe((14, true, true, true));
+        (hit.Damage, hit.Dashable, hit.Guardable).ShouldBe((14, true, true));
         Windows(up).ShouldBe(Windows(patterns["3연격"]).Take(1).ToArray(), "3연격 1타와 다른 틱에 친다");
 
         // 점프로는 못 넘는다 — 실제 캐릭터의 점프 정점(발 300)이 사각형 윗끝(360) 아래다. 사각형이 닿는 보스 앞 어느 자리에서든.

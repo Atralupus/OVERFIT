@@ -55,7 +55,7 @@ class Anim:
     """SpriteFrames 의 애니메이션 하나. 이름은 **뷰가 부르는 이름**이다.
 
     `FighterView` · `BossView` 가 `idle · run · attack · attack2 · hit · death` 를 재생한다
-    (attack2 는 파이터의 2타와 패리 — 이슈 #59 · 설계 §5.1 · §5.3).
+    (attack2 는 파이터의 2타와 가드 — 이슈 #59 · #96 · 설계 §5.1).
     없는 이름으로 `Play` 하면 엔진이 `ERROR:` 를 찍고 헤드리스 판정이 실패하므로,
     그 여섯은 반드시 여기 있어야 한다 (`REQUIRED_ANIMS` 가 확인한다).
     """

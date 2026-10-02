@@ -148,7 +148,7 @@ public class JumpClearanceTests
 
             for (int i = 0; i < 300 && sim.Events.Count == 0; i++)
             {
-                sim.Tick(new InputFrame((sbyte)(i < walkTicks ? 1 : 0), false, false, false, false));
+                sim.Tick(new InputFrame((sbyte)(i < walkTicks ? 1 : 0), false, false, false));
             }
 
             return sim.Events.Single();
@@ -188,7 +188,7 @@ public class JumpClearanceTests
         BattleSim sim = TestConfigs.PatternSim("높은 칼", pattern, shapes: shapes);
 
         // 480 → 879 (57틱 × 7px). 보스는 1440 에서 왼쪽을 본다 — 모양은 940 ~ 1440 이고 몸의 앞끝은 909 다.
-        var right = new InputFrame(1, false, false, false, false);
+        var right = new InputFrame(1, false, false, false);
         for (int i = 0; i < 57; i++)
         {
             sim.Tick(right);
@@ -277,7 +277,7 @@ public class JumpClearanceTests
             for (int i = 0; i < 400 && sim.Events.Count == 0; i++)
             {
                 bool jump = sim.Fighter.Grounded && sim.NextActiveIn is { } left && left <= 10 * BattleSim.Dt;
-                sim.Tick(new InputFrame((sbyte)(i < walkTicks ? 1 : 0), jump, false, false, false));
+                sim.Tick(new InputFrame((sbyte)(i < walkTicks ? 1 : 0), jump, false, false));
             }
 
             return sim.Events.Single();
@@ -338,7 +338,7 @@ public class JumpClearanceTests
             }
 
             sbyte move = (sbyte)(i < 94 ? 1 : jumpedAt >= 0 && i == jumpedAt + 9 ? -1 : 0);
-            sim.Tick(new InputFrame(move, jump, dash, false, false));
+            sim.Tick(new InputFrame(move, jump, dash, false));
         }
 
         DodgeEvent dashed = sim.Events.Single();

@@ -22,9 +22,9 @@ public class BombReactionTests
 {
     private const string _waitId = "기다림";
 
-    private static readonly InputFrame _bomb = new(0, false, false, false, false, Bomb: true);
-    private static readonly InputFrame _right = new(1, false, false, false, false);
-    private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
+    private static readonly InputFrame _bomb = new(0, false, false, false, Bomb: true);
+    private static readonly InputFrame _right = new(1, false, false, false);
+    private static readonly InputFrame _attack = new(0, false, false, Attack: true);
 
     private static FighterConfig Real() => TestConfigs.Fighters()[TestConfigs.Balance().Battle.Fighter];
 
@@ -87,8 +87,6 @@ public class BombReactionTests
             DashDirection = "out",
             Jumpable = false,
             AntiAir = false,
-            Parryable = false,
-            ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,
@@ -265,7 +263,7 @@ public class BombReactionTests
     public void 반응이_끝낸_계획의_캔슬은_반응의_동작을_안_끊는다()
     {
         // 계획은 3연격을 144 에서 끊고 잡기로 잇는다. 반응이 78 에서 끊어 계획이 끝나면 남은 캔슬도 버린다 — 안 버리면 반응의 동작이 러너 144 에
-        // 옛 계획의 지점으로 끊긴다. 반응의 동작을 길게(엇박 3연격 · 222틱) 두어야 그 지점에 닿는다(돌진은 60틱이라 이 버그를 못 본다).
+        // 옛 계획의 지점으로 끊긴다. 반응의 동작을 길게(엇박 3연격 · 240틱) 두어야 그 지점에 닿는다(돌진은 78틱이라 이 버그를 못 본다).
         BombReactionDef slow = new() { DelaySeconds = Data.DelaySeconds, HesitateSeconds = Data.HesitateSeconds, Move = "엇박 3연격" };
         string[] roster = ["3연격", "잡기", "엇박 3연격"];
         BattleSim sim = Sim([new ScriptPlan(0.8, "3연격", 1, "잡기")], roster, TestConfigs.Boss(maxHealth: 999_999, reaction: slow));
@@ -287,18 +285,18 @@ public class BombReactionTests
     [Fact]
     public void 캔슬_지점이_없는_동작은_끝난_뒤_쉬기에서_끊는다()
     {
-        // 올려베기(87틱)는 캔슬 지점이 없다 — 끝나는 틱에 다음 계획이 서고, 그 다음 틱(쉬기)에 끊는다.
+        // 올려베기(105틱)는 캔슬 지점이 없다 — 끝나는 틱에 다음 계획이 서고, 그 다음 틱(쉬기)에 끊는다. 30틱에 던져야 놓기(119) 전에 그 자리(106)가 온다.
         string[] roster = ["올려베기", "돌진"];
         BattleSim sim = Sim([new ScriptPlan(0.8, "올려베기")], roster);
         int begun = UntilBegins(sim, "올려베기");
         using var log = new LogCapture();
-        ThrowAt(sim, begun + 10);
-        TestConfigs.UntilTick(sim, begun + 87);
+        ThrowAt(sim, begun + 30);
+        TestConfigs.UntilTick(sim, begun + 105);
         sim.BossHesitating.ShouldBeFalse("동작 중에 끊었다 — 올려베기는 지점이 없다");
 
         sim.Tick(default);
 
-        Reacts(log).ShouldBe([$"[boss][D] bomb_react from=rest tick={begun + 88}"]);
+        Reacts(log).ShouldBe([$"[boss][D] bomb_react from=rest tick={begun + 106}"]);
     }
 
     [Fact]

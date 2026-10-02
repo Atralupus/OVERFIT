@@ -11,7 +11,7 @@ public sealed class FleetConfig
     /// <summary>습관형의 몫 — 나머지가 혼합형이다.</summary>
     public required double HabitShare { get; init; }
 
-    /// <summary>습관형(대시 · 점프 · 패리 · 가드)의 주된 수단의 비중.</summary>
+    /// <summary>습관형(대시 · 점프 · 가드)의 주된 수단의 비중.</summary>
     public required IReadOnlyList<double> HabitDominant { get; init; }
 
     /// <summary>반응 지연(초) — 선딜이 시작하고 누를 수 있게 되기까지.</summary>

@@ -70,6 +70,8 @@ def main() -> None:
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
     cfg, sp = config["ppo"], config["selfplay"]
     rounds = args.rounds or sp["rounds"]
+    # 끝에 보스만 배우는 라운드(이슈 #168 — 유저: "보스도 학습을 시키세요 더") — 번갈아 배우면 마지막 라운드의 파이터가 보스보다 한 바퀴 앞선 채 끝난다.
+    extra = 0 if args.rounds else sp.get("boss_extra_rounds", 0)
     iters = {"boss": args.iterations or sp["boss_iterations"], "fighter": args.iterations or sp["fighter_iterations"]}
     out = ROOT / "out" / "selfplay" / (args.name or f"sp-{cfg['seed']}")
     start = last_round(out) + 1 if args.resume else 1
@@ -81,7 +83,8 @@ def main() -> None:
     boss = Side("boss", worker.run(0, 1, out / "probe_boss").manifest, cfg, rng, out)
     fighter = Side("fighter", worker.run(0, 1, out / "probe_fighter", learner="fighter").manifest, cfg, rng, out)
     if args.resume and start > 1:
-        snaps = {s: [out / f"{s}_r{k:02d}.json" for k in range(start)] for s in ("boss", "fighter")}
+        snaps = {"boss": [out / f"boss_r{k:02d}.json" for k in range(start)],
+                 "fighter": [out / f"fighter_r{k:02d}.json" for k in range(min(start, rounds + 1))]}
         boss.load(snaps["boss"][-1])
         fighter.load(snaps["fighter"][-1])
         print(f"resume from round {start - 1}", flush=True)
@@ -97,18 +100,18 @@ def main() -> None:
         w = csv.DictWriter(f, fieldnames=fields)
         if not resuming:
             w.writeheader()
-        for rnd in range(start, rounds + 1):
-            for side, other, base, opponents_fixed, eps in (
-                (boss, "fighter", 0, ["fleet"], sp["boss_episodes"]),
-                (fighter, "boss", 500, ["rule"], sp["fighter_episodes"]),
-            ):
+        for rnd in range(start, rounds + extra + 1):
+            sides = [(boss, "fighter", 0, ["fleet"], sp["boss_episodes"]), (fighter, "boss", 500, ["rule"], sp["fighter_episodes"])]
+            for side, other, base, opponents_fixed, eps in (sides if rnd <= rounds else sides[:1]):
                 opponents = opponents_fixed + [str(p) for p in pool(snaps[other], sp["pool_latest"], sp["pool_spread"])]
                 for it in range(1, iters[side.name] + 1):
                     t0 = time.time()
                     seed = cfg["seed"] * 1_000_000 + rnd * 1000 + base + it
                     r = worker.run(seed, eps, out / f"rollout_{side.name}", weights=side.latest, learner=side.name, opponents=opponents)
                     adv, ret = ppo.gae(r.reward, r.value, r.done, cfg["gamma"], cfg["lam"], span=r.span, unit=r.manifest["decide_ticks"])
-                    s = train.update(side.policy, side.value, side.opt_p, side.opt_v, r, adv, ret, cfg, rng)
+                    # 파이터는 엔트로피를 따로 낮게 둔다(이슈 #167) — 보스의 0.03 을 같이 쓰면 파이터가 배운 타이밍에 못 모이고 고르게 흩어진다.
+                    side_cfg = {**cfg, "entropy_coef": cfg["fighter_entropy_coef"]} if side.name == "fighter" else cfg
+                    s = train.update(side.policy, side.value, side.opt_p, side.opt_v, r, adv, ret, side_cfg, rng)
                     side.save(side.latest)
                     e = episodes.summary(out / f"rollout_{side.name}", config["reward"])
                     ep_return = float(np.bincount(r.episode, weights=r.reward).mean()) if len(r.reward) else 0.0

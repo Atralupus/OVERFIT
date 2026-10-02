@@ -84,13 +84,12 @@ public class BotTraitsTests
     [Fact]
     public void 수단_비중의_합은_1이고_칸마다_0보다_크다()
     {
-        // 판정마다의 수단은 대시 · 점프 · 패리를 비중의 합으로 나눠 고른다 — 가드가 도드라진 봇이라도 그 합이 0 으로 떨어지면 안 된다.
+        // 판정마다의 수단은 대시 · 점프를 비중의 합으로 나눠 고른다 — 가드가 도드라진 봇이라도 그 합이 0 으로 떨어지면 안 된다.
         foreach (BotTraits t in Bots(200))
         {
-            (t.Dash + t.Jump + t.Parry + t.Guard).ShouldBe(1, 1e-12);
+            (t.Dash + t.Jump + t.Guard).ShouldBe(1, 1e-12);
             t.Dash.ShouldBeGreaterThan(0);
             t.Jump.ShouldBeGreaterThan(0);
-            t.Parry.ShouldBeGreaterThan(0);
             t.Guard.ShouldBeGreaterThan(0);
         }
     }
@@ -105,7 +104,6 @@ public class BotTraitsTests
             {
                 BotHabit.Dash => t.Dash,
                 BotHabit.Jump => t.Jump,
-                BotHabit.Parry => t.Parry,
                 BotHabit.Guard => t.Guard,
                 _ => null,
             };
@@ -115,8 +113,8 @@ public class BotTraitsTests
             }
 
             ShouldBeIn(d, fleet.HabitDominant, $"{t.Habit} 습관형의 주된 수단");
-            double rest = (1 - d) / 3;
-            new[] { t.Dash, t.Jump, t.Parry, t.Guard }.Count(w => Math.Abs(w - rest) < 1e-12).ShouldBe(3, "나머지 셋이 남은 몫을 똑같이 나누지 않았다");
+            double rest = (1 - d) / 2;
+            new[] { t.Dash, t.Jump, t.Guard }.Count(w => Math.Abs(w - rest) < 1e-12).ShouldBe(2, "나머지 둘이 남은 몫을 똑같이 나누지 않았다");
         }
     }
 
@@ -127,9 +125,9 @@ public class BotTraitsTests
         List<BotTraits> habits = bots.Where(t => t.Habit != BotHabit.Mixed).ToList();
 
         ((double)habits.Count / bots.Count).ShouldBeInRange(0.45, 0.55, "습관형의 몫이 habit_share(0.5)에서 멀다");
-        foreach (BotHabit habit in new[] { BotHabit.Dash, BotHabit.Jump, BotHabit.Parry, BotHabit.Guard, BotHabit.Spacing })
+        foreach (BotHabit habit in new[] { BotHabit.Dash, BotHabit.Jump, BotHabit.Guard, BotHabit.Spacing })
         {
-            ((double)habits.Count(t => t.Habit == habit) / habits.Count).ShouldBeInRange(0.15, 0.25, $"{habit} 습관이 고르게 안 뽑혔다");
+            ((double)habits.Count(t => t.Habit == habit) / habits.Count).ShouldBeInRange(0.19, 0.31, $"{habit} 습관이 고르게 안 뽑혔다");
         }
     }
 

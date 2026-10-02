@@ -106,7 +106,7 @@ public class BattleSimTests
 
         for (int i = 0; i < 600; i++)
         {
-            sim.Tick(new InputFrame(1, false, Dash: i % 13 == 0, false, false));
+            sim.Tick(new InputFrame(1, false, Dash: i % 13 == 0, false));
             if (sim.Fighter.Grounded && Math.Abs(sim.Fighter.X - sim.Boss.X) < standoff - 1e-9)
             {
                 inside = true;
@@ -135,7 +135,7 @@ public class BattleSimTests
         bool inside = false;
         for (int i = 0; i < 300; i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, false));
+            sim.Tick(new InputFrame(1, false, false, false));
             if (Math.Abs(sim.Fighter.X - sim.Boss.X) < Standoff() - 1e-9)
             {
                 inside = true;
@@ -168,7 +168,7 @@ public class BattleSimTests
         for (int i = 0; i < 300; i++)
         {
             bool inside = Math.Abs(sim.Fighter.X - sim.Boss.X) < standoff * 0.5;
-            sim.Tick(new InputFrame((sbyte)(inside ? 0 : 1), Jump: i == 0, false, false, false));
+            sim.Tick(new InputFrame((sbyte)(inside ? 0 : 1), Jump: i == 0, false, false));
         }
 
         sim.Fighter.Grounded.ShouldBeTrue("아직 공중이다 — 이 테스트가 착지를 안 본다");
@@ -197,7 +197,6 @@ public class BattleSimTests
                 ["단타"] = OneHit(
                     distance: new double[] { 0, 2000 },
                     height: new double[] { 0, 300 },
-                    parryable: false,
                     at: 6 * BattleSim.Dt),
             },
             Seed = 1,
@@ -208,7 +207,7 @@ public class BattleSimTests
         // 132틱 동안 오른쪽으로 걸어 보스 몸 안으로 들어간다(패턴은 2.2초 뒤에 선다).
         for (int i = 0; i < 132; i++)
         {
-            sim.Tick(new InputFrame(1, false, false, false, false));
+            sim.Tick(new InputFrame(1, false, false, false));
         }
 
         Math.Abs(sim.Fighter.X - sim.Boss.X)
@@ -217,7 +216,7 @@ public class BattleSimTests
         // 막힌 채로 보스 쪽으로 대시. 판정은 여섯 틱 뒤에 선다.
         for (int i = 0; i < 12; i++)
         {
-            sim.Tick(new InputFrame(0, false, Dash: i == 0, false, false));
+            sim.Tick(new InputFrame(0, false, Dash: i == 0, false));
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -239,7 +238,7 @@ public class BattleSimTests
             double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
             var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
             sbyte move = standoff <= 0 ? toward : gap < standoff ? (sbyte)-toward : (sbyte)0;
-            outcome = sim.Tick(new InputFrame(move, false, false, false, false));
+            outcome = sim.Tick(new InputFrame(move, false, false, false));
         }
 
         return PlayerAxes.From(sim.Events);
@@ -301,7 +300,7 @@ public class BattleSimTests
         {
             bool near = sim.Boss.X - sim.Fighter.X <= sim.Boss.HalfWidth + sim.FighterReach;
             bool free = sim.Fighter.Action == FighterAction.Idle;
-            sim.Tick(new InputFrame((sbyte)(near ? 0 : 1), false, false, false, Attack: near && free));
+            sim.Tick(new InputFrame((sbyte)(near ? 0 : 1), false, false, Attack: near && free));
         }
 
         sim.Boss.Health.ShouldBeLessThan(before);
@@ -318,7 +317,6 @@ public class BattleSimTests
                 (sbyte)(i % 11 < 5 ? 1 : -1),
                 Jump: i % 37 == 0,
                 Dash: i % 23 == 0,
-                Parry: i % 29 == 0,
                 Attack: i % 17 == 0);
         }
 
@@ -390,7 +388,7 @@ public class BattleSimTests
         var sim = new BattleSim(Setup());
         for (int i = 0; i < 900; i++)
         {
-            sim.Tick(new InputFrame(0, false, Dash: i % 41 == 0, false, false));
+            sim.Tick(new InputFrame(0, false, Dash: i % 41 == 0, false));
         }
 
         sim.Events.ShouldNotBeEmpty();
@@ -507,8 +505,6 @@ public class BattleSimTests
             DashDirection = "out",
             Jumpable = true,
             AntiAir = false,
-            Parryable = false,
-            ParryWindow = 0,
             PunishGreed = false,
             Reach = "far",
             MultiHit = 1,
@@ -560,7 +556,7 @@ public class BattleSimTests
 
     /// <summary>판정 하나짜리 패턴. 기하와 태그를 부르는 쪽이 정한다.</summary>
     private static PatternDef OneHit(
-        double[] distance, double[] height, bool parryable, double at) => new()
+        double[] distance, double[] height, double at) => new()
         {
             Tags = new PatternTags
             {
@@ -568,8 +564,6 @@ public class BattleSimTests
                 DashDirection = "out",
                 Jumpable = false,
                 AntiAir = false,
-                Parryable = parryable,
-                ParryWindow = parryable ? 0.12 : 0,
                 PunishGreed = false,
                 Reach = "far",
                 MultiHit = 1,
@@ -596,28 +590,28 @@ public class BattleSimTests
     });
 
     [Fact]
-    public void 점프로_넘긴_판정은_같이_눌러둔_패리가_아니라_점프로_기록된다()
+    public void 점프로_넘긴_판정은_같이_누른_대시가_아니라_점프로_기록된다()
     {
         // 이 브랜치의 최우선 버그다. 회피 행동 칸이 하나였을 때는 **가장 최근에 시작한 행동**이
         // 판정을 가져갔다. 그래서 점프로 넘긴 낮은 판정이 그 뒤에 누른 패리의 공으로 기록됐고
-        // (out/demo.log 10건 중 4건), 그 패리는 "실패한 패리" 로도 세어져 parry_rate 까지 깎았다.
+        // (out/demo.log 10건 중 4건), 그 패리는 "실패한 패리" 로도 세어져 parry_rate 까지 깎았다. 패리는 #168 에서 걷었고
+        // 같은 자리를 공중 대시가 선다 — 점프보다 **나중에** 시작한다.
         // 안 맞은 이유는 HitResolver 가 이미 알고 있다 — 높이가 어긋났으면 점프다.
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
             height: new double[] { 0, 70 },
-            parryable: true,
             at: 6 * BattleSim.Dt));
 
         for (int i = 1; i <= 14; i++)
         {
-            // 1틱: 점프(공중으로) → 7틱: 패리(점프보다 **나중에** 시작한다). 판정은 9틱 언저리다.
-            sim.Tick(new InputFrame(0, Jump: i == 1, false, Parry: i == 7, false));
+            // 1틱: 점프(공중으로) → 7틱: 공중 대시(점프보다 **나중에** 시작한다). 판정은 9틱 언저리다.
+            sim.Tick(new InputFrame(0, Jump: i == 1, Dash: i == 7, false));
         }
 
         sim.Events.Count.ShouldBe(1);
         DodgeEvent e = sim.Events[0];
         e.Verdict.ShouldBe(HitVerdict.MissedByHeight);
-        e.Verb.ShouldBe(DodgeVerb.Jump, "점프가 넘긴 판정인데 나중에 시작한 패리가 공을 가져갔다");
+        e.Verb.ShouldBe(DodgeVerb.Jump, "점프가 넘긴 판정인데 나중에 시작한 대시가 공을 가져갔다");
         e.Airborne.ShouldBeTrue();
         e.TimingError.ShouldBeLessThan(0);
     }
@@ -625,7 +619,7 @@ public class BattleSimTests
     [Fact]
     public void 거리로_빗나간_판정은_어떤_행동에도_안_붙는다()
     {
-        // 간격 덕에 그냥 안 닿은 것이다. 그 순간 돌던 대시·패리의 공으로 적으면
+        // 간격 덕에 그냥 안 닿은 것이다. 그 순간 돌던 대시의 공으로 적으면
         // dash_timing_bias 가 "판정을 피한 대시" 가 아닌 것들로 채워진다.
         //
         // **이 테스트가 이슈 #46 의 반례 가드다.** "대시가 돌고 있으면 거리 miss 를 대시의 공으로"
@@ -635,13 +629,12 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 100 },
             height: new double[] { 0, 300 },
-            parryable: true,
             at: 6 * BattleSim.Dt));
 
         for (int i = 1; i <= 14; i++)
         {
             // 파이터는 480, 보스는 1440 에 서 있다 — 대시를 해도 100 안쪽으로는 못 들어간다.
-            sim.Tick(new InputFrame(0, false, Dash: i == 2, Parry: i == 8, false));
+            sim.Tick(new InputFrame(0, false, Dash: i == 2, false));
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -663,7 +656,6 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 1000 },
             height: new double[] { 0, 300 },
-            parryable: false,
             at: 6 * BattleSim.Dt));
 
         for (int i = 1; i <= 14; i++)
@@ -671,7 +663,7 @@ public class BattleSimTests
             // 1틱: 보스 반대쪽을 본다 — 대시는 **바라보는 쪽으로만** 간다. 2틱: 대시.
             // 파이터 480 · 보스 1440 이므로 대시 전 거리는 960 으로 사거리(1000) **안**이다.
             // 그 한 줄이 이 테스트와 바로 위 반례 가드를 가른다.
-            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false, false));
+            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false));
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -700,17 +692,16 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 950 },
             height: new double[] { 0, 300 },
-            parryable: false,
             at: 6 * BattleSim.Dt));
 
-        sim.Tick(new InputFrame(-1, false, false, false, false));   // 보스 반대쪽을 본다 — 다음 틱의 대시가 이 자리에서 선다
+        sim.Tick(new InputFrame(-1, false, false, false));   // 보스 반대쪽을 본다 — 다음 틱의 대시가 이 자리에서 선다
         double start = Math.Abs(sim.Fighter.X - sim.Boss.X);
         start.ShouldBeGreaterThan(950, "대시 시작 자리의 중심이 띠 안이다 — 이 테스트가 점과 몸통을 못 가른다");
         (start - sim.Fighter.HalfWidth).ShouldBeLessThanOrEqualTo(950, "대시 시작 자리의 몸통이 띠 밖이다 — 이 테스트가 점과 몸통을 못 가른다");
 
         for (int i = 2; i <= 14; i++)
         {
-            sim.Tick(new InputFrame(0, false, Dash: i == 2, false, false));
+            sim.Tick(new InputFrame(0, false, Dash: i == 2, false));
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -731,13 +722,12 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 1000 },
             height: new double[] { 0, 70 },
-            parryable: false,
             at: 6 * BattleSim.Dt));
 
         // 1틱: 보스 반대쪽을 보며 뛴다. 8틱: 공중 대시(착지 전 한 번은 된다). 판정은 11틱에 선다.
         for (int i = 1; i <= 7; i++)
         {
-            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), Jump: i == 1, false, false, false));
+            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), Jump: i == 1, false, false));
         }
 
         sim.Fighter.Y.ShouldBeGreaterThan(70, "대시 시작 높이의 몸통이 판정에 걸친다 — 이 테스트가 높이를 못 가른다");
@@ -745,7 +735,7 @@ public class BattleSimTests
 
         for (int i = 8; i <= 20 && sim.Events.Count == 0; i++)
         {
-            sim.Tick(new InputFrame(0, false, Dash: i == 8, false, false));
+            sim.Tick(new InputFrame(0, false, Dash: i == 8, false));
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -773,7 +763,6 @@ public class BattleSimTests
                 ["단타"] = OneHit(
                     distance: new double[] { 190, 2000 },
                     height: new double[] { 0, 300 },
-                    parryable: false,
                     at: 6 * BattleSim.Dt),
             },
             Seed = 1,
@@ -789,7 +778,6 @@ public class BattleSimTests
                 (sbyte)(!soon && gap > 300 ? 1 : 0),
                 false,
                 Dash: soon && sim.Fighter.Action == FighterAction.Idle,
-                false,
                 false));
         }
 
@@ -852,7 +840,7 @@ public class BattleSimTests
                 move = (sbyte)(gap > Standoff() + 10 ? toward : 0);
             }
 
-            outcome = sim.Tick(new InputFrame(move, false, dash, false, false));
+            outcome = sim.Tick(new InputFrame(move, false, dash, false));
         }
 
         return sim.Events;
@@ -900,13 +888,12 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 1000 },
             height: new double[] { 0, 300 },
-            parryable: false,
             at: 20 * BattleSim.Dt));
 
         for (int i = 1; i <= 30; i++)
         {
             // 대시는 2틱에 시작해 12틱에 끝나고, 경직(6틱)까지 18틱에 끝난다. 판정은 23틱 언저리다.
-            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false, false));
+            sim.Tick(new InputFrame((sbyte)(i == 1 ? -1 : 0), false, Dash: i == 2, false));
         }
 
         sim.Events.Count.ShouldBe(1);
@@ -925,17 +912,17 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
             height: new double[] { 0, 300 },
-            parryable: false,
             at: 6 * BattleSim.Dt));
 
+        // 첫 틱에 대시 — 무적(0.14초 · 8틱)이 판정(9틱 언저리) 앞에서 닫히고 대시(11틱)는 아직 돈다. 그 대시가 시도다.
         for (int i = 1; i <= 14; i++)
         {
-            sim.Tick(new InputFrame(0, false, false, Parry: i == 8, false));
+            sim.Tick(new InputFrame(0, false, Dash: i == 1, false));
         }
 
         sim.Events.Count.ShouldBe(1);
         sim.Events[0].Verdict.ShouldBe(HitVerdict.Hit);
-        sim.Events[0].Verb.ShouldBe(DodgeVerb.Parry);
+        sim.Events[0].Verb.ShouldBe(DodgeVerb.Dash);
     }
 
     [Fact]
@@ -947,7 +934,6 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
             height: new double[] { 0, 300 },
-            parryable: true,
             at: 6 * BattleSim.Dt));
 
         for (int i = 1; i <= 14; i++)
@@ -958,25 +944,24 @@ public class BattleSimTests
         sim.Events.Count.ShouldBe(1);
         DodgeEvent e = sim.Events[0];
         e.DashAvailable.ShouldBeTrue("dash_window=0.14 인데 대시가 없었다고 실렸다");
-        e.ParryAvailable.ShouldBeTrue("parryable=true 인데 패리가 없었다고 실렸다");
         e.JumpAvailable.ShouldBeFalse("높이 300 띠가 온 바닥을 덮는데 점프가 가능했다고 실렸다 — 기준 파이터의 정점은 176 이다");
     }
 
     // ── 방어 하나와 계측 (이슈 #27 · #53) ────────────────────────────────────
 
     /// <summary>
-    /// 패리 가능한 판정 하나를 <paramref name="pressAt"/> 틱에 K 로 받아 본다. 관측과 <b>판정이 선 틱</b>을 돌려준다.
+    /// 판정 하나를 <paramref name="pressAt"/> 틱에 대시로 받아 본다(null 이면 아무것도 안 한다). 관측과 <b>판정이 선 틱</b>을 돌려준다.
     /// <paramref name="at"/> 은 판정이 서는 패턴 틱이다(기본 24 — <see cref="OneAt"/>).
     /// </summary>
-    private static (DodgeEvent Event, int Tick) ParryAt(int? pressAt, int at = 24) =>
-        OneAt(i => new InputFrame(0, false, false, Parry: i == pressAt, false), at);
+    private static (DodgeEvent Event, int Tick) DashAt(int? pressAt, int at = 24) =>
+        OneAt(i => new InputFrame(0, false, Dash: i == pressAt, false), at);
 
     /// <summary>같은 판정을 <paramref name="from"/> 틱부터 ↓ 를 붙들어 가드로 받아 본다 (설계 §5.2).</summary>
     private static (DodgeEvent Event, int Tick) GuardFrom(int from) =>
-        OneAt(i => new InputFrame(0, false, false, false, false, GuardHeld: i >= from));
+        OneAt(i => new InputFrame(0, false, false, false, GuardHeld: i >= from));
 
     /// <summary>
-    /// 패리 가능한 판정 하나(패턴의 <paramref name="at"/> 틱째 · 기본 24)를 틱마다 <paramref name="input"/> 으로 받아 본다.
+    /// 판정 하나(패턴의 <paramref name="at"/> 틱째 · 기본 24)를 틱마다 <paramref name="input"/> 으로 받아 본다.
     ///
     /// <para>
     /// 판정 틱을 손으로 안 적는 이유는 간격과 시각이 바뀔 때마다 그 숫자가 같이 움직이기 때문이다 —
@@ -988,7 +973,6 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
             height: new double[] { 0, 300 },
-            parryable: true,
             at: at * BattleSim.Dt));
 
         for (int i = 1; i <= at + 6 && sim.Events.Count == 0; i++)
@@ -1000,25 +984,23 @@ public class BattleSimTests
     }
 
     [Fact]
-    public void 패리_가드_무반응이_서로_다른_관측이_된다()
+    public void 대시_가드_무반응이_서로_다른_관측이_된다()
     {
         // **계측은 여전히 셋으로 갈린다** (이슈 #53) — 갈리는 자리만 바뀌었다.
-        // 전에는 정확 · 부정확 · 무반응이었고, 지금은 **패리 · 가드 · 무반응**이다.
+        // 전에는 정확 · 부정확 · 무반응이었고, 그다음 패리 · 가드 · 무반응이었다(패리는 #168 에서 걷었다). 지금은 **대시 · 가드 · 무반응**이다.
         // 셋이 다시 뭉치면 여기서 빨개진다.
         const int early = 12;
-        (DodgeEvent parried, int hitTick) = ParryAt(26);              // 판정 코앞 — 창(0.133) 안
+        (DodgeEvent dodged, int hitTick) = DashAt(26);                // 판정 코앞 — 무적(0.14) 안
         (DodgeEvent guarded, _) = GuardFrom(early);                   // 일찍부터 ↓ 를 붙들고 있었다
-        (DodgeEvent none, _) = ParryAt(null);                         // 아무것도 안 했다
+        (DodgeEvent none, _) = DashAt(null);                          // 아무것도 안 했다
 
-        parried.Verdict.ShouldBe(HitVerdict.Parried);
-        parried.Verb.ShouldBe(DodgeVerb.Parry);
-        parried.TimingError.ShouldBe((26 - hitTick) * BattleSim.Dt, 1e-9);
+        dodged.Verdict.ShouldBe(HitVerdict.Dodged);
+        dodged.Verb.ShouldBe(DodgeVerb.Dash);
+        dodged.TimingError.ShouldBe((26 - hitTick) * BattleSim.Dt, 1e-9);
 
         guarded.Verdict.ShouldBe(HitVerdict.Guarded);
-        guarded.Verb.ShouldBe(DodgeVerb.Guard, "붙들어 막은 것을 패리로 세면 성공률이 거짓이 된다");
+        guarded.Verb.ShouldBe(DodgeVerb.Guard, "붙들어 막은 것을 다른 수단으로 세면 그 수단의 축이 거짓이 된다");
         guarded.TimingError.ShouldBe((early - hitTick) * BattleSim.Dt, 1e-9);
-        guarded.TimingError.ShouldBeLessThan(-TestConfigs.Fighter().ParryPreciseWindow,
-            "창 안에서 누른 것이 가드로 기록됐다 — 이 테스트가 두 갈래를 안 본다");
 
         none.Verdict.ShouldBe(HitVerdict.Hit);
         none.Verb.ShouldBe(DodgeVerb.None);
@@ -1028,95 +1010,16 @@ public class BattleSimTests
         // 뭉쳐 있는 실패가 실제로 있었다.
         var points = new HashSet<(HitVerdict, DodgeVerb, double)>
         {
-            (parried.Verdict, parried.Verb, parried.TimingError),
+            (dodged.Verdict, dodged.Verb, dodged.TimingError),
             (guarded.Verdict, guarded.Verb, guarded.TimingError),
             (none.Verdict, none.Verb, none.TimingError),
         };
-        points.Count.ShouldBe(3, "패리 · 가드 · 무반응이 같은 점으로 뭉쳤다");
+        points.Count.ShouldBe(3, "대시 · 가드 · 무반응이 같은 점으로 뭉쳤다");
 
         // 축 집계까지 따라가는지도 본다 — 관측이 갈려도 집계가 뭉치면 망은 못 본다.
-        PlayerAxes axes = PlayerAxes.From(new[] { parried, guarded, none });
-        axes.ParrySamples.ShouldBe(1);
+        PlayerAxes axes = PlayerAxes.From(new[] { dodged, guarded, none });
+        axes.DashSamples.ShouldBe(1);
         axes.GuardSamples.ShouldBe(1);
-        axes.ParryRate.ShouldBe(1.0, 1e-9);
-    }
-
-    [Fact]
-    public void 늦은_패리는_그냥_맞고_붙든_가드는_막는다()
-    {
-        // 스펙이 패리와 가드를 다시 갈랐다 (설계 §5.3: "그 밖이면 그냥 맞는다 — 가드가 아니다"). 같은 시각(12틱)에
-        // K 를 누른 것과 ↓ 를 붙든 것이 맞은 것과 막은 것으로 갈린다. 12틱에 누른 패리는 판정(27틱 언저리)에서
-        // 창 밖(0.25초)이지만 커밋(0.333초) 안이다 — 그 시도는 패리의 것으로 남는다.
-        (DodgeEvent late, _) = ParryAt(12);
-        (DodgeEvent guarded, _) = GuardFrom(12);
-
-        late.Verdict.ShouldBe(HitVerdict.Hit, "창을 놓친 패리가 막았다 — 패리가 다시 가드가 됐다");
-        late.Verb.ShouldBe(DodgeVerb.Parry, "눌렀다 놓친 것은 패리 시도다 — 무반응과 같은 점이면 안 된다");
-        guarded.Verdict.ShouldBe(HitVerdict.Guarded);
-    }
-
-    [Fact]
-    public void 경직까지_끝난_뒤에_맞은_판정은_패리의_공이_아니다()
-    {
-        // 이 계획이 정한 것 6 — 패리 시도의 공은 **패리 행동이 도는 동안만** 산다(대시의 공이 대시 행동이 도는 동안인 것과
-        // 같은 경계). 행동이 끝난 뒤에 선 판정까지 그 누름의 시도로 세면 사람이 한 적 없는 표본이 parry 축에 섞이고,
-        // "아무것도 안 하고 맞았다" 가 "일찍 누르고 맞았다" 로 기록된다. (#82) 패리 행동은 이제 **커밋 뒤 경직까지**다 — 경직 중에 맞은 판정은
-        // 아래 짝 테스트가 본다. 그래서 여기는 경직까지 끝난 뒤(누른 뒤 44틱)에 판정을 세운다: 전에는 24틱짜리 판(커밋 20틱 뒤)이었다.
-        FighterConfig c = TestConfigs.Fighter();
-        const int press = 3;
-        (DodgeEvent e, int hitTick) = ParryAt(press, at: 44);
-
-        double parryAction = c.ParryDuration + (BattleSim.TicksFor(c.ParryStiff) * BattleSim.Dt);
-        ((hitTick - press) * BattleSim.Dt).ShouldBeGreaterThan(parryAction,
-            "판정이 패리 행동 안에 섰다 — 이 테스트가 경직까지 끝난 뒤를 안 본다");
-        e.Verdict.ShouldBe(HitVerdict.Hit);
-        e.Verb.ShouldBe(DodgeVerb.None, "경직까지 끝난 누름이 이 판정의 공을 가져갔다");
-        e.TimingError.ShouldBe(0);
-    }
-
-    [Fact]
-    public void 커밋_뒤_경직_중에_맞은_판정은_그_패리의_시도다()
-    {
-        // (#82) 위 테스트의 짝 — 커밋(0.333초)은 끝났지만 패리 뒤 경직(parry_stiff) 안에 선 판정이다. 경직 동안 파이터는 서 있기로 한 것이
-        // 아니라 **못 움직이는** 것이라 그 맨몸은 그 패리가 만든 것이다 — 대시 경직 중의 판정이 대시의 것인 것과 같은 규칙이다
-        // (FighterStiffTests). 공의 시각은 누른 틱이라 오차가 크게 음수다: "너무 일찍 눌러 커밋에 묶였다" 가 그대로 실린다.
-        // 경직이 없던 때는 이 판정이 None 이었다(아무것도 안 하고 맞은 것과 같은 점).
-        FighterConfig c = TestConfigs.Fighter();
-        const int press = 3;
-        (DodgeEvent e, int hitTick) = ParryAt(press);
-
-        double since = (hitTick - press) * BattleSim.Dt;
-        since.ShouldBeGreaterThan(c.ParryDuration, "판정이 커밋 안에 섰다 — 이 테스트가 경직을 안 본다");
-        since.ShouldBeLessThan(c.ParryDuration + (BattleSim.TicksFor(c.ParryStiff) * BattleSim.Dt), "판정이 경직 밖에 섰다");
-        e.Verdict.ShouldBe(HitVerdict.Hit);
-        e.Verb.ShouldBe(DodgeVerb.Parry, "패리 뒤 경직 중의 판정이 그 패리의 시도로 안 실렸다");
-        e.TimingError.ShouldBeLessThan(-c.ParryDuration, "공의 시각이 누른 틱이 아니다");
-    }
-
-    [Fact]
-    public void 어느_타든_받아치면_보스가_탈진하고_연격이_끊긴다()
-    {
-        // #72 · 설계 §4.3 — 받아치면 **어느 타든** 연격이 그 자리에서 끊기고 보스가 탈진한다. 이슈 #53 은 반대였다:
-        // 앞의 연타를 받아친 상은 피해 0 뿐이고 박자를 고정했다. 스펙이 뒤집었다 — 끊기면 뒤의 박자가 없으니 흔들릴 것도 없다.
-        // 기 +1 과 공중 대시 회복은 그대로다.
-        BattleSim sim = ParryNthOfTwo(1);
-
-        sim.Events[0].Verdict.ShouldBe(HitVerdict.Parried);
-        sim.Boss.Exhausted.ShouldBeTrue("1타를 받아쳤는데 보스가 안 무너졌다");
-        sim.Boss.CurrentPattern.ShouldBeNull("탈진했는데 패턴이 안 끊겼다");
-        sim.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth, "받아쳤는데 깎였다");
-        sim.Fighter.Qi.ShouldBe(1);
-        sim.Fighter.AirDashSpent.ShouldBeFalse();
-
-        // 끊겼는지는 탈진이 풀린 **뒤**에야 보인다 — 탈진 90틱 동안은 끊기지 않은 러너도 서 있어 2타를 못 낸다. 그래서 다음
-        // 패턴이 설 때까지 민다: 러너가 안 끊겼다면 탈진이 풀린 그 사이에 남은 2타를 낸다.
-        for (int i = 0; i < 60 * 3 && (sim.Boss.Exhausted || sim.Boss.CurrentPattern is null); i++)
-        {
-            sim.Tick(default);
-        }
-
-        sim.Boss.CurrentPattern.ShouldNotBeNull("탈진이 풀렸는데 다음 패턴이 안 섰다");
-        sim.Events.Count.ShouldBe(1, "끊긴 패턴의 2타가 왔다");
     }
 
     [Fact]
@@ -1134,8 +1037,6 @@ public class BattleSimTests
                 DashDirection = "either",
                 Jumpable = false,
                 AntiAir = false,
-                Parryable = false,
-                ParryWindow = 0,
                 PunishGreed = false,
                 Reach = "close",
                 MultiHit = 2,
@@ -1165,7 +1066,7 @@ public class BattleSimTests
         // 패턴 시작(3틱째)과 같은 틱에 대시 — 대시 무적이 3·6틱째 판정을 둘 다 덮는다.
         for (int i = 1; i <= 12; i++)
         {
-            sim.Tick(new InputFrame(0, false, Dash: i == 3, false, false));
+            sim.Tick(new InputFrame(0, false, Dash: i == 3, false));
         }
 
         sim.Events.Count.ShouldBe(2);
@@ -1183,76 +1084,14 @@ public class BattleSimTests
         var sim = OnePattern(OneHit(
             distance: new double[] { 0, 2000 },
             height: new double[] { 0, 300 },
-            parryable: true,
             at: 30 * BattleSim.Dt));
 
         for (int i = 1; i <= 40 && sim.Events.Count == 0; i++)
         {
-            sim.Tick(new InputFrame(0, false, false, false, false, GuardHeld: true));
+            sim.Tick(new InputFrame(0, false, false, false, GuardHeld: true));
         }
 
         return sim;
-    }
-
-    private const int _firstHit = 24;
-    private const int _lastHit = 54;
-
-    /// <summary>
-    /// 판정 <b>둘</b>짜리 패턴. 단타가 아니라 두 대인 것이 요점이다: 어느 타를 받아쳤는가 하나만 다른 두 판을 만든다.
-    /// </summary>
-    private static PatternDef TwoHits() => new()
-    {
-        Tags = new PatternTags
-        {
-            DashWindow = 0,
-            DashDirection = "out",
-            Jumpable = false,
-            AntiAir = false,
-            Parryable = true,
-            ParryWindow = 0.12,
-            PunishGreed = false,
-            Reach = "far",
-            MultiHit = 2,
-            Tracking = false,
-        },
-        Timeline = new List<PatternStep>
-        {
-            new() { T = _firstHit * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
-            new() { T = _lastHit * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
-            new() { T = (_lastHit + 6) * BattleSim.Dt, Kind = "end" },
-        },
-    };
-
-    /// <summary>
-    /// 두 대짜리 패턴에서 <paramref name="which"/> 번째(1 또는 2)만 <b>받아친다.</b>
-    /// 나머지 한 대는 그냥 맞는다 — 무엇을 받아쳤는가 하나만 다른 두 판을 만드는 것이 목적이다.
-    /// </summary>
-    private static BattleSim ParryNthOfTwo(int which)
-    {
-        var sim = OnePattern(TwoHits());
-        int press = which == 1 ? _firstHit : _lastHit;
-
-        // 여유를 넉넉히 둔다 — 패턴은 간격(3틱) 뒤에 서므로 판정은 타임라인 시각보다 그만큼
-        // 늦게 온다. 누름은 그래도 창(0.12초 = 7.2틱) 안이라 시각을 안 옮겨도 받아친다.
-        for (int i = 1; i <= _lastHit + 12 && sim.Events.Count < which; i++)
-        {
-            sim.Tick(new InputFrame(0, false, false, Parry: i == press, false));
-        }
-
-        return sim;
-    }
-
-    /// <summary>보스가 탈진해 있는 남은 틱. <b>틱을 세어 잰다</b> — 데이터 값을 손으로 안 베낀다.</summary>
-    private static int ExhaustLeft(BattleSim sim)
-    {
-        int ticks = 0;
-        while (sim.Boss.Exhausted && ticks < 60 * 10)
-        {
-            sim.Tick(default);
-            ticks++;
-        }
-
-        return ticks;
     }
 
     [Fact]
@@ -1274,131 +1113,6 @@ public class BattleSimTests
         sim.Fighter.Guarding.ShouldBeTrue("받아낸 가드가 풀렸다");
     }
 
-    [Fact]
-    public void 어느_타를_받아쳐도_탈진은_같은_90틱이다()
-    {
-        // 설계 §4.3 — 탈진은 틱으로 센다(1.5초 = 90틱 · 반올림은 BattleSim.TicksFor 한 곳). 어느 타를 받아쳤는지와 무관하게
-        // 같은 상태 · 같은 길이다. 받아친 틱부터 90틱 동안 탈진이고, 받아친 뒤 90번째 틱에 풀린다.
-        int expected = BattleSim.TicksFor(TestConfigs.Boss().ExhaustSeconds);
-        expected.ShouldBe(90);
-
-        BattleSim early = ParryNthOfTwo(1);
-        BattleSim last = ParryNthOfTwo(2);
-        early.Events[0].Verdict.ShouldBe(HitVerdict.Parried);
-        last.Events[1].Verdict.ShouldBe(HitVerdict.Parried);
-
-        ExhaustLeft(early).ShouldBe(expected);
-        ExhaustLeft(last).ShouldBe(expected);
-    }
-
-    [Fact]
-    public void 탈진이_풀리면_간격을_처음부터_세고_다음_패턴을_고른다()
-    {
-        // 설계 §4.3 — 탈진이 끝나면 패턴 간격 뒤 다음 패턴을 고른다. 탈진 동안 보스는 아무것도 안 한다: 패턴도 없고 간격도 안 준다.
-        // 판이 처음 설 때와 같은 규약이다 — 쉬는 첫 틱부터 세어 간격의 마지막 틱에 다음 패턴이 선다. 탈진이 풀리는 틱이 쉬는 첫 틱이다.
-        BattleSim fresh = OnePattern(TwoHits());
-        while (fresh.Boss.CurrentPattern is null && fresh.Ticks < 600)
-        {
-            fresh.Tick(default);
-        }
-
-        BattleSim sim = ParryNthOfTwo(1);
-        int free = sim.Ticks + ExhaustLeft(sim);
-        while (sim.Boss.CurrentPattern is null && sim.Ticks < free + 600)
-        {
-            sim.Tick(default);
-        }
-
-        (sim.Ticks - free + 1).ShouldBe(fresh.Ticks, "탈진이 풀린 뒤 간격을 처음부터 안 셌다");
-    }
-
-    [Fact]
-    public void 끊긴_창은_관측을_안_남기고_로그만_남긴다()
-    {
-        // 설계 §3.5 5 — 보스가 탈진해 패턴이 끊기면 열린 창은 결과가 없다. 지어내면 창이 열린 틱의 빗나간 이유(대개 거리)가 나가
-        // "거리로 빗나갔다" 로 계측에 들어간다 — 그 한 줄이 곧 시도 기록이다. 그래서 로그 한 줄만 남긴다.
-        // 앞의 판정(거리 50 · 창 30틱)은 멀리 선 파이터에게 안 닿은 채 살아 있고, 그동안 선 둘째를 받아친다.
-        var pattern = new PatternDef
-        {
-            Tags = TwoHits().Tags,
-            Timeline = new List<PatternStep>
-            {
-                new() { T = 12 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 50, 0, 300 }, Damage = 5, ActiveSeconds = 0.5 },
-                new() { T = 24 * BattleSim.Dt, Kind = "active", Band = new double[] { 0, 2000, 0, 300 }, Damage = 5 },
-                new() { T = 60 * BattleSim.Dt, Kind = "end" },
-            },
-        };
-
-        using var log = new LogCapture();
-        BattleSim sim = OnePattern(pattern);
-        for (int i = 1; i <= 40 && sim.Events.Count == 0; i++)
-        {
-            bool secondSoon = sim.BossTestedRects.Count > 0 && sim.NextActiveIn is <= 4 * BattleSim.Dt;
-            sim.Tick(new InputFrame(0, false, false, Parry: secondSoon, false));
-        }
-
-        sim.Events.Count.ShouldBe(1);
-        sim.Events[0].Verdict.ShouldBe(HitVerdict.Parried);
-        sim.Boss.Exhausted.ShouldBeTrue();
-        log.Lines.ShouldContain($"[boss][D] cut_swing id=단타 tick={sim.Ticks} reason=exhaust");
-
-        for (int i = 0; i < 40; i++)
-        {
-            sim.Tick(default);
-        }
-
-        sim.Events.Count.ShouldBe(1, "끊긴 창이 관측을 남겼다");
-    }
-
-    /// <summary>봇이 쓰는 반응 창(초)과 같은 값. 이 안에서 누르면 판정이 패리 창 안에 선다.</summary>
-    private const double _lateReact = 0.10;
-
-    [Fact]
-    public void 실제_1단계_연격을_받아치면_곧장_누른_2연격이_탈진_안에_다_닿는다()
-    {
-        // **유저가 요청한 고리 한 바퀴** (#72 · 설계 §4.3): 받아친다 → 보스가 무너진다 → 곧장 누른 2연격(1타 + 2타)이 탈진 안에
-        // 다 닿는다. 2번 PR 이 넘긴 자리다(#59 의 2/4 넘김) — FighterActionTests 가 되받아치기를, BossDataTests 가 초의 산수를
-        // 못박지만 BattleSim 위에서 한 바퀴가 실제로 도는지는 아무도 안 봤다. **실제 캐릭터 · 보스 · 1단계 연격**으로 돈다.
-        FighterConfig fighter = TestConfigs.Fighters().Values.Single();
-        var sim = new BattleSim(new BattleSetup
-        {
-            Arena = TestConfigs.Arena(),
-            Fighter = fighter,
-            HitShapes = TestConfigs.HitShapes(),
-            Boss = TestConfigs.Boss(),
-            PatternIds = new[] { "3연격" },
-            Patterns = Patterns(),
-            Seed = 51,
-            MaxTicks = 60 * 60,
-        });
-
-        // 붙은 채 기다리다 판정이 봇의 반응 창(_lateReact) 안으로 오면 K. 받아친 다음 틱에 J, 1타 도중에 J 를 한 번 더(2타). **붙은 뒤에만**
-        // 누른다 — 쉬는 길이가 흔들려(설계 2026-09-29 조각1 §3.4) 3연격이 걸어 들어가는 도중에 서면, 멀리서 받아친 뒤의 2연격은 보스에 안 닿는다.
-        int parried = 0;
-        for (int t = 1; t <= 60 * 30 && parried == 0; t++)
-        {
-            double gap = Math.Abs(sim.Fighter.X - sim.Boss.X);
-            var toward = (sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1);
-            bool press = gap <= Standoff() + 10 && sim.NextActiveIn is double left && left <= _lateReact
-                && sim.Fighter.Action == FighterAction.Idle;
-            sim.Tick(new InputFrame(gap > Standoff() + 10 ? toward : (sbyte)0, false, false, Parry: press, false));
-            if (sim.Events.Count > 0 && sim.Events[^1].Verdict == HitVerdict.Parried)
-            {
-                parried = sim.Ticks;
-            }
-        }
-
-        parried.ShouldBeGreaterThan(0, "1단계 연격을 한 번도 못 받아쳤다");
-        int before = sim.Boss.Health;
-        for (int i = 1; sim.Boss.Exhausted && i <= 60 * 5; i++)
-        {
-            sim.Tick(new InputFrame(0, false, false, false, Attack: i is 1 or 3));
-        }
-
-        (before - sim.Boss.Health).ShouldBe(fighter.Combo[0].Damage + fighter.Combo[1].Damage,
-            "받아친 뒤 곧장 누른 2연격이 탈진 안에 다 안 닿았다");
-    }
-
     /// <summary>실제 <c>점프 공격</c> 하나만 도는 판 — 보스는 안 죽는다. 뛰는 틱의 파이터 앞에 내린다.</summary>
     private static BattleSim Leaper() => new(new BattleSetup
     {
@@ -1413,47 +1127,35 @@ public class BattleSimTests
     });
 
     [Fact]
-    public void 실제_점프_공격의_착지는_가드로도_패리로도_못_받는다()
+    public void 실제_점프_공격의_착지는_가드로도_못_받는다()
     {
-        // 설계 2026-09-29 조각1 §2.3 — 착지는 바닥 전체 · 높이 0 ~ 60 · 피해 24 · 대시 · 가드 · 패리 불가다(판정의 답 셋이 거짓). 답은 점프 하나다.
-        // ↓ 를 붙든 가드는 맨몸이라 전액을 맞고, 막아 낸 것이 없어 스태미나도 안 낸다. 창 안에서 누른 패리도 맨몸이다 — 받아치지 못하고 그냥 맞는다
-        // (보스도 안 무너진다). 옛 이름: 실제_점프_공격의_착지는_가드로_막고_패리로는_못_받는다 — 조각 1 전에는 가드가 12 × 1.8 = 21.6 스태미나 ·
-        // 칩 3 으로 막았다.
+        // 설계 2026-09-29 조각1 §2.3 — 착지는 바닥 전체 · 높이 0 ~ 60 · 피해 24 · 대시 · 가드 불가다(판정의 답 둘이 거짓). 답은 점프 하나다.
+        // ↓ 를 붙든 가드는 맨몸이라 전액을 맞고, 막아 낸 것이 없어 스태미나도 안 낸다. 옛 이름: 실제_점프_공격의_착지는_가드로_막고_패리로는_못_받는다
+        // — 조각 1 전에는 가드가 12 × 1.8 = 21.6 스태미나 · 칩 3 으로 막았다. 패리의 반쪽은 패리와 같이 걷었다(#168).
         BattleSim guarded = Leaper();
         for (int i = 0; i < 300 && guarded.Events.Count == 0; i++)
         {
-            guarded.Tick(new InputFrame(0, false, false, false, false, GuardHeld: true));
+            guarded.Tick(new InputFrame(0, false, false, false, GuardHeld: true));
         }
 
         DodgeEvent g = guarded.Events.Single();
         (g.Verb, g.Verdict).ShouldBe((DodgeVerb.Guard, HitVerdict.Hit), "가드를 못 받는 착지를 막았다");
-        (g.GuardAvailable, g.ParryAvailable).ShouldBe((false, false));
+        g.GuardAvailable.ShouldBeFalse();
         g.JumpAvailable.ShouldBeTrue("착지 띠는 점프로 넘는다 — 기준 파이터도 발이 60 위에 창보다 오래 있다");
         guarded.Fighter.Health.ShouldBe(TestConfigs.Fighter().MaxHealth - 24);
         guarded.Fighter.Stamina.ShouldBe(TestConfigs.Fighter().MaxStamina, "막아 낸 것이 없는데 가드 값을 냈다");
 
-        BattleSim parried = Leaper();
-        for (int i = 0; i < 300 && parried.Events.Count == 0; i++)
-        {
-            bool press = parried.NextActiveIn is <= 4 * BattleSim.Dt && parried.Fighter.Action == FighterAction.Idle;
-            parried.Tick(new InputFrame(0, false, false, Parry: press, false));
-        }
-
-        DodgeEvent p = parried.Events.Single();
-        p.Verdict.ShouldBe(HitVerdict.Hit, "패리를 못 받는 착지를 받아쳤다");
-        p.Verb.ShouldBe(DodgeVerb.Parry);
-        parried.Boss.Exhausted.ShouldBeFalse();
     }
 
     [Fact]
     public void 가드는_다른_수단을_안_고른_것으로도_세어진다()
     {
-        // 의존도 축의 분모는 그대로여야 한다 — 가드로 받은 판정은 "패리를 안 골랐다" 가 맞다.
+        // 의존도 축의 분모는 그대로여야 한다 — 가드로 받은 판정은 "대시 · 점프를 안 골랐다" 가 맞다.
         BattleSim sim = GuardOne();
         PlayerAxes axes = PlayerAxes.From(sim.Events);
 
         axes.GuardSamples.ShouldBe(1);
         axes.GuardBrokenSamples.ShouldBe(0);
-        axes.ParrySamples.ShouldBe(0, "가드가 패리로 세어졌다");
+        (axes.DashSamples, axes.JumpSamples).ShouldBe((0, 0), "가드가 다른 수단으로 세어졌다");
     }
 }

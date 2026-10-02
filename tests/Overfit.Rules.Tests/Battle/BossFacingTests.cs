@@ -15,7 +15,7 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class BossFacingTests
 {
-    private static readonly InputFrame _right = new(1, false, false, false, false);
+    private static readonly InputFrame _right = new(1, false, false, false);
 
     private static Boss Spawn(double x = 1000) => new(TestConfigs.Boss(), TestConfigs.Arena(), x);
 

@@ -36,7 +36,7 @@ public class ReplayGoldenTests
     /// 공격은 17틱마다 누르는데 1타(기준 17틱)가 끝나고 경직에 든 첫 틱이라 **그 틱에 2타를 잇는다**(#82 — 1타의 경직 중 J).
     /// 경직이 없던 때는 Idle 이라 새 1타였고, 이 대본은 2타를 한 번도 안 이었다.
     /// 가드의 회귀는 <c>FighterActionTests</c> · <c>HitResolverTests</c> · <c>BattleSimTests</c> ·
-    /// <c>BotPolicyTests</c> 가 본다. 29틱마다의 K 는 이제 0.333초 커밋의 패리다(설계 §5.3) — 커밋 뒤에 0.25초 패리 뒤 경직이 붙는다(#82).
+    /// <c>BotPolicyTests</c> 가 본다. 29틱마다 누르던 K(패리)는 패리와 같이 걷었다(#168).
     /// 211틱마다 뒤 90틱 동안은 L 만 누른다(설계 2026-09-30 조각2 §1 · §2) — 폭탄의 던지기 · 보스의 반응 · 끊김 · 떨어짐이 골든 안에 든다. 이 대본은
     /// 거의 늘 칼질 중이거나 떠 있어서, 다른 버튼과 같이 누르면 규칙의 순서(공격이 폭탄보다 먼저)와 커밋이 L 을 다 버린다 — 처음 넣었을 때 한 번도
     /// 안 던졌다. 창은 처음에 주기의 앞 90틱이었는데, 보스가 끊으려 하자(3/5) 다섯 번 다 끊겨 떨어짐이 골든 밖으로 나갔다 — 뒤 90틱으로 옮겼다.
@@ -52,7 +52,6 @@ public class ReplayGoldenTests
                 (sbyte)(i % 11 < 5 ? 1 : -1),
                 Jump: !bomb && i % 37 == 0,
                 Dash: !bomb && i % 23 == 0,
-                Parry: !bomb && i % 29 == 0,
                 Attack: !bomb && i % 17 == 0,
                 Bomb: bomb);
         }
@@ -80,7 +79,7 @@ public class ReplayGoldenTests
             // 가능했던 수단도 넣는다. 패턴 id 에서 따라 나오는 값처럼 보이지만, patterns.json 의
             // 태그를 고치면 id 는 그대로인 채 의존도 축의 분모가 통째로 달라진다 —
             // 다이제스트에서 빼면 그 변화가 골든 밖이 된다.
-            text.Append(CultureInfo.InvariantCulture, $"{e.DashAvailable}|{e.JumpAvailable}|{e.ParryAvailable}|");
+            text.Append(CultureInfo.InvariantCulture, $"{e.DashAvailable}|{e.JumpAvailable}|");
             // 가드 가능도 넣는다 (이슈 #53). 관측에 칸을 더할 때 **여기를 빠뜨린 적이 있다** — 그동안은 그 칸을 통째로
             // 바꿔도 골든이 초록이었다. 마무리 칸(Finisher)은 #72 에서 관측과 같이 걷었다(설계 §7.2).
             text.Append(CultureInfo.InvariantCulture, $"{e.GuardAvailable}\n");

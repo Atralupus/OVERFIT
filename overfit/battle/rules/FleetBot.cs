@@ -111,7 +111,7 @@ public sealed class FleetBot
         if (fighter.Action == FighterAction.Attack)
         {
             bool press = _chainThis && fighter.ComboStep == 0 && !fighter.ComboQueued && fighter.Affords(FighterAction.Attack);
-            return new InputFrame(0, false, false, false, Attack: press);
+            return new InputFrame(0, false, false, Attack: press);
         }
 
         // 창이 살아 있는 동안은 "판정이 지금" 이다 — NextActiveIn 은 판정이 서는 틱에 null 이 된다(최소 봇의 주석 · #72).
@@ -175,7 +175,7 @@ public sealed class FleetBot
     {
         if (_guardThis)
         {
-            return new InputFrame(0, false, false, false, false, GuardHeld: true);
+            return new InputFrame(0, false, false, false, GuardHeld: true);
         }
 
         Plan plan = _plan ??= NewPlan(sim);
@@ -199,7 +199,7 @@ public sealed class FleetBot
         {
             // 박자로 누르는 사람은 타마다 선딜을 보고 누르지 않는다 — 여는 그림으로 패턴을 알아챈 뒤로는 박자가 누른다. 알아채는 데 드는 것은
             // 패턴이 선 뒤의 반응 지연 하나다. 타마다의 선딜에 묶어 두었더니 느린 리듬형이 엇박의 늦은 타를 우연히 받아쳐 엇박이 노리는 사람이
-            // 원본에 안 섰다(재 봄 · #108: 리듬형 패리의 엇박 0.671 · 기저율 0.672).
+            // 원본에 안 섰다(재 봄 · #108: 리듬형 패리의 엇박 0.671 · 기저율 0.672 — 패리는 #168 에서 걷었다).
             expected = _patternStart + Ticks(beat[_hitIndex]) - 1;
             earliest = _patternStart + _reactionTicks;
         }
@@ -210,7 +210,7 @@ public sealed class FleetBot
             // 기다리는 동안 간격을 두는 사람은 제 간격까지 물러선다 — 간격 습관의 첫 수단은 자리다(DodgeVerb.Spacing). 판정 직전에는 계획의
             // 수단을 누른다: 물러서는 걸음(초당 수백 px)으로는 칼 궤적을 다 못 벗어나는 자리가 있다.
             return _traits.RestGap > 0 && gap < sim.FighterReach + _traits.RestGap
-                ? new InputFrame((sbyte)-toward, false, false, false, false)
+                ? new InputFrame((sbyte)-toward, false, false, false)
                 : default;
         }
 
@@ -249,13 +249,13 @@ public sealed class FleetBot
                 sbyte want = plan.Inward ? toward : (sbyte)-toward;
                 if (fighter.Facing != want)
                 {
-                    return new InputFrame(want, false, false, false, false);
+                    return new InputFrame(want, false, false, false);
                 }
 
                 plan.Pressed = true;
-                return new InputFrame(0, false, Dash: true, false, false);
+                return new InputFrame(0, false, Dash: true, false);
 
-            case DodgeVerb.Jump:
+            default:
                 blocked ??= fighter.Action != FighterAction.Idle ? $"action_{fighter.Action}" : fighter.Grounded ? null : "airborne";
                 if (blocked is not null)
                 {
@@ -263,17 +263,7 @@ public sealed class FleetBot
                 }
 
                 plan.Pressed = true;
-                return new InputFrame(0, Jump: true, false, false, false);
-
-            default:
-                blocked ??= fighter.Affords(FighterAction.Parry) ? null : "stamina";
-                if (blocked is not null)
-                {
-                    return default;
-                }
-
-                plan.Pressed = true;
-                return new InputFrame(0, false, false, Parry: true, false);
+                return new InputFrame(0, Jump: true, false, false);
         }
     }
 
@@ -296,12 +286,12 @@ public sealed class FleetBot
         double stand = punish ? reach : reach + _traits.RestGap;
         if (gap > stand)
         {
-            return new InputFrame(toward, false, false, false, false);
+            return new InputFrame(toward, false, false, false);
         }
 
         if (!punish && _traits.RestGap > 0)
         {
-            return gap < reach + (_traits.RestGap / 2) ? new InputFrame((sbyte)-toward, false, false, false, false) : default;
+            return gap < reach + (_traits.RestGap / 2) ? new InputFrame((sbyte)-toward, false, false, false) : default;
         }
 
         if (gap > reach || fighter.Action != FighterAction.Idle || !fighter.Affords(FighterAction.Attack))
@@ -328,7 +318,7 @@ public sealed class FleetBot
 
         _swings = swing;
         _chainThis = chain;
-        return new InputFrame(0, false, false, false, Attack: true);
+        return new InputFrame(0, false, false, Attack: true);
     }
 
     /// <summary>판정 하나의 계획 — 욕심 · 수단 · 리듬 · 대시 방향 · 잡음을 <b>한 번</b> 뽑는다. 키는 계획 번호다.</summary>
@@ -337,10 +327,9 @@ public sealed class FleetBot
         _plans++;
         double Roll(int kind) => Det.Roll01(_seed, Det.Domain.FleetAct, k1: _plans, k2: kind);
 
-        double pick = Roll(2) * (_traits.Dash + _traits.Jump + _traits.Parry);
-        DodgeVerb verb = pick < _traits.Dash ? DodgeVerb.Dash
-            : pick < _traits.Dash + _traits.Jump ? DodgeVerb.Jump
-            : DodgeVerb.Parry;
+        // 수단은 대시와 점프 둘이다 — 패리는 #168 에서 걷었다. 가드는 판정이 아니라 사례 단위로 따로 뽑는다(Track · _guardThis).
+        double pick = Roll(2) * (_traits.Dash + _traits.Jump);
+        DodgeVerb verb = pick < _traits.Dash ? DodgeVerb.Dash : DodgeVerb.Jump;
         var plan = new Plan
         {
             Greedy = Roll(1) < _traits.Greed,

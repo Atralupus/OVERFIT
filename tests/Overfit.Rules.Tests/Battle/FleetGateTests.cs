@@ -38,15 +38,14 @@ public class FleetGateTests
     /// </summary>
     private static readonly BotTraits _skilled = FleetPlay.Mid with { ReactionSeconds = 0.2, JitterSeconds = 0.02, BiasSeconds = -0.03 };
 
-    /// <summary>수단 하나의 비중을 <paramref name="w"/> 로, 나머지 셋이 남은 몫을 똑같이 나눈다 — 타이밍이 좋은 봇 위에서.</summary>
+    /// <summary>수단 하나의 비중을 <paramref name="w"/> 로, 나머지 둘이 남은 몫을 똑같이 나눈다 — 타이밍이 좋은 봇 위에서.</summary>
     private static BotTraits Weighted(DodgeVerb verb, double w)
     {
-        double rest = (1 - w) / 3;
+        double rest = (1 - w) / 2;
         return _skilled with
         {
             Dash = verb == DodgeVerb.Dash ? w : rest,
             Jump = verb == DodgeVerb.Jump ? w : rest,
-            Parry = verb == DodgeVerb.Parry ? w : rest,
             Guard = verb == DodgeVerb.Guard ? w : rest,
         };
     }
@@ -55,7 +54,7 @@ public class FleetGateTests
     /// 대시만 하는 봇 — 타이밍 · 방향 축은 대시 건으로만 선다. 반응은 빠르게(0.15초) 둔다: 3연격의 2 · 3타는 선딜이 0.25초라 반응이 그보다 길면
     /// 이른 편향이 반응 지연에 잘려 편향의 차이가 축에 안 닿는다 — 편향을 볼 때 반응을 섞지 않는다.
     /// </summary>
-    private static BotTraits Dasher => FleetPlay.Mid with { Dash = 1, Jump = 0, Parry = 0, Guard = 0, Greed = 0, ReactionSeconds = 0.15 };
+    private static BotTraits Dasher => FleetPlay.Mid with { Dash = 1, Jump = 0, Guard = 0, Greed = 0, ReactionSeconds = 0.15 };
 
     private static void ShouldRise(double low, double high, double margin, string axis) =>
         (high - low).ShouldBeGreaterThanOrEqualTo(margin, $"{axis}: 낮음 {low:0.000} → 높음 {high:0.000} — 성향이 축을 {margin} 만큼 못 올렸다");
@@ -71,12 +70,6 @@ public class FleetGateTests
     public void 점프_비중이_점프_의존도를_올린다()
     {
         ShouldRise(Pooled(Weighted(DodgeVerb.Jump, 0.1)).JumpReliance, Pooled(Weighted(DodgeVerb.Jump, 0.8)).JumpReliance, 0.2, "jump_reliance");
-    }
-
-    [Fact]
-    public void 패리_비중이_패리_의존도를_올린다()
-    {
-        ShouldRise(Pooled(Weighted(DodgeVerb.Parry, 0.1)).ParryReliance, Pooled(Weighted(DodgeVerb.Parry, 0.8)).ParryReliance, 0.2, "parry_reliance");
     }
 
     [Fact]
@@ -120,9 +113,13 @@ public class FleetGateTests
         ShouldRise(Pooled(FleetPlay.Mid with { Greed = 0 }).Greed, Pooled(FleetPlay.Mid with { Greed = 0.6 }).Greed, 0.1, "greed");
     }
 
-    /// <summary>패리 습관형 — 가드 · 욕심 없이 패리 0.9, 타이밍이 좋은 봇 위에서(눈으로 누르는 패리가 받아쳐야 박자의 차이가 보인다).</summary>
-    private static BotTraits Parrier(double rhythm) =>
-        _skilled with { Dash = 0.05, Jump = 0.05, Parry = 0.9, Guard = 0, Greed = 0, Rhythm = rhythm };
+    /// <summary>
+    /// 안쪽 대시 습관형 — 가드 · 욕심 없이 대시 0.9 · 늘 안쪽, 타이밍이 좋은 봇 위에서(눈으로 누르는 대시가 무적으로 흘려야 박자의 차이가 보인다).
+    /// 안쪽인 까닭: 바깥 대시는 박자가 틀려도 거리로 빠져 엇박에 안 맞는다 — 무적의 박자를 재려면 칼 안에 남아야 한다. 전에는 패리 습관형이었다
+    /// — 패리는 #168 에서 걷었다.
+    /// </summary>
+    private static BotTraits Dodger(double rhythm) =>
+        _skilled with { Dash = 0.9, Jump = 0.1, Guard = 0, Greed = 0, Rhythm = rhythm, DashInward = 1 };
 
     /// <summary>대본 <paramref name="pattern"/> 만 도는 판에서, 그 패턴의 판정 중 맞은(맞음 · 붕괴 · 잡힘) 몫.</summary>
     private static double HitShare(BotTraits traits, string pattern)
@@ -147,16 +144,16 @@ public class FleetGateTests
     [Fact]
     public void 리듬형이_엇박에_더_맞는다()
     {
-        // 엇박 3연격은 3연격과 여는 그림이 같고 타마다 선딜만 늦다 — 박자로 누르는 패리는 창(0.133초) 앞에서 헛쳐 커밋 안에서 맞는다(설계 2026-09-24 §4.9).
-        ShouldRise(HitShare(Parrier(0), "엇박 3연격"), HitShare(Parrier(1), "엇박 3연격"), 0.2, "엇박에 맞는 몫");
+        // 엇박 3연격은 3연격과 여는 그림이 같고 타마다 선딜만 늦다 — 박자로 누르는 대시는 무적(0.14초)이 판정 앞에서 닫혀 맞는다(설계 2026-09-24 §4.9).
+        ShouldRise(HitShare(Dodger(0), "엇박 3연격"), HitShare(Dodger(1), "엇박 3연격"), 0.2, "엇박에 맞는 몫");
     }
 
     [Fact]
     public void 리듬은_3연격에서는_차이가_없다()
     {
         // 대조 — 3연격은 제 박자가 곧 실제 판정이라 박자로 누르든 눈으로 누르든 같다. 여기서 갈리면 리듬이 박자 말고 다른 것을 건드린 것이다.
-        double sight = HitShare(Parrier(0), "3연격");
-        double rhythm = HitShare(Parrier(1), "3연격");
+        double sight = HitShare(Dodger(0), "3연격");
+        double rhythm = HitShare(Dodger(1), "3연격");
 
         Math.Abs(rhythm - sight).ShouldBeLessThan(0.1, $"3연격에 맞는 몫: 눈 {sight:0.000} · 박자 {rhythm:0.000}");
     }

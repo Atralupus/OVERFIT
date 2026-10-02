@@ -71,16 +71,16 @@ public class FactoryBatchTests
     [Fact]
     public void 성향의_수는_왕복_서식이다()
     {
-        // 같은 double 은 같은 글자다 — 되읽으면 비트까지 같아야 분석(파이썬)이 공장과 같은 수를 본다. 칸은 봇 · 습관 뒤의 열셋이다(TraitsHeader).
+        // 같은 double 은 같은 글자다 — 되읽으면 비트까지 같아야 분석(파이썬)이 공장과 같은 수를 본다. 칸은 봇 · 습관 뒤의 열둘이다(TraitsHeader — 패리의 칸은 #168 에서 걷었다).
         BotResult result = BotRun.Run(51, 0, _tables.Value, 1);
         var builder = new StringBuilder();
 
         SampleCsv.AppendBot(builder, result);
 
         string[] cells = builder.ToString().TrimEnd('\n').Split(',');
-        double[] back = cells[2..15].Select(c => double.Parse(c, NumberStyles.Float, CultureInfo.InvariantCulture)).ToArray();
+        double[] back = cells[2..14].Select(c => double.Parse(c, NumberStyles.Float, CultureInfo.InvariantCulture)).ToArray();
         BotTraits t = result.Traits;
-        double[] traits = [t.Dash, t.Jump, t.Parry, t.Guard, t.ReactionSeconds, t.JitterSeconds, t.BiasSeconds, t.Rhythm, t.DashInward, t.RestGap, t.Greed, t.Chain, t.JumpLead];
+        double[] traits = [t.Dash, t.Jump, t.Guard, t.ReactionSeconds, t.JitterSeconds, t.BiasSeconds, t.Rhythm, t.DashInward, t.RestGap, t.Greed, t.Chain, t.JumpLead];
         back.Select(BitConverter.DoubleToInt64Bits).ShouldBe(traits.Select(BitConverter.DoubleToInt64Bits));
     }
 

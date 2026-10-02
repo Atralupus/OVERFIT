@@ -24,10 +24,6 @@ public sealed class PatternTags
     /// <summary>대공인가 — <b>공중에 있는 쪽이 더 맞는다.</b> 점프 의존 플레이어를 봉인하는 재료다.</summary>
     public required bool AntiAir { get; init; }
 
-    public required bool Parryable { get; init; }
-
-    public required double ParryWindow { get; init; }
-
     /// <summary>선딜이 짧아 욕심내면 맞는가.</summary>
     public required bool PunishGreed { get; init; }
 
@@ -111,9 +107,6 @@ public sealed class PatternStep
 
     /// <summary>판정의 답 — <b>가드</b>로 막을 수 있나 (<see cref="Dash"/> 와 같은 규약). <c>false</c> 면 가드 중이어도 맨몸이다 — 붕괴가 아니다.</summary>
     public bool? Guard { get; init; }
-
-    /// <summary>판정의 답 — <b>패리</b>로 받아칠 수 있나 (<see cref="Dash"/> 와 같은 규약). 태그(<c>parryable</c>)가 되는 패턴 안에서 이 판정만 막는다.</summary>
-    public bool? Parry { get; init; }
 
     /// <summary>
     /// 붙드는 시간(초) — 0 보다 크면 <b>붙드는 판정</b>이다 (#78 · 설계 §4.7). 맨몸에 닿은 결과가 맞음이 아니라 잡힘(<see cref="HitVerdict.Grabbed"/>)이고,

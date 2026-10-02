@@ -8,7 +8,7 @@ using Xunit;
 namespace Overfit.Rules.Tests.Battle;
 
 /// <summary>
-/// 탈진한 보스 (설계 §4.3 · §4.2) — 무엇을 안 하는가, 공중에서 무너지면 어떻게 내리는가. 두 원인(패리 · 게이지) 중 게이지로
+/// 탈진한 보스 (설계 §4.3 · §4.2) — 무엇을 안 하는가, 공중에서 무너지면 어떻게 내리는가. 원인은 게이지 하나다(패리는 #168 에서 걷었다) — 게이지로
 /// 무너뜨린다: 받아칠 수 없는 점프 공격을 멈추는 길이 게이지뿐이라(설계 §4.2) 공중 탈진은 게이지로만 온다.
 ///
 /// <para>
@@ -18,8 +18,8 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class BossExhaustTests
 {
-    private static readonly InputFrame _attack = new(0, false, false, false, Attack: true);
-    private static readonly InputFrame _right = new(1, false, false, false, false);
+    private static readonly InputFrame _attack = new(0, false, false, Attack: true);
+    private static readonly InputFrame _right = new(1, false, false, false);
 
     /// <summary>
     /// 떠 있는 보스가 칼 끝(<see cref="BattleSim.FighterReach"/>)에 들어왔나 — 도약이 파이터 쪽으로 날아오는 동안 <b>한 번</b> 휘두를 자리다.

@@ -4,9 +4,10 @@ using System.Collections.Generic;
 namespace Overfit.Battle.Rules;
 
 /// <summary>
-/// 플레이어가 어떻게 싸우는가, 11개 숫자로. <b>수와 순서가 계약이다</b> — 망의 입력 모양이라
+/// 플레이어가 어떻게 싸우는가, 9개 숫자로. <b>수와 순서가 계약이다</b> — 망의 입력 모양이라
 /// 늘리는 것은 수치 하나를 고치는 것과 다른 종류의 변경이다. 10 → 11(<see cref="GuardRate"/>)은 망을 세우는
-/// 자리에서 한 번에 정했다 (#104 · 설계 2026-09-28 §3.2). 근거의 크기는 축이 아니라 <b>개수</b>로 실린다(<see cref="Samples"/> 들).
+/// 자리에서 한 번에 정했다 (#104 · 설계 2026-09-28 §3.2). 11 → 9 는 패리를 걷으며(#168) 패리의 두 축(성공률 · 의존도)이 빠진 것이다 —
+/// 지금 이 축을 입력으로 읽는 망은 없다(읽는 곳은 <c>BattleDemo</c> 의 로그 한 줄이다). 근거의 크기는 축이 아니라 <b>개수</b>로 실린다(<see cref="Samples"/> 들).
 /// <see cref="DodgeEvent"/> 목록만 받으므로
 /// <b>전투를 안 돌려도 테스트된다.</b>
 ///
@@ -34,7 +35,7 @@ namespace Overfit.Battle.Rules;
 /// </para>
 ///
 /// <para>
-/// 다섯 축은 전체가 아니라 <b>부분집합</b>으로 계산된다 (대시·점프·패리 건만).
+/// 몇 축은 전체가 아니라 <b>부분집합</b>으로 계산된다 (대시·점프 건만).
 /// <see cref="Samples"/> 만 옆에 붙이면 "관측 10건" 이 "대시 3건으로 낸 분산" 까지
 /// 보증하는 것처럼 보인다 — 가장 얇은 근거를 가장 크게 믿게 만드는 배치다.
 /// 그래서 수단별 건수를 따로 싣는다. <b>축이 아니라 개수다</b> — 축의 수를 안 건드린다.
@@ -74,7 +75,7 @@ public sealed class PlayerAxes
     public double JumpTimingBias { get; private init; }
 
     /// <summary>
-    /// <b>대시나 패리로도 피할 수 있었던 상황에서</b> 점프를 고른 비율 (스펙 8절).
+    /// <b>대시로도 피할 수 있었던 상황에서</b> 점프를 고른 비율 (스펙 8절). 대시와 패리가 다른 수단이던 때(#168 전)는 패리도 들었다.
     /// 그냥 사용 비율이 아니다 — 그러면 "점프에 의존한다" 와 "점프로만 피할 수 있는 패턴만
     /// 만났다" 가 같은 값이 되는데, 그 둘은 봉인할 것이 정반대다.
     /// </summary>
@@ -88,19 +89,6 @@ public sealed class PlayerAxes
     /// 체류 시간보다 <b>피격 순간의 고도</b>가 바로 그 답이기 때문이다.
     /// </summary>
     public double AirborneAtImpactRatio { get; private init; }
-
-    /// <summary>
-    /// 패리 <b>성공</b>률 — 패리를 고른 판정 중 실제로 받아친 비율이다.
-    ///
-    /// <para>
-    /// 분모(<see cref="ParrySamples"/>)는 창을 놓치고 커밋 안에서 그냥 맞은 판정까지 센다 (설계 §5.3) — 그래서
-    /// 이 값은 누름의 정확도를 잰다. 가드는 ↓ 라 따로 센다(<see cref="GuardSamples"/>).
-    /// </para>
-    /// </summary>
-    public double ParryRate { get; private init; }
-
-    /// <summary><b>다른 수단이 있는데</b> 패리를 고른 비율 (스펙 8절). <c>JumpReliance</c> 와 같은 셈법이다.</summary>
-    public double ParryReliance { get; private init; }
 
     public double Greed { get; private init; }
 
@@ -127,10 +115,10 @@ public sealed class PlayerAxes
     public double DistanceBias { get; private init; }
 
     /// <summary>
-    /// <b>가드를 고른</b> 관측의 몫 — 11번째 축 (#104 · 설계 2026-09-28 §3.2). 잡힌 가드도 든다 — 고른 것은 같고 결과가 다르다.
+    /// <b>가드를 고른</b> 관측의 몫 — 마지막 축 (#104 · 설계 2026-09-28 §3.2). 잡힌 가드도 든다 — 고른 것은 같고 결과가 다르다.
     ///
     /// <para>
-    /// <b>의존도가 아니라 사용 비율인 이유.</b> 의존도 축(<see cref="JumpReliance"/> · <see cref="ParryReliance"/>)은 "그 수단이 가능했고
+    /// <b>의존도가 아니라 사용 비율인 이유.</b> 의존도 축(<see cref="JumpReliance"/>)은 "그 수단이 가능했고
     /// <b>다른 수단도</b> 가능했던" 판정을 분모로 삼는다 — 가능했던 수단이 드문 패턴만 만난 사람을 "안 골랐다" 로 세지 않으려는 것이다.
     /// 가드는 잡기와 점프 공격의 착지를 빼면 <b>모든</b> 판정에서 가능해 그 분모가 대부분이고, 그러니 가드의 사용 비율은 그 자체로 정직한
     /// 성향이다 — 의존도 축이 피하려던 혼동이 가드에는 거의 없다. 분모를 "가드할 수 있었던 판정" 으로 좁히지 않는 이유: ↓ 를 붙든 채 잡기에
@@ -155,25 +143,18 @@ public sealed class PlayerAxes
     /// <summary>점프로 설명된 관측 수. <c>JumpTimingBias</c> 의 근거다.</summary>
     public int JumpSamples { get; private init; }
 
-    /// <summary>패리로 설명된 관측 수. <c>ParryRate</c> 의 분모다.</summary>
-    public int ParrySamples { get; private init; }
-
     /// <summary>
     /// 점프가 가능했고 <b>다른 수단도 가능했던</b> 관측 수 — <c>JumpReliance</c> 의 분모다.
     /// 의존도는 부분집합의 부분집합이라 <c>Samples</c> 도 <c>JumpSamples</c> 도 이 얇기를 안 말해준다.
     /// </summary>
     public int JumpChoiceSamples { get; private init; }
 
-    /// <summary>패리가 가능했고 다른 수단도 가능했던 관측 수 — <c>ParryReliance</c> 의 분모다.</summary>
-    public int ParryChoiceSamples { get; private init; }
-
     /// <summary>
     /// <b>가드로 버틴</b> 관측 수 (이슈 #47) — <see cref="GuardRate"/> 의 분자이자 그 축의 근거다. "가드 비율 0.5" 가 두 건으로 낸
     /// 값인지 이백 건으로 낸 값인지를 망이 알아야 해서 축과 같이 싣는다(다른 수단의 개수와 같은 까닭).
     ///
     /// <para>
-    /// 가드는 비율 말고도 다른 축을 움직인다: 가드로 받은 판정은 <see cref="ParryReliance"/> 의 분모에 들어가되 분자에는 안 들어가고
-    /// ("패리 말고 다른 것을 골랐다"), 거리는 <see cref="DistanceBias"/> 에 그대로 쌓인다.
+    /// 가드는 비율 말고도 다른 축을 움직인다: 거리는 <see cref="DistanceBias"/> 에 그대로 쌓인다.
     /// </para>
     /// </summary>
     public int GuardSamples { get; private init; }
@@ -190,11 +171,11 @@ public sealed class PlayerAxes
     ///
     /// <para>
     /// ⚠ <b><see cref="DodgeEvent.PatternId"/> 를 안 읽는다</b> — 축 전부가 모든 패턴을 뭉갠
-    /// 값이다 (확인함 · 이슈 #46). 패턴이 여럿이면 빚이다: "3연격은 패리하고 점프 공격은 뛰어넘는다" 는 사람이
-    /// "패리 반 점프 반" 한 명으로 읽힌다.
+    /// 값이다 (확인함 · 이슈 #46). 패턴이 여럿이면 빚이다: "3연격은 대시하고 점프 공격은 뛰어넘는다" 는 사람이
+    /// "대시 반 점프 반" 한 명으로 읽힌다.
     ///
     /// <para>
-    /// <b>지금은 그 빚을 진다</b> (#72). 1단계의 두 패턴은 묻는 답이 다르지만(점프 공격은 패리를 못 받는다), 판정마다의
+    /// <b>지금은 그 빚을 진다</b> (#72). 1단계의 두 패턴은 묻는 답이 다르지만(점프 공격은 대시를 못 받는다), 판정마다의
     /// "고를 수 있었나"(<see cref="DodgeEvent.JumpAvailable"/> 등)가 의존도의 분모를 이미 가른다. 패턴별 집계는 그것을
     /// 읽을 망이 들어오는 PR 이 입력 모양과 같이 정한다(설계 §4.4 「망이 들어오면」).
     /// </para>
@@ -210,8 +191,8 @@ public sealed class PlayerAxes
 
         var dashErrors = new List<double>();
         var jumpErrors = new List<double>();
-        int dashes = 0, jumps = 0, parries = 0, parried = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
-        int jumpChoices = 0, jumpChosen = 0, parryChoices = 0, parryChosen = 0;
+        int dashes = 0, jumps = 0, inward = 0, outward = 0, airborne = 0, greedy = 0;
+        int jumpChoices = 0, jumpChosen = 0;
         int guards = 0, guardsBroken = 0;
         double distance = 0;
 
@@ -233,21 +214,12 @@ public sealed class PlayerAxes
             // 의존도의 분모는 **진짜 선택이 있었던** 판정뿐이다 — 그 수단이 가능했고,
             // 다른 수단도 하나 이상 가능했던 자리. 고를 수 없었던 것을 "안 골랐다" 로 세면
             // 축이 플레이어의 성향이 아니라 보스의 패턴 구성을 재게 된다.
-            if (e.JumpAvailable && (e.DashAvailable || e.ParryAvailable))
+            if (e.JumpAvailable && e.DashAvailable)
             {
                 jumpChoices++;
                 if (e.Verb == DodgeVerb.Jump)
                 {
                     jumpChosen++;
-                }
-            }
-
-            if (e.ParryAvailable && (e.DashAvailable || e.JumpAvailable))
-            {
-                parryChoices++;
-                if (e.Verb == DodgeVerb.Parry)
-                {
-                    parryChosen++;
                 }
             }
 
@@ -269,14 +241,6 @@ public sealed class PlayerAxes
                 case DodgeVerb.Jump:
                     jumps++;
                     jumpErrors.Add(e.TimingError);
-                    break;
-                case DodgeVerb.Parry:
-                    parries++;
-                    if (e.Verdict == HitVerdict.Parried)
-                    {
-                        parried++;
-                    }
-
                     break;
                 case DodgeVerb.Guard:
                     // 막아냈든 깨졌든 **고른 것은 가드**다. 둘의 차이는 verb 가 아니라 Verdict 가 나른다. 가드 중에 잡힌 것(#78 · 가드를
@@ -301,19 +265,15 @@ public sealed class PlayerAxes
             JumpTimingBias = Mean(jumpErrors),
             JumpReliance = Ratio(jumpChosen, jumpChoices),
             AirborneAtImpactRatio = Ratio(airborne, events.Count),
-            ParryRate = Ratio(parried, parries),
-            ParryReliance = Ratio(parryChosen, parryChoices),
             Greed = Ratio(greedy, events.Count),
             DistanceBias = distance / events.Count,
             GuardRate = Ratio(guards, events.Count),
             Samples = events.Count,
             DashSamples = dashes,
             JumpSamples = jumps,
-            ParrySamples = parries,
             GuardSamples = guards,
             GuardBrokenSamples = guardsBroken,
             JumpChoiceSamples = jumpChoices,
-            ParryChoiceSamples = parryChoices,
         };
     }
 

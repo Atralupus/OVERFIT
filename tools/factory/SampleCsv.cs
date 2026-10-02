@@ -14,8 +14,8 @@ public static class SampleCsv
     /// <summary><c>samples.csv</c> 의 머리 — 봇 · 시도 · 칸 · 라벨.</summary>
     public const string SamplesHeader = "bot,attempt,slot,label";
 
-    /// <summary>성향의 칸 — 습관 · 수단 넷 · 나머지 아홉(<see cref="AppendTraits"/> 의 순서).</summary>
-    public const string TraitsHeader = "habit,dash,jump,parry,guard,reaction,jitter,bias,rhythm,dash_inward,rest_gap,greed,chain,jump_lead";
+    /// <summary>성향의 칸 — 습관 · 수단 셋 · 나머지 아홉(<see cref="AppendTraits"/> 의 순서). 패리의 칸은 패리와 같이 걷었다(#168).</summary>
+    public const string TraitsHeader = "habit,dash,jump,guard,reaction,jitter,bias,rhythm,dash_inward,rest_gap,greed,chain,jump_lead";
 
     /// <summary><c>bots.csv</c> 의 머리 — 봇 번호 · 성향 전부 · 흐름(시도 · 이겼나) · 틱 · 사례 수.</summary>
     public const string BotsHeader = "bot," + TraitsHeader + ",attempts,won,ticks,samples";
@@ -52,7 +52,6 @@ public static class SampleCsv
         [
             t.Dash,
             t.Jump,
-            t.Parry,
             t.Guard,
             t.ReactionSeconds,
             t.JitterSeconds,

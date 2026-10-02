@@ -1,0 +1,97 @@
+{
+  "_comment": "비교 관문의 결과 (설계 2026-10-01 조각8 §2) — tools/build.sh gate 가 쓴다. 손으로 고치지 않는다.",
+  "name": "sp-4",
+  "episodes": 512,
+  "seed": 777000000,
+  "margin": 0.1,
+  "opponents": [
+    {
+      "name": "fleet",
+      "sha256": null
+    },
+    {
+      "name": "fighter_r05.json",
+      "sha256": "3458e4917950a789013ad484c845894a40f69fe73532ad9ddc353653f57beaf8"
+    },
+    {
+      "name": "fighter_r10.json",
+      "sha256": "4fb45026c0a06abed0670487bf3be3c4ac23ddce547d628cc20fec7ffa570dbd"
+    },
+    {
+      "name": "fighter_r15.json",
+      "sha256": "046dab862a9552e50b2fccac36e6f336249f40557ac0c9ab8172e92989c4ea47"
+    },
+    {
+      "name": "fighter_r20.json",
+      "sha256": "1a6e578c2c90c82da72abaeb6af4c113ccfbcbacc941ed3ce4f2403dbf6c0ce6"
+    }
+  ],
+  "rows": [
+    {
+      "boss": "random",
+      "boss_win": 0.2051,
+      "fighter_lost": 128.7,
+      "boss_lost": 666.7,
+      "seconds": 74.8,
+      "return": -0.9877,
+      "weights_sha256": null
+    },
+    {
+      "boss": "rule",
+      "boss_win": 0.2266,
+      "fighter_lost": 133.3,
+      "boss_lost": 658.6,
+      "seconds": 83.2,
+      "return": -0.9309,
+      "weights_sha256": null
+    },
+    {
+      "boss": "qtable",
+      "boss_win": 0.5508,
+      "fighter_lost": 189.8,
+      "boss_lost": 588.8,
+      "seconds": 197.4,
+      "return": -0.1662,
+      "weights_sha256": "b978ccc1e61ff7d3ecd8a507e3608d7b947d63e918a13f9a1e696ab230c86bac"
+    },
+    {
+      "boss": "form1",
+      "boss_win": 0.6504,
+      "fighter_lost": 205.2,
+      "boss_lost": 474.9,
+      "seconds": 135.2,
+      "return": 0.3697,
+      "weights_sha256": "7c8b9abe21cab7b159220aa8a2a2371fa00f626d1ffce0d0b2aef7ecfcad1db7"
+    },
+    {
+      "boss": "form2",
+      "boss_win": 0.7324,
+      "fighter_lost": 211.0,
+      "boss_lost": 405.0,
+      "seconds": 129.5,
+      "return": 0.6589,
+      "weights_sha256": "16f412d0bcd54c2ecde157e52a4d70809ce0d0e6069fb9295823ac678b15f2a3"
+    },
+    {
+      "boss": "form3",
+      "boss_win": 0.8887,
+      "fighter_lost": 216.9,
+      "boss_lost": 334.7,
+      "seconds": 128.5,
+      "return": 1.0879,
+      "weights_sha256": "4f19ce4d008085ab186a314f6673f60aaa05721a332c7810168b2f7c1ad2a29e"
+    },
+    {
+      "boss": "game",
+      "boss_win": 0.7812,
+      "fighter_lost": 211.8,
+      "boss_lost": 396.8,
+      "seconds": 119.1,
+      "return": 0.7909,
+      "weights_sha256": "23062b7b0d153ca02c267b573009f8ef8322c2acba9a321fae8c9cfe0cedabcd"
+    }
+  ],
+  "pass": true,
+  "against": "qtable",
+  "gap": 0.3379
+}

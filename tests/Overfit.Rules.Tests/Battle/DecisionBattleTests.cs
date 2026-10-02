@@ -14,7 +14,7 @@ namespace Overfit.Rules.Tests.Battle;
 /// </summary>
 public class DecisionBattleTests
 {
-    private static readonly InputFrame _right = new(1, false, false, false, false);
+    private static readonly InputFrame _right = new(1, false, false, false);
 
     /// <summary>받은 결정을 적고 안에 넘긴다.</summary>
     private sealed class Recording(IBossController inner) : IBossController

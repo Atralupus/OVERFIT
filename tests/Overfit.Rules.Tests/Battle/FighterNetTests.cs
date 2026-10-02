@@ -10,16 +10,16 @@ namespace Overfit.Rules.Tests.Battle;
 public class FighterNetTests
 {
     [Fact]
-    public void 칸은_열둘이고_엣지는_첫_틱만_이동과_가드는_내내다()
+    public void 칸은_열하나고_엣지는_첫_틱만_이동과_가드는_내내다()
     {
-        FighterActions.Count.ShouldBe(12);
+        FighterActions.Count.ShouldBe(11);
         InputFrame first = FighterActions.Input(FighterActions.JumpRight, 0);
         InputFrame later = FighterActions.Input(FighterActions.JumpRight, 3);
         (first.Jump, first.Move, later.Jump, later.Move).ShouldBe((true, (sbyte)1, false, (sbyte)1));
         (FighterActions.Input(FighterActions.DashLeft, 0).Dash, FighterActions.Input(FighterActions.DashLeft, 0).Move).ShouldBe((true, (sbyte)-1));
         FighterActions.Input(FighterActions.Guard, 5).GuardHeld.ShouldBeTrue();
         (FighterActions.Input(FighterActions.Attack, 0).Attack, FighterActions.Input(FighterActions.Attack, 1).Attack).ShouldBe((true, false));
-        (FighterActions.Input(FighterActions.Bomb, 0).Bomb, FighterActions.Input(FighterActions.Parry, 0).Parry).ShouldBe((true, true));
+        (FighterActions.Input(FighterActions.Bomb, 0).Bomb, FighterActions.Input(FighterActions.Bomb, 1).Bomb).ShouldBe((true, false));
         FighterActions.Input(FighterActions.Idle, 0).ShouldBe(default(InputFrame));
     }
 

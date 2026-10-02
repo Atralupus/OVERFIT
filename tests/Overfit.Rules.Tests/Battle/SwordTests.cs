@@ -76,7 +76,7 @@ public class SwordTests
     {
         for (int i = 0; i < 600 && Math.Abs(sim.Fighter.X - sim.Boss.X) > gap; i++)
         {
-            sim.Tick(new InputFrame((sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1), false, false, false, false));
+            sim.Tick(new InputFrame((sbyte)(sim.Fighter.X < sim.Boss.X ? 1 : -1), false, false, false));
         }
     }
 
@@ -87,7 +87,7 @@ public class SwordTests
     private static int SwingOnce(BattleSim sim)
     {
         int before = sim.Boss.Health, activeTicks = 0, landedAt = -1;
-        sim.Tick(new InputFrame(0, false, false, false, Attack: true));
+        sim.Tick(new InputFrame(0, false, false, Attack: true));
         for (int i = 0; i < 120 && sim.Fighter.Action == FighterAction.Attack; i++)
         {
             sim.Tick(default);
@@ -156,8 +156,8 @@ public class SwordTests
         // 칼끝에서 보스 몸통 앞끝까지 193~200 — 1타의 칼(90)은 모자라고 긴 칼(400)은 넉넉하다.
         WalkUpTo(sim, sim.Boss.HalfWidth + 200);
         int before = sim.Boss.Health;
-        sim.Tick(new InputFrame(0, false, false, false, Attack: true));
-        sim.Tick(new InputFrame(0, false, false, false, Attack: true));   // 1타 도중 — 2타를 눌러 둔다
+        sim.Tick(new InputFrame(0, false, false, Attack: true));
+        sim.Tick(new InputFrame(0, false, false, Attack: true));   // 1타 도중 — 2타를 눌러 둔다
         for (int i = 0; i < 120 && !(sim.Fighter.ComboStep == 1 && sim.Fighter.AttackActive); i++)
         {
             sim.Tick(default);

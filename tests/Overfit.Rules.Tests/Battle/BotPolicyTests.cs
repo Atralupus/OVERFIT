@@ -143,11 +143,6 @@ public class BotPolicyTests
                     sim.Fighter.Affords(FighterAction.Dash).ShouldBeTrue($"시드 {seed} · {sim.Ticks}틱: 모자란 대시를 눌렀다");
                 }
 
-                if (input.Parry)
-                {
-                    sim.Fighter.Affords(FighterAction.Parry).ShouldBeTrue($"시드 {seed} · {sim.Ticks}틱: 모자란 패리를 눌렀다");
-                }
-
                 if (input.Attack)
                 {
                     sim.Fighter.Affords(FighterAction.Attack).ShouldBeTrue($"시드 {seed} · {sim.Ticks}틱: 모자란 칼질을 눌렀다");
@@ -222,13 +217,12 @@ public class BotPolicyTests
     private static readonly ulong[] _seeds = { 7, 51, 99, 777, 2024, 31337, 12345, 8, 1, 2, 3, 4, 5, 6, 9, 10 };
 
     [Fact]
-    public void 봇이_회피_수단_셋을_다_쓴다()
+    public void 봇이_회피_수단_둘을_다_쓴다()
     {
         // 한 수단만 쓰는 봇은 나머지 축을 영원히 0 으로 만든다 — 그 데이터로는 개인화를 못 배운다.
         HashSet<DodgeVerb> used = VerbsUsed();
 
         used.ShouldContain(DodgeVerb.Dash);
-        used.ShouldContain(DodgeVerb.Parry);
         used.ShouldContain(DodgeVerb.Jump);
     }
 
