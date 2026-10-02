@@ -2,96 +2,137 @@
 
 [한국어](README.ko.md)
 
-OVERFIT is a 2D side-scrolling action game with one boss fight. The boss has three phases, and each phase is the boss at a different
-level of training: a neural network trained by reinforcement learning chooses everything the boss does, and every phase uses a network
-that has trained longer than the one before. The boss does not study you during the fight. It was trained before the game shipped.
+OVERFIT is a 2D side-scrolling action game with one boss fight. The boss is a policy network trained by reinforcement learning, and
+its three phases are three checkpoints of the same training run, in order of training: phase 1 is the least trained, phase 3 the most.
+Nothing is learned during play; the networks are fixed when the game ships.
 
-- The boss has 800 HP. Phase 2 starts at 600 HP and phase 3 at 400 HP.
-- At each phase change the boss stands still, flashes white three times, and takes no damage for 1.5 seconds.
-
-## The three bosses
+- The boss has 800 HP. Phase 2 starts at 600 HP and phase 3 at 400 HP. At each change the boss stands still, flashes white three
+  times, and takes no damage for 1.5 seconds; then the next checkpoint takes over.
+- The fighter has 220 HP and one life, and can move, jump, dash (short invincibility), guard (costs stamina), attack (one or two hits),
+  and throw bombs (10 per fight, 1.5 s windup, 60 damage; a hit before the release loses the bomb). Hits fill the boss's poise
+  gauge, and a full gauge exhausts the boss for 1.5 seconds. A fight that lasts 10 minutes is a loss.
 
 | <img src="docs/gifs/net1.gif" width="420"> | <img src="docs/gifs/net2.gif" width="420"> |
 |---|---|
-| **Phase 1.** Runs in and opens with fast combos and rushes | **Phase 2.** Keeps its distance, leaps over the fighter, and attacks from behind |
+| **Phase 1.** Checkpoint from round 10 of 20 | **Phase 2.** Checkpoint from round 16 |
 | <img src="docs/gifs/net3.gif" width="420"> | <img src="docs/gifs/form.gif" width="420"> |
-| **Phase 3.** Backs off and leaps around the fighter while waiting for an opening | **Phase change.** The boss stands still, flashes white three times, and takes no damage for 1.5 seconds |
+| **Phase 3.** Checkpoint from round 20 | **Phase change** |
 
-## Boss moves
+## The learning problem
 
-| <img src="docs/gifs/rush.gif" width="420"> | <img src="docs/gifs/grab.gif" width="420"> |
+**Decisions.** The boss acts at decision points, not every frame (the game runs at 60 ticks per second):
+
+| Point | When |
 |---|---|
-| **3-hit combo → rush.** Cancelled after the first hit | **3-hit combo → grab.** Cancelled after the second hit |
-| <img src="docs/gifs/jump.gif" width="420"> | <img src="docs/gifs/uppercut.gif" width="420"> |
-| **Jump attack.** Only a jump clears the landing | **Uppercut.** Reaches high; a jump does not clear it |
-| <img src="docs/gifs/fast.gif" width="420"> | <img src="docs/gifs/offbeat.gif" width="420"> |
-| **Fast 3-hit combo** | **Off-beat 3-hit combo.** Each windup is held a little longer |
-| <img src="docs/gifs/retreat.gif" width="420"> | <img src="docs/gifs/leap.gif" width="420"> |
-| **Back off.** Runs backwards, still facing the fighter | **Leaps.** Over the fighter, then back away from the fighter |
+| Freed | A move ends, an exhaustion starts, a phase change ends, the fight starts (only "wait" is open) |
+| Rest | Every 12 ticks (0.2 s) while waiting |
+| Approach | Every 12 ticks while running in, and on arrival |
+| Retreat | Every 12 ticks while backing off |
+| Cancel | At each cancel point of a combo |
 
-Ticks are 1/60 s, counted from the tick the move starts.
+Between decisions the chosen action plays out, so this is a semi-Markov decision process: a decision lasts a variable number of
+ticks (its *span*).
 
-| Move | Hits (tick) | Damage | Avoided by | Ends (tick) |
-|---|---|---|---|---|
-| 3-hit combo | 51 · 93 · 159 | 8 · 8 · 14 | dash, guard, distance; a jump clears some hits | 213 |
-| Off-beat 3-hit combo | 60 · 111 · 186 | 8 · 8 · 14 | dash, guard, distance; a jump clears some hits | 240 |
-| Fast 3-hit combo | 24 · 51 · 84 | 8 · 8 · 14 | dash, guard, distance | 138 |
-| Rush | 24 after arriving | 14 | dash, guard | 78 after arriving |
-| Grab | 60 | 25, held 1 s | jump only | 158 (a missed grab leaves the boss open for 1.5 s) |
-| Jump attack | 60 | 24 | jump only | 108 |
-| Uppercut | 51 | 14 | dash, guard | 105 |
+**Actions.** One categorical over 13 actions: wait, approach, retreat, leap over, leap back, continue the current move, and the seven
+moves (3-hit combo, jump attack, off-beat 3-hit combo, fast 3-hit combo, rush, grab, uppercut). The rules give a mask of legal actions
+per decision (for example, "continue" only at a cancel point, "approach" not after arriving), and the policy is a masked softmax.
 
-The three combos have cancel points: the boss can drop the rest of the combo and start another move at once.
+**Observation.** 95 numbers, normalized to roughly [−1, 1]:
 
-## The fight
+| Part | Size | Contents |
+|---|---|---|
+| Decision point | 6 | one-hot |
+| Boss | 10 | x / arena width, y / 300, facing, HP ratio, phase one-hot (3), poise ratio, exhausted, shifting |
+| Boss movement | 4 | none · approach · retreat · leap one-hot |
+| Boss move | 10 | none + 7 moves one-hot, move progress, ticks to the next cancel point / 60 |
+| Fighter, 0.3 s ago | 13 | dx / arena width, y / 300, facing, facing the boss, HP ratio, stamina, bombs / 10, throw progress, action one-hot (5: idle, dash, attack, guard, throw) |
+| Fighter history | 40 | the fighter's action one-hot at 8 samples, 6 ticks apart, over the 0.8 s before that |
+| Bombs in flight | 12 | up to 4 × (present, flight progress, origin dx) |
 
-- The fighter has 220 HP and one life. A fight that lasts 10 minutes is a loss.
-- The fighter can move, jump, dash (a short invincibility), guard (costs stamina), attack (one hit, or two in a row), and throw bombs.
-- **Bombs.** 10 per fight. A throw takes 1.5 seconds, and a hit before the release loses the bomb. A bomb that lands does 60 damage.
-- Hits fill the boss's poise gauge. A full gauge exhausts the boss for 1.5 seconds.
+The fighter is observed with an 18-tick (0.3 s) delay, like a human's reaction time; the boss's own state is current. Items are
+encoded by their properties, not their names, so new items widen the property columns instead of adding item-specific inputs.
 
-## How the bosses were trained
+**Reward** for decision *i*, over its span:
 
-**What the boss sees and chooses.** At each decision point (when it becomes free, every 0.2 seconds while waiting or running in, and
-at each cancel point) the game turns the fight into 95 numbers: the boss's position, HP, phase, and current move; the fighter's
-position, HP, stamina, bombs, and recent actions as they looked 0.3 seconds ago; and bombs in flight. A small network
-(95 → 128 → 128 → 13) gives a score to each of 13 choices: wait, run in, back off, leap over, leap back, continue the current move, or
-start one of the seven moves. Choices that are not possible at that moment are removed, and the boss picks at random among the rest; a
-higher score makes a choice more likely.
+```
+r_i = (fighter HP lost / 220) − (boss HP lost / 800) − 0.002 · (span ticks / 60)
+      + 0.5 / 7   the first time a move is used in the fight
+      ± 1         at the end (win / loss; a timeout is a loss)
+```
 
-**How it learns.** The boss plays many fights and is rewarded after each decision: plus for damage dealt, minus for damage taken, a
-small minus for time, a small bonus the first time it uses each move in a fight (so every phase uses all seven), and plus or minus 1
-for winning or losing. The training method (PPO) makes choices that led to more reward more likely.
+The first-use bonus exists because, without it, the policy dropped dominated moves entirely (the fast 3-hit combo has the same damage
+as the 3-hit combo and comes out sooner). With it, every checkpoint used in the game uses all seven moves.
 
-**Who it trains against.** A second network learns to play the fighter. The two train in turns for 20 rounds (self-play), using the
-game's own rules. The boss saved after each round is tested against the same set of opponents (bots and saved fighters); its win
-rate rose from 22% (untrained) to 89% (round 20).
+**Discounting by time.** γ = 0.99 is the discount per 12 ticks, and a decision is discounted by γ^(span / 12) (the same for the GAE λ
+term). Discounting per decision instead made long actions (a grab holds for a second) look cheaper and biased the policy toward them.
 
-**Choosing the three phases.** Phase 3 is the strongest saved boss (round 20, 89%). Phases 1 and 2 are the saved bosses closest to
-halfway and three quarters of the way from the untrained boss to phase 3 (round 10, 63%; round 16, 71%). Only bosses that use all
-seven moves can be picked.
+## Network and PPO
 
-**The final fighter still wins.** Over 256 fights, the last trained fighter beats the phase-3 boss 61% of the time.
+- Policy and value are separate MLPs, 95 → 128 → 128 → 13 and 95 → 128 → 128 → 1, ReLU, He initialization. The policy's last layer is
+  scaled by 0.01 so the initial policy is close to uniform over legal actions.
+- PPO with clipping 0.2, GAE λ 0.95, 4 epochs, minibatch 1,024, Adam with learning rate 3·10⁻⁴, value loss coefficient 0.5, entropy
+  coefficient 0.03 (boss) and 0.005 (fighter), gradient norm clipped at 0.5, advantages normalized per minibatch.
+- The trainer is plain numpy (`ml/rl/net.py`, `ppo.py`, `train.py`), with hand-written backpropagation and gradient checks in the
+  tests.
+- Experience is generated by the game's own rules in C#, headless (`tools/factory`, `--rollout`): the same code the game runs, in
+  parallel, with episode results independent of the thread count. A rollout writes a flat binary file of
+  (observation, mask, action, log-probability, value, reward, done, span) that numpy reads in one call.
 
-## How it runs in the game
+## Self-play
 
-- The networks are `overfit/data/boss_net/form1.json`, `form2.json`, and `form3.json`; the game switches to the next one at each
-  phase change.
-- The random pick uses the game's seeded random numbers and an exponent function computed with additions and multiplications only, so
-  a recorded attempt replays exactly on any machine. A test checks the game's results against Python bit for bit.
+Against scripted bots alone, the boss found one exploit (the bots could not escape a grab) and collapsed onto it. So a second network
+learns to play the fighter, and the two train in turns.
 
-## Compared with other bosses
+- **The fighter network** sees itself now and the boss 12 ticks ago (52 numbers, including the boss's current move step and the time
+  to its next active hit frame), decides every 6 ticks, and chooses one of 11 actions (idle, left, right, jump ×3, dash ×2, attack,
+  guard, bomb). Its reward is the mirror of the boss's, without the time term.
+- **Schedule.** 20 rounds. In each round the boss trains for 10 iterations (256 fights each), then the fighter for 10 iterations (128
+  fights each). Every round both are saved.
+- **Opponent pools.** The boss trains against the bot fleet plus 5 saved fighters (the latest 3 and 2 spread over earlier rounds); the
+  fighter trains against the hand-written rule boss plus 5 saved bosses chosen the same way. Training against a pool rather than only
+  the latest opponent keeps either side from overfitting to one partner.
+- **Training only the boss for more rounds at the end did not work:** it found the last fighter's weakness and used grabs for 75% of
+  its moves, beating that fighter but getting weaker against everyone else. Only checkpoints from alternating rounds are used.
 
-512 fights per boss against the same opponents (bots and saved fighters), same seeds (`tools/build.sh gate --name=sp-4`, result in
-[`ml/rl/gate/sp-4.json`](ml/rl/gate/sp-4.json)).
+## Choosing the three phases
+
+Every saved boss plays the same test set (the bot fleet and the saved fighters of rounds 5, 10, 15, and 20), 256 fights with fixed
+seeds. Phase 3 is the strongest checkpoint (round 20, 89%). Phases 1 and 2 are the checkpoints whose win rates are closest to half and
+three quarters of the way from the untrained boss (22%) to phase 3: round 10 (63%) and round 16 (71%). Only checkpoints that use every
+move for at least 1% of their move choices are candidates.
+
+The last trained fighter beats the phase-3 boss in 61% of 256 fights, so a strong player is expected to win.
+
+## Baselines
+
+512 fights per boss against the same test set, same seeds (`tools/build.sh gate --name=sp-4`, result in
+[`ml/rl/gate/sp-4.json`](ml/rl/gate/sp-4.json)):
 
 | Boss | Win rate |
 |---|---|
-| Random choices | 21% |
-| Hand-written rules (the boss before networks) | 23% |
-| Lookup table (reinforcement learning without a network) | 55% |
+| Uniform random over legal actions | 21% |
+| Hand-written rules (the boss before networks: random plans of rest, run, move, cancel) | 23% |
+| Tabular Q (Monte Carlo control, same rewards and number of fights) | 55% |
 | Phase 1 · 2 · 3 network, whole fight | 65% · 73% · 89% |
 | The game's boss (phase 1 → 2 → 3) | 78% |
+
+The tabular baseline discretizes each decision into (decision point, distance in 4 bins, fighter airborne, fighter action, boss move,
+phase), about 660 visited states, and was trained against the test set itself. It is far behind the network, which reads all 95
+observations at once.
+
+## How the networks run in the game
+
+- The three checkpoints are stored as JSON (`overfit/data/boss_net/form1.json`, `form2.json`, `form3.json`, with their origin in
+  `picks.json`) and evaluated in C# with a plain forward pass (`PolicyNet.cs`). The game switches networks when a phase change ends.
+- The action is **sampled** from the masked softmax, as in training, not taken greedily. A greedy policy repeats one action and looks
+  broken rather than weaker.
+- **Deterministic.** Sampling uses the game's seeded, stateless random numbers (`overfit/core/Det.cs`), and the softmax's `exp` is
+  computed with additions and multiplications only (`DetMath.Exp`), because the platform's `Math.Exp` may differ in the last bit
+  between machines. Every attempt stores its inputs and replays exactly.
+- **Checked against Python.** A test feeds fixed observations to the three networks and compares the logits and values from C# with a
+  pure-Python forward pass that uses the same summation order, bit for bit.
+- The networks are part of the data hash stored with every attempt, so attempts recorded before a network changes are reported as
+  "data changed" rather than as a replay failure.
 
 ## Play
 
@@ -107,15 +148,18 @@ If macOS blocks it, open System Settings → Privacy & Security and choose Open 
 | Guard | ↓ (S), hold |
 | Bomb | L |
 
-Building from source needs Godot 4.7 (mono) and .NET 8. See [CONTRIBUTING.md](CONTRIBUTING.md) (Korean).
+Building from source needs Godot 4.7 (mono) and .NET 8. See [CONTRIBUTING.md](CONTRIBUTING.md) (Korean). Training needs Python with
+numpy in `ml/.venv` (`ml/requirements.txt`); the settings are in `ml/rl/train.json`.
 
 | Command | What it does |
 |---|---|
 | `tools/build.sh check` | Format, build, tests. The commit gate |
 | `tools/build.sh export` | macOS build |
-| `tools/build.sh selfplay --name=NAME` | Trains the boss and fighter networks in turns; needs `ml/.venv` (`ml/requirements.txt`) |
-| `tools/build.sh evalboss --name=NAME` · `pick --name=NAME` | Tests every saved boss and picks the three phases |
-| `tools/build.sh duel FIGHTER_NET.json` | Records a full fight between a trained fighter and the game's boss |
+| `tools/build.sh selfplay --name=NAME` | Self-play training → `out/selfplay/NAME/` |
+| `tools/build.sh evalboss --name=NAME` | Tests every saved boss against the test set |
+| `tools/build.sh pick --name=NAME` | Picks the three phases and writes the Python check values |
+| `tools/build.sh qtrain --name=NAME` · `gate --name=NAME` | Trains the tabular baseline and runs the comparison |
+| `tools/build.sh duel FIGHTER.json` | Records a full fight between a trained fighter and the game's boss |
 
 ## License
 
