@@ -114,18 +114,6 @@ public partial class GifRunner : Node
             },
             From: 1, To: 141),
 
-        // 폭탄이 끊긴다 (조각2 §2). 960 떨어져 3연격 50틱에 던진다 — 보스는 68틱에 알고("!") 첫 캔슬 지점(78)에서 끊어, 멈칫 뒤 달려와 놓기(139) 전에
-        // 친다. 폭탄을 잃는다. BombReactionTests.GIF_bombcut.
-        new("bombcut", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
-            Inputs: new[] { new GifInput(50, 50, "bomb") },
-            From: 30, To: 170),
-
-        // 폭탄이 떨어진다 — 3연격이 서자마자(2틱) 던지면 첫 캔슬 지점(78)이 늦다. 보스는 끊고 달려오지만 폭탄이 먼저 놓이고(91) 달려오는 보스에게
-        // 떨어진다(121). 1틱은 못 누른다 — 엣지는 한 틱 앞에 누르는데 그 틱에는 겨냥한 동작이 아직 안 섰다(Drive). BombReactionTests.GIF_bomb.
-        new("bomb", Plans: SceneDriver.Moves("3연격"), Target: "3연격",
-            Inputs: new[] { new GifInput(2, 2, "bomb") },
-            From: 1, To: 141),
-
         // 페이즈 전환 (설계 2026-10-01 조각1 §2 · §4) — 보스는 605 에서 서고 3초 쉰다. 파이터가 115틱 걸어(보스 앞 155) 118틱에 J — 1타(10)가 122틱에
         // 600(문턱 · #167)에 멈추며 전환이 선다: idle · 흰 플래시 셋 · 무적 1.5초(212틱까지). 판의 시계로 잡는다(Target 없음). BossFormBattleTests.GIF_form.
         new("form", Plans: new[] { new ScriptPlan(3.0, "3연격") }, Target: null,
